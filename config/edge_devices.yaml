@@ -1,0 +1,35 @@
+# Edge device / cgroup profiles for evaluation (sections 3, 21, 22).
+# Used by the energy/latency harness to simulate constrained legacy x86 via
+# Linux cgroups and to build the DeviceState vector fed to router/halter.
+
+devices:
+  catastrophic_edge:
+    device_class: 0
+    cpu_cores: 1
+    mem_max_mb: 512
+    power_mode: 0.0          # power-saver
+    latency_budget_ms: 2000
+    description: "1 CPU core, 512 MB RAM -- catastrophic edge constraint."
+
+  standard_edge:
+    device_class: 1
+    cpu_cores: 2
+    mem_max_mb: 2048
+    power_mode: 0.5
+    latency_budget_ms: 1000
+    description: "2 CPU cores, 2 GB RAM -- standard edge constraint."
+
+  workstation:
+    device_class: 2
+    cpu_cores: 0              # 0 = unconstrained (no cgroup limit)
+    mem_max_mb: 0
+    power_mode: 1.0
+    latency_budget_ms: 250
+    description: "Unconstrained host (plugged in) -- System 2 exploration budget."
+
+# RAPL energy profiling (section 22).
+energy:
+  rapl_root: /sys/class/powercap/intel-rapl
+  idle_seconds: 60           # idle baseline window before each run
+  warmup_runs: 5
+  repeats: 5                 # repeat each measurement >=5 times (section 22.4)

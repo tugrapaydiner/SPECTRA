@@ -1,0 +1,17 @@
+# ARC / ARC-style abstract grid reasoning (section 24.3).
+_base_: base.yaml
+
+task: arc
+
+data:
+  # ARC uses up to 10 colors (0-9). We pad grids to a fixed canvas.
+  num_tokens: 11        # 10 colors + 1 padding token
+  pad_token: 10
+  height: 30
+  width: 30
+  seq_len: 900          # 30x30 padded canvas
+
+model:
+  # Larger sequence (L=900) benefits from a slightly wider core; recursion depth
+  # is the main lever, so keep n/T moderate.
+  dim: 192

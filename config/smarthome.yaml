@@ -1,0 +1,14 @@
+# Smart-home state resolution: privacy-preserving edge decisions (section 24.5).
+_base_: base.yaml
+
+task: smarthome
+
+data:
+  # Compact symbolic vocabulary for sensor states + action tokens.
+  num_tokens: 24
+  seq_len: 16           # fixed-length sensor/context feature sequence
+  height: 1
+  width: 16
+
+model:
+  dim: 96               # small symbolic task; keep the core tiny

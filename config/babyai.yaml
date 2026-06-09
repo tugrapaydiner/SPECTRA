@@ -1,0 +1,13 @@
+# BabyAI-style grounded local planning (section 24.4).
+_base_: base.yaml
+
+task: babyai
+
+data:
+  # Token vocabulary covers grid cells + action tokens; sized generously and
+  # finalised by the dataset builder (section 10.2 generator).
+  num_tokens: 32
+  height: 8
+  width: 8
+  seq_len: 64
+  max_plan_len: 16

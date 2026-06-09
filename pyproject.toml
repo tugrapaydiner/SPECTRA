@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectra"
+version = "0.6.0"
+description = "SPECTRA: Sparse Policy-guided Energy-aware Cache-Ternary Recursive Agent"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "SPECTRA" }]
+dependencies = [
+    "torch>=2.4",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+    "einops>=0.7",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+# Top-level packages mirror BLUEPRINT.md section 13. Tests and scripts are not
+# installed as importable packages (scripts are run directly).
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["common*", "model*", "train*", "eval*", "data*", "deploy*"]
+
+[tool.pytest.ini_options]
+# Put the repo root on sys.path so `import model.trm`, `import train.losses`,
+# etc. resolve during tests without an editable install.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "slow: long-running gates (e.g. single-batch overfit). Deselect with -m 'not slow'.",
+]
+filterwarnings = [
+    # Keep test output readable; surface our own warnings only.
+    "ignore::DeprecationWarning",
+]

@@ -1,0 +1,13 @@
+# Maze: path planning with an exact path verifier (section 24.2).
+_base_: base.yaml
+
+task: maze
+
+data:
+  # Vocabulary: 0=wall, 1=open, 2=start, 3=goal, 4=path (predicted on the answer grid).
+  num_tokens: 5
+  height: 15
+  width: 15
+  seq_len: 225          # height * width
+  min_path_len: 8
+  max_path_len: 40

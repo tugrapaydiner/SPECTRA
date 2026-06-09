@@ -1,0 +1,13 @@
+# Sudoku: controlled symbolic reasoning with an exact validator (section 24.1).
+_base_: base.yaml
+
+task: sudoku
+
+data:
+  num_tokens: 10      # vocabulary: 0 (blank) + digits 1-9
+  seq_len: 81         # 9x9 grid flattened
+  height: 9
+  width: 9
+  box: 3              # 3x3 sub-box size
+  min_clues: 30       # generator difficulty controls (section 10.2)
+  max_clues: 50

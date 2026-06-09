@@ -1,0 +1,31 @@
+# SPECTRA runtime + research environment.
+# `pip install -r requirements.txt && pytest -m "not slow"` is the 5-minute clone test.
+
+# --- Core deep-learning / numerical stack ---
+torch>=2.4
+numpy>=1.24
+
+# --- Config, utilities, progress ---
+pyyaml>=6.0
+einops>=0.7
+tqdm>=4.66
+
+# --- Evaluation harness ---
+pandas>=2.0          # scaling-law / null-hypothesis DataFrames (eval/scaling.py)
+psutil>=5.9          # device telemetry: battery/RAM, graceful where absent (eval/telemetry.py)
+
+# --- Testing ---
+pytest>=7.4
+
+# --- Optional (not required for the core; enable per workflow) ---
+# matplotlib>=3.7  pillow>=9.0   # README visuals (scripts/render_*.py)
+# wandb>=0.16                 # experiment tracking
+# onnx>=1.15  onnxruntime>=1.17   # INT8 baselines / export
+# gymnasium>=0.29             # BabyAI-style grounded planning
+#
+# Native AVX2 kernel (optional, edge deployment):
+#   needs a C++ toolchain ABI-compatible with torch (gcc/Linux, MSVC/Windows) + AVX2
+#   build with:  python setup.py build_ext --inplace
+#
+# Physical energy (optional, Linux x86 only):
+#   Intel/AMD RAPL via /sys/class/powercap/intel-rapl  (no extra pip dependency)

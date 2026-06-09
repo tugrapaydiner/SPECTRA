@@ -1,0 +1,40 @@
+# SPECTRA base configuration.
+# Task configs (sudoku.yaml, maze.yaml, ...) inherit from this via `_base_`
+# and override only what differs.
+
+seed: 42
+device: auto          # auto | cpu | cuda
+
+# Recursive core (TRM). See BLUEPRINT sections 5 and 15.
+model:
+  dim: 128            # hidden dimension D
+  n_layers: 2         # transformer-style blocks inside the shared operator f_theta
+  heads: 8            # attention heads
+  n: 6                # inner latent recursion steps per cycle
+  T: 3                # deep recursion cycles per supervision step
+  N_sup: 8            # number of deep supervision steps
+  alpha_y: 0.1        # residual scaling for y updates (section 5.6)
+  alpha_z: 0.1        # residual scaling for z updates (section 5.6)
+
+# Optimisation / training (section 11 stability defaults).
+train:
+  lr: 1.0e-3
+  weight_decay: 0.01
+  batch_size: 128
+  max_steps: 20000
+  warmup_steps: 500            # LR warmup steps (maps to lr_warmup_steps)
+  quant_warmup_steps: 2000     # soft->hard ternarization warmup (section 11.6)
+  clip_grad_norm: 1.0       # section 11.4
+  ema_decay: 0.999          # section 11.3
+  lambda_h: 0.5             # halting BCE weight (section 17)
+  lambda_improve: 0.1       # policy-improvement weight (section 12/17)
+  margin: 0.01              # improvement margin (section 12)
+  log_every: 50
+  eval_every: 500
+  ckpt_every: 1000
+
+# Logging (section 29).
+log:
+  level: INFO
+  dir: outputs
+  wandb: false
