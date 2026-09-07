@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 import torch
 
-from eval.edge_energy import measure_energy_joules
+from eval.edge_energy import measure_energy_record
 from eval.latency import measure_latency
 from eval.memory import model_size_mb, process_rss_mb
 from eval.metrics import board_accuracy, cell_accuracy
@@ -53,7 +53,7 @@ def benchmark(model: TRM, x: torch.Tensor, y: torch.Tensor, height: int, width: 
             for i in range(n_energy):
                 model(x[i:i+1], height=height, width=width)
 
-    energy = measure_energy_joules(representative_pass, n_runs=1)
+    energy = measure_energy_record(representative_pass, n_runs=1)
     joules = (energy["energy_joules"] / n_energy) if energy["available"] else None
     report = edge_report(accuracy=acc["board_acc"], latency_ms=latency["latency_ms_mean"],
         peak_ram_mb=process_rss_mb(), model_size_mb=model_size_mb(model),
