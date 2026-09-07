@@ -1,6 +1,11 @@
 # SPECTRA Research State
 
-This is the live milestone register. The complete pre-M05 M01–M04 state log is preserved **verbatim** in [`RESEARCH_STATE_M01_M04.md`](RESEARCH_STATE_M01_M04.md), copied from the exact M04-era blob `0a3a815e040d12aa9686dfe164111a686c64d08b` before this register was compacted. Git history therefore retains both the original cumulative record and the live register below.
+This is the live milestone register. Detailed historical state is preserved without rewriting prior evidence:
+
+- M01–M04: [`RESEARCH_STATE_M01_M04.md`](RESEARCH_STATE_M01_M04.md)
+- complete pre-M06 live register, including M05 in full: [`RESEARCH_STATE_M05.md`](RESEARCH_STATE_M05.md), archived from blob `08ed850a4e9b58b9c4b58367c3c15d79a4c0decc`
+
+Git history retains the original cumulative registers. The live register below records the accepted milestone index and M06 in full.
 
 ## Accepted milestone index
 
@@ -10,388 +15,287 @@ This is the live milestone register. The complete pre-M05 M01–M04 state log is
 | M02 | native-kernel correctness and input contracts | accepted and merged; `main` merge `e0781ec8b4e649ab4ccd48d4cd5f432a9b88d249` |
 | M03 | trustworthy task/data/evaluation contracts | accepted and merged; `main` merge `01638b10777029fb28bb35229e374f0865c6e5d4` |
 | M04 | reproducible training and checkpoint state | accepted and merged through PR #4; `main` merge `370caf708755e1c68c59d5696778597f0290ea68` |
-| M05 | checkpoint-backed evaluation | **COMPLETE ON `research/m05-checkpoint-eval`; not merged at the time of this entry** |
-
-Detailed M01–M04 evidence, numerical contracts, test counts, failures, and limitations are unchanged in the archived register linked above. The sections below record M05 in full.
+| M05 | checkpoint-backed evaluation | accepted and merged through PR #5; `main` merge `1003c59e17dc17e652438317b7480c9e898379af` |
+| M06 | controlled trained baseline experiment | **COMPLETE ON `research/m06-capability-gates`; accepted evidence run `34124798931`; not merged at the time of this entry** |
 
 ---
 
-## Milestone 05 — checkpoint-backed evaluation
+## Milestone 06 — controlled trained baseline experiment
 
-**Stage status:** COMPLETE ON `research/m05-checkpoint-eval`; not merged at the time of this entry.
+**Stage status:** COMPLETE ON `research/m06-capability-gates`; accepted experiment/evidence gate is green; not merged at the time of this entry.
 
-M05 changes evaluation loading, immutable evaluation snapshots, research-vs-smoke boundaries, inference-setting contracts, realized-compute accounting, per-example provenance, tests, and audit infrastructure. It does **not** change TRM training mathematics, native-kernel mathematics, or the underlying LatentNativeMCTS search algorithm; the MCTS subclass added in M05 only counts calls around the existing implementation.
+M06 intentionally does one thing only: it establishes a controlled trained baseline experiment on a non-debug task. It does **not** add or evaluate MCTS, routing, halting-policy training, a process reward model, distillation, a self-improvement flywheel, energy optimization, scaling-law machinery, or target-hardware performance.
+
+The preregistered protocol is [`M06_PROTOCOL.md`](M06_PROTOCOL.md). The concise accepted evidence surface is [`M06_ACCEPTANCE_GATE.md`](M06_ACCEPTANCE_GATE.md).
+
+### Research question and primary endpoint
+
+On one fixed validated 9×9 Sudoku distribution, does a small floating-point recursive TRM learn measurable held-out task structure, how much of that learning survives a matched W1.58A8 recursive model evaluated at full quantization strength, and how do both compare with a deliberately larger simple single-pass baseline under a fixed data/training protocol?
+
+The primary endpoint was fixed before training:
+
+```text
+strict Sudoku semantic solve rate (`semantic_validity`)
+```
+
+Exact-reference match, blank-cell accuracy, all-cell accuracy, loss curves, gradient norms, and training time were retained as secondary/diagnostic quantities. A zero exact-solve rate was explicitly allowed by the protocol.
+
+### Flagship task and frozen data
+
+The main pilot used the existing validated Sudoku pipeline at a harder-than-debug setting:
+
+- 9×9 Sudoku (`box=3`)
+- unique solutions required
+- 30–35 clues
+- existing validated generator/augmentation path
+- data seed `20260907`
+- train `384`
+- validation `96`
+- test `128`
+- zero cross-split group overlap required
+- zero cross-split exact overlap required
+
+The frozen split passed the duplicate audit. The test split was not used to select architecture, optimizer, step count, seed count, or checkpoint.
+
+4×4 Sudoku was reserved only for a preregistered learning-failure diagnostic. That branch was not triggered, so **4×4 was not used in the M06 main experiment or for post-hoc retuning**.
+
+### Models and declared differences
+
+#### A. Floating-point recursive reference
+
+```text
+TRM
+FP32
+dim=48
+n_layers=1
+heads=4
+n=1
+T=1
+N_sup=2
+trainable parameters=30,829
+```
+
+#### B. Matched W1.58A8 recursive model
+
+Same recursive dimensions/schedule as A, with ternary projections and A8 recurrent-state fake quantization.
+
+```text
+trainable parameters=30,397
+quantization warmup=50 of 200 steps
+```
+
+The repository's FP and ternary attention/projection implementations use different existing bias conventions. An architecture-only preflight therefore found a `1.401278%` trainable-parameter difference. The original 1.0% preregistered match tolerance was amended to 1.5% **before any M06 timing probe, validation metric, test prediction, or accuracy result was produced**. The implementations themselves were not changed to force equality.
+
+#### C. Larger single-pass baseline
+
+```text
+System1Student
+FP32
+dim=96
+n_layers=2
+heads=4
+trainable parameters=228,394
+single pass
+```
+
+The unused confidence head was frozen and excluded from the trainable parameter count because M06 did not train or test confidence routing.
+
+The larger single-pass baseline is deliberately not parameter matched. It asks whether a simple larger model is a stronger baseline than the small recursive systems. A future causal comparison still needs a size/compute-controlled single-pass comparator.
+
+### Optimization protocol
+
+Common settings were fixed before results:
+
+```text
+optimizer        AdamW
+learning rate    1e-3
+weight decay     0.01
+batch size       32
+gradient clip    1.0
+main steps       target 200 / model / seed
+```
+
+There was no architecture-specific LR search, accuracy-based early stopping, best-checkpoint selection, or test-time search.
+
+The recursive models used the repository's existing deep-supervision objective, including the existing halting/improvement terms. The single-pass model used token cross-entropy because it has no recursive supervision or halting head. This objective difference is an architectural limitation and prevents interpreting M06 as a clean causal test of recursion alone.
+
+### Timed probe and recorded compute budget
+
+Before the main fits, exactly five optimizer steps per architecture were timed. Probe models were discarded; no probe accuracy was inspected.
+
+| Model | 5-step elapsed | seconds / step |
+|---|---:|---:|
+| FP recursive | `0.256232 s` | `0.0512465` |
+| W1.58A8 recursive | `0.231664 s` | `0.0463327` |
+| larger single-pass | `0.238884 s` | `0.0477768` |
+
+The slowest observed rate was `0.0512465 s/step`. Under the preregistered timing-only rule, the `1080 s` main-training budget allowed the full repeated-seed branch:
+
+```text
+seeds             1101, 2202
+steps / model      200
+models / seed      3
+main fits          6
+estimated time     61.4958 s
+actual summed fit  52.9538 s
+budget             1080 s
+```
+
+No accuracy-dependent budget adjustment occurred.
+
+Training compute is retained separately from evaluation metrics. Each run sampled `6,400` training examples. Under the declared architectures:
+
+- FP recursive: `25,600` shared-block applications sampled per run
+- W1.58A8 recursive: `25,600` per run
+- larger single-pass: `12,800` block applications per run
+
+These are structural counters, not FLOP-equated or joule-equated costs. Physical joules were not available on the runner.
+
+### Observed primary result
+
+**The primary endpoint was zero for every model at both seeds.**
+
+Across the frozen 128-example test set:
+
+| Model | Seeds | Semantic solve rate | Exact match | Blank-cell accuracy | All-cell accuracy |
+|---|---:|---:|---:|---:|---:|
+| FP recursive | 2 | `0.0000` | `0.0000` | `0.15925 ± 0.00065` | `0.49894 ± 0.00039` |
+| W1.58A8 recursive | 2 | `0.0000` | `0.0000` | `0.11458 ± 0.00453` | `0.47232 ± 0.00270` |
+| larger single-pass | 2 | `0.0000` | `0.0000` | `0.32821 ± 0.01570` | `0.59963 ± 0.00936` |
+
+The `±` values are population standard deviations over the two fixed seeds, not confidence intervals.
+
+Per-seed strict solve and exact-reference rates were all exactly zero. M06 therefore does **not** establish useful exact 9×9 Sudoku reasoning capability for any of these small-budget fits.
+
+### Did training fail?
+
+Not under the preregistered optimization-failure definition.
+
+All six fits had finite/nonzero gradients and reduced final-window training loss by far more than the required 5%:
+
+| Model / seed | Initial-window loss | Final-window loss | Relative improvement |
+|---|---:|---:|---:|
+| FP recursive / 1101 | `2.39634` | `1.29827` | `45.82%` |
+| FP recursive / 2202 | `2.59600` | `1.29393` | `50.16%` |
+| W1.58A8 recursive / 1101 | `2.48694` | `1.33376` | `46.37%` |
+| W1.58A8 recursive / 2202 | `2.38910` | `1.32407` | `44.58%` |
+| larger single-pass / 1101 | `2.08138` | `0.76017` | `63.48%` |
+| larger single-pass / 2202 | `1.98616` | `0.74136` | `62.67%` |
+
+No fit met the preregistered learning-failure trigger. Consequently the gradient-inspection / 8-example overfit / minimal-4×4 diagnostic branch was not executed. `diagnostics.json` and `failures.json` are retained and empty for the accepted run.
+
+This distinction matters: the pilot learned partial token/cell structure but did not reach the much stricter complete-board capability endpoint.
+
+### Ternary inference verification
+
+The W1.58A8 result was evaluated only after each final checkpoint was reloaded. Evaluation was rejected unless every `FakeBitLinear.quant_strength` buffer was exactly `1.0`.
+
+Both seeds passed for all seven ternary modules:
+
+```text
+blocks.0.attn.q    = 1.0
+blocks.0.attn.k    = 1.0
+blocks.0.attn.v    = 1.0
+blocks.0.attn.proj = 1.0
+blocks.0.ff.0      = 1.0
+blocks.0.ff.2      = 1.0
+out_head           = 1.0
+```
+
+The accepted workflow printed `quantization_strength_check=pass`.
+
+Final ternary state was non-degenerate:
+
+- seed 1101: negative `0.36156`, positive `0.35904`, zero `0.27940`
+- seed 2202: negative `0.36032`, positive `0.36121`, zero `0.27848`
+
+This validates the declared M06 evaluation representation. It does not establish parity with FP accuracy.
+
+### Interpretation / claims boundary
+
+The M06 evidence supports only narrow conclusions:
+
+1. A repeated-seed trained baseline experiment now exists on a non-debug 9×9 task under a frozen data/resource/evaluation protocol.
+2. All three training paths learned partial token/cell structure under the preregistered optimization criterion.
+3. None solved a complete held-out Sudoku at this data/training budget.
+4. The deliberately larger single-pass baseline was materially stronger on the secondary cell metrics than either small recursive model.
+5. The full-strength W1.58A8 recursive model was weaker than the matched FP recursive model on the same secondary metrics in both seeds.
+
+Therefore M06 provides **no evidence that recursion substitutes for parameter count**, and **no evidence that W1.58A8 preserves FP recursive quality** at this pilot budget.
+
+It also does not prove the reverse universal claims. The single-pass comparator is much larger; recursive and single-pass training objectives differ; the FP and ternary implementations have the documented bias difference; only two model seeds were run; and the task distribution is generated rather than an external benchmark. M06 cannot establish that recursion is intrinsically worse or that ternary reasoning cannot work.
+
+No search/routing/PRM mechanism should be added to reinterpret this result inside M06.
+
+### Accepted environment and regression state
+
+Accepted experiment environment:
+
+```text
+Ubuntu 24.04.4 hosted runner
+AMD EPYC 7763
+x86_64
+4 logical CPUs exposed
+Python 3.11.16
+PyTorch 2.14.0+cpu
+NumPy 2.4.6
+CUDA false
+PyTorch threads 2
+```
+
+This is controlled CI evidence, not target-edge-hardware benchmarking.
+
+After the experiment/evidence verifier succeeded, the full fast regression passed:
+
+```text
+204 passed, 16 deselected in 59.98 s
+```
+
+The 16 slow legacy/capability tests were outside the user-defined M06 experiment scope; M06 does not convert them into acceptance evidence.
 
 ### Repository / evidence state
 
-- M05 base: accepted M04 merge on `main`, `370caf708755e1c68c59d5696778597f0290ea68`
-- Final green implementation head: `5ccd87d907e635b0e47a2e296f65de4c4de78071`
-- Final green implementation workflow: GitHub Actions run `34082746876`
-- Job: `101621021178`
-- Evidence artifact: `m05-checkpoint-eval-evidence`
-- Artifact id: `10004234258`
-- Evidence ZIP SHA-256: `2dc88643726db54eec5c15a66d6833bc178a113ac1d0bad311094bdf67856ed5`
-- Artifact size: 91,098 bytes; workflow retention: 14 days
-- Focused M05 gate: **14 passed in 4.43 s**
-- Full fast suite: **202 passed, 16 deselected in 61.09 s**
-- CI host: Ubuntu 24.04.4, Python 3.11.16, torch 2.14.0+cpu, NumPy 2.4.6, pytest 9.1.1
-- CUDA availability: false
-- RAPL energy on the CI host: unavailable
+Authoritative accepted experiment:
 
-### Root causes closed by M05
+- M06 base: M05-accepted `main`, `1003c59e17dc17e652438317b7480c9e898379af`
+- accepted experimental head: `9fd96e72b9542c33c4ae0639d44847f104a83df8`
+- Actions run: `34124798931`
+- job: `101750849574`
+- artifact: `m06-controlled-baseline-evidence`
+- artifact id: `10019726497`
+- artifact ZIP SHA-256: `63c533e96fba488baac7bb8a44052dd1408a342b21a6313cd8c3c7d1e6b5acb8`
+- artifact size: `6,697,316` bytes
+- retention: 14 days
+- experiment exit: `0`
+- evidence-check exit: `0`
+- fast-regression exit: `0`
 
-Before M05, the research-facing evaluation paths were not trustworthy enough for scientific result labels:
-
-1. `scripts/eval_scaling_laws.py` constructed fresh random TRMs for requested parameter budgets instead of loading trained checkpoints.
-2. The same scaling path constructed fresh random `LatentEnergyVerifier` and `LatentActionCodebook` objects while presenting the configuration as learned search.
-3. `scripts/eval_edge.py` allowed a missing checkpoint to fall through to random initialization.
-4. Scaling rows treated `N_sup` as a generic recursion/search-depth knob even though `LatentNativeMCTS._step()` does not consume `N_sup`; changing it could therefore label two search rows differently while executing identical MCTS transition computation.
-5. M03 split manifests recorded stable IDs/split provenance but did not contain the exact input/target arrays, so evaluation replay still depended on generator code and seed reconstruction.
-6. M04 EMA state tracks trainable parameters only, while ternary `quant_strength` is deliberately a non-persistent buffer stored separately in checkpoint quantization provenance. A research evaluator must restore both pieces explicitly rather than instantiate a fresh rho or substitute raw trainable weights.
-
-### Immutable evaluation snapshot contract
-
-`eval/evaluation_manifest.py` introduces:
+Key retained evidence hashes:
 
 ```text
-format  = spectra.eval_manifest
-version = 1
+summary.json          1a3041d541aee77d50e65f9d4314ff70ba1fe81ccd418a15959adcc55db802aa
+data_manifest.json    bbe21422059fb901d9bb53503110c33250c910e780fade7a9511fc26634237f1
+timing_probe.json     f17a7c51e44fb506ab698fd51a08b740ebb01e74bfd13bb5987e55fb9f179194
+budget_decision.json  4508b46fc2397a69f02b9b974a2c8032eda2474a275fbb1afd6dfb844bb8ab39
+parameter_audit.json  edea84e4ad13f1b9b2d873bdb88fd46ee578d9af03250378d93da103e8d49e9a
+environment.json      6548bcd5c2abc219a941217ae8d45cb4a4433aee206f72ca476d3c36089370cf
 ```
 
-A research evaluation snapshot embeds the exact selected split:
+The artifact retains all six final checkpoints, six per-step learning curves, six complete 128-example prediction JSONL files, raw timing/budget/parameter records, environment/install metadata, failures/diagnostics files, test output, raw run logs, and per-file SHA-256 records.
 
-- input arrays
-- target arrays
-- input masks
-- target masks
-- stable data IDs
-- pre-augmentation group IDs
-- per-example metadata
-- task/scope/official-benchmark label
-- exact task configuration
-- height, width, sequence length, vocabulary and pad token
-- SHA-256 of the source M03 data manifest when available
-- a canonical `manifest_sha256`
+### Pre-acceptance iterations
 
-The canonical digest excludes only its own digest field. Loading recomputes it and rejects tampering. Evaluation constructs the dataset directly from the embedded arrays; it does **not** regenerate examples at evaluation time.
+Two pre-experimental failures are retained because they explain the final protocol provenance:
 
-The M05 reference snapshot was built from `config/m04_cpu_reference.yaml`, seed `20260907`, test size 4. Its canonical SHA-256 was:
+1. Run `34124091722` stopped at architecture-only preflight when the original 1.0% parameter-match tolerance encountered the existing 1.401278% FP/ternary bias-related difference. No M06 timing probe, validation accuracy, test prediction, or performance result ran. The tolerance was amended to 1.5% before experiment execution.
+2. Run `34124576768` passed the amended architecture preflight but failed on a direct-script import-path bug before the timing probe or accuracy ran. The entry point was repaired without changing the experiment protocol.
 
-```text
-d8d4bb166a632fd735f7e2c1380e6cb815c8f5f0f86aefd42a39106e47908747
-```
+Neither failed run exposed a model-performance result.
 
-The four frozen test IDs were:
+### M06 decision
 
-```text
-9d3eda1cb2139845b28a16b2
-9dfaae0192c1ac074bba42eb
-fb66cbcdc44afb5d0818ddff
-1c7f1319ecce8ca1e48f2c37
-```
+M06 closes the **controlled trained baseline** layer for its declared pilot scope. The result is deliberately not upgraded into a central-hypothesis claim: every model's strict solve rate was zero.
 
-Both the `N_sup=1` and `N_sup=2` reference evaluations consumed these exact four IDs in the same order.
+**Evidence required before a later milestone can test additional reasoning mechanisms:** first establish an adequate trained baseline with nonzero strict solves under a separately preregistered, larger-but-bounded data/training budget, and add a size/compute-controlled single-pass comparator. Only after complete-task capability exists should search, routing, verifier, energy, or scaling mechanisms be evaluated as scientific improvements.
 
-### Strict trained-core checkpoint restoration
-
-`eval/checkpoint_eval.py::load_research_trm_checkpoint` requires the current versioned M04 training-state format and rejects:
-
-- missing files
-- legacy weights-only checkpoints
-- non-resume-capable/incomplete checkpoint structures
-- `global_step <= 0` checkpoints
-- unsupported model family metadata
-- missing architecture fields
-- architecture/task shape or vocabulary disagreement
-- incompatible state dicts
-- invalid raw/EMA identity
-- missing EMA trainable parameters
-- missing or inconsistent ternary quantization provenance
-
-The evaluator reconstructs the actual checkpoint model rather than accepting YAML guesses:
-
-- model family
-- dimension and exact parameter count
-- vocabulary / sequence length
-- layer count
-- `n`, `T`, `N_sup`
-- attention heads
-- residual scales
-- max grid size
-- ternary setting
-- A8 setting
-- raw versus recorded EMA evaluation identity
-
-It then forces `model.eval()`; research evaluation itself runs under `torch.inference_mode()`.
-
-#### EMA and non-persistent quantization state
-
-For an EMA-labelled result, every trainable parameter must come from the checkpoint EMA mapping. Raw trainable substitution is forbidden. Persistent non-parameter model state can come from the matching raw state where required by PyTorch state reconstruction.
-
-`FakeBitLinear.quant_strength` is intentionally non-persistent and therefore is not carried by either raw `state_dict()` or EMA. M05 separately restores `training.quantization.strengths` through `load_quant_strength_state` and verifies the restored per-layer values. The ternary+A8 adversarial fixture checkpointed at training step 1 with rho `0.25`; the M05 loader test verifies the research model is restored at rho `0.25` rather than constructor default rho `1.0`.
-
-### Checkpoint / evaluation-manifest compatibility
-
-Research evaluation requires the checkpoint and immutable snapshot to agree on:
-
-- task name
-- height and width
-- sequence length
-- vocabulary
-- exact resolved task configuration
-
-A modified manifest whose digest is deliberately recomputed still fails when its task configuration no longer matches the trained checkpoint. Distribution-shift evaluation therefore requires an explicitly different declared contract; it cannot occur accidentally through regeneration or a config override.
-
-### Learned-search auxiliary checkpoint contract
-
-Research-labelled learned Latent MCTS never creates fresh random auxiliaries.
-
-M05 defines versioned learned auxiliary metadata:
-
-```text
-format  = spectra.learned_auxiliary
-version = 1
-```
-
-The supported M05 auxiliary kinds are:
-
-- `latent_energy_verifier`
-- `latent_action_codebook`
-
-Each artifact must record `trained_steps > 0`, architecture metadata, state dict, and compatibility tied to:
-
-- the **exact core checkpoint SHA-256**
-- task
-- latent dimension
-- vocabulary
-- sequence length
-
-Learned search requires both a compatible verifier checkpoint and a compatible action-policy checkpoint. Missing either one, wrong auxiliary kind, incomplete architecture, malformed state, zero-step/untrained metadata, or a core-checkpoint hash mismatch fails before a research result is emitted.
-
-The M05 adversarial tests use one-step-optimized auxiliary fixtures only to verify this loader/search contract. They are **not** evidence that a scientifically trained verifier or action policy is good, calibrated, or beneficial.
-
-### Compute-knob contract
-
-M05 separates requested labels from computation actually consumed.
-
-#### Ordinary greedy forward
-
-`N_sup` is a real knob for the ordinary TRM forward pass. For a checkpoint with `T` outer cycles and inner recurrence parameter `n`:
-
-```text
-recursive_cycle calls / example = N_sup * T
-shared-operator applications / example = N_sup * T * (n + 1)
-```
-
-The reference checkpoint had `T=1`, `n=1`.
-
-Reference realized totals over the same four examples:
-
-| setting | forward calls | recursive-cycle calls | shared-operator applications | stopping reason |
-|---|---:|---:|---:|---|
-| `N_sup=1` | 4 | 4 | 8 | `greedy_forward_complete` ×4 |
-| `N_sup=2` | 4 | 8 | 16 | `greedy_forward_complete` ×4 |
-
-The tiny reference checkpoint happened to produce the same task metrics at those two settings. This is **not** evidence that the knob was ignored: realized cycle/operator counters doubled exactly as specified.
-
-#### Current native learned MCTS
-
-`LatentNativeMCTS._step()` consumes the checkpoint's `T` and `n` through `recursive_cycle`; it does **not** consume `N_sup`. M05 therefore:
-
-- rejects `ordinary_n_sup` / `N_sup` as an MCTS transition setting
-- keeps the checkpoint's original `N_sup` in provenance only
-- excludes it from the effective search-compute signature
-- records `N_sup_consumed_by_search_transition = false`
-
-Current `LatentNativeMCTS` is also deterministic: there is no random rollout sampling, random tie break, root noise, or stochastic policy sampling. A `search_seed` is therefore currently a decorative ignored setting and is rejected. M05 records:
-
-```text
-search_stochastic = false
-search_seed_consumed = null
-```
-
-If a future stochastic search implementation is introduced, it must define and consume an independent search RNG stream before exposing a research seed knob.
-
-`uncertainty_beta` is consumed only when the loaded verifier implements `value_with_uncertainty`. The strict M05 learned-verifier loader currently supports a single `LatentEnergyVerifier`, which does not implement that interface, so nonzero `uncertainty_beta` is rejected rather than silently ignored. A future ensemble/uncertainty verifier checkpoint must explicitly satisfy that interface before such a sweep is valid.
-
-The effective current MCTS settings therefore include only knobs/metadata actually used by the loaded implementation, such as rollout budget, loaded action count/codebook, checkpoint `T/n`, and PUCT coefficient; uncertainty is valid only with a compatible uncertainty-aware verifier.
-
-### Realized MCTS compute accounting
-
-`CountingLatentNativeMCTS` wraps the existing MCTS methods without changing search math and records per example:
-
-- child transition calls (`_step`)
-- node expansions (`_expand`)
-- verifier calls (`_value`)
-- rollouts requested
-- rollouts completed
-- stopping reason
-- corresponding recursive-cycle and shared-operator applications
-
-The adversarial contract fixture uses three learned actions and two rollouts. It verifies exactly:
-
-```text
-expansions             = 3
-transition calls       = 9
-verifier calls         = 2
-rollouts completed     = 2
-stopping reason        = rollout_budget_exhausted
-```
-
-These values establish accounting for that tested search topology; they are not a claim about learned-search quality.
-
-### Per-example research output
-
-Research evaluation emits a record for every frozen example containing at least:
-
-- checkpoint path and SHA-256
-- checkpoint format/version/global step
-- actual model family and parameter count
-- ternary/A8 settings
-- checkpoint `n/T/N_sup`
-- requested and realized raw/EMA identity
-- actual evaluation backend/device/dtype
-- training runtime metadata
-- evaluation-manifest canonical/file SHA-256
-- split/task/scope
-- data ID and group ID
-- inference setting
-- realized setting
-- verifier/action-policy checkpoint hashes when search is used
-- prediction tokens
-- exact-reference correctness boolean
-- task metrics
-- realized compute counters and stopping reason
-
-The result kind is `research_checkpoint`. Random initialization can never produce that label.
-
-### Random-initialization smoke boundary
-
-Historical parameter-budget random models remain only behind explicit smoke mode:
-
-```text
---smoke-random-init
-```
-
-Smoke rows are permanently marked:
-
-```text
-result_kind     = smoke_random_init
-research_result = false
-```
-
-The old random-initialized dense-vs-SPECTRA null-hypothesis result path was disabled entirely rather than retaining an easy-to-misread pseudo-experiment. A scientific comparative/null-hypothesis result now requires separately trained compatible checkpoints and a fixed evaluation snapshot.
-
-### M05 reference checkpoint-backed run
-
-The accepted implementation CI trained the tiny eight-step M04 CPU teacher only to exercise the full checkpoint→snapshot→evaluation path.
-
-Reference teacher checkpoint file SHA-256:
-
-```text
-2bb51758b5d4bfcbf2f73cbbb7b17a77b24779e5bdf73eb1c2a66501259e59e4
-```
-
-Loaded evaluation provenance:
-
-```text
-model family       = TRM
-parameter count    = 4,488
-ternary            = false
-A8                 = false
-weight identity    = ema
-backend            = pytorch_eager
-device             = cpu
-manifest examples  = 4
-```
-
-Reference metrics for both `N_sup=1` and `N_sup=2` on the same frozen examples were:
-
-```text
-exact reference match = 0.0
-semantic validity      = 0.0
-cell accuracy          = 0.203125
-blank-cell accuracy    = 0.03125
-```
-
-These low values are expected from a tiny mechanics checkpoint and are not a task-capability or scaling-law claim. The single-run CI latency samples (~0.745 ms and ~1.290 ms) are retained only as execution smoke evidence and are **not target-hardware performance claims**. No physical energy reading was available.
-
-### Exact reproducible M05 commands
-
-Create a versioned trained checkpoint:
-
-```bash
-python scripts/train_teacher.py \
-  --config config/m04_cpu_reference.yaml \
-  --train-size 24 --val-size 12 \
-  --out outputs/m05_teacher
-```
-
-Freeze the exact test examples:
-
-```bash
-python scripts/build_eval_manifest.py \
-  --config config/m04_cpu_reference.yaml \
-  --train-size 24 --val-size 12 --test-size 4 \
-  --split test --seed 20260907 \
-  --out outputs/m05_test_manifest.json
-```
-
-Checkpoint-backed scaling/inference sweep:
-
-```bash
-python scripts/eval_scaling_laws.py \
-  --checkpoint outputs/m05_teacher/teacher.pt \
-  --manifest outputs/m05_test_manifest.json \
-  --weights recorded --device cpu \
-  --greedy-n-sup 1 2 \
-  --latency-runs 1 \
-  --out outputs/m05_scaling.csv \
-  --predictions-out outputs/m05_scaling_predictions.jsonl
-```
-
-Checkpoint-backed edge report:
-
-```bash
-python scripts/eval_edge.py \
-  --ckpt outputs/m05_teacher/teacher.pt \
-  --manifest outputs/m05_test_manifest.json \
-  --weights recorded --device cpu \
-  --n-sup 1 2 --latency-runs 1 \
-  --out outputs/m05_edge_report.json
-```
-
-A learned-search research invocation additionally requires one compatible `--verifier-checkpoint` and `--action-checkpoint` per core checkpoint. Current native MCTS is deterministic, so `--search-seed` is intentionally rejected; nonzero `--uncertainty-beta` is also rejected by the single-verifier path because it would not be consumed.
-
-### M05 failures / iterations retained explicitly
-
-No final M05 test was weakened. The following failures or hidden-contract problems were found and closed:
-
-1. **Legacy null-hypothesis expectation.** The first M05 CI run passed all new focused tests and both checkpoint-backed CLIs, but the full suite had one old test expecting random-init dense-vs-SPECTRA rows. The research path was not restored; the legacy test was changed to assert the new rejection boundary.
-2. **Non-persistent ternary rho.** A focused run exposed that `FakeBitLinear.quant_strength` is not in `state_dict`, so a reconstructed ternary evaluator started at rho `1.0` instead of checkpoint rho `0.25`. The loader now restores the explicit M04 quantization-strength snapshot and verifies it.
-3. **MCTS `N_sup` provenance trap.** An early effective-setting record included checkpoint `N_sup`, which could make otherwise identical MCTS settings appear different. It was removed from the effective signature; direct search `N_sup` input is rejected.
-4. **Decorative search seed.** A final search audit confirmed current `LatentNativeMCTS` is deterministic. `search_seed` is now rejected instead of pretending to alter the computation.
-5. **Ignored uncertainty beta.** A nonzero beta would be ignored by a single `LatentEnergyVerifier`. M05 now rejects it unless the loaded verifier implements the uncertainty interface.
-
-Earlier failed-run artifacts remain useful debugging provenance but are not acceptance evidence. The authoritative green implementation evidence is run `34082746876` above.
-
-### Remaining limitations / unsupported claims
-
-- The M05 CI research CLI exercised the **greedy checkpoint-backed path** using a tiny eight-step teacher; it did not establish useful reasoning quality.
-- Learned-search loading/accounting is adversarially unit-tested using one-step auxiliary fixtures. M05 did **not** evaluate a scientifically trained verifier/action-policy pair and therefore does not establish learned-search advantage.
-- The strict M05 auxiliary loader supports a single `LatentEnergyVerifier`; no strict ensemble-verifier checkpoint loader was added in this milestone. Nonzero uncertainty beta is therefore intentionally unavailable in research mode.
-- Current native MCTS is deterministic. The requested independent stochastic-search RNG rule is enforced prospectively: a future stochastic implementation must define/use a separate stream before a seed can be exposed. No stochastic search RNG exists to test today.
-- M05 does not prove a trained scaling law. The harness is now capable of comparing multiple real checkpoints on one frozen snapshot, but the reference evidence contains only one tiny checkpoint and two ordinary-forward compute settings.
-- M05 does not establish a scientific System-1 null-hypothesis comparison; the misleading random-init comparison was disabled and no trained baseline checkpoint experiment was supplied.
-- CUDA/GPU evaluation was unavailable in CI.
-- Physical RAPL energy measurement was unavailable in CI.
-- The small single-run latency values are not target-device benchmarks.
-- Research core loading is intentionally strict to the current `spectra.training` v1 TRM metadata contract. Legacy weights-only files are not research checkpoints.
-- An evaluation manifest is immutable by content hash, but intentional creation of a different rehashed manifest is a different experiment identity; compatibility rules still prevent silent task-config drift.
-- M05 does not establish official ARC/BabyAI results, external benchmark generalization, search-quality gains, scaling laws, energy savings, or production hardware performance.
-
-### M05 decision
-
-M05 closes the **evaluation provenance and execution-contract** layer for the tested scope: research rows require a trained versioned core checkpoint and exact frozen examples; architecture/precision-family settings are restored from metadata; EMA and ternary quantization state are explicit; learned search cannot fabricate random auxiliaries; ignored knobs are rejected; realized compute is counted; and each prediction carries enough provenance to trace it back to checkpoint and data identity.
-
-**Next action:** stop here for M05. Do not convert the tiny reference checkpoint into a capability/scaling claim, and do not claim learned-search benefit until genuinely trained compatible auxiliary checkpoints are evaluated. Merge only after the final documentation-inclusive branch-head CI is green and the user accepts the milestone.
+**Next action: stop here for M06. Do not stack new mechanisms onto this pilot.**
