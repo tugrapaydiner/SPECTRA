@@ -1,86 +1,177 @@
-"""Iso-joule compute-optimal scaling laws (BLUEPRINT sections 5.5, 27.0).
+"""Checkpoint-backed scaling/evaluation sweep.
 
-    python scripts/eval_scaling_laws.py --config config/sudoku.yaml \
-        --params 1000000 7000000 14000000 --depths 1 2 4 8 --rollouts 0 8 32 \
-        --out outputs/scaling.csv
+Research example:
 
-Sweeps parameter budget x recursion depth x Latent-MCTS rollouts, logs measured
-RAPL microjoules per inference (on the Linux x86 eval box), and writes a DataFrame
-ready to plot Accuracy vs. Measured Joules -- the experiment that actually tests
-whether learned test-time search substitutes for parameter count.
+    python scripts/eval_scaling_laws.py \
+      --checkpoint outputs/teacher/teacher.pt \
+      --manifest outputs/eval/sudoku_test.json \
+      --greedy-n-sup 1 2 4 8 \
+      --out outputs/scaling.csv
+
+Random initialization is available only through ``--smoke-random-init`` and every
+row is permanently marked ``research_result=false``.
 """
-
 from __future__ import annotations
 
+import argparse
+import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import argparse  # noqa: E402
-
 import torch  # noqa: E402
 
 from common import get_logger, load_config, resolve_device  # noqa: E402
-from eval.cpufreq import pinned_frequency  # noqa: E402
-from eval.edge_energy import rapl_available  # noqa: E402
-from eval.latent_mcts import LatentNativeMCTS  # noqa: E402
-from eval.scaling import run_null_hypothesis, run_scaling_grid, to_dataframe  # noqa: E402
-from model.energy import LatentEnergyVerifier  # noqa: E402
-from model.latent_action import LatentActionCodebook  # noqa: E402
+from eval.checkpoint_eval import (  # noqa: E402
+    EvaluationContractError,
+    load_research_trm_checkpoint,
+    require_learned_search_auxiliaries,
+)
+from eval.evaluation_manifest import load_evaluation_manifest  # noqa: E402
+from eval.scaling import run_checkpoint_scaling_grid, run_scaling_grid, to_dataframe  # noqa: E402
 from scripts._common import build_datasets  # noqa: E402
 
 log = get_logger("eval_scaling_laws")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Iso-joule scaling-law sweep.")
-    ap.add_argument("--config", default="config/sudoku.yaml")
-    ap.add_argument("--override", nargs="*", default=[])
-    ap.add_argument("--params", type=int, nargs="*", default=[1_000_000, 7_000_000, 14_000_000])
-    ap.add_argument("--depths", type=int, nargs="*", default=[1, 2, 4, 8])
-    ap.add_argument("--rollouts", type=int, nargs="*", default=[0, 8, 32])
-    ap.add_argument("--val-size", type=int, default=128)
-    ap.add_argument("--out", default="outputs/scaling.csv")
-    ap.add_argument("--null-hypothesis", action="store_true",
-                    help="also evaluate the iso-FLOP dense baseline (spectra vs dense)")
-    args = ap.parse_args()
+def _write_jsonl(path: str | Path, rows: list[dict]) -> None:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
 
-    cfg = load_config(args.config, args.override)
-    device = resolve_device(cfg.device)
-    _, val = build_datasets(cfg, n_train=1, n_val=args.val_size)
+
+def _research(args) -> None:
+    if not args.checkpoint:
+        raise EvaluationContractError("research scaling requires --checkpoint")
+    if not args.manifest:
+        raise EvaluationContractError("research scaling requires --manifest")
+    if args.config or args.params or args.depths or args.rollouts:
+        raise EvaluationContractError(
+            "--config/--params/--depths/--rollouts are random-init smoke arguments; "
+            "research architecture/task state comes from checkpoint + immutable manifest"
+        )
+
+    manifest = load_evaluation_manifest(args.manifest)
+    device = resolve_device(args.device)
+    cores = [
+        load_research_trm_checkpoint(p, device=device, weight_identity=args.weights)
+        for p in args.checkpoint
+    ]
+
+    search_rollouts = [int(v) for v in (args.search_rollouts or [])]
+    auxiliary_pairs = []
+    if search_rollouts:
+        if len(args.verifier_checkpoint or []) != len(cores) or len(args.action_checkpoint or []) != len(cores):
+            raise EvaluationContractError(
+                "learned search requires one --verifier-checkpoint and one --action-checkpoint per core checkpoint"
+            )
+        for core, verifier_path, action_path in zip(
+            cores, args.verifier_checkpoint, args.action_checkpoint
+        ):
+            auxiliary_pairs.append(
+                require_learned_search_auxiliaries(
+                    core,
+                    verifier_checkpoint=verifier_path,
+                    action_checkpoint=action_path,
+                )
+            )
+    else:
+        if args.verifier_checkpoint or args.action_checkpoint:
+            raise EvaluationContractError(
+                "auxiliary checkpoints were supplied but no --search-rollouts were requested"
+            )
+        auxiliary_pairs = [None] * len(cores)
+
+    rows, examples = run_checkpoint_scaling_grid(
+        cores,
+        manifest,
+        greedy_n_sup=args.greedy_n_sup,
+        search_rollouts=search_rollouts,
+        auxiliary_pairs=auxiliary_pairs,
+        search_seed=int(args.search_seed),
+        c_puct=float(args.c_puct),
+        uncertainty_beta=float(args.uncertainty_beta),
+        n_latency_runs=int(args.latency_runs),
+    )
+    df = to_dataframe(rows)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out, index=False)
+    predictions = args.predictions_out or str(out.with_suffix(".predictions.jsonl"))
+    _write_jsonl(predictions, examples)
+    log.info(
+        "research checkpoint grid: checkpoints=%d settings=%d fixed_examples=%d -> %s",
+        len(cores), len(rows), len(manifest.dataset), out,
+    )
+    log.info("per-example predictions -> %s", predictions)
+
+
+def _smoke(args) -> None:
+    if not args.config:
+        raise EvaluationContractError("--smoke-random-init requires --config")
+    if args.checkpoint or args.manifest or args.verifier_checkpoint or args.action_checkpoint:
+        raise EvaluationContractError("smoke random-init mode cannot accept research checkpoints/manifests")
+    cfg = load_config(args.config)
+    device = resolve_device(args.device or cfg.device)
+    _, val = build_datasets(cfg, n_train=1, n_val=int(args.val_size))
     x = torch.from_numpy(val.inputs).to(device)
     y = torch.from_numpy(val.targets).to(device)
-    h, w = val.height, val.width
-    num_tokens, seq_len = int(cfg.data.num_tokens), int(cfg.data.seq_len)
-    max_grid = int(cfg.data.get("max_grid_size", 32))
-
-    def mcts_factory(model, rollouts):
-        verifier = LatentEnergyVerifier(num_tokens, dim=model.dim, max_grid_size=max_grid).to(device)
-        codebook = LatentActionCodebook(model.dim, n_actions=3).to(device)
-        return LatentNativeMCTS(model, verifier, codebook, h, w, n_rollouts=rollouts)
-
-    log.info("RAPL available: %s (microjoules logged only on Linux x86)", rapl_available())
-    # Hold the CPU at a fixed operating point so AVX2 thermal throttling does not
-    # corrupt the iso-joule curve (no-op + reported off Linux / without root).
-    with pinned_frequency(disable_turbo=True) as freq:
-        log.info("CPU frequency pinned: %s (%s)", freq["pinned"], freq.get("reason", ""))
-        factory = mcts_factory if any(r > 0 for r in args.rollouts) else None
-        if args.null_hypothesis:
-            # Spectra (small + recursion + search) vs dense (more params) at iso-FLOP.
-            rows = run_null_hypothesis(
-                args.params[0], args.depths, args.rollouts, x, y, h, w, num_tokens, seq_len,
-                device=device, max_grid_size=max_grid, mcts_factory=factory,
-            )
-        else:
-            rows = run_scaling_grid(
-                args.params, args.depths, args.rollouts, x, y, h, w, num_tokens, seq_len,
-                device=device, max_grid_size=max_grid, mcts_factory=factory,
-            )
+    rows = run_scaling_grid(
+        param_targets=args.params or [40_000],
+        depths=args.depths or [1],
+        rollouts_list=args.rollouts or [0],
+        x=x,
+        y=y,
+        height=val.height,
+        width=val.width,
+        num_tokens=int(cfg.data.num_tokens),
+        seq_len=int(cfg.data.seq_len),
+        device=device,
+        n_latency_runs=int(args.latency_runs),
+        max_grid_size=int(cfg.data.get("max_grid_size", 32)),
+        smoke_random_init=True,
+    )
     df = to_dataframe(rows)
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(args.out, index=False)
-    log.info("Scaling grid (%d points) -> %s\n%s", len(df), args.out, df.to_string(index=False))
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out, index=False)
+    log.warning("SMOKE RANDOM INIT ONLY: %d rows -> %s; these are not research results", len(rows), out)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Checkpoint-backed scaling/evaluation sweep.")
+    ap.add_argument("--checkpoint", nargs="*", default=[])
+    ap.add_argument("--manifest", default=None)
+    ap.add_argument("--weights", choices=["recorded", "raw", "ema"], default="recorded")
+    ap.add_argument("--device", default="cpu")
+    ap.add_argument("--greedy-n-sup", type=int, nargs="*", default=None,
+                    help="ordinary forward N_sup values; this knob is not applied to MCTS transitions")
+    ap.add_argument("--search-rollouts", type=int, nargs="*", default=[])
+    ap.add_argument("--verifier-checkpoint", nargs="*", default=[])
+    ap.add_argument("--action-checkpoint", nargs="*", default=[])
+    ap.add_argument("--search-seed", type=int, default=20260907)
+    ap.add_argument("--c-puct", type=float, default=1.5)
+    ap.add_argument("--uncertainty-beta", type=float, default=0.0)
+    ap.add_argument("--latency-runs", type=int, default=3)
+    ap.add_argument("--out", default="outputs/scaling.csv")
+    ap.add_argument("--predictions-out", default=None)
+
+    # Explicitly segregated historical/random-init plumbing mode.
+    ap.add_argument("--smoke-random-init", action="store_true")
+    ap.add_argument("--config", default=None)
+    ap.add_argument("--params", type=int, nargs="*", default=[])
+    ap.add_argument("--depths", type=int, nargs="*", default=[])
+    ap.add_argument("--rollouts", type=int, nargs="*", default=[])
+    ap.add_argument("--val-size", type=int, default=8)
+    args = ap.parse_args()
+
+    if args.smoke_random_init:
+        _smoke(args)
+    else:
+        _research(args)
 
 
 if __name__ == "__main__":
