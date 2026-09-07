@@ -1,6 +1,6 @@
 """Symbolic task verifiers with explicit milestone-03 contracts.
 
-Scores are soft diagnostics.  Boolean ``*_correct`` functions are the semantic
+Scores are soft diagnostics. Boolean ``*_correct`` functions are the semantic
 success gates and intentionally do not substitute exact reference matching.
 """
 from __future__ import annotations
@@ -14,6 +14,20 @@ from data import maze as maze_task
 # --------------------------------------------------------------------------- #
 # Sudoku
 # --------------------------------------------------------------------------- #
+_INTEGER_DTYPES = {
+    torch.uint8,
+    torch.int8,
+    torch.int16,
+    torch.int32,
+    torch.int64,
+}
+
+
+def _require_integral_tensor(t: torch.Tensor, name: str) -> None:
+    if t.dtype not in _INTEGER_DTYPES:
+        raise TypeError(f"{name} must use an integer dtype, got {t.dtype}")
+
+
 def _require_sudoku_shape(puzzle: torch.Tensor, candidate: torch.Tensor, box: int) -> int:
     if not isinstance(box, int) or isinstance(box, bool) or box <= 0:
         raise ValueError("box must be a positive integer")
@@ -27,6 +41,8 @@ def _require_sudoku_shape(puzzle: torch.Tensor, candidate: torch.Tensor, box: in
         )
     if puzzle.device != candidate.device:
         raise ValueError("Sudoku puzzle/candidate must be on the same device")
+    _require_integral_tensor(puzzle, "Sudoku puzzle")
+    _require_integral_tensor(candidate, "Sudoku candidate")
     return n
 
 
@@ -63,6 +79,7 @@ def sudoku_puzzle_valid(puzzle: torch.Tensor, box: int) -> torch.Tensor:
     n = box * box
     if puzzle.ndim != 2 or puzzle.shape[1] != n * n:
         raise ValueError(f"Sudoku puzzle must have shape [B, {n*n}]")
+    _require_integral_tensor(puzzle, "Sudoku puzzle")
     rows, cols, boxes = _rows_cols_boxes(puzzle, box)
     return (
         _partial_groups_valid(rows, n)
@@ -147,7 +164,7 @@ def maze_score(input_grid: torch.Tensor, candidate: torch.Tensor, height: int, w
     """Soft structural score plus the strict semantic-success component.
 
     Crucially, a candidate with no PATH cells receives zero for the path-overlay
-    component.  Copying a non-trivial unsolved input therefore cannot score as a
+    component. Copying a non-trivial unsolved input therefore cannot score as a
     semantic success.
     """
     _require_maze_shape(input_grid, candidate, height, width)
