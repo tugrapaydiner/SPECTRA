@@ -1,0 +1,92 @@
+name: m06-capability-gates
+
+on:
+  push:
+    branches: [research/m06-capability-gates]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capability-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CPU dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p .m06
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m06/install_torch.txt
+          timeout 180s python -m pip install -r requirements.txt |& tee .m06/install_requirements.txt
+          python - <<'PY' | tee .m06/environment.txt
+          import platform, torch, numpy, pytest
+          print("platform=", platform.platform())
+          print("torch=", torch.__version__)
+          print("numpy=", numpy.__version__)
+          print("pytest=", pytest.__version__)
+          print("cuda_available=", torch.cuda.is_available())
+          PY
+
+      - name: Run all slow scientific capability gates
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 2400s python -m pytest -m slow -ra --durations=25 |& tee .m06/pytest_slow.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m06/slow_exit_code.txt
+          exit 0
+
+      - name: Run full fast regression
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 600s python -m pytest -m "not slow" -ra |& tee .m06/pytest_fast.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m06/fast_exit_code.txt
+          exit 0
+
+      - name: Record branch provenance
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "base=1003c59e17dc17e652438317b7480c9e898379af"
+            git diff --stat 1003c59e17dc17e652438317b7480c9e898379af...HEAD
+          } | tee .m06/diff_stat.txt
+
+      - name: Upload M06 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m06-capability-gates-evidence
+          path: .m06/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce M06 acceptance
+        shell: bash
+        run: |
+          slow=$(cat .m06/slow_exit_code.txt)
+          fast=$(cat .m06/fast_exit_code.txt)
+          echo "slow_exit_code=$slow"
+          echo "fast_exit_code=$fast"
+          if [ "$slow" -ne 0 ] || [ "$fast" -ne 0 ]; then
+            echo "M06 acceptance failed: both the complete slow capability suite and fast regression must pass."
+            exit 1
+          fi
+          echo "M06 acceptance passed."
