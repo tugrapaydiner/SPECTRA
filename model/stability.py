@@ -1,16 +1,7 @@
-"""Stability Shield helpers for ternary training (BLUEPRINT section 11).
-
-Progressive ternarization (section 11.5/11.6) is implemented as a smooth
-*quant-strength warmup*: every ``FakeBitLinear`` carries a rho in [0, 1] that
-interpolates its forward weight from full precision (rho=0) to hard ternary
-(rho=1). Ramping rho up over training avoids the shock of an abrupt switch to
-ternary. ``ternary_report`` exposes the weight distribution for the saturation
-collapse detector (section 11.7).
-"""
-
+"""Stability Shield helpers for ternary training."""
 from __future__ import annotations
 
-from typing import Any, Iterator
+from typing import Any, Iterator, Mapping
 
 import torch.nn as nn
 
@@ -31,11 +22,38 @@ def set_quant_strength(model: nn.Module, rho: float) -> None:
         module.quant_strength.fill_(rho)
 
 
-class QuantWarmup:
-    """Linear soft->hard ternarization schedule (section 11.6).
+def quant_strength_state(model: nn.Module) -> dict[str, float]:
+    """Return per-layer quantization strength for checkpoint provenance."""
+    return {
+        name: float(module.quant_strength.item())
+        for name, module in iter_bitlinears(model)
+    }
 
-    ``rho = min(1, step / warmup_steps)``. Call :meth:`apply` each training step
-    to push the model from full precision toward hard ternary.
+
+def load_quant_strength_state(
+    model: nn.Module,
+    state: Mapping[str, float],
+) -> None:
+    """Strictly restore per-layer quantization strength."""
+    current = {name: module for name, module in iter_bitlinears(model)}
+    if set(current) != set(state):
+        missing = sorted(set(current) - set(state))
+        extra = sorted(set(state) - set(current))
+        raise ValueError(
+            f"quantization-strength keys mismatch: missing={missing}, extra={extra}"
+        )
+    for name, module in current.items():
+        rho = float(state[name])
+        if not 0.0 <= rho <= 1.0:
+            raise ValueError(f"invalid quantization strength for {name}: {rho}")
+        module.quant_strength.fill_(rho)
+
+
+class QuantWarmup:
+    """Linear soft->hard ternarization schedule.
+
+    ``rho = min(1, step / warmup_steps)``. The schedule has no hidden mutable
+    counter; checkpoints record ``warmup_steps`` plus the actual per-layer rho.
     """
 
     def __init__(self, warmup_steps: int):
@@ -77,11 +95,7 @@ def ternary_report(model: nn.Module) -> dict[str, Any]:
 def is_ternary_saturated(
     report: dict[str, Any], max_zero: float = 0.90, min_zero: float = 0.005
 ) -> bool:
-    """Detect ternary saturation collapse (section 11.7).
-
-    Too many zeros (> ``max_zero``) means a dead model; almost no zeros
-    (< ``min_zero``) means the ternary code collapsed to a noisy binary {-1,+1}.
-    """
+    """Detect dead-zero or effectively-binary ternary saturation."""
     if report.get("num_ternary_layers", 0) == 0:
         return False
     zero = report["zero"]
