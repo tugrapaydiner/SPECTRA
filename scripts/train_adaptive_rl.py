@@ -265,10 +265,11 @@ def rollout_batch(
                 state, active_mask=route_mask, reactivation_policy="allow"
             )
             candidate = out["logits"].argmax(dim=-1)
-            exact = sudoku_correct(x, candidate, box=box) & valid
+            exact = sudoku_correct(x, candidate, box=box).bool() & valid
 
         last_budget = k + 1 >= k_steps
-        eligible = valid & ~exact & ~last_budget
+        budget_mask = torch.full_like(valid, last_budget, dtype=torch.bool)
+        eligible = valid & ~exact & ~budget_mask
         if bool(eligible.any()):
             action, hlp, hent = halter.act(out["y"].detach(), d, sample=training)
             voluntary = action.bool() & eligible
@@ -282,7 +283,7 @@ def rollout_batch(
         halter_decision.append(hdecision)
 
         terminated_now = exact | voluntary
-        truncated_now = valid & ~terminated_now & last_budget
+        truncated_now = valid & ~terminated_now & budget_mask
         terminated_rows.append(terminated_now)
         truncated_rows.append(truncated_now)
         success_rows.append(exact)
