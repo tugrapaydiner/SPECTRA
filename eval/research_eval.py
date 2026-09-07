@@ -248,6 +248,13 @@ def evaluate_setting(
         action_policy.module.eval()
         if verifier.module.training or action_policy.module.training:
             raise EvaluationContractError("learned search auxiliaries must be in eval mode")
+        if setting.uncertainty_beta > 0.0 and not hasattr(
+            verifier.module, "value_with_uncertainty"
+        ):
+            raise EvaluationContractError(
+                "uncertainty_beta is not consumed by the loaded verifier; "
+                "a nonzero uncertainty setting requires a compatible ensemble verifier checkpoint"
+            )
     elif verifier is not None or action_policy is not None:
         raise EvaluationContractError("greedy evaluation must not attach unused learned auxiliaries")
 
