@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python -m py_compile model/latent_action.py eval/action_search.py eval/action_checkpoint.py scripts/train_action_policy.py
+          python -m py_compile model/latent_action.py eval/action_search.py eval/action_checkpoint.py scripts/train_action_policy.py scripts/train_action_policy_v3.py
           echo "$?" | tee .m09/compile_exit_code.txt
           exit 0
 
@@ -52,17 +52,17 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          timeout 300s python -m pytest tests/test_m09_trained_actions.py -q |& tee .m09/pytest_m09.txt
+          timeout 300s python -m pytest tests/test_m09_trained_actions.py tests/test_m09_challenger.py -q |& tee .m09/pytest_m09.txt
           code=${PIPESTATUS[0]}
           echo "$code" | tee .m09/focused_exit_code.txt
           exit 0
 
-      - name: Run M09 trained action experiment
+      - name: Run M09 budget-aligned challenger experiment
         shell: bash
         run: |
           set +e
           set -o pipefail
-          timeout 1800s python scripts/train_action_policy.py --out .m09/experiment |& tee .m09/run.log
+          timeout 1800s python scripts/train_action_policy_v3.py --out .m09/experiment |& tee .m09/run.log
           code=${PIPESTATUS[0]}
           echo "$code" | tee .m09/experiment_exit_code.txt
           exit 0
@@ -76,9 +76,9 @@ jobs:
           root=pathlib.Path('.m09/experiment')
           required=[
               'reasoner.pt','action_policy.pt','target_table.pt','summary.json',
-              'target_generation.json','development_versions.json','untouched_test.json',
+              'target_generation.json','v3_development.json','untouched_test.json',
               'freeze_audit.json','exact_commands.json','SUMMARY.md',
-              'comparisons/untouched_test.jsonl',
+              'comparisons/development_v3.jsonl','comparisons/untouched_test.jsonl',
           ]
           missing=[p for p in required if not (root/p).is_file()]
           print('missing=', missing)
@@ -87,17 +87,22 @@ jobs:
           print(json.dumps(s, indent=2, sort_keys=True))
           assert s['status']=='complete', s['status']
           assert s['acceptance_pass'] is True
+          assert s['selected_version']=='v3_budget_aligned_challenger'
+          assert s['prior_failed_run']==34138116310
           assert s['reference_target_used'] is False
           assert s['test_inputs_evaluated_after_checkpoint_freeze'] is True
           assert s['reasoner_freeze_audit']['unchanged'] is True
           assert s['reasoner_freeze_audit']['reasoner_parameter_in_action_optimizer'] is False
           assert s['target_generation']['train_work']['state_action_equivalents'] <= 25000
           assert s['selected_training']['parameter_count'] < 50000
+          assert s['selected_training']['fit_depths']==[0]
           fs=s['selected_training']['first_step']
           assert fs['direction_grad_norm_preclip'] > 0
           assert fs['policy_head_grad_norm_preclip'] > 0
           assert fs['direction_change_after_step'] > 0
           assert fs['policy_head_change_after_step'] > 0
+          d=s['development']
+          assert d['pass'] is True and all(d['checks'].values())
           t=s['untouched_test']
           assert t['pass'] is True
           assert t['paired_vs_unguided']['mean_delta'] >= 0.005
