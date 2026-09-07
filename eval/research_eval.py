@@ -125,7 +125,9 @@ def realized_setting(
     return {
         "mode": "latent_mcts",
         "ordinary_n_sup": None,
-        "checkpoint_N_sup": int(model.N_sup),
+        # checkpoint N_sup remains in checkpoint provenance, but is deliberately
+        # absent from the effective search-compute signature because _step does
+        # not consume it.
         "N_sup_consumed_by_search_transition": False,
         "transition_T_cycles": int(model.T),
         "transition_inner_n": int(model.n),
