@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/m06-controlled-baseline.yml'
       - 'scripts/m06_baseline_experiment.py'
+      - 'scripts/m06_protocol_runner.py'
       - 'docs/M06_PROTOCOL.md'
   workflow_dispatch:
 
@@ -48,9 +49,10 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          python -m py_compile scripts/m06_baseline_experiment.py
+          python -m py_compile scripts/m06_baseline_experiment.py scripts/m06_protocol_runner.py
           python - <<'PY' | tee .m06/preflight.txt
           import scripts.m06_baseline_experiment as m
+          import scripts.m06_protocol_runner as contract
           rows=[]
           for kind in m.KINDS:
               model=m.make_model(kind, 1)
@@ -59,9 +61,10 @@ jobs:
               print(row)
           counts={r['kind']: r['trainable_params'] for r in rows}
           gap=abs(counts['fp_recursive']-counts['ternary_recursive'])/counts['fp_recursive']
-          assert gap <= 0.01, (gap, counts)
+          assert gap <= contract.RECURSIVE_PARAMETER_MATCH_TOLERANCE, (gap, counts)
           assert counts['single_pass'] > max(counts['fp_recursive'], counts['ternary_recursive']), counts
           print('recursive_parameter_gap=', gap)
+          print('recursive_parameter_tolerance=', contract.RECURSIVE_PARAMETER_MATCH_TOLERANCE)
           print('parameter_counts=', counts)
           PY
 
@@ -70,7 +73,7 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          timeout 1800s python scripts/m06_baseline_experiment.py --out .m06 |& tee .m06/run.log
+          timeout 1800s python scripts/m06_protocol_runner.py --out .m06 |& tee .m06/run.log
           code=${PIPESTATUS[0]}
           echo "$code" | tee .m06/experiment_exit_code.txt
           exit 0
