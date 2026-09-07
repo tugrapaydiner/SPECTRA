@@ -1,16 +1,8 @@
-"""Teacher -> student trajectory distillation (BLUEPRINT sections 11, 10.4).
+"""Distillation and auxiliary-training losses.
 
-The Stability Shield trains the ternary/quantized *student* to imitate a stable
-FP16 *teacher* -- not just its final answer, but its whole recursive trajectory.
-The loss has three parts, per supervision step:
-
-  * task: standard deep-supervision loss against the ground truth,
-  * logit distillation: temperature-softened KL from the teacher's logits,
-  * state distillation: MSE between student and teacher latent states (y, z),
-    i.e. the section 10.4 ``lambda_z * ||z_hat - z||^2`` term.
-
-The teacher is frozen (its tensors are detached), so gradients only update the
-student.
+This module contains both independently supervised losses and search-bootstrapped
+losses.  M07 makes that provenance boundary explicit: MCTS backup values are
+useful self-training targets, but they are not independent verifier ground truth.
 """
 
 from __future__ import annotations
@@ -21,6 +13,9 @@ import torch
 import torch.nn.functional as F
 
 from train.losses import deep_supervision_loss
+
+MCTS_BOOTSTRAP_TARGET_KIND = "mcts_bootstrap_value_v1"
+GROUNDED_VERIFIER_TARGET_KIND = "sudoku_one_cycle_improvement_v1"
 
 
 def trajectory_distillation_loss(
@@ -34,19 +29,7 @@ def trajectory_distillation_loss(
     lambda_h: float = 0.5,
     lambda_improve: float = 0.1,
 ) -> tuple[torch.Tensor, dict[str, float]]:
-    """Combined task + logit + state distillation loss.
-
-    Args:
-        student_steps: Student ``TRM.forward`` step outputs (carry gradient).
-        teacher_steps: Teacher step outputs (treated as constants / detached).
-        y_target: Ground-truth token ids ``[B, L]``.
-        lambda_task / lambda_logit / lambda_state: Term weights.
-        temperature: Softmax temperature for logit distillation.
-        lambda_h / lambda_improve: Passed through to the task loss.
-
-    Returns:
-        ``(total_loss, components)`` where ``components`` holds the scalar parts.
-    """
+    """Combined task + logit + state distillation loss."""
     if len(student_steps) != len(teacher_steps):
         raise ValueError("student and teacher must have the same number of steps")
 
@@ -60,7 +43,6 @@ def trajectory_distillation_loss(
     for s, t in zip(student_steps, teacher_steps):
         s_logp = F.log_softmax(s["logits"] / tau, dim=-1)
         t_p = F.softmax(t["logits"].detach() / tau, dim=-1)
-        # Per-token KL(teacher || student), averaged, scaled by tau^2.
         kl = (t_p * (torch.log(t_p + 1e-9) - s_logp)).sum(dim=-1).mean()
         logit_loss = logit_loss + kl * (tau * tau)
         state_loss = state_loss + F.mse_loss(s["y"], t["y"].detach())
@@ -79,6 +61,34 @@ def trajectory_distillation_loss(
     }
 
 
+def grounded_improvement_bce_loss(
+    verifier,
+    x: torch.Tensor,
+    y_state: torch.Tensor,
+    z_state: torch.Tensor,
+    labels: torch.Tensor,
+    width: int = 9,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    """BCE for the independently grounded M07 one-cycle improvement event.
+
+    ``labels`` must be binary values produced by the M07 oracle target constructor;
+    this loss never constructs labels from verifier predictions or MCTS backups.
+    """
+    labels = labels.to(dtype=torch.float32)
+    if labels.ndim != 1:
+        labels = labels.reshape(-1)
+    if not torch.logical_or(labels == 0, labels == 1).all():
+        raise ValueError("grounded verifier labels must be binary 0/1")
+    logits = verifier.forward_logits(x, y_state, z_state, width)
+    loss = F.binary_cross_entropy_with_logits(logits, labels.to(logits))
+    p = torch.sigmoid(logits.detach())
+    return loss, {
+        "bce": float(loss.detach()),
+        "mean_probability": float(p.mean()),
+        "positive_rate": float(labels.mean()),
+    }
+
+
 def latent_prm_loss(
     verifier,
     x: torch.Tensor,
@@ -87,29 +97,15 @@ def latent_prm_loss(
     width: int = 9,
     visit_weights: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, float]]:
-    """MCTS-bootstrapped **unsupervised Process Reward Model** training (BC #2).
+    """Regress **MCTS-bootstrapped** per-node values.
 
-    OpenAI's o1 scales on a PRM that scores intermediate reasoning steps, trained
-    with expensive human step labels. SPECTRA bootstraps the PRM autonomously: the
-    Monte-Carlo backup already assigns a value ``q = W/N`` to every intermediate
-    latent ``z_k`` it visits (``LatentNativeMCTS.prm_targets``). Regressing the
-    energy verifier ``V_psi(x, z)`` onto those backed-up per-step values turns the
-    outcome verifier (ORM) into a **process** verifier (PRM) with NO human labels:
-
-        L_PRM = sum_k w_k * ( V_psi(x, z_k) - q_k )^2 ,    w_k ∝ N_k (visit count)
-
-    More-visited nodes have lower-variance targets, so visit weighting focuses the
-    PRM on the parts of the tree the search actually trusted.
-
-    Args:
-        verifier: A latent value model exposing ``value(x, z, width) -> [M]``.
-        x: The problem tokens ``[1, L]`` (broadcast over the M latents).
-        z_states: Intermediate latents ``[M, L, D]`` (from ``prm_targets``).
-        value_targets: Backed-up MCTS values ``[M]`` (the process rewards).
-        visit_weights: Optional per-node visit counts ``[M]`` for weighting.
+    The targets are ``q=W/N`` values produced by the current search/verifier loop.
+    They are self-training signals of kind ``mcts_bootstrap_value_v1`` and must not
+    be presented as independent verifier ground truth.  M07 acceptance never uses
+    this loss or these targets as its grounding evidence.
     """
     x_rep = x.expand(z_states.shape[0], -1)
-    pred = verifier.value(x_rep, z_states, width)  # [M]
+    pred = verifier.value(x_rep, z_states, width)
     sq_err = (pred - value_targets.to(pred)) ** 2
     if visit_weights is not None:
         w = visit_weights.to(pred) / visit_weights.sum().clamp_min(1e-8)
@@ -130,26 +126,9 @@ def alphazero_distillation_loss(
     lambda_value: float = 1.0,
     lambda_answer: float = 1.0,
 ) -> tuple[torch.Tensor, dict[str, float]]:
-    """AlphaZero-style distillation: internalise the FULL MCTS search distribution.
-
-    Cross-entropy on System 2's final answer alone is behavioral cloning -- it
-    throws away 99% of the search signal and caps out. True self-play trains the
-    policy head on the MCTS visit distribution ``pi(a) ∝ N(s,a)^{1/tau}`` and the
-    value head on the search value ``v``:
-
-        L = lambda_p * [ -sum_a pi(a) log p_student(a) ]   # policy: -pi^T log p
-          + lambda_v * (v_student - v_search)^2            # value
-          + lambda_a * CE(answer, y*)                      # (optional) grounded answer
-
-    Args:
-        student_policy_logits: Student policy logits ``[B, A]`` over codebook actions.
-        student_value: Student value prediction ``[B]``.
-        search_policy: MCTS visit distribution ``[B, A]`` (sums to 1, detached target).
-        search_value: MCTS root value ``[B]`` (detached target).
-        answer_logits / y_target: Optional grounded-answer CE term.
-    """
+    """AlphaZero-style distillation from search outputs."""
     logp = F.log_softmax(student_policy_logits, dim=-1)
-    policy_loss = -(search_policy.detach() * logp).sum(dim=-1).mean()  # AlphaZero policy CE
+    policy_loss = -(search_policy.detach() * logp).sum(dim=-1).mean()
     value_loss = F.mse_loss(student_value, search_value.detach())
 
     total = lambda_policy * policy_loss + lambda_value * value_loss
@@ -171,24 +150,7 @@ def system1_distillation_loss(
     lambda_conf: float = 0.5,
     temperature: float = 2.0,
 ) -> tuple[torch.Tensor, dict[str, float]]:
-    """Distil the recursive teacher into the feed-forward System 1 student.
-
-    The student learns to (a) predict the answer (cross-entropy vs ground truth),
-    (b) match the teacher's softened logits (KL), and (c) predict whether its own
-    answer is correct (confidence BCE) so dual-mode routing can trust it
-    (BLUEPRINT section 10.4: "System 1: predict final answer directly").
-
-    Args:
-        student_logits: Student answer logits ``[B, L, V]``.
-        student_conf_logit: Student confidence logit ``[B]``.
-        teacher_logits: Teacher (System 2) answer logits ``[B, L, V]`` (detached).
-        y_target: Ground-truth tokens ``[B, L]``.
-        lambda_kl / lambda_conf: Term weights.
-        temperature: Softmax temperature for the KL term.
-
-    Returns:
-        ``(total_loss, components)``.
-    """
+    """Distil the recursive teacher into the feed-forward System 1 student."""
     ce = F.cross_entropy(
         student_logits.reshape(-1, student_logits.size(-1)), y_target.reshape(-1)
     )
