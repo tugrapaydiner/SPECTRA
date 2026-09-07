@@ -42,6 +42,9 @@ class SelfAttention(nn.Module):
         if dim % heads != 0:
             raise ValueError(f"dim={dim} must be divisible by heads={heads}")
         self.heads = heads
+        # Match nn.MultiheadAttention's metadata spelling. This is a plain
+        # integer alias only; it does not alter attention math or checkpoint state.
+        self.num_heads = heads
         self.head_dim = dim // heads
         self.q = linear_cls(dim, dim, bias=bias)
         self.k = linear_cls(dim, dim, bias=bias)
