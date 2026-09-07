@@ -1,0 +1,204 @@
+name: m09-trained-actions
+
+on:
+  push:
+    branches: [research/m09-trained-actions]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trained-actions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CPU dependencies
+        run: |
+          set -euxo pipefail
+          mkdir -p .m09
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m09/install_torch.txt
+          timeout 180s python -m pip install -r requirements.txt |& tee .m09/install_requirements.txt
+          python - <<'PY' | tee .m09/environment_bootstrap.txt
+          import os, platform, sys, torch, numpy
+          print('python=', sys.version)
+          print('platform=', platform.platform())
+          print('machine=', platform.machine())
+          print('logical_cpus=', os.cpu_count())
+          print('torch=', torch.__version__)
+          print('numpy=', numpy.__version__)
+          print('cuda_available=', torch.cuda.is_available())
+          PY
+
+      - name: Compile M09 paths
+        shell: bash
+        run: |
+          set +e
+          python -m py_compile model/latent_action.py eval/action_search.py eval/action_checkpoint.py scripts/train_action_policy.py scripts/train_action_policy_v3.py scripts/export_m09_development_checkpoint.py
+          echo "$?" | tee .m09/compile_exit_code.txt
+          exit 0
+
+      - name: Focused M09 contracts
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 300s python -m pytest tests/test_m09_trained_actions.py tests/test_m09_challenger.py -q |& tee .m09/pytest_m09.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m09/focused_exit_code.txt
+          exit 0
+
+      - name: Run M09 budget-aligned challenger experiment
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 1800s python scripts/train_action_policy_v3.py --out .m09/experiment |& tee .m09/run.log
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m09/experiment_exit_code.txt
+          exit 0
+
+      - name: Preserve incomplete development checkpoint
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          experiment=$(cat .m09/experiment_exit_code.txt 2>/dev/null || echo 99)
+          if [ "$experiment" -eq 3 ]; then
+            timeout 600s python scripts/export_m09_development_checkpoint.py --experiment-dir .m09/experiment |& tee .m09/development_checkpoint_export.txt
+            code=${PIPESTATUS[0]}
+          else
+            echo "experiment exit=$experiment; no failed-development checkpoint export needed" | tee .m09/development_checkpoint_export.txt
+            code=0
+          fi
+          echo "$code" | tee .m09/preserve_checkpoint_exit_code.txt
+          exit 0
+
+      - name: Verify M09 evidence state
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY' |& tee .m09/evidence_check.txt
+          import json, pathlib, sys
+          root=pathlib.Path('.m09/experiment')
+          common=[
+              'reasoner.pt','target_table.pt','summary.json','target_generation.json',
+              'v3_development.json','comparisons/development_v3.jsonl',
+          ]
+          missing=[p for p in common if not (root/p).is_file()]
+          print('missing_common=', missing)
+          if missing: sys.exit(2)
+          s=json.loads((root/'summary.json').read_text())
+          print(json.dumps(s, indent=2, sort_keys=True))
+          assert s['reasoner_frozen_unchanged'] is True
+          assert s['target_generation']['reference_target_used'] is False
+          assert s['target_generation']['train_work']['state_action_equivalents'] <= 25000
+          if str(s['status']).startswith('incomplete_'):
+              required=['development_action_policy.pt','development_checkpoint.json']
+              missing=[p for p in required if not (root/p).is_file()]
+              print('missing_incomplete=', missing)
+              if missing: sys.exit(2)
+              assert s['acceptance_pass'] is False
+              assert s['test_inputs_evaluated'] is False
+              d=s['v3_development']
+              assert d['pass'] is False
+              assert d['paired_vs_unguided']['mean_delta'] < 0.005
+              ck=json.loads((root/'development_checkpoint.json').read_text())
+              assert ck['accepted_practical_benefit'] is False
+              assert ck['test_inputs_evaluated'] is False
+              assert ck['class']=='BudgetAlignedChallengerCodebook'
+              assert ck['fitted_version']=='v3_budget_aligned_challenger'
+              assert ck['reference_target_used'] is False
+              print('M09_INCOMPLETE_EVIDENCE_RETAINED=PASS')
+              sys.exit(2)  # intentionally nonzero: empirical acceptance is not satisfied
+          required=[
+              'action_policy.pt','untouched_test.json','freeze_audit.json','exact_commands.json',
+              'SUMMARY.md','comparisons/untouched_test.jsonl',
+          ]
+          missing=[p for p in required if not (root/p).is_file()]
+          print('missing_complete=', missing)
+          if missing: sys.exit(2)
+          assert s['status']=='complete'
+          assert s['acceptance_pass'] is True
+          assert s['selected_version']=='v3_budget_aligned_challenger'
+          assert s['reference_target_used'] is False
+          assert s['test_inputs_evaluated_after_checkpoint_freeze'] is True
+          assert s['reasoner_freeze_audit']['unchanged'] is True
+          assert s['reasoner_freeze_audit']['reasoner_parameter_in_action_optimizer'] is False
+          fs=s['selected_training']['first_step']
+          assert fs['direction_grad_norm_preclip'] > 0
+          assert fs['policy_head_grad_norm_preclip'] > 0
+          assert fs['direction_change_after_step'] > 0
+          assert fs['policy_head_change_after_step'] > 0
+          assert s['development']['pass'] is True and all(s['development']['checks'].values())
+          t=s['untouched_test']
+          assert t['pass'] is True
+          assert t['paired_vs_unguided']['mean_delta'] >= 0.005
+          assert t['paired_vs_unguided']['wins'] > t['paired_vs_unguided']['losses']
+          assert all(t['checks'].values())
+          print('M09_EVIDENCE_GATE=PASS')
+          PY
+          echo "$?" | tee .m09/evidence_check_exit_code.txt
+          exit 0
+
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 600s python -m pytest -m "not slow" -ra |& tee .m09/pytest_fast.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m09/fast_exit_code.txt
+          exit 0
+
+      - name: Record provenance and evidence hashes
+        if: always()
+        run: |
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "base=049ada6b01260662e1b3f037522fbe9a84d6d1c6"
+            echo
+            git diff --stat 049ada6b01260662e1b3f037522fbe9a84d6d1c6...HEAD
+          } | tee .m09/diff_stat.txt
+          python - <<'PY' | tee .m09/evidence_sha256.txt
+          import hashlib, pathlib
+          root=pathlib.Path('.m09')
+          for p in sorted(q for q in root.rglob('*') if q.is_file() and q.name!='evidence_sha256.txt'):
+              print(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.as_posix()}")
+          PY
+
+      - name: Upload M09 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m09-trained-actions-evidence
+          path: .m09/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce M09 acceptance execution
+        if: always()
+        run: |
+          compile=$(cat .m09/compile_exit_code.txt 2>/dev/null || echo 99)
+          focused=$(cat .m09/focused_exit_code.txt 2>/dev/null || echo 99)
+          experiment=$(cat .m09/experiment_exit_code.txt 2>/dev/null || echo 99)
+          preserve=$(cat .m09/preserve_checkpoint_exit_code.txt 2>/dev/null || echo 99)
+          evidence=$(cat .m09/evidence_check_exit_code.txt 2>/dev/null || echo 99)
+          fast=$(cat .m09/fast_exit_code.txt 2>/dev/null || echo 99)
+          echo "compile=$compile focused=$focused experiment=$experiment preserve=$preserve evidence=$evidence fast=$fast"
+          if [ "$compile" -ne 0 ] || [ "$focused" -ne 0 ] || [ "$preserve" -ne 0 ] || [ "$experiment" -ne 0 ] || [ "$evidence" -ne 0 ] || [ "$fast" -ne 0 ]; then
+            echo "M09 acceptance failed; incomplete evidence/checkpoint may still be valid and retained."
+            exit 1
+          fi
+          echo "M09 acceptance passed."
