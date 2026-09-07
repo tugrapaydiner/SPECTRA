@@ -53,6 +53,11 @@ def _research(args) -> None:
             "--config/--params/--depths/--rollouts are random-init smoke arguments; "
             "research architecture/task state comes from checkpoint + immutable manifest"
         )
+    if args.search_seed is not None:
+        raise EvaluationContractError(
+            "current LatentNativeMCTS is deterministic and does not consume --search-seed; "
+            "a future stochastic search mode must define an independent RNG stream"
+        )
 
     manifest = load_evaluation_manifest(args.manifest)
     device = resolve_device(args.device)
@@ -91,7 +96,7 @@ def _research(args) -> None:
         greedy_n_sup=args.greedy_n_sup,
         search_rollouts=search_rollouts,
         auxiliary_pairs=auxiliary_pairs,
-        search_seed=int(args.search_seed),
+        search_seed=None,
         c_puct=float(args.c_puct),
         uncertainty_beta=float(args.uncertainty_beta),
         n_latency_runs=int(args.latency_runs),
@@ -152,7 +157,10 @@ def main() -> None:
     ap.add_argument("--search-rollouts", type=int, nargs="*", default=[])
     ap.add_argument("--verifier-checkpoint", nargs="*", default=[])
     ap.add_argument("--action-checkpoint", nargs="*", default=[])
-    ap.add_argument("--search-seed", type=int, default=20260907)
+    ap.add_argument(
+        "--search-seed", type=int, default=None,
+        help="reserved for a future stochastic search implementation; current native MCTS rejects it",
+    )
     ap.add_argument("--c-puct", type=float, default=1.5)
     ap.add_argument("--uncertainty-beta", type=float, default=0.0)
     ap.add_argument("--latency-runs", type=int, default=3)
