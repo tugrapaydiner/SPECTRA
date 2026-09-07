@@ -9,9 +9,14 @@ all training/evaluation logic remains in m06_baseline_experiment.py.
 """
 from __future__ import annotations
 
-import json
+import sys
+from pathlib import Path
 
-import scripts.m06_baseline_experiment as experiment
+# Direct execution sets sys.path[0] to scripts/. Add the repository root so the
+# same package imports work both from `python scripts/...` and module preflight.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import scripts.m06_baseline_experiment as experiment  # noqa: E402
 
 RECURSIVE_PARAMETER_MATCH_TOLERANCE = 0.015
 
