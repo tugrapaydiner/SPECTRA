@@ -1,4 +1,8 @@
-"""Tiny Recursive Model (TRM): the FP16 recursive reasoning core.
+"""Tiny Recursive Model (TRM): precision-agnostic recursive reasoning core.
+
+Compute precision is selected by the training/runtime boundary, not by this model
+class. M04 uses FP32 for the deterministic CPU reference and provides an explicit
+CUDA ``fp16_amp`` autocast path when FP16 compute is requested.
 
 This implements the recursion of BLUEPRINT sections 5 and 15. Three states are
 carried through the loop:
@@ -49,7 +53,7 @@ class TRM(nn.Module):
         alpha_z: Initial residual-scaling for ``z`` updates (section 5.6).
         max_grid_size: Max grid extent for row/col positional embeddings.
         linear_cls: Projection factory for the blocks' FFNs (``nn.Linear`` for
-            FP16; ``FakeBitLinear`` to ternarize only the FFN).
+            the dense path; ``FakeBitLinear`` to ternarize only the FFN).
         ternary: If True, build a fully ternary recursive core -- ``FakeBitLinear``
             FFN + ternary attention + ternary output head (W1.58). Embeddings,
             norms, and the halting head stay higher precision (section 11.5).
