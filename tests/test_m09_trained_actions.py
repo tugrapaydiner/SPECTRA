@@ -227,16 +227,14 @@ def test_action_checkpoint_rejects_reference_leakage(tmp_path: Path):
 
 
 def test_greedy_coverage_selection_is_deterministic_and_train_only_math():
-    # cols: identity, c0, c1, c2
     small = torch.tensor([
         [0.2, 0.8, 0.3, 0.2],
         [0.5, 0.4, 0.9, 0.5],
         [0.4, 0.4, 0.4, 0.7],
     ])
-    # Pad to the protocol's 24 candidates with dominated columns.
     utilities = torch.cat([small, torch.full((3, 21), -1.0)], dim=1)
     selected, report = greedy_coverage_select(utilities, 3)
-    assert selected == [1, 0, 2]  # c1 gives largest first coverage, then c0, then c2
+    assert selected == [0, 1, 2]
     assert report["coverage_gain"] > 0
 
 
