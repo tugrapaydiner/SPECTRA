@@ -4,9 +4,9 @@
 
 ### Sparse Policy-guided Energy-aware Cache-Ternary Recursive Agent
 
-**An edge-native o1** — a 1.58-bit recursive reasoner that recreates the test-time-compute paradigm (Cache-Resident Latent MCTS guided by a self-taught, label-free Process Reward Model) on a single legacy CPU core.
+**An edge-native recursive reasoner** — a W1.58A8 recurrent core with latent search, adaptive execution, grounded verification, and a correctness-first native CPU path.
 
-[Architecture spec](docs/ARCHITECTURE.md) · [The physics](#1-the-physics-of-b1-ternary-gemv) · [Reasoning stack](#7-the-reasoning-stack) · [Telemetry firehose](#8-the-telemetry-firehose)
+[Architecture spec](docs/ARCHITECTURE.md) · [Measurement protocol](docs/M13_PROTOCOL.md) · [Reasoning stack](#7-the-reasoning-stack) · [Telemetry](#8-the-telemetry-firehose)
 
 </div>
 
@@ -14,206 +14,190 @@
 
 ## Abstract
 
-SPECTRA is a **high-fidelity scientific instrument** built to test one hypothesis on real silicon: that *learned, cache-resident test-time search* is a second axis of scaling that can substitute for parameter count under a fixed physical joule budget. The reasoning core is **W1.58A8** — ternary weights in `{-1, 0, +1}` with INT8 activations — applied recursively, with AlphaZero-style search running **inside the INT8 latent space** and a Process Reward Model that labels its own intermediate steps from Monte-Carlo backups. Every figure below is **measured on physical hardware**; nothing is illustrative. If a quantity has not been measured, it is not plotted.
+SPECTRA is a **scientific instrument** for testing whether compact recursive reasoning plus learned test-time control can improve the quality/compute frontier on constrained CPUs. The reasoning core uses ternary weights in `{-1, 0, +1}` with quantized recurrent state boundaries, explicit recursive execution, latent search, learned routing/halting, and independent symbolic task validation.
 
-**Results at a glance** — host: 13th-Gen Intel Core i7-13620H (L2 `1.25 MB` / L3 `24 MB`, read from `/sys`). Regenerate on any target with `scripts/bench_*.py` → `scripts/render_*.py`.
+M13 tightened the measurement boundary substantially. Hardware timings and counter readings are retained as raw rows; derived arithmetic-intensity values are labeled as logical traffic models rather than measured DRAM traffic; CPU-package RAPL is never called GPU or whole-system energy; and unavailable counters remain unavailable rather than becoming zero. The accepted M13 raw evidence and regenerated figure live in [`results/m13/`](results/m13/).
 
-| Quantity | Measured | Source |
-|---|---|---|
-| Kernel correctness | **AVX2 ≡ scalar, bit-exact** | `tests/test_kernel.py` |
-| B=1 throughput vs reuse `K` | `0.6 → 49.9 GOP/s` (`K = 1 → 256`) | `bench_kernel.py` |
-| Arithmetic intensity | `AI = 4K` : `3.9 → 1008 ops/byte` | `eval/roofline.py` |
-| AVX2 vs scalar | `1.3–2.0×` (peak `2.7×` at `K = 256`) | SIMD sweep |
-| Lazy-routing saving | `10%` active → `9.7×` cheaper (linear) | sparse kernel |
-| Memory hierarchy | flat `~30 GOP/s`, `32 KB → 32 MB` | cache sweep |
-| Core footprint | `1.34 MB` packed, `16×` vs FP32 | `deploy/pack_ternary.py` |
+**M13 retained measurement host:** Intel Xeon Platinum 8573C, Linux `6.17.0-1022-azure`, process affinity CPUs `0–3`, PyTorch threads `2`, observed `performance` governor. These measurements characterize that run only.
 
----
-
-## 1. The physics of B=1 ternary GEMV
-
-At batch size 1 the forward pass is a matrix–vector product: each weight is read **once** and used in **one** multiply-accumulate, so there is no reuse to cache-block and arithmetic intensity (`AI`, ops per DRAM byte) is fixed by precision alone:
-
-$$
-\mathrm{AI} \;=\; \frac{\text{ops}}{\text{DRAM bytes}} \;=\; \frac{O\,H}{O\,H \cdot \text{bits}/8} \;=\; \frac{8}{\text{bits}}
-\qquad\Longrightarrow\qquad
-\mathrm{AI}_{\text{FP32}} = 0.25, \quad \mathrm{AI}_{\text{W1.58}} = 4 .
-$$
-
-FP32 is hopelessly memory-bound; W1.58 (2-bit) cuts the streamed bytes `16×` but is still below the ridge point `AI* = P_peak / BW` on most cores. Quantization alone cannot cross the roofline. The move to *compute-bound* comes from recursion: the same ternary core is re-applied `K = T·n·N_sup` times, and if it stays cache-resident, DRAM pays once.
-
-$$
-\mathrm{AI}_K \;=\; \frac{K\,O\,H}{O\,H \cdot \text{bits}/8} \;=\; \frac{8K}{\text{bits}} \;=\; 4K,
-\qquad
-P \;=\; \min\!\big(P_{\text{peak}},\; \mathrm{BW}\cdot\mathrm{AI}\big).
-$$
-
-<div align="center">
-<img src="assets/04_roofline.png" width="78%" alt="Measured roofline of the B=1 ternary GEMV"/>
-</div>
-
-Driving the production kernel with reuse `K ∈ [1, 256]` traces the predicted curve exactly: a single GEMV (`K = 1`, `AI ≈ 4`) is memory-bound at `0.6 GOP/s`, and as reuse climbs the operating point walks up the roofline to a compute-bound `~50 GOP/s` at `K = 256` (`AI ≈ 1008`). The `AI` axis is computed by `eval/roofline.py`; the throughput axis is timed.
+| Quantity | Retained result | Scope |
+|---|---:|---|
+| Native correctness | scalar/native fidelity contracts pass | correctness evidence |
+| Complete sequential B=1 solve | **7.586 ms median / 7.819 ms p95** | 24 distinct held-out instances × 3 warm rounds; decode + semantic validation included |
+| Cold first solve | **16.417 s** | includes artifact load and native extension build/load |
+| Precomputed K-input reuse | **0.36 → 31.13 GOP/s** (`K=1→256`, AVX2) | microbenchmark with all `K` inputs already materialized; **not** sequential recurrence evidence |
+| Modelled K-input intensity | **7.64 → 407.06 operations/byte** | external first-touch logical-byte model; **not measured DRAM bytes** |
+| Packed weights in M13 runtime | **3,112 B** | packed ternary weight tensors only |
+| Full model state | **53,184 B** | parameters + persistent buffers under actual dtypes |
+| Search-tree tensor storage | **73,472 B** | controlled reference tree tensor storages; excludes Python allocator overhead |
+| Process RSS | **374.72 MiB sampled peak** | 0.5 ms sampler; short allocations can be missed |
+| CPU-package energy | **unavailable** | hosted runner exposed no readable package domain; joules are `null`, not `0` |
 
 ---
 
-## 2. Weight-stationary recursion
+## 1. Operation and traffic convention
 
-The kernel `spectra_weight_stationary_gemv` decodes each 2-bit weight row **once** and dots it against all `K` recursion-step activations before eviction. The one-time DRAM weight fetch is amortized over `K` applications, so DRAM traffic *per MAC* collapses as `1/K`:
+M13 uses one arithmetic convention everywhere:
 
 $$
-\frac{\text{DRAM weight bytes}}{\text{MAC}} \;=\; \frac{O\,H \cdot \text{bits}/8}{K\,O\,H} \;=\; \frac{\text{bits}}{8K} \;=\; \frac{0.25}{K} \quad(\text{2-bit}).
+1\ \mathrm{MAC} = 2\ \mathrm{arithmetic\ operations}.
 $$
 
-<div align="center">
-<img src="assets/06_weight_stationary.png" width="78%" alt="Throughput rises as DRAM bytes per MAC fall as 1/K"/>
-</div>
+Throughput is therefore reported in arithmetic GOP/s, and arithmetic intensity is reported in arithmetic operations per declared byte. For a dense matrix-vector product with `O·H` MACs, the arithmetic numerator is `2OH`, not `OH`.
 
-Measured throughput (left axis) rises monotonically with `K` while the exact bytes/MAC (right axis, log) falls as `0.25/K` — the two are the same physical statement. Reuse, not quantization, is what converts a memory-bound GEMV into a compute-bound one.
+The important denominator distinction is equally explicit. `eval/roofline.py` now models **logical/external first-touch bytes**: packed weights, activation inputs, outputs, and requantization metadata. Those are not hardware DRAM transactions. For example, the retained 512×512, K=1 precomputed-input row has:
+
+```text
+MACs                              262,144
+arithmetic operations             524,288
+packed weights                     65,536 B
+input activations                     512 B
+output activations                    512 B
+requant metadata                    2,048 B
+modelled external first-touch      68,608 B
+arithmetic intensity                  7.642 operations/B
+```
+
+A roofline classification produced from assumed peak compute and assumed bandwidth is a **model**, not evidence that a measured workload resided in a particular cache or saturated DRAM.
 
 ---
 
-## 3. The fused AVX2 kernel
+## 2. Precomputed K-input reuse is a microbenchmark
 
-The hot loop is integer-only and branch-free. Ternary codes are unpacked 32-at-a-time with a single `pshufb` lookup; the dot product uses `_mm256_sign_epi8` (sign-select `±x` or `0`, **no multiplies**); requantization is an integer multiply-shift (no FP division in the loop):
+`spectra_weight_stationary_gemv` accepts a pre-created `[K,H]` activation matrix in one native call. It decodes each packed weight row and applies that row to all `K` already-materialized input vectors. This is useful for measuring reuse **inside that kernel invocation**.
 
-$$
-\mathrm{acc}_o \;=\; \sum_{d=1}^{H} w^{q}_{o,d}\, x_d,
-\qquad
-y_o \;=\; \mathrm{clip}\!\left(\frac{\mathrm{acc}_o\, m_o + 2^{\,s-1}}{2^{\,s}},\; -128,\; 127\right),
-\qquad
-m_o \approx \frac{\gamma_o\, s_{\text{act}}}{s_{\text{out}}} .
-$$
+It is not the same workload as actual recurrent reasoning, where step `k+1` cannot exist until step `k` has produced the next recurrent state. M13 therefore labels every retained row:
 
-The AVX2 path is validated **bit-for-bit** against a scalar oracle and the PyTorch fake-quant reference.
+```text
+workload = precomputed_input_reuse
+```
 
-<div align="center">
-<img src="assets/05_simd_scaling.png" width="78%" alt="AVX2 vs scalar throughput and speedup across hidden widths"/>
-</div>
+and benchmarks actual sequential recurrence separately.
 
-Across contraction widths `H ∈ [64, 2048]` the vectorized kernel sustains `1.3–2.0×` over scalar (up to `2.7×` at high reuse). The gap widens with width as the decode and MACs amortize loop overhead — and the AVX2 output is identical to scalar, so the speedup carries no accuracy cost.
+On the accepted Xeon runner the AVX2 precomputed-input microbenchmark rose from `0.358 GOP/s` at `K=1` to `31.134 GOP/s` at `K=256`. The corresponding derived intensity rose from `7.64` to `407.06 operations/B` because the model amortizes packed weights while also accounting for the growing K input/output activation traffic.
+
+These measurements do **not** establish cache residency or a bandwidth bottleneck. The raw rows are in [`results/m13/precomputed_input_reuse.csv`](results/m13/precomputed_input_reuse.csv).
 
 ---
 
-## 4. Compute-bound across the memory hierarchy
+## 3. The fused AVX2 microkernel
 
-A textbook B=1 GEMV is memory-bound. SPECTRA's is not. Sweeping the resident weight-matrix size across this CPU's real L2/L3 boundaries (the kernel re-reads the matrix `Nₐ` times) holds throughput flat from L2 into DRAM:
+The historical integer kernel packs ternary codes and uses vector sign/select operations for the hot dot-product path, with integer requantization. Its scalar and AVX2 implementations have correctness contracts and bit-exact comparison tests.
 
-$$
-P(|W|) \;\approx\; \text{const} \qquad \text{for}\quad 32\,\text{KB} \;\le\; |W| \;\le\; 32\,\text{MB}\;\; (> \text{L3}).
-$$
-
-<div align="center">
-<img src="assets/02_cache_residency.png" width="78%" alt="Throughput flat from 32 KB to 32 MB: compute-bound across L2, L3 and DRAM"/>
-</div>
-
-Throughput is identical whether the weights live in L2, in L3, or in main memory past the `24 MB` L3 — there is **no DRAM cliff**. The ternary decode plus `_mm256_sign_epi8` is the bottleneck, not bandwidth, so the effective DRAM rate (`~3.6 GB/s`) sits far below the machine's peak. This is the empirical counterpart of §1: the kernel is decode-limited, which is exactly the regime in which the `1.34 MB` cache-resident core wins.
+The K-input benchmark remains useful as a native-kernel microbenchmark, but M13 intentionally separates it from the deployed M10/M11 mixed-precision recursive runtime. The M10 deployed runtime uses its correctness-first packed-ternary FP32 scalar C++ primitive plus explicit FP32 attention, normalization, GELU, residual, A8 boundary, halt, and decode work. A fast isolated AVX2 microkernel is not by itself a whole-solve performance claim.
 
 ---
 
-## 5. Lazy active-token routing
+## 4. Memory-size sweeps are not cache-residency proofs
 
-A learned RL policy freezes confident tokens; the sparse kernel computes only the active set `Aₖ`, so cost scales with the number of active tokens rather than sequence length `L`:
+Earlier SPECTRA experiments observed relatively flat throughput across a broad weight-matrix-size sweep. That observation remains useful raw microbenchmark behavior, but the interpretation is narrower after M13:
 
-$$
-\text{cost} \;\propto\; |A_k|,
-\qquad
-\text{speedup} \;=\; \frac{L}{|A_k|}.
-$$
+> A flat throughput curve alone does not prove that weights reside in L2/L3, does not prove that accesses came from DRAM, and does not prove that the kernel is bandwidth-bound or decode-bound.
 
-The router is trained by the dense GAE-λ objective of §7 with a per-step active-token penalty.
+Establishing those claims requires independent hardware evidence such as cache-miss / memory-controller / PMU counters under a controlled frequency and affinity protocol. M13 does not have that evidence, so the accepted state records:
 
-<div align="center">
-<img src="assets/03_lazy_routing.png" width="78%" alt="Sparse-kernel latency is linear in active-token fraction"/>
-</div>
+```text
+cache_residency_established     false
+bandwidth_bottleneck_established false
+```
 
-Measured `spectra_sparse_ternary_gemv` latency is dead-linear in the active fraction: at `10%` active density the layer is `9.7×` cheaper than dense. Because cost is exactly proportional to the kept tokens, every frozen token is compute the model never spends.
+The project name and cache-aware design motivation remain; measured cache residency is an open hardware-validation question.
+
+---
+
+## 5. Adaptive token execution
+
+SPECTRA has both heuristic and learned active-token control. M11 established that real adaptive execution can skip declared active-query/pointwise work while keeping dense K/V context, but also showed that control/gather/scatter overhead can erase a theoretical arithmetic saving on small workloads.
+
+M12 then added a real grounded actor-critic training path for the router and halter. Its bounded held-out policy result was **negative**: the learned router collapsed toward low activity, reduced the logical cost proxy, did not halt earlier, solved `0/96` like the baselines, and slightly reduced structural score. The training path passed; learned-control superiority did not.
+
+Accordingly, microkernel active-row savings are not reported as automatic end-to-end speedups or quality improvements.
 
 ---
 
 ## 6. W1.58A8 numerics and footprint
 
-Weights are ternarized per output channel by absmean scaling with a straight-through estimator (forward ternary, gradient to the full-precision master weight), under a soft warmup that ramps `ρ : 0 → 1`. Activations use per-token symmetric INT8.
+Weights are ternarized per output channel by absmean scaling with a straight-through estimator during training. Ternary codes pack four 2-bit codes per byte. Recurrent A8 boundaries use per-token dynamic quantize/dequantize semantics in the accepted M10 deployment path.
 
-$$
-\gamma_o = \frac{1}{H}\sum_{d=1}^{H} |W_{o,d}|,
-\qquad
-w^{q}_{o,d} = \mathrm{clip}\!\big(\mathrm{round}(W_{o,d}/\gamma_o),\,-1,\,1\big),
-\qquad
-W_{\text{fwd}} = (1-\rho)\,W + \rho\,(\gamma \odot w^{q}),
-$$
+A small packed representation can be a necessary condition for cache-aware execution, but **size alone is not proof of cache residency**. M13 therefore reports separate memory scopes rather than collapsing them into one “model RAM” number:
 
-$$
-s = \frac{\max_d |x_d|}{127},
-\qquad
-x^{q} = \mathrm{clip}\!\big(\mathrm{round}(x/s),\,-128,\,127\big).
-$$
+- packed ternary weights;
+- complete in-memory model parameter/buffer state;
+- explicit search-tree tensor storage;
+- current process RSS;
+- sampled window-local RSS peak;
+- Linux lifetime `VmHWM` when available.
 
-Ternary codes pack 4-per-byte (`00 → 0`, `01 → +1`, `10 → −1`), so the core costs `⌈N/4⌉` bytes.
-
-<div align="center">
-<img src="assets/01_core_memory_footprint.png" width="78%" alt="The 5.6M-param ternary core packs to 1.34 MB, 16x smaller than FP32"/>
-</div>
-
-The `5.6M`-parameter recursive core packs to **`1.34 MB`** — exactly `16×` (= 32/2) smaller than FP32, computed by the production packer, not estimated. That is the precondition for §2 and §4: only at this size does the core stay resident in fast cache so the one-time fetch can be amortized.
+For the retained M13 pilot those values were `3,112 B`, `53,184 B`, `73,472 B`, `374.72 MiB`, `374.72 MiB`, and `375.43 MiB`, respectively. The process figures include Python/PyTorch/native-runtime overhead and are intentionally not presented as model-weight memory.
 
 ---
 
 ## 7. The reasoning stack
 
-**Dense, verifier-bootstrapped RL (router/halter).** Per-step credit via GAE-λ instead of a single terminal reward, shaped by the frozen neural energy verifier value `V^ψ = −E_ψ(x, z)`, with a Polyak-tracked target critic and a stop-gradient on the latent to keep the bootstrap stationary (`train/rl.py`):
+**Grounded router/halter actor-critic.** M12 uses per-example terminal/truncation masks and GAE-λ. True terminals zero the value bootstrap; time-limit truncations retain the final value bootstrap but end the sampled trace. Forced environment actions receive no invented policy-gradient credit. The dense shaping term uses the discount-consistent potential form:
 
 $$
-r_k = \big(V^{\psi}_{k+1} - V^{\psi}_k\big) - \lambda_{\text{tok}}\frac{|A_k|}{L} - \lambda_{\text{step}},
-\qquad
-\delta_k = r_k + \gamma\, V_\phi(z^{k+1}) - V_\phi(z^k),
-\qquad
-A_k = \sum_{l \ge 0} (\gamma\lambda)^l\, \delta_{k+l}.
+F(s_k,s_{k+1}) = \gamma\,\Phi(s_{k+1}^{\mathrm{effective}}) - \Phi(s_k),
 $$
 
-**Cache-Resident Latent MCTS.** Search runs over INT8 latents (never decoding to tokens), expanding nodes with a learned action codebook. Selection uses PUCT on a **pessimistic** value, where `μ, σ` are the mean and disagreement of a deep ensemble, so out-of-distribution latents are penalized rather than chased (`eval/latent_mcts.py`, `model/energy.py`):
+with terminal effective potential zero and truncation retaining the actual next-state potential. Step/token compute costs and task-success / voluntary-halt terms are logged separately.
 
-$$
-a^\star = \arg\max_{a}\Big[\, Q_{\text{LCB}}(s,a) + c_{\text{puct}}\, P(s,a)\, \frac{\sqrt{N(s)}}{1 + N(s,a)} \,\Big],
-\qquad
-V_{\text{LCB}}(z) = \mu(z) - \beta\,\sigma(z).
-$$
+**Latent MCTS.** SPECTRA has an inspectable MCTS reference with explicit node state, PUCT selection, work counters, and verifier interfaces. M09’s trained action mechanism did not meet its preregistered practical-effect threshold, so the repository does **not** claim learned-search benefit from that milestone.
 
-**Unsupervised Latent PRM (o1-style, no human labels).** The Monte-Carlo backup already assigns every visited latent a value `qₖ = Wₖ/Nₖ`; regressing the energy verifier onto those backups turns an outcome RM into a *process* RM, visit-weighted toward the parts of the tree the search trusted (`train/distill.py`). Vector quantization bounds compounding recursion error by the codebook covering radius `r`, converting `O(ε·Lᵈ)` drift into a depth-independent `O(r)` (`model/latent_vq.py`):
+**Grounded verifier.** The independent verifier path is trained against frozen-reasoner continuation behavior and is checkpoint-compatible with the reasoner. Symbolic task correctness remains the terminal semantic authority for accepted Sudoku evaluation; verifier scores are not substituted for exact task correctness.
 
-$$
-\mathcal{L}_{\text{PRM}} = \sum_k w_k\big(V_\psi(x, z_k) - q_k\big)^2,\quad w_k \propto N_k,
-\qquad
-\big\lVert z - \mathrm{snap}(z) \big\rVert \le r .
-$$
-
-The effective reasoning depth of the core is `D_eff = T·(n+1)·L_layers` (`model/trm.py`).
+The effective recursive depth of the core remains controlled by the explicit TRM schedule and its execution-state API.
 
 ---
 
 ## 8. The telemetry firehose
 
-`common/telemetry_logger.py` — **`SpectraTelemetryLogger`** extracts five ground-truth streams from a live run, fully decoupled from any plotting:
+`common/telemetry_logger.py` extracts run telemetry independently of plotting. M13 unified its physical-energy reader with `eval/edge_energy.py` through `common/energy_counters.py`.
 
 | Stream | Output | Captured |
 |---|---|---|
-| MCTS tree | `mcts_graphs.jsonl` | full graph: visits `N`, `Q = W/N`, epistemic `σ`, PRM reward, principal variation |
-| Hardware | `hardware_telemetry.csv` | RAPL joules, peak RAM, latency — background sampler |
-| Latents | `latent_states.parquet` | raw INT8 `z` plus active-token mask, per step and token |
-| Microsecond trace | `trace.json` | Chrome / Perfetto — Python loop vs C++ AVX2 lanes |
-| Scaling | `spectra_scaling_laws.csv` | task × params × rollouts × measured joules × correctness |
+| MCTS tree | `mcts_graphs.jsonl` | visits, Q, verifier diagnostics, principal variation |
+| Hardware | `hardware_telemetry.csv` | validated CPU-package energy **or explicit unavailable reason**, latency, sampled RSS maximum, sampling interval/limit |
+| Latents | `latent_states.parquet` | INT8 latent state plus active-token mask |
+| Microsecond trace | `trace.json` | Python/native/search spans |
+| Scaling | `spectra_scaling_laws.csv` | task × params × rollouts × correctness with nullable physical-energy fields |
 
-```python
-from common.telemetry_logger import SpectraTelemetryLogger
+Physical-energy semantics are deliberately strict:
 
-with SpectraTelemetryLogger("runs/spectra") as log:
-    with log.profile_hardware(task_id):            # RAPL + peak RAM + latency
-        _, steps = model(x, height=h, width=w)
-        best = mcts.search(x)                       # populates mcts.root
-    log.export_latents(steps, task_id)             # INT8 latents -> Parquet
-    log.dump_mcts_tree(mcts, x, task_id)           # search graph -> JSONL
-    log.log_scaling_row(task_id, model=model, mcts_rollouts=mcts.n_rollouts,
-                        is_correct=ok, total_joules=j, total_latency_ms=ms)
+- each readable counter has explicit identity, parent domain, class, and `max_energy_range_uj`;
+- one conservative wrap can be reconstructed from the counter-specific range;
+- reset-like decreases, malformed endpoints, changed counter sets, and partial reads invalidate the window;
+- nested child domains are never added to a package total;
+- CPU-package RAPL can include cores and other on-package components, but it is **not discrete-GPU energy and not whole-system/wall energy**;
+- unavailable energy is `None` / JSON `null`, never fabricated `0.0`.
+
+Controlled counter fixtures cover normal zero, wraparound, reset/corruption, out-of-range, unreadable/partial data, and nested domains. Those fixtures are synthetic contract tests, not physical energy measurements.
+
+---
+
+## 9. M13 complete-solve measurement
+
+The primary M13 workload is actual sequential `CPURecursiveRuntime.forward` execution. Each timed B=1 solve includes the recurrent native/mixed-precision runtime, output decode, and semantic Sudoku validation. Training/export are excluded from warm latency; cold start is recorded separately.
+
+Accepted raw timing protocol:
+
+```text
+held-out instances           24 distinct
+warm-up instances             4 distinct
+timing rounds                 3
+raw warm timing rows          72
+inference_mode              true
+reference targets used      false
+warm median               7.585985 ms
+warm p95                  7.819384 ms
+cold first solve        16417.175752 ms
 ```
+
+The cold observation includes artifact load/validation, runtime construction, native extension build/load, and the first complete solve. It is never averaged into the warm latency.
+
+For one complete recurrent solve, the retained native linear work counter reports `1,583,104 MACs = 3,166,208 arithmetic operations`. M13’s traffic model accounts for packed/scales/FP persistent storage, FP32 native input/output tensor boundaries, recurrent y/z read/write lower bounds, input/decode traffic, and separately discloses algorithmic attention-score bytes if materialized. The denominator is labeled **logical tensor/interface bytes**, not measured cache or DRAM traffic.
+
+![M13 complete solve latency](results/m13/m13_full_solve_latency.svg)
 
 ---
 
@@ -221,27 +205,27 @@ with SpectraTelemetryLogger("runs/spectra") as log:
 
 ```bash
 pip install -r requirements.txt
-pytest -m "not slow"                      # full fast gate (33 test modules), ~5 min
-python setup.py build_ext --inplace       # optional native AVX2 kernel (gcc/Linux or MSVC, AVX2)
-pytest tests/test_kernel.py               # AVX2 == scalar == PyTorch, bit-exact
+pytest -m "not slow"
+python setup.py build_ext --inplace       # optional native AVX2 kernel
+pytest tests/test_kernel.py
 ```
 
-The full design specification lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+The full design specification lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Measurement acceptance is defined in [`docs/M13_PROTOCOL.md`](docs/M13_PROTOCOL.md), with durable raw evidence in [`results/m13/`](results/m13/).
 
 ## The open question
 
-The kernel, the telemetry firehose, the RAPL/cgroup energy path, and the iso-FLOP dense null-baseline are all in place. The one number this repository will **not** fabricate is the result it was built to find:
+SPECTRA now has stronger training, deployment, adaptive-execution, and measurement plumbing than its early prototype, but the central quality/energy result remains open:
 
-> For a fixed physical joule budget on legacy x86, does a small W1.58A8 model plus learned latent search match or beat a larger zero-shot dense model?
+> Under a fixed, **properly measured** physical energy budget, can a compact recursive reasoner plus learned latent control/search outperform an appropriate larger baseline?
 
-The accuracy/energy frontier requires training both families at scale under RAPL — a run that has not yet happened. **This repository is the instrument; the result is the experiment.**
+Answering that requires a host with valid physical package counters (or an explicitly defined external power meter), representative trained models that actually solve the task, and a preregistered comparison. M13’s hosted runner exposed no readable package RAPL domain, so the accepted result is **energy unavailable**, not zero and not an inferred joule number.
 
 ## Citation
 
 ```bibtex
 @misc{spectra2026,
-  title  = {SPECTRA: Cache-Resident Latent Search as a Second Axis of Scaling under a Physical Joule Budget},
-  note   = {Open scientific instrument; iso-joule scaling result pending compute},
+  title  = {SPECTRA: Recursive Latent Reasoning under Explicit Edge Compute and Measurement Contracts},
+  note   = {Open scientific instrument; capability and iso-energy results remain bounded by accepted milestone evidence},
   year   = {2026}
 }
 ```
