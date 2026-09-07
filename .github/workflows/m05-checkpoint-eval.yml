@@ -1,0 +1,145 @@
+name: m05-checkpoint-eval
+
+on:
+  push:
+    branches: [research/m05-checkpoint-eval]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checkpoint-evaluation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CPU dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p .m05
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m05/install_torch.txt
+          timeout 180s python -m pip install -r requirements.txt |& tee .m05/install_requirements.txt
+          python - <<'PY' | tee .m05/environment.txt
+          import platform, torch, numpy, pytest
+          print("platform=", platform.platform())
+          print("torch=", torch.__version__)
+          print("numpy=", numpy.__version__)
+          print("pytest=", pytest.__version__)
+          print("cuda_available=", torch.cuda.is_available())
+          PY
+
+      - name: Focused M05 contract and adversarial tests
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 420s python -m pytest \
+            tests/test_m05_checkpoint_eval.py \
+            tests/test_scaling_laws.py \
+            -m "not slow" -ra |& tee .m05/pytest_focused.txt
+
+      - name: Produce a real versioned trained checkpoint
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 360s python scripts/train_teacher.py \
+            --config config/m04_cpu_reference.yaml \
+            --train-size 24 --val-size 12 \
+            --out .m05/teacher |& tee .m05/train_teacher.txt
+
+      - name: Freeze immutable test manifest
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 180s python scripts/build_eval_manifest.py \
+            --config config/m04_cpu_reference.yaml \
+            --train-size 24 --val-size 12 --test-size 4 \
+            --split test --seed 20260907 \
+            --out .m05/test_manifest.json |& tee .m05/build_manifest.txt
+
+      - name: Checkpoint-backed edge evaluation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 360s python scripts/eval_edge.py \
+            --ckpt .m05/teacher/teacher.pt \
+            --manifest .m05/test_manifest.json \
+            --weights recorded --device cpu \
+            --n-sup 1 2 --latency-runs 1 \
+            --out .m05/edge_report.json |& tee .m05/eval_edge.txt
+          python - <<'PY' | tee .m05/edge_summary.txt
+          import json
+          p=json.load(open('.m05/edge_report.json'))
+          assert p['research_result'] is True
+          assert p['result_kind'] == 'research_checkpoint'
+          assert len(p['settings']) == 2
+          assert len(p['per_example']) == 8
+          ids1=[r['data_id'] for r in p['per_example'][:4]]
+          ids2=[r['data_id'] for r in p['per_example'][4:]]
+          assert ids1 == ids2
+          assert all(r['checkpoint_sha256'] == p['checkpoint']['checkpoint_sha256'] for r in p['per_example'])
+          print('checkpoint=', p['checkpoint']['checkpoint_sha256'])
+          print('manifest=', p['evaluation_manifest']['canonical_sha256'])
+          print('fixed_ids=', ids1)
+          PY
+
+      - name: Checkpoint-backed scaling evaluation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 360s python scripts/eval_scaling_laws.py \
+            --checkpoint .m05/teacher/teacher.pt \
+            --manifest .m05/test_manifest.json \
+            --weights recorded --device cpu \
+            --greedy-n-sup 1 2 --latency-runs 1 \
+            --out .m05/scaling.csv \
+            --predictions-out .m05/scaling_predictions.jsonl |& tee .m05/eval_scaling.txt
+          python - <<'PY' | tee .m05/scaling_summary.txt
+          import json, pandas as pd
+          df=pd.read_csv('.m05/scaling.csv')
+          assert len(df)==2
+          assert set(df['result_kind']) == {'research_checkpoint'}
+          rows=[json.loads(x) for x in open('.m05/scaling_predictions.jsonl')]
+          assert len(rows)==8
+          ids1=[r['data_id'] for r in rows[:4]]
+          ids2=[r['data_id'] for r in rows[4:]]
+          assert ids1==ids2
+          assert all(r['eval_backend']=='pytorch_eager' for r in rows)
+          print(df.to_string(index=False))
+          print('fixed_ids=', ids1)
+          PY
+
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 600s python -m pytest -m "not slow" -ra |& tee .m05/pytest_fast.txt
+
+      - name: Record branch diff
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "base=370caf708755e1c68c59d5696778597f0290ea68"
+            git diff --stat 370caf708755e1c68c59d5696778597f0290ea68...HEAD
+          } | tee .m05/diff_stat.txt
+
+      - name: Upload M05 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m05-checkpoint-eval-evidence
+          path: .m05/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
