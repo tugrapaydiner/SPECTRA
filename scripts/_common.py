@@ -1,23 +1,25 @@
-"""Shared helpers for the entry-point scripts (model/dataset construction)."""
+"""Shared helpers for entry-point scripts.
 
+Milestone 03 removes the old "Sudoku else Maze" dataset shortcut. Every retained
+task is now resolved through one executable task contract before any data is
+constructed.
+"""
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# Make the repo root importable when a script is run as `python scripts/foo.py`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import numpy as np  # noqa: E402
-
 from common import DotDict  # noqa: E402
-from data.datasets import GridDataset, build_dataset  # noqa: E402
+from data.datasets import GridDataset  # noqa: E402
+from data.splits import build_reproducible_splits, write_manifest  # noqa: E402
+from data.task_contracts import TaskContract, contract_from_config  # noqa: E402
 from model.trm import TRM  # noqa: E402
 from train.trainer import TrainConfig  # noqa: E402
 
 
 def build_trm(cfg: DotDict, ternary: bool = False, act8: bool = False) -> TRM:
-    """Construct a :class:`TRM` from a resolved config."""
     m = cfg.model
     return TRM(
         dim=m.dim,
@@ -36,35 +38,43 @@ def build_trm(cfg: DotDict, ternary: bool = False, act8: bool = False) -> TRM:
     )
 
 
-def _sudoku_kwargs(cfg: DotDict) -> dict:
-    data = cfg.data
-    clues = int((data.get("min_clues", 30) + data.get("max_clues", 50)) // 2)
-    return {"box": int(data.get("box", 3)), "num_clues": clues, "augment": True}
+def task_contract_from(cfg: DotDict) -> TaskContract:
+    """Validate the YAML task/data block and return its normalized contract."""
+    return contract_from_config(str(cfg.task), cfg.data)
 
 
-def _maze_kwargs(cfg: DotDict) -> dict:
-    data = cfg.data
-    return {
-        "height": int(data.height),
-        "width": int(data.width),
-        "min_path_len": int(data.get("min_path_len", 0)),
-        "augment": True,
-    }
+def build_data_splits(
+    cfg: DotDict,
+    n_train: int,
+    n_val: int,
+    n_test: int,
+    seed: int | None = None,
+    manifest_path: str | Path | None = None,
+) -> tuple[dict[str, GridDataset], dict]:
+    """Build reproducible grouped train/validation/test data and its manifest."""
+    contract = task_contract_from(cfg)
+    datasets, manifest = build_reproducible_splits(
+        contract.task,
+        {"train": n_train, "validation": n_val, "test": n_test},
+        int(cfg.seed if seed is None else seed),
+        generator_kwargs=dict(contract.generator_kwargs),
+        task_scope=contract.scope,
+        official_benchmark=contract.official_benchmark,
+    )
+    if manifest_path is not None:
+        write_manifest(manifest_path, manifest)
+    return datasets, manifest
 
 
 def build_datasets(
     cfg: DotDict, n_train: int, n_val: int, seed: int | None = None
 ) -> tuple[GridDataset, GridDataset]:
-    """Build train/val :class:`GridDataset` for the config's task."""
-    rng = np.random.default_rng(cfg.seed if seed is None else seed)
-    kwargs = _sudoku_kwargs(cfg) if cfg.task == "sudoku" else _maze_kwargs(cfg)
-    train_ds = build_dataset(cfg.task, n_train, rng, **kwargs)
-    val_ds = build_dataset(cfg.task, n_val, rng, **kwargs)
-    return train_ds, val_ds
+    """Backward-compatible train/validation wrapper using separate RNG streams."""
+    datasets, _ = build_data_splits(cfg, n_train, n_val, 0, seed=seed)
+    return datasets["train"], datasets["validation"]
 
 
 def train_config_from(cfg: DotDict, max_steps: int | None = None) -> TrainConfig:
-    """Map the YAML ``train`` block to a :class:`TrainConfig`."""
     t = cfg.train
     return TrainConfig(
         lr=float(t.lr),

@@ -1,13 +1,12 @@
-# BabyAI-style grounded local planning (section 24.4).
+# SYNTHETIC local BabyAI-style one-step gridworld. This is NOT official BabyAI.
 _base_: base.yaml
 
 task: babyai
 
 data:
-  # Token vocabulary covers grid cells + action tokens; sized generously and
-  # finalised by the dataset builder (section 10.2 generator).
-  num_tokens: 32
+  variant: synthetic_next_state
+  num_tokens: 8        # exact local generator vocabulary 0..7
   height: 8
   width: 8
   seq_len: 64
-  max_plan_len: 16
+  wall_prob: 0.2

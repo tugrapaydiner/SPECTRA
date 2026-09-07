@@ -1,77 +1,147 @@
-"""Accuracy and distribution metrics for the recursive core.
+"""Task-aware evaluation metrics for SPECTRA.
 
-These cover the Phase 3 diagnostics (per-step accuracy) and the collapse signals
-of BLUEPRINT section 11.7 (prediction entropy, most-common-token ratio). All
-functions accept torch tensors and return Python scalars / lists so they are easy
-to log to JSONL (section 29).
+Milestone 03 separates three different notions that were previously easy to
+conflate:
+
+* exact reference match: candidate equals the stored target cell-for-cell;
+* semantic validity: candidate solves the symbolic task even if an alternative
+  valid solution exists;
+* inference-cell accuracy: accuracy on cells that actually had to be inferred
+  (Sudoku blanks), plus padding-aware content accuracy for padded local tasks.
 """
-
 from __future__ import annotations
 
 from typing import Any, Sequence
 
 import torch
 
+from model.verifier import maze_correct, sudoku_correct
+
 
 def cell_accuracy(pred: torch.Tensor, target: torch.Tensor) -> float:
-    """Fraction of individual cells predicted correctly."""
     return (pred == target).float().mean().item()
 
 
 def board_accuracy(pred: torch.Tensor, target: torch.Tensor) -> float:
-    """Fraction of examples whose every cell is correct (exact-match)."""
-    return (pred == target).all(dim=1).float().mean().item()
+    """Legacy name for exact reference match."""
+    return exact_reference_match(pred, target)
 
 
-def blank_accuracy(
-    pred: torch.Tensor, target: torch.Tensor, inputs: torch.Tensor
-) -> float:
-    """Accuracy restricted to cells that were blank (0) in the input.
+def exact_reference_match(pred: torch.Tensor, target: torch.Tensor) -> float:
+    """Fraction of examples exactly equal to the retained reference target."""
+    if pred.shape != target.shape or pred.ndim < 2:
+        raise ValueError("pred/target must have identical batch-first shapes")
+    return (pred == target).reshape(pred.shape[0], -1).all(dim=1).float().mean().item()
 
-    Isolates learned inference from trivially copying given clues.
-    """
-    blank = inputs == 0
-    if blank.sum() == 0:
+
+def masked_cell_accuracy(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> float:
+    """Cell accuracy on an explicit boolean mask; NaN when the mask is empty."""
+    if pred.shape != target.shape or mask.shape != target.shape:
+        raise ValueError("pred/target/mask shapes must match")
+    mask = mask.bool()
+    if int(mask.sum().item()) == 0:
         return float("nan")
-    return (pred[blank] == target[blank]).float().mean().item()
+    return (pred[mask] == target[mask]).float().mean().item()
 
 
-def per_step_accuracy(
-    steps: Sequence[dict[str, Any]], target: torch.Tensor
-) -> list[float]:
-    """Cell accuracy of each deep-supervision step's decoded answer."""
+def blank_accuracy(pred: torch.Tensor, target: torch.Tensor, inputs: torch.Tensor) -> float:
+    """Sudoku inference accuracy restricted to cells blank in the input."""
+    return masked_cell_accuracy(pred, target, inputs == 0)
+
+
+def semantic_validity(
+    task: str,
+    inputs: torch.Tensor,
+    pred: torch.Tensor,
+    *,
+    box: int | None = None,
+    height: int | None = None,
+    width: int | None = None,
+    require_optimal: bool = True,
+) -> float:
+    """Mean strict symbolic success for tasks with an implemented exact validator."""
+    if task == "sudoku":
+        if box is None:
+            raise ValueError("Sudoku semantic validity requires box")
+        return sudoku_correct(inputs, pred, box).float().mean().item()
+    if task == "maze":
+        if height is None or width is None:
+            raise ValueError("Maze semantic validity requires height and width")
+        return maze_correct(
+            inputs, pred, height, width, require_optimal=require_optimal
+        ).float().mean().item()
+    raise ValueError(
+        f"No strict semantic-validity metric is claimed for task {task!r}; "
+        "use exact reference match for this local synthetic task"
+    )
+
+
+def task_metrics(
+    task: str,
+    inputs: torch.Tensor,
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    box: int | None = None,
+    height: int | None = None,
+    width: int | None = None,
+    pad_token: int | None = None,
+    require_optimal: bool = True,
+) -> dict[str, float]:
+    """Primary metrics for one retained task contract.
+
+    ARC-style and BabyAI-style are local synthetic variants in this repository;
+    they intentionally do not receive an "official benchmark" semantic score.
+    """
+    out = {
+        "exact_reference_match": exact_reference_match(pred, target),
+        "cell_accuracy": cell_accuracy(pred, target),
+    }
+    if task == "sudoku":
+        if box is None:
+            raise ValueError("Sudoku metrics require box")
+        out["semantic_validity"] = semantic_validity(task, inputs, pred, box=box)
+        out["blank_cell_accuracy"] = blank_accuracy(pred, target, inputs)
+    elif task == "maze":
+        if height is None or width is None:
+            raise ValueError("Maze metrics require height/width")
+        out["semantic_validity"] = semantic_validity(
+            task, inputs, pred, height=height, width=width,
+            require_optimal=require_optimal,
+        )
+    elif task == "arc":
+        if pad_token is None:
+            raise ValueError("ARC-style metrics require pad_token")
+        out["content_cell_accuracy"] = masked_cell_accuracy(
+            pred, target, target != pad_token
+        )
+    return out
+
+
+def per_step_accuracy(steps: Sequence[dict[str, Any]], target: torch.Tensor) -> list[float]:
     return [cell_accuracy(s["logits"].argmax(-1), target) for s in steps]
 
 
 def prediction_entropy(logits: torch.Tensor) -> float:
-    """Mean per-token predictive entropy (nats). Low entropy + wrong = collapse."""
     logp = torch.log_softmax(logits, dim=-1)
     p = logp.exp()
-    entropy = -(p * logp).sum(dim=-1)
-    return entropy.mean().item()
+    return (-(p * logp).sum(dim=-1)).mean().item()
 
 
 def most_common_token_ratio(pred: torch.Tensor) -> float:
-    """Fraction of predictions taken by the single most frequent token.
-
-    BLUEPRINT section 11.7: a value > 0.90 indicates output collapse.
-    """
     flat = pred.reshape(-1)
     counts = torch.bincount(flat)
     return (counts.max().float() / flat.numel()).item()
 
 
 def unique_predicted_tokens(pred: torch.Tensor) -> int:
-    """Number of distinct predicted tokens (a diversity sanity check)."""
     return int(pred.reshape(-1).unique().numel())
 
 
 def active_density_per_step(steps: Sequence[dict[str, Any]]) -> list[float]:
-    """Active-token fraction at each supervision step (requires a router)."""
     return [s["active_density"] for s in steps if "active_density" in s]
 
 
 def active_token_density(steps: Sequence[dict[str, Any]]) -> float:
-    """Mean active-token density across recursion steps (BLUEPRINT section 7.6)."""
     densities = active_density_per_step(steps)
     return sum(densities) / len(densities) if densities else float("nan")
