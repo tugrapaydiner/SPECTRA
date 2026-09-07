@@ -1,6 +1,6 @@
 """M09 search adapters for trained state-conditioned latent actions.
 
-Milestone 08's :class:`LatentNativeMCTS` remains unchanged.  This module adds the
+Milestone 08's :class:`LatentNativeMCTS` remains unchanged. This module adds the
 small policy-prior hook needed by M09 and a transparent symbolic-oracle evaluator
 used only to isolate action quality in the acceptance experiment.
 """
@@ -13,11 +13,7 @@ from model.verifier import sudoku_score
 
 
 class StateConditionedLatentNativeMCTS(LatentNativeMCTS):
-    """M08 serial/batched semantics with optional ``P(a|x,y,z)`` priors.
-
-    Codebooks exposing ``priors_for_state`` receive the complete current search
-    state. Legacy codebooks still use their historical global ``priors()`` path.
-    """
+    """M08 serial/batched semantics with optional ``P(a|x,y,z)`` priors."""
 
     def _reset_search_state(self, mode: str) -> None:
         super()._reset_search_state(mode)
@@ -54,7 +50,6 @@ class StateConditionedLatentNativeMCTS(LatentNativeMCTS):
         total = float(priors.sum())
         if total <= 0.0:
             raise RuntimeError("action priors must have positive mass")
-        # Search consumes normalized probabilities even for custom policy adapters.
         return priors / priors.sum()
 
     def _expand(self, node: _LatentNode, x_emb, *, initial: bool = False) -> bool:
@@ -113,7 +108,18 @@ class OracleScoreActionMCTS(StateConditionedLatentNativeMCTS):
     no-decode native verifier path.
     """
 
+    def _reset_search_state(self, mode: str) -> None:
+        super()._reset_search_state(mode)
+        self.last_search_stats["oracle_evaluator_calls"] = 0
+        self.last_search_stats["oracle_decode_calls"] = 0
+
     def _value(self, x: torch.Tensor, node: _LatentNode) -> float:
+        self.last_search_stats["oracle_evaluator_calls"] = int(
+            self.last_search_stats["oracle_evaluator_calls"]
+        ) + 1
+        self.last_search_stats["oracle_decode_calls"] = int(
+            self.last_search_stats["oracle_decode_calls"]
+        ) + 1
         answer = self.model.out_head(node.y).argmax(dim=-1)
         return float(sudoku_score(x, answer, box=3).detach().mean())
 
