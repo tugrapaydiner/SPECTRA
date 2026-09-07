@@ -83,7 +83,9 @@ def test_online_policy_halt_executes_fewer_real_steps_and_matches_truncation():
     assert early.stop_reason == "policy_halt"
     assert early.executed_steps == 1
     assert early.halt_step.item() == 0
+    assert full.stop_reason == "model_exhausted"
     assert full.executed_steps == 4
+    assert full.halt_step.item() == 3
     assert early.work["block_applications"] < full.work["block_applications"]
     assert early.work["attention_q_vectors"] < full.work["attention_q_vectors"]
     assert torch.equal(early.logits, legacy1[0])
@@ -192,7 +194,7 @@ def _export_tiny_m10(model: TRM, path: Path):
     return load_cpu_artifact(path)
 
 
-def test_native_full_density_and_partial_sparse_agree_with_reference(tmp_path: Path):
+def test_native_full_density_partial_sparse_and_empty_active_agree_with_reference(tmp_path: Path):
     model = _model(n_sup=2, ternary=True, act8=True)
     x = torch.randint(0, 5, (1, 16), dtype=torch.long)
     loaded = _export_tiny_m10(model, tmp_path / "tiny_cpu.pt")
@@ -220,3 +222,21 @@ def test_native_full_density_and_partial_sparse_agree_with_reference(tmp_path: P
     fout = full.run_execution_step(fs)
     assert nout["work_delta"]["native_input_vectors"] < fout["work_delta"]["native_input_vectors"]
     assert nout["work_delta"]["native_scalar_products"] < fout["work_delta"]["native_scalar_products"]
+
+    empty = AdaptiveCPURecursiveRuntime(loaded)
+    es = empty.init_execution_state(x)
+    y0 = es.y.clone(); z0 = es.z.clone()
+    eout = empty.run_execution_step(es, active_mask=torch.zeros(1, 16, 1))
+    assert torch.equal(es.y, y0)
+    assert torch.equal(es.z, z0)
+    assert eout["active_tokens"] == 0
+    assert eout["work_delta"]["recursive_cycles"] == 0
+    assert eout["work_delta"]["all_frozen_step_skips"] == 1
+    assert eout["work_delta"]["attention_q_vectors"] == 0
+    assert eout["work_delta"]["attention_k_vectors"] == 0
+    assert eout["work_delta"]["attention_v_vectors"] == 0
+    assert eout["work_delta"]["ffn_input_vectors"] == 0
+    # The step boundary still returns logits through the native out_head; no
+    # recursive q/k/v/ffn work is executed.
+    assert eout["work_delta"]["native_linear_calls"] == 1
+    assert eout["work_delta"]["native_input_vectors"] == 16
