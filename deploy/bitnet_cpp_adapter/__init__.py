@@ -3,6 +3,10 @@
 The fused sparse ctypes path uses the Milestone-02 checked C ABI. It rejects
 invalid NumPy dtype/shape/contiguity/buffer contracts before entering native code,
 and the native function repeats the structural/content checks.
+
+A configured ``SPECTRA_BITNET_CPP`` directory is configuration presence only.
+SPECTRA does not currently have a tested compatible bitnet.cpp artifact loader and
+recursive inference path, so it must not be reported as an available backend.
 """
 from __future__ import annotations
 
@@ -122,9 +126,32 @@ def sparse_ternary_gemv(x, active_idx, w_packed, requant_mult, shift: int, out_d
 
 
 def bitnet_cpp_root() -> Path | None:
+    """Return a configured existing bitnet.cpp directory, if any.
+
+    This is a configuration probe only and says nothing about SPECTRA runtime
+    compatibility.
+    """
     root = os.environ.get("SPECTRA_BITNET_CPP")
     return Path(root) if root and Path(root).exists() else None
 
 
+def bitnet_cpp_status() -> dict[str, object]:
+    configured = bitnet_cpp_root()
+    return {
+        "configured_root": str(configured) if configured is not None else None,
+        "configured": configured is not None,
+        "supported": False,
+        "reason": (
+            "No compatible SPECTRA artifact loader and recursive inference runtime "
+            "has been integrated and tested against bitnet.cpp."
+        ),
+    }
+
+
 def is_bitnet_cpp_available() -> bool:
-    return bitnet_cpp_root() is not None
+    """Whether bitnet.cpp is a tested SPECTRA inference backend.
+
+    A directory alone is insufficient; M10 keeps this False until a compatible
+    artifact loader plus recursive runtime is actually integrated and validated.
+    """
+    return False
