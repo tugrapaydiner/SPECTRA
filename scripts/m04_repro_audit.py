@@ -1,16 +1,20 @@
 """M04 reproducibility evidence: initialization and interrupted-resume equivalence."""
 from __future__ import annotations
 
-import argparse
-import json
+import sys
 from pathlib import Path
 
-import torch
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from common import load_config
-from scripts._common import build_seeded_training_components
-from train.checkpoint import load_checkpoint_payload
-from train.trainer import Trainer
+import argparse  # noqa: E402
+import json  # noqa: E402
+
+import torch  # noqa: E402
+
+from common import load_config  # noqa: E402
+from scripts._common import build_seeded_training_components  # noqa: E402
+from train.checkpoint import load_checkpoint_payload  # noqa: E402
+from train.trainer import Trainer  # noqa: E402
 
 
 ATOL = 1e-7
@@ -50,7 +54,7 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     resume_path = out.parent / "resume_state.pt"
 
-    cfg0, init_a, train_a, val_a, _, streams = components(
+    _, init_a, train_a, val_a, _, streams = components(
         args.config, args.train_size, args.val_size
     )
     _, init_b, train_b, val_b, _, _ = components(
