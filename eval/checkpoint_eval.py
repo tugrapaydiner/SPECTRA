@@ -16,6 +16,7 @@ import torch.nn as nn
 from eval.evaluation_manifest import LoadedEvaluationManifest
 from model.energy import LatentEnergyVerifier
 from model.latent_action import LatentActionCodebook
+from model.stability import quant_strength_state
 from model.trm import TRM
 from train.checkpoint import CheckpointError, atomic_torch_save, load_checkpoint_payload, select_weight_state
 
@@ -42,10 +43,57 @@ def count_parameters(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters())
 
 
-def _plain_mapping(value: Any, name: str) -> dict[str, Any]:
+def _mapping(value: Any, name: str) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise EvaluationContractError(f"checkpoint metadata {name!r} must be a mapping")
     return {str(k): v for k, v in value.items()}
+
+
+def _tensor_state_dict(value: Any) -> bool:
+    return (
+        isinstance(value, Mapping)
+        and all(isinstance(k, str) for k in value)
+        and all(torch.is_tensor(v) for v in value.values())
+    )
+
+
+def _load_evaluation_identity(model: nn.Module, payload: Mapping[str, Any], identity: str) -> None:
+    """Load raw or EMA with the same semantics used by ``EMA.average_parameters``.
+
+    EMA checkpoints contain trainable parameters only. For EMA evaluation the
+    trainable parameter set must come entirely from EMA; only non-parameter model
+    state (for example quantization-strength buffers) is taken from the raw model
+    state. This is explicit buffer restoration, not raw-parameter substitution.
+    """
+    if identity == "raw":
+        model.load_state_dict(select_weight_state(payload, "raw"), strict=True)
+        return
+    if identity != "ema":
+        raise EvaluationContractError("weight identity must be raw or ema")
+
+    raw = dict(select_weight_state(payload, "raw"))
+    ema = dict(select_weight_state(payload, "ema"))
+    trainable = {name for name, p in model.named_parameters() if p.requires_grad}
+    if set(ema) != trainable:
+        missing = sorted(trainable - set(ema))
+        extra = sorted(set(ema) - trainable)
+        raise EvaluationContractError(
+            f"EMA trainable-parameter contract mismatch: missing={missing}, extra={extra}"
+        )
+    parameter_names = set(dict(model.named_parameters()))
+    combined: dict[str, torch.Tensor] = {}
+    for key in model.state_dict():
+        if key in ema:
+            combined[key] = ema[key]
+        elif key in parameter_names:
+            raise EvaluationContractError(
+                f"EMA result is missing model parameter {key!r}; raw substitution is forbidden"
+            )
+        elif key in raw:
+            combined[key] = raw[key]
+        else:
+            raise EvaluationContractError(f"checkpoint is missing non-parameter state {key!r}")
+    model.load_state_dict(combined, strict=True)
 
 
 @dataclass
@@ -76,6 +124,10 @@ class LoadedTRMCheckpoint:
             "checkpoint_version": self.payload["version"],
             "checkpoint_global_step": int(self.payload["training"]["global_step"]),
             "weight_identity": self.weight_identity,
+            "ema_buffer_policy": (
+                "ema_trainable_parameters_plus_raw_checkpoint_nonparameter_state"
+                if self.weight_identity == "ema" else None
+            ),
             "model_family": self.architecture["class"],
             "param_count": int(self.param_count),
             "ternary": bool(self.architecture["ternary"]),
@@ -105,54 +157,44 @@ def load_research_trm_checkpoint(
         )
     except (CheckpointError, OSError, RuntimeError, ValueError) as exc:
         raise EvaluationContractError(f"invalid research checkpoint {p}: {exc}") from exc
-
     if payload.get("checkpoint_kind") != "training_state":
         raise EvaluationContractError("research evaluation requires a training-state checkpoint")
-    training = _plain_mapping(payload.get("training"), "training")
+    training = _mapping(payload.get("training"), "training")
     if int(training.get("global_step", 0)) <= 0:
         raise EvaluationContractError("research evaluation requires a checkpoint after training began")
 
-    arch = _plain_mapping(payload.get("architecture"), "architecture")
+    arch = _mapping(payload.get("architecture"), "architecture")
     if arch.get("class") != "TRM":
         raise EvaluationContractError(
             f"unsupported research model family {arch.get('class')!r}; expected TRM"
         )
-    required_arch = (
+    required = (
         "dim", "num_tokens", "seq_len", "n_layers", "n", "T", "N_sup",
         "max_grid_size", "ternary", "act8", "resolved_model_config",
     )
-    missing = [k for k in required_arch if k not in arch]
+    missing = [k for k in required if k not in arch]
     if missing:
         raise EvaluationContractError(f"checkpoint architecture metadata missing {missing}")
-    model_cfg = _plain_mapping(arch["resolved_model_config"], "resolved_model_config")
+    model_cfg = _mapping(arch["resolved_model_config"], "resolved_model_config")
     for key in ("heads", "alpha_y", "alpha_z"):
         if key not in model_cfg:
             raise EvaluationContractError(
                 f"checkpoint cannot reconstruct TRM exactly: resolved model config missing {key!r}"
             )
-
-    task = _plain_mapping(payload.get("task"), "task")
-    if task.get("num_tokens") is not None and int(task["num_tokens"]) != int(arch["num_tokens"]):
+    task = _mapping(payload.get("task"), "task")
+    if int(task.get("num_tokens", -1)) != int(arch["num_tokens"]):
         raise EvaluationContractError("checkpoint architecture/task vocabulary disagree")
     if int(task.get("height", 0)) * int(task.get("width", 0)) != int(arch["seq_len"]):
         raise EvaluationContractError("checkpoint task shape and architecture seq_len disagree")
 
     model = TRM(
-        dim=int(arch["dim"]),
-        num_tokens=int(arch["num_tokens"]),
-        seq_len=int(arch["seq_len"]),
-        n_layers=int(arch["n_layers"]),
-        n=int(arch["n"]),
-        T=int(arch["T"]),
-        N_sup=int(arch["N_sup"]),
-        heads=int(model_cfg["heads"]),
-        alpha_y=float(model_cfg["alpha_y"]),
-        alpha_z=float(model_cfg["alpha_z"]),
-        max_grid_size=int(arch["max_grid_size"]),
-        ternary=bool(arch["ternary"]),
+        dim=int(arch["dim"]), num_tokens=int(arch["num_tokens"]), seq_len=int(arch["seq_len"]),
+        n_layers=int(arch["n_layers"]), n=int(arch["n"]), T=int(arch["T"]),
+        N_sup=int(arch["N_sup"]), heads=int(model_cfg["heads"]),
+        alpha_y=float(model_cfg["alpha_y"]), alpha_z=float(model_cfg["alpha_z"]),
+        max_grid_size=int(arch["max_grid_size"]), ternary=bool(arch["ternary"]),
         act8=bool(arch["act8"]),
     )
-
     recorded = payload["weights"].get("evaluation_identity")
     identity = recorded if weight_identity == "recorded" else weight_identity
     if identity not in {"raw", "ema"}:
@@ -160,37 +202,36 @@ def load_research_trm_checkpoint(
             "weight_identity must be recorded/raw/ema and the recorded identity must exist"
         )
     try:
-        state = select_weight_state(payload, str(identity))
-        model.load_state_dict(state, strict=True)
-    except (CheckpointError, RuntimeError, ValueError) as exc:
+        _load_evaluation_identity(model, payload, str(identity))
+    except (CheckpointError, RuntimeError, ValueError, EvaluationContractError) as exc:
         raise EvaluationContractError(
             f"checkpoint weights are incompatible with reconstructed model: {exc}"
         ) from exc
 
+    # Quantization strength is non-parameter state and must match the checkpoint's
+    # explicit quantization provenance after raw-buffer restoration.
+    quant = training.get("quantization", {})
+    if bool(arch["ternary"]):
+        expected = dict(quant.get("strengths", {}))
+        actual = quant_strength_state(model)
+        if expected != actual:
+            raise EvaluationContractError(
+                f"checkpoint quantization buffer/provenance mismatch: expected={expected}, actual={actual}"
+            )
+
     dev = torch.device(device)
-    model = model.to(dev)
-    model.eval()
+    model = model.to(dev).eval()
     if model.training:
         raise EvaluationContractError("research model failed to enter inference/eval mode")
     return LoadedTRMCheckpoint(
-        path=p,
-        sha256=digest,
-        payload=payload,
-        model=model,
-        weight_identity=str(identity),
-        param_count=count_parameters(model),
-        device=dev,
-        eval_backend="pytorch_eager",
+        p, digest, payload, model, str(identity), count_parameters(model), dev, "pytorch_eager"
     )
 
 
 def validate_checkpoint_manifest_compatibility(
-    core: LoadedTRMCheckpoint,
-    manifest: LoadedEvaluationManifest,
+    core: LoadedTRMCheckpoint, manifest: LoadedEvaluationManifest
 ) -> None:
-    """Require task/config compatibility before evaluating a research checkpoint."""
-    task = core.task
-    mp = manifest.payload
+    task, mp = core.task, manifest.payload
     checks = {
         "task": (str(task.get("task")), str(mp.get("task"))),
         "height": (int(task.get("height", -1)), int(mp.get("height", -2))),
@@ -201,22 +242,14 @@ def validate_checkpoint_manifest_compatibility(
     bad = {k: v for k, v in checks.items() if v[0] != v[1]}
     if bad:
         raise EvaluationContractError(f"checkpoint/evaluation manifest mismatch: {bad}")
-    saved_task_cfg = task.get("resolved_task_config")
-    if not isinstance(saved_task_cfg, Mapping):
+    saved = task.get("resolved_task_config")
+    if not isinstance(saved, Mapping):
         raise EvaluationContractError("checkpoint lacks resolved task configuration")
-    if dict(saved_task_cfg) != dict(mp.get("task_config", {})):
+    if dict(saved) != dict(mp.get("task_config", {})):
         raise EvaluationContractError(
             "checkpoint/evaluation manifest task configuration differs; "
             "distribution-shift evaluation must use a separately declared contract"
         )
-
-
-def _tensor_state_dict(value: Any) -> bool:
-    return (
-        isinstance(value, Mapping)
-        and all(isinstance(k, str) for k in value)
-        and all(torch.is_tensor(v) for v in value.values())
-    )
 
 
 def auxiliary_payload(
@@ -227,7 +260,6 @@ def auxiliary_payload(
     core: LoadedTRMCheckpoint,
     trained_steps: int,
 ) -> dict[str, Any]:
-    """Build strict metadata for a learned-search auxiliary artifact."""
     if kind not in {"latent_energy_verifier", "latent_action_codebook"}:
         raise EvaluationContractError(f"unsupported auxiliary kind {kind!r}")
     if int(trained_steps) <= 0:
@@ -260,11 +292,7 @@ def save_auxiliary_checkpoint(
 ) -> None:
     atomic_torch_save(
         auxiliary_payload(
-            module,
-            kind=kind,
-            architecture=architecture,
-            core=core,
-            trained_steps=trained_steps,
+            module, kind=kind, architecture=architecture, core=core, trained_steps=trained_steps
         ),
         path,
     )
@@ -279,9 +307,8 @@ class LoadedAuxiliary:
     payload: dict[str, Any]
 
 
-def _load_auxiliary_payload(path: str | Path) -> tuple[Path, str, dict[str, Any]]:
-    p = Path(path)
-    digest = sha256_file(p)
+def _load_aux(path: str | Path) -> tuple[Path, str, dict[str, Any]]:
+    p, digest = Path(path), sha256_file(path)
     try:
         payload = torch.load(p, map_location="cpu", weights_only=True)
     except TypeError:
@@ -299,8 +326,8 @@ def _load_auxiliary_payload(path: str | Path) -> tuple[Path, str, dict[str, Any]
     return p, digest, dict(payload)
 
 
-def _validate_aux_compatibility(payload: Mapping[str, Any], core: LoadedTRMCheckpoint) -> None:
-    comp = _plain_mapping(payload.get("compatibility"), "auxiliary compatibility")
+def _check_aux_core(payload: Mapping[str, Any], core: LoadedTRMCheckpoint) -> None:
+    comp = _mapping(payload.get("compatibility"), "auxiliary compatibility")
     expected = {
         "core_checkpoint_sha256": core.sha256,
         "task": str(core.task["task"]),
@@ -313,55 +340,45 @@ def _validate_aux_compatibility(payload: Mapping[str, Any], core: LoadedTRMCheck
         raise EvaluationContractError(f"learned auxiliary is incompatible with core: {bad}")
 
 
-def load_latent_verifier_checkpoint(
-    path: str | Path,
-    core: LoadedTRMCheckpoint,
-) -> LoadedAuxiliary:
-    p, digest, payload = _load_auxiliary_payload(path)
+def load_latent_verifier_checkpoint(path: str | Path, core: LoadedTRMCheckpoint) -> LoadedAuxiliary:
+    p, digest, payload = _load_aux(path)
     if payload.get("kind") != "latent_energy_verifier":
         raise EvaluationContractError("expected latent_energy_verifier auxiliary checkpoint")
-    _validate_aux_compatibility(payload, core)
-    a = _plain_mapping(payload.get("architecture"), "verifier architecture")
+    _check_aux_core(payload, core)
+    a = _mapping(payload.get("architecture"), "verifier architecture")
     if a.get("class") != "LatentEnergyVerifier":
         raise EvaluationContractError("unsupported verifier family")
-    required = ("num_tokens", "dim", "n_layers", "heads", "max_grid_size", "act_bits")
-    if any(k not in a for k in required):
-        raise EvaluationContractError("verifier checkpoint architecture metadata is incomplete")
+    for key in ("num_tokens", "dim", "n_layers", "heads", "max_grid_size", "act_bits"):
+        if key not in a:
+            raise EvaluationContractError("verifier checkpoint architecture metadata is incomplete")
     verifier = LatentEnergyVerifier(
-        num_tokens=int(a["num_tokens"]), dim=int(a["dim"]), n_layers=int(a["n_layers"]),
-        heads=int(a["heads"]), max_grid_size=int(a["max_grid_size"]), act_bits=int(a["act_bits"]),
+        int(a["num_tokens"]), int(a["dim"]), int(a["n_layers"]), int(a["heads"]),
+        int(a["max_grid_size"]), int(a["act_bits"]),
     )
     try:
         verifier.load_state_dict(payload["state_dict"], strict=True)
     except RuntimeError as exc:
         raise EvaluationContractError(f"verifier state_dict incompatible with metadata: {exc}") from exc
-    verifier = verifier.to(core.device).eval()
-    return LoadedAuxiliary(p, digest, str(payload["kind"]), verifier, payload)
+    return LoadedAuxiliary(p, digest, str(payload["kind"]), verifier.to(core.device).eval(), payload)
 
 
-def load_action_policy_checkpoint(
-    path: str | Path,
-    core: LoadedTRMCheckpoint,
-) -> LoadedAuxiliary:
-    p, digest, payload = _load_auxiliary_payload(path)
+def load_action_policy_checkpoint(path: str | Path, core: LoadedTRMCheckpoint) -> LoadedAuxiliary:
+    p, digest, payload = _load_aux(path)
     if payload.get("kind") != "latent_action_codebook":
         raise EvaluationContractError("expected latent_action_codebook auxiliary checkpoint")
-    _validate_aux_compatibility(payload, core)
-    a = _plain_mapping(payload.get("architecture"), "action architecture")
+    _check_aux_core(payload, core)
+    a = _mapping(payload.get("architecture"), "action architecture")
     if a.get("class") != "LatentActionCodebook":
         raise EvaluationContractError("unsupported action-policy family")
     for key in ("dim", "n_actions", "scale"):
         if key not in a:
             raise EvaluationContractError("action checkpoint architecture metadata is incomplete")
-    codebook = LatentActionCodebook(
-        dim=int(a["dim"]), n_actions=int(a["n_actions"]), scale=float(a["scale"])
-    )
+    codebook = LatentActionCodebook(int(a["dim"]), int(a["n_actions"]), float(a["scale"]))
     try:
         codebook.load_state_dict(payload["state_dict"], strict=True)
     except RuntimeError as exc:
         raise EvaluationContractError(f"action state_dict incompatible with metadata: {exc}") from exc
-    codebook = codebook.to(core.device).eval()
-    return LoadedAuxiliary(p, digest, str(payload["kind"]), codebook, payload)
+    return LoadedAuxiliary(p, digest, str(payload["kind"]), codebook.to(core.device).eval(), payload)
 
 
 def require_learned_search_auxiliaries(
