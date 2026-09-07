@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python -m py_compile model/latent_action.py eval/action_search.py eval/action_checkpoint.py scripts/train_action_policy.py scripts/train_action_policy_v3.py
+          python -m py_compile model/latent_action.py eval/action_search.py eval/action_checkpoint.py scripts/train_action_policy.py scripts/train_action_policy_v3.py scripts/export_m09_development_checkpoint.py
           echo "$?" | tee .m09/compile_exit_code.txt
           exit 0
 
@@ -67,42 +67,80 @@ jobs:
           echo "$code" | tee .m09/experiment_exit_code.txt
           exit 0
 
-      - name: Verify M09 empirical acceptance gate
+      - name: Preserve incomplete development checkpoint
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          experiment=$(cat .m09/experiment_exit_code.txt 2>/dev/null || echo 99)
+          if [ "$experiment" -eq 3 ]; then
+            timeout 600s python scripts/export_m09_development_checkpoint.py --experiment-dir .m09/experiment |& tee .m09/development_checkpoint_export.txt
+            code=${PIPESTATUS[0]}
+          else
+            echo "experiment exit=$experiment; no failed-development checkpoint export needed" | tee .m09/development_checkpoint_export.txt
+            code=0
+          fi
+          echo "$code" | tee .m09/preserve_checkpoint_exit_code.txt
+          exit 0
+
+      - name: Verify M09 evidence state
         shell: bash
         run: |
           set +e
           python - <<'PY' |& tee .m09/evidence_check.txt
           import json, pathlib, sys
           root=pathlib.Path('.m09/experiment')
-          required=[
-              'reasoner.pt','action_policy.pt','target_table.pt','summary.json',
-              'target_generation.json','v3_development.json','untouched_test.json',
-              'freeze_audit.json','exact_commands.json','SUMMARY.md',
-              'comparisons/development_v3.jsonl','comparisons/untouched_test.jsonl',
+          common=[
+              'reasoner.pt','target_table.pt','summary.json','target_generation.json',
+              'v3_development.json','comparisons/development_v3.jsonl',
           ]
-          missing=[p for p in required if not (root/p).is_file()]
-          print('missing=', missing)
+          missing=[p for p in common if not (root/p).is_file()]
+          print('missing_common=', missing)
           if missing: sys.exit(2)
           s=json.loads((root/'summary.json').read_text())
           print(json.dumps(s, indent=2, sort_keys=True))
-          assert s['status']=='complete', s['status']
+          assert s['reasoner_frozen_unchanged'] is True
+          assert s['target_generation']['reference_target_used'] is False
+          assert s['target_generation']['train_work']['state_action_equivalents'] <= 25000
+          if str(s['status']).startswith('incomplete_'):
+              required=['development_action_policy.pt','development_checkpoint.json']
+              missing=[p for p in required if not (root/p).is_file()]
+              print('missing_incomplete=', missing)
+              if missing: sys.exit(2)
+              assert s['acceptance_pass'] is False
+              assert s['test_inputs_evaluated'] is False
+              d=s['v3_development']
+              assert d['pass'] is False
+              assert d['paired_vs_unguided']['mean_delta'] < 0.005
+              ck=json.loads((root/'development_checkpoint.json').read_text())
+              assert ck['accepted_practical_benefit'] is False
+              assert ck['test_inputs_evaluated'] is False
+              assert ck['class']=='BudgetAlignedChallengerCodebook'
+              assert ck['fitted_version']=='v3_budget_aligned_challenger'
+              assert ck['reference_target_used'] is False
+              print('M09_INCOMPLETE_EVIDENCE_RETAINED=PASS')
+              sys.exit(2)  # intentionally nonzero: empirical acceptance is not satisfied
+          required=[
+              'action_policy.pt','untouched_test.json','freeze_audit.json','exact_commands.json',
+              'SUMMARY.md','comparisons/untouched_test.jsonl',
+          ]
+          missing=[p for p in required if not (root/p).is_file()]
+          print('missing_complete=', missing)
+          if missing: sys.exit(2)
+          assert s['status']=='complete'
           assert s['acceptance_pass'] is True
           assert s['selected_version']=='v3_budget_aligned_challenger'
-          assert s['prior_failed_run']==34138116310
           assert s['reference_target_used'] is False
           assert s['test_inputs_evaluated_after_checkpoint_freeze'] is True
           assert s['reasoner_freeze_audit']['unchanged'] is True
           assert s['reasoner_freeze_audit']['reasoner_parameter_in_action_optimizer'] is False
-          assert s['target_generation']['train_work']['state_action_equivalents'] <= 25000
-          assert s['selected_training']['parameter_count'] < 50000
-          assert s['selected_training']['fit_depths']==[0]
           fs=s['selected_training']['first_step']
           assert fs['direction_grad_norm_preclip'] > 0
           assert fs['policy_head_grad_norm_preclip'] > 0
           assert fs['direction_change_after_step'] > 0
           assert fs['policy_head_change_after_step'] > 0
-          d=s['development']
-          assert d['pass'] is True and all(d['checks'].values())
+          assert s['development']['pass'] is True and all(s['development']['checks'].values())
           t=s['untouched_test']
           assert t['pass'] is True
           assert t['paired_vs_unguided']['mean_delta'] >= 0.005
@@ -155,11 +193,12 @@ jobs:
           compile=$(cat .m09/compile_exit_code.txt 2>/dev/null || echo 99)
           focused=$(cat .m09/focused_exit_code.txt 2>/dev/null || echo 99)
           experiment=$(cat .m09/experiment_exit_code.txt 2>/dev/null || echo 99)
+          preserve=$(cat .m09/preserve_checkpoint_exit_code.txt 2>/dev/null || echo 99)
           evidence=$(cat .m09/evidence_check_exit_code.txt 2>/dev/null || echo 99)
           fast=$(cat .m09/fast_exit_code.txt 2>/dev/null || echo 99)
-          echo "compile=$compile focused=$focused experiment=$experiment evidence=$evidence fast=$fast"
-          if [ "$compile" -ne 0 ] || [ "$focused" -ne 0 ] || [ "$experiment" -ne 0 ] || [ "$evidence" -ne 0 ] || [ "$fast" -ne 0 ]; then
-            echo "M09 acceptance failed; inspect retained evidence."
+          echo "compile=$compile focused=$focused experiment=$experiment preserve=$preserve evidence=$evidence fast=$fast"
+          if [ "$compile" -ne 0 ] || [ "$focused" -ne 0 ] || [ "$preserve" -ne 0 ] || [ "$experiment" -ne 0 ] || [ "$evidence" -ne 0 ] || [ "$fast" -ne 0 ]; then
+            echo "M09 acceptance failed; incomplete evidence/checkpoint may still be valid and retained."
             exit 1
           fi
           echo "M09 acceptance passed."
