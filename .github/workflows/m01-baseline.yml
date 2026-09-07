@@ -25,13 +25,14 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          repo_status="$(git status --short)"
           mkdir -p .m01
           {
             echo "timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "commit=$(git rev-parse HEAD)"
             echo "branch=$(git branch --show-current)"
             echo "git_status_begin"
-            git status --short
+            printf '%s\n' "$repo_status"
             echo "git_status_end"
             echo "python=$(python --version 2>&1)"
             echo "pip=$(python -m pip --version 2>&1)"
@@ -92,7 +93,14 @@ jobs:
           fi
           set -e
           elapsed=$(( $(date +%s) - t0 ))
-          printf "dependencies\t%s\trc_torch=%s rc_requirements=%s elapsed_s=%s\n" "$([ "$rc_torch" -eq 0 ] && [ "$rc_req" -eq 0 ] && echo passed || { [ "$rc_torch" -eq 124 ] || [ "$rc_req" -eq 124 ]; } && echo timed_out || echo failed)" "$rc_torch" "$rc_req" "$elapsed" | tee -a .m01/status.tsv
+          if [ "$rc_torch" -eq 0 ] && [ "$rc_req" -eq 0 ]; then
+            dep_status=passed
+          elif [ "$rc_torch" -eq 124 ] || [ "$rc_req" -eq 124 ]; then
+            dep_status=timed_out
+          else
+            dep_status=failed
+          fi
+          printf "dependencies\t%s\trc_torch=%s rc_requirements=%s elapsed_s=%s\n" "$dep_status" "$rc_torch" "$rc_req" "$elapsed" | tee -a .m01/status.tsv
           if [ "$rc_torch" -eq 0 ] && [ "$rc_req" -eq 0 ]; then
             python - <<'PY' | tee .m01/python_environment.txt
           import platform
@@ -272,6 +280,7 @@ jobs:
           name: m01-baseline-evidence
           path: .m01/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
 
       - name: Reflect actual failures in CI status
