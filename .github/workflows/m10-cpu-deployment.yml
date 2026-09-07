@@ -1,0 +1,37 @@
+name: m10-cpu-deployment
+
+on:
+  push:
+    branches: [research/m10-cpu-deployment]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-deployment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CPU dependencies
+        run: |
+          set -euxo pipefail
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
+          timeout 180s python -m pip install -r requirements.txt
+
+      - name: Compile M10 Python paths
+        run: |
+          python -m py_compile deploy/m10_native.py deploy/m10_artifact.py deploy/m10_runtime.py
+
+      - name: Focused M10 deployment contracts
+        run: |
+          python -m pytest tests/test_m10_cpu_deployment.py -q
