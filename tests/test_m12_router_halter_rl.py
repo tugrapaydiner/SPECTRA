@@ -69,8 +69,9 @@ def test_mixed_batch_early_terminal_masks_post_episode_slots():
     assert adv[0, 0].item() == torch.tensor(0.5).item()
     assert adv[1, 0].item() == 0.0
     assert ret[1, 0].item() == 0.0
-    # Example 1: final truncation bootstraps 0.3.
-    assert torch.allclose(adv[:, 1], torch.tensor([0.3, 0.1]), atol=1e-7)
+    # Example 1: final truncation bootstraps 0.3. k1 residual is 0.1 and k0
+    # residual is 0.0, so the sampled k1 advantage traces back once to k0.
+    assert torch.allclose(adv[:, 1], torch.tensor([0.1, 0.1]), atol=1e-7)
 
 
 def test_discounted_potential_shaping_terminal_and_truncation_treatment():
@@ -126,7 +127,7 @@ def test_historical_halting_helper_does_not_credit_forced_final_stop():
     halt_step, logp = halting_episode(policy, y_steps, d, sample=False)
     assert halt_step.item() == 1
     # Only step 0 was a policy decision: log P(continue)=log(0.5).
-    assert torch.allclose(logp, torch.tensor([torch.log(torch.tensor(0.5))]), atol=1e-7)
+    assert torch.allclose(logp, torch.log(torch.tensor([0.5])), atol=1e-7)
 
 
 def test_optimizer_gradient_ownership_is_exact():
@@ -158,7 +159,7 @@ def test_optimizer_gradient_ownership_is_exact():
     ra = router_dist.sample()
     rlp = router_dist.log_prob(ra).sum(1).repeat(k, 1)
     rent = router_dist.entropy().mean(1).repeat(k, 1)
-    ha, hlp0, hent0 = halter.act(z, d, sample=True)
+    _, hlp0, hent0 = halter.act(z, d, sample=True)
     hlp = hlp0.repeat(k, 1); hent = hent0.repeat(k, 1)
     critic_values = torch.stack([critic(z, d) for _ in range(k)])
     adv = torch.randn(k, b); ret = torch.randn(k, b); mask = torch.ones(k, b, dtype=torch.bool)
