@@ -1,8 +1,18 @@
 # Milestone 06 Acceptance Gate — Controlled Trained Baseline
 
-**Decision: PASS for the M06 experimental-scope contract.**
+**Decision: PASS.**
 
-This is a pass because the preregistered controlled pilot executed completely, retained its evidence, respected the recorded compute budget, restored the ternary checkpoint at full declared quantization, and reported the observed negative primary result without reinterpretation. It is **not** a pass for a reasoning-capability, recursion-advantage, ternary-parity, scaling-law, search, energy, or target-hardware claim.
+M06 acceptance is defined by evidence, not by winning a comparison. The gate is:
+
+1. at least one real trained checkpoint from the declared experiment,
+2. a held-out result table from the frozen test split,
+3. retained learning curves,
+4. exact reproduction commands,
+5. a clear diagnosis of failures or limitations.
+
+**Progress is not conditioned on SPECTRA beating a baseline.** A negative, tied, or weaker result passes this milestone if the experiment is real, reproducible, held out, and honestly diagnosed.
+
+The accepted M06 run satisfies all five requirements. It is **not** a pass for a reasoning-capability, recursion-advantage, ternary-parity, scaling-law, search, energy, or target-hardware claim.
 
 ## Research question
 
@@ -57,7 +67,7 @@ The preregistered timing rule therefore selected the full repeated-seed branch:
 
 No result-dependent budget adjustment occurred.
 
-## Primary result
+## Held-out result table
 
 **Every model produced zero valid solved boards on the 128-example frozen test split at both seeds.**
 
@@ -80,9 +90,35 @@ The `±` values above are population standard deviations across the two preregis
 | single-pass / 1101 | `0.312510` | `0.590278` | `0` | `0` |
 | single-pass / 2202 | `0.343907` | `0.608989` | `0` | `0` |
 
-## Learning / optimization check
+## Real trained checkpoints
 
-Zero exact solves did **not** automatically trigger a learning-failure diagnosis. The preregistered learning-failure rule was based on optimization signal: final-window training loss had to improve by at least 5% relative to the initial window, with finite/nonzero gradients.
+The accepted artifact contains all six final checkpoints:
+
+```text
+.m06/checkpoints/fp_recursive_seed1101.pt
+.m06/checkpoints/fp_recursive_seed2202.pt
+.m06/checkpoints/ternary_recursive_seed1101.pt
+.m06/checkpoints/ternary_recursive_seed2202.pt
+.m06/checkpoints/single_pass_seed1101.pt
+.m06/checkpoints/single_pass_seed2202.pt
+```
+
+These are trained final-step checkpoints, not random-init or smoke fixtures. The test predictions were generated only after final checkpoints were written and reloaded.
+
+## Learning curves and optimization diagnosis
+
+The artifact retains the complete per-step JSONL learning curves for every fit:
+
+```text
+.m06/curves/fp_recursive_seed1101.jsonl
+.m06/curves/fp_recursive_seed2202.jsonl
+.m06/curves/ternary_recursive_seed1101.jsonl
+.m06/curves/ternary_recursive_seed2202.jsonl
+.m06/curves/single_pass_seed1101.jsonl
+.m06/curves/single_pass_seed2202.jsonl
+```
+
+Zero exact solves did **not** automatically mean optimization failure. The preregistered failure rule required less than 5% training-loss improvement or zero/non-finite gradients.
 
 All six fits cleared that rule:
 
@@ -97,9 +133,48 @@ All six fits cleared that rule:
 
 Therefore the M06 gradient/overfit/minimal-4×4 failure branch was **not triggered**. 4×4 Sudoku was not used in the main experiment or as a post-hoc retuning surface.
 
+### Failure diagnosis
+
+The observed failure is **task-level capability failure at this pilot budget**, not a localized optimization failure:
+
+- every model had zero strict held-out solves;
+- gradients remained finite and nonzero;
+- training loss decreased strongly for all six fits;
+- secondary cell accuracy shows partial structure was learned;
+- the larger single-pass baseline learned substantially more partial structure than either small recursive model;
+- the W1.58A8 recursive model was weaker than the FP recursive model on both secondary metrics in both seeds.
+
+This diagnoses what M06 actually establishes: the training pipelines learn, but this small data/step regime is insufficient for complete 9×9-board capability. It does not justify claiming that recursion is intrinsically worse, that ternary reasoning cannot work, or that the baseline architecture is universally superior.
+
+## Exact reproduction commands
+
+From the repository root, the accepted experiment entry point is deterministic with the M06 protocol constants embedded in the runner.
+
+Install the same dependency families used by the accepted CPU CI run:
+
+```bash
+python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
+python -m pip install -r requirements.txt
+```
+
+Run the exact M06 experiment command used by the accepted workflow:
+
+```bash
+mkdir -p .m06
+timeout 1800s python scripts/m06_protocol_runner.py --out .m06 2>&1 | tee .m06/run.log
+```
+
+Run the post-experiment regression gate:
+
+```bash
+timeout 600s python -m pytest -m "not slow" -ra 2>&1 | tee .m06/pytest_fast.txt
+```
+
+The GitHub Actions definition that executed these commands is `.github/workflows/m06-controlled-baseline.yml`. The accepted run is `34124798931` at experimental head `9fd96e72b9542c33c4ae0639d44847f104a83df8`.
+
 ## Declared ternary inference state
 
-The W1.58A8 quantization-strength warmup was `50` steps. Each final ternary checkpoint was reloaded before test evaluation. The evidence gate required every `FakeBitLinear` quantization-strength buffer to equal exactly `1.0`.
+The W1.58A8 quantization-strength warmup was `50` steps. Each final ternary checkpoint was reloaded before test evaluation. The evidence gate required every `FakeBitLinear.quant_strength` buffer to equal exactly `1.0`.
 
 Both seeds passed for all seven ternary modules:
 
@@ -158,7 +233,7 @@ M06 also provides **no evidence that W1.58A8 preserves the floating-point recurs
 
 These observations do not establish the reverse universal claims either. The comparison is a small generated-data pilot with only two seeds, a much larger single-pass model, different architectural objectives (deep supervision versus single-pass CE), and existing FP/ternary projection-bias differences. It therefore cannot prove that recursion is intrinsically worse or that ternary reasoning cannot work.
 
-The important positive result is narrower: all three optimization paths learned nontrivial token/cell structure without collapse, the controlled experiment/evidence machinery works, and the project now has an honest trained baseline against which a later scientific hypothesis can be tested.
+The important positive result is narrower: all three optimization paths learned nontrivial token/cell structure without collapse, the controlled experiment/evidence machinery works, and the project now has an honest trained baseline against which later hypotheses can be tested.
 
 ## Accepted evidence
 
@@ -201,10 +276,10 @@ Neither failed run exposed an M06 performance result.
 
 ## M06 decision
 
-M06 closes one narrow layer: **a reproducible, repeated-seed, trained baseline experiment now exists on a non-debug 9×9 task under a preregistered resource and evaluation contract**.
+M06 satisfies the user-defined acceptance gate: **real trained checkpoints, a frozen held-out result table, retained learning curves, exact commands, and a clear failure diagnosis are all present.**
 
-It does not validate SPECTRA's central hypothesis. The primary endpoint was zero for every model. No MCTS, router, halter, PRM, distillation, energy optimization, or scaling mechanism should be stacked on top of these results inside M06.
+The fact that SPECTRA did not beat the larger single-pass baseline is an experimental result, not a milestone failure. Likewise, zero strict solves are an observed limitation, not a reason to retroactively fail this gate.
 
-**Evidence needed before the next milestone:** establish an adequate trained capability baseline that achieves nonzero strict solves under a separately preregistered, larger-but-still-bounded data/training budget, and include a size/compute-controlled single-pass comparator rather than relying only on the deliberately larger baseline used here. Only after strict task capability exists should additional reasoning/search mechanisms be evaluated.
+Future milestones may choose to improve strict task capability, add a size/compute-controlled comparator, or test new mechanisms under separately preregistered contracts. Those are scientific next steps, **not conditions for M06 acceptance or permission to progress**.
 
 **Stop here for M06.**
