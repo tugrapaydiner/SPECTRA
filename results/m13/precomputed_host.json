@@ -1,0 +1,27 @@
+{
+  "bandwidth_bottleneck_established": false,
+  "bit_exact": true,
+  "cache_residency_established": false,
+  "compile_flags_avx2": [
+    "g++",
+    "-O3",
+    "-std=c++17",
+    "-shared",
+    "-fPIC",
+    "-mavx2"
+  ],
+  "compile_flags_scalar": [
+    "g++",
+    "-O3",
+    "-std=c++17",
+    "-shared",
+    "-fPIC"
+  ],
+  "compiler": "g++",
+  "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+  "operation_convention": "1_MAC_equals_2_arithmetic_operations",
+  "peak_avx2_gops_precomputed_input_reuse": 31.133501315530832,
+  "traffic_scope": "kernel_external_first_touch_logical_bytes_not_measured_dram",
+  "uname": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "workload_label": "precomputed_input_reuse"
+}

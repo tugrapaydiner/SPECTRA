@@ -1,0 +1,27 @@
+{
+  "accounted_logical_bytes": 348380,
+  "attention_score_bytes_if_materialized": 32768,
+  "attention_score_bytes_included_in_accounted_total": false,
+  "bandwidth_bottleneck_established": false,
+  "cache_residency_established": false,
+  "input_embedding_output_bytes": 2048,
+  "input_token_bytes": 128,
+  "logits_and_decode_bytes": 1408,
+  "memory_levels": {
+    "activation_state": "logical FP32 tensor boundary/state bytes; cache/DRAM residency not asserted",
+    "attention": "algorithmic score bytes disclosed conditionally; PyTorch implementation may fuse/stream",
+    "persistent_storage": "packed weights/scales/FP tensors; cache level not asserted"
+  },
+  "native_fp32_input_output_boundary_bytes": 304384,
+  "native_linear_macs": 1583104,
+  "native_linear_operations": 3166208,
+  "native_linear_ops_per_accounted_logical_byte": 9.08837476318962,
+  "operation_convention": "1_MAC_equals_2_arithmetic_operations",
+  "persistent_fp_tensor_bytes": 3340,
+  "persistent_packed_weight_bytes": 3112,
+  "persistent_scale_bias_bytes": 1192,
+  "recurrent_yz_read_write_lower_bound_bytes": 32768,
+  "representative_heldout_input_sha256": "a134265d63f6d26b3f758d3a4aa8df1dfda6f9ee1741420bbb8f9585b7f943ff",
+  "traffic_scope": "logical_tensor_and_interface_bytes_not_measured_cache_or_dram_transactions",
+  "workload": "actual_sequential_recurrence_complete_solve"
+}

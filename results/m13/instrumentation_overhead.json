@@ -1,0 +1,9 @@
+{
+  "direct_full_solve_mean_ms": 7.759914875,
+  "energy_snapshot_read_mean_us": 22.266125,
+  "energy_snapshot_read_p95_us": 30.759,
+  "note": "overhead observation on this host; sampler thread scheduling and sysfs cost are environment-dependent",
+  "rss_sampled_full_solve_mean_ms": 11.245102875003354,
+  "rss_sampler_interval_ms": 0.5,
+  "rss_sampler_observed_overhead_ms": 3.4851880000033546
+}

@@ -1,0 +1,45 @@
+{
+  "available": false,
+  "avg_package_power_watts": null,
+  "distinct_examples_per_pass": 24,
+  "domain_deltas": [],
+  "end_snapshot": {
+    "all_valid": false,
+    "discovery": {
+      "domains": [],
+      "package_discovery_complete": false,
+      "package_domain_ids": [],
+      "rejected": [],
+      "root": "/sys/class/powercap"
+    },
+    "package_valid": false,
+    "readings": [],
+    "timestamp_perf_ns": 90837040163
+  },
+  "energy_joules": null,
+  "energy_microjoules": null,
+  "failure_reason": "no_package_domain",
+  "idle_subtraction_performed": false,
+  "joules_per_complete_solve": null,
+  "joules_per_run": null,
+  "last_result_type": null,
+  "n_runs": 3,
+  "package_domain_ids": [],
+  "scope": "cpu_package_rapl_not_gpu_not_whole_system",
+  "scope_note": "RAPL package energy is attributed by the host package counter and can include CPU cores plus other on-package components. It is not a discrete-GPU or whole-system/wall-energy measurement.",
+  "start_snapshot": {
+    "all_valid": false,
+    "discovery": {
+      "domains": [],
+      "package_discovery_complete": false,
+      "package_domain_ids": [],
+      "rejected": [],
+      "root": "/sys/class/powercap"
+    },
+    "package_valid": false,
+    "readings": [],
+    "timestamp_perf_ns": 90292270796
+  },
+  "total_complete_solves": 72,
+  "wall_seconds": 0.5446118790000014
+}
