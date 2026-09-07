@@ -63,12 +63,14 @@ The test split is never used for model selection, step selection, hyperparameter
 
 ### B. Matched ternary recursive model
 
-Exactly the same TRM architecture as A, except:
+Same recursive dimensions and recurrence schedule as A, except:
 
 - ternary weights enabled
 - recurrent activation fake-quantization enabled (`W1.58A8` training path)
 - quantization strength ramps linearly from 0 to 1 during the first quarter of the main training steps
 - evaluation is invalid unless every `FakeBitLinear.quant_strength` is exactly `1.0` at checkpoint/evaluation time
+
+The repository's floating-point block uses PyTorch `nn.MultiheadAttention`, whose projection includes bias tensors, while the existing ternary hand-written attention path is bias-free. Therefore exact trainable-parameter equality would require changing one implementation solely for this experiment. M06 does **not** alter either implementation. Instead, A and B must have trainable parameter counts within **1%** of each other; the exact counts and relative gap are recorded before training. This is an implementation difference and a limitation of the comparison.
 
 ### C. Larger single-pass baseline
 
@@ -79,8 +81,9 @@ Exactly the same TRM architecture as A, except:
 - `heads=4`
 - one feed-forward pass, no recursion
 - FP32
+- the existing confidence head is frozen and excluded from the trainable parameter count because M06 does not train or evaluate confidence routing
 
-The experiment must record exact trainable parameter counts and fail before main training if C is not larger than A or if A and B do not have identical trainable parameter counts.
+The experiment fails before main training if A/B differ by more than 1% in trainable parameters or if C is not larger than both recursive models.
 
 ## Optimization protocol
 
@@ -94,6 +97,7 @@ Common settings, fixed before results:
 - no architecture-specific LR search
 - no early stopping on validation accuracy
 - final-step checkpoint is evaluated
+- no EMA, scheduler, or post-hoc best-checkpoint selection in this M06 pilot
 
 Recursive A/B use the repository's existing deep-supervision loss (token CE at each supervision step plus the existing halting/improvement terms). Single-pass C uses token cross-entropy because it has no recursive supervision or halting head. This objective difference is architectural and must be reported as a limitation; optimizer, batch, data, step count, and seed protocol remain fixed.
 
@@ -101,9 +105,9 @@ Ternary B alone has the preregistered quantization-strength warmup required by i
 
 ## Timed resource probe and training budget
 
-Before main training, run exactly `5` optimizer steps for each architecture on the 9×9 training split with the same batch size. Probe models are discarded and probe accuracy is not inspected.
+Before main training, run exactly `5` optimizer steps for each architecture on the 9×9 training split with the same batch size. Probe models are discarded and probe accuracy is not inspected. The probe uses the fully quantized ternary path so its timing does not underestimate the declared inference representation.
 
-Recorded main-training wall-clock budget on the runner: **1080 seconds total** across all main model fits. Target main step count is **200 optimizer steps per model**.
+Recorded main-training wall-clock budget on the controlled runner: **1080 seconds total** across all main model fits. Target main step count is **200 optimizer steps per model**.
 
 The seed/step decision uses timing only, never accuracy:
 
@@ -113,7 +117,7 @@ The seed/step decision uses timing only, never accuracy:
 4. Else choose one-seed steps as `floor((1080 / (3*s_max)) / 10) * 10`, capped at 200.
 5. If that value is below 40 steps, stop the main experiment and report compute infeasibility rather than changing architectures or task difficulty.
 
-Evaluation budget is the complete frozen 128-example test split once per final checkpoint, batched, plus validation snapshots for the learning curves. No test-time search is allowed in M06.
+Evaluation budget is the complete frozen 128-example test split once per final checkpoint, batched, plus validation snapshots for the learning curves. No test-time search is allowed in M06. Validation snapshots do not change training duration or select a checkpoint.
 
 ## Stop conditions
 
@@ -136,10 +140,10 @@ Exact-solve rate equal to zero is **not** by itself an optimization failure.
 A fit is classified as an optimization-learning failure only if its final-window training loss does not improve by at least 5% relative to its initial-window training loss, or gradients are zero/non-finite. For a failing architecture only, M06 then records:
 
 1. one-batch gradient inspection,
-2. an 8-example overfit check,
+2. an 8-example 9×9 overfit check,
 3. a minimal 4×4 Sudoku configuration as pipeline debugging only.
 
-No new mechanism may be added in response to a failed learning check inside M06.
+Each overfit diagnostic is capped at 80 optimizer steps and 120 seconds. Diagnostic results are not used to retune or rerun the main pilot. No new mechanism may be added in response to a failed learning check inside M06.
 
 ## Evidence to preserve
 
