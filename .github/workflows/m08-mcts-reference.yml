@@ -62,7 +62,7 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          timeout 300s python -m pytest tests/test_m08_mcts_reference.py -q |& tee .m08/pytest_m08.txt
+          timeout 300s python -m pytest tests/test_m08_mcts_reference.py tests/test_m08_virtual_loss_exception.py -q |& tee .m08/pytest_m08.txt
           code=${PIPESTATUS[0]}
           echo "$code" | tee .m08/focused_exit_code.txt
           exit 0
