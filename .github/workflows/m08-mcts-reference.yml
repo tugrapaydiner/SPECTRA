@@ -1,0 +1,129 @@
+name: m08-mcts-reference
+
+on:
+  push:
+    branches: [research/m08-mcts-reference]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mcts-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CPU dependencies
+        run: |
+          set -euxo pipefail
+          mkdir -p .m08
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m08/install_torch.txt
+          timeout 180s python -m pip install -r requirements.txt |& tee .m08/install_requirements.txt
+          python - <<'PY' | tee .m08/environment.txt
+          import os, platform, sys, torch, numpy
+          print('python=', sys.version)
+          print('platform=', platform.platform())
+          print('machine=', platform.machine())
+          print('logical_cpus=', os.cpu_count())
+          print('torch=', torch.__version__)
+          print('numpy=', numpy.__version__)
+          print('cuda_available=', torch.cuda.is_available())
+          PY
+
+      - name: Compile M08 paths
+        shell: bash
+        run: |
+          set +e
+          python -m py_compile eval/latent_mcts.py eval/mcts_reference.py scripts/run_m08_reference.py
+          echo "$?" | tee .m08/compile_exit_code.txt
+          exit 0
+
+      - name: Run frozen reference tree
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          python scripts/run_m08_reference.py --out .m08/reference_tree.json |& tee .m08/reference_cli.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m08/reference_exit_code.txt
+          exit 0
+
+      - name: Focused M08 contracts
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 300s python -m pytest tests/test_m08_mcts_reference.py -q |& tee .m08/pytest_m08.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m08/focused_exit_code.txt
+          exit 0
+
+      - name: Existing native and checkpoint MCTS contracts
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 300s python -m pytest tests/test_latent_mcts_native.py tests/test_m05_checkpoint_eval.py tests/test_m07_grounded_verifier.py -m "not slow" -q |& tee .m08/pytest_compat.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m08/compat_exit_code.txt
+          exit 0
+
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 600s python -m pytest -m "not slow" -ra |& tee .m08/pytest_fast.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m08/fast_exit_code.txt
+          exit 0
+
+      - name: Record provenance and hashes
+        if: always()
+        run: |
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "base=d15d5578878a175442895867de08d98efb31e6da"
+            echo
+            git diff --stat d15d5578878a175442895867de08d98efb31e6da...HEAD
+          } | tee .m08/diff_stat.txt
+          python - <<'PY' | tee .m08/evidence_sha256.txt
+          import hashlib, pathlib
+          root=pathlib.Path('.m08')
+          for p in sorted(q for q in root.rglob('*') if q.is_file() and q.name != 'evidence_sha256.txt'):
+              print(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.as_posix()}")
+          PY
+
+      - name: Upload M08 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m08-mcts-reference-evidence
+          path: .m08/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce M08 gate
+        if: always()
+        run: |
+          compile=$(cat .m08/compile_exit_code.txt 2>/dev/null || echo 99)
+          ref=$(cat .m08/reference_exit_code.txt 2>/dev/null || echo 99)
+          focused=$(cat .m08/focused_exit_code.txt 2>/dev/null || echo 99)
+          compat=$(cat .m08/compat_exit_code.txt 2>/dev/null || echo 99)
+          fast=$(cat .m08/fast_exit_code.txt 2>/dev/null || echo 99)
+          echo "compile=$compile reference=$ref focused=$focused compat=$compat fast=$fast"
+          if [ "$compile" -ne 0 ] || [ "$ref" -ne 0 ] || [ "$focused" -ne 0 ] || [ "$compat" -ne 0 ] || [ "$fast" -ne 0 ]; then
+            echo "M08 gate failed; inspect retained evidence."
+            exit 1
+          fi
+          echo "M08 gate passed."
