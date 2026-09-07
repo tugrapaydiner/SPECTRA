@@ -64,6 +64,7 @@ jobs:
           set -euxo pipefail
           timeout 180s python setup.py build_ext --inplace |& tee .m02/build_extension.txt
           python - <<'PY' | tee .m02/extension_backend.txt
+          import torch
           import spectra_kernel_ext
           print("backend=", spectra_kernel_ext.backend_name())
           assert spectra_kernel_ext.backend_name() in {"avx2", "scalar"}
