@@ -9,12 +9,19 @@ from typing import Any, Mapping
 import torch
 
 from eval.checkpoint_eval import EvaluationContractError, LoadedTRMCheckpoint
-from model.latent_action import StateConditionedLatentActionCodebook
+from model.latent_action import (
+    BudgetAlignedChallengerCodebook,
+    StateConditionedLatentActionCodebook,
+)
 from train.checkpoint import atomic_torch_save
 
 ACTION_FORMAT = "spectra.m09_action_policy"
 ACTION_VERSION = 1
 ACTION_KIND = "state_conditioned_latent_action"
+SUPPORTED_FAMILIES = {
+    "StateConditionedLatentActionCodebook": StateConditionedLatentActionCodebook,
+    "BudgetAlignedChallengerCodebook": BudgetAlignedChallengerCodebook,
+}
 
 
 def _sha256_file(path: str | Path) -> str:
@@ -32,7 +39,7 @@ def _plain_mapping(value: Any, name: str) -> dict[str, Any]:
     return {str(k): v for k, v in value.items()}
 
 
-def action_architecture(module: StateConditionedLatentActionCodebook) -> dict[str, Any]:
+def action_architecture(module) -> dict[str, Any]:
     return {
         "class": type(module).__name__,
         "dim": int(module.dim),
@@ -46,7 +53,7 @@ def action_architecture(module: StateConditionedLatentActionCodebook) -> dict[st
 
 
 def save_m09_action_checkpoint(
-    module: StateConditionedLatentActionCodebook,
+    module,
     path: str | Path,
     *,
     core: LoadedTRMCheckpoint,
@@ -55,6 +62,8 @@ def save_m09_action_checkpoint(
     fitted_version: str,
     provenance: Mapping[str, Any],
 ) -> None:
+    if type(module).__name__ not in SUPPORTED_FAMILIES:
+        raise EvaluationContractError("unsupported M09 action-policy family")
     if int(trained_steps) <= 0:
         raise EvaluationContractError("M09 action checkpoint requires trained_steps > 0")
     if not fitted_version:
@@ -90,14 +99,11 @@ def save_m09_action_checkpoint(
 class LoadedM09ActionPolicy:
     path: Path
     sha256: str
-    module: StateConditionedLatentActionCodebook
+    module: torch.nn.Module
     payload: dict[str, Any]
 
 
-def load_m09_action_checkpoint(
-    path: str | Path,
-    core: LoadedTRMCheckpoint,
-) -> LoadedM09ActionPolicy:
+def load_m09_action_checkpoint(path: str | Path, core: LoadedTRMCheckpoint) -> LoadedM09ActionPolicy:
     p = Path(path)
     if not p.is_file():
         raise EvaluationContractError(f"M09 action checkpoint does not exist: {p}")
@@ -128,31 +134,26 @@ def load_m09_action_checkpoint(
         raise EvaluationContractError(f"M09 action checkpoint incompatible with core: {bad}")
 
     arch = _plain_mapping(payload.get("architecture"), "architecture")
-    required = {
-        "class", "dim", "num_tokens", "n_actions", "scale", "hidden_dim",
-        "state_representation", "prior_semantics",
-    }
+    required = {"class", "dim", "num_tokens", "n_actions", "scale", "hidden_dim", "state_representation", "prior_semantics"}
     missing = sorted(required - set(arch))
     if missing:
         raise EvaluationContractError(f"M09 action architecture metadata missing {missing}")
-    if arch["class"] != "StateConditionedLatentActionCodebook":
+    family = SUPPORTED_FAMILIES.get(str(arch["class"]))
+    if family is None:
         raise EvaluationContractError("unsupported M09 action-policy family")
-    if arch["state_representation"] != StateConditionedLatentActionCodebook.STATE_REPRESENTATION:
+    if arch["state_representation"] != family.STATE_REPRESENTATION:
         raise EvaluationContractError("unsupported M09 search-state representation")
-    if arch["prior_semantics"] != StateConditionedLatentActionCodebook.PRIOR_SEMANTICS:
+    if arch["prior_semantics"] != family.PRIOR_SEMANTICS:
         raise EvaluationContractError("unsupported M09 prior semantics")
 
     training = _plain_mapping(payload.get("training"), "training")
-    if int(training.get("trained_steps", 0)) <= 0:
-        raise EvaluationContractError("M09 action checkpoint is not marked trained")
-    if not training.get("fitted_version"):
-        raise EvaluationContractError("M09 action checkpoint lacks fitted version")
+    if int(training.get("trained_steps", 0)) <= 0 or not training.get("fitted_version"):
+        raise EvaluationContractError("M09 action checkpoint lacks trained version metadata")
     prov = _plain_mapping(payload.get("provenance"), "provenance")
     required_prov = {
         "reference_target_used", "candidate_bank_seed", "candidate_bank_count",
-        "selected_candidate_indices", "target_utility_table_sha256",
-        "reasoner_tensor_state_sha256", "train_id_sha256", "development_id_sha256",
-        "test_id_sha256", "target_generation_work", "training_method",
+        "selected_candidate_indices", "target_utility_table_sha256", "reasoner_tensor_state_sha256",
+        "train_id_sha256", "development_id_sha256", "test_id_sha256", "target_generation_work", "training_method",
     }
     missing_prov = sorted(required_prov - set(prov))
     if missing_prov:
@@ -160,12 +161,9 @@ def load_m09_action_checkpoint(
     if prov["reference_target_used"] is not False:
         raise EvaluationContractError("M09 action checkpoint target provenance is leaky")
 
-    module = StateConditionedLatentActionCodebook(
-        dim=int(arch["dim"]),
-        num_tokens=int(arch["num_tokens"]),
-        n_actions=int(arch["n_actions"]),
-        scale=float(arch["scale"]),
-        hidden_dim=int(arch["hidden_dim"]),
+    module = family(
+        dim=int(arch["dim"]), num_tokens=int(arch["num_tokens"]), n_actions=int(arch["n_actions"]),
+        scale=float(arch["scale"]), hidden_dim=int(arch["hidden_dim"]),
     )
     state = payload.get("state_dict")
     if not isinstance(state, Mapping) or not all(torch.is_tensor(v) for v in state.values()):
@@ -174,5 +172,4 @@ def load_m09_action_checkpoint(
         module.load_state_dict(state, strict=True)
     except RuntimeError as exc:
         raise EvaluationContractError(f"M09 action state_dict incompatible with metadata: {exc}") from exc
-    module = module.to(core.device).eval()
-    return LoadedM09ActionPolicy(p, _sha256_file(p), module, payload)
+    return LoadedM09ActionPolicy(p, _sha256_file(p), module.to(core.device).eval(), payload)
