@@ -184,7 +184,7 @@ def test_native_contract_rejects_bad_lengths_indices_shift_weights_and_multiplie
     mult = np.array([1], dtype=np.int32)
     y = np.zeros((2, 1), dtype=np.int8)
 
-    bad_reserved = packed.copy(); bad_reserved[0] = (bad_reserved[0] & ~0x3) | 0x3
+    bad_reserved = packed.copy(); bad_reserved[0] = (bad_reserved[0] & 0xFC) | 0x3
     status = lib.spectra_sparse_ternary_gemv(
         X.ctypes.data_as(I8), X.size, active.ctypes.data_as(I32), active.size,
         bad_reserved.ctypes.data_as(U8), bad_reserved.size,
