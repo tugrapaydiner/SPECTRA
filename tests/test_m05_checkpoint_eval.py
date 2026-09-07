@@ -33,6 +33,7 @@ from eval.research_eval import (
 from eval.scaling import run_checkpoint_scaling_grid, run_scaling_grid
 from model.energy import LatentEnergyVerifier
 from model.latent_action import LatentActionCodebook
+from model.stability import quant_strength_state
 from scripts._common import build_data_splits, build_seeded_training_components, task_contract_from
 from train.trainer import Trainer
 
@@ -136,7 +137,7 @@ def test_immutable_manifest_roundtrip_and_tamper_detection(tmp_path: Path):
     assert before.shape[1] == 16
 
 
-def test_checkpoint_restores_recorded_family_flags_params_ema_and_eval_mode(tmp_path: Path):
+def test_checkpoint_restores_recorded_family_flags_params_ema_quant_and_eval_mode(tmp_path: Path):
     _, _, core, manifest = _make_artifacts(tmp_path, ternary=True, act8=True)
     validate_checkpoint_manifest_compatibility(core, manifest)
     assert core.architecture["class"] == "TRM"
@@ -145,9 +146,19 @@ def test_checkpoint_restores_recorded_family_flags_params_ema_and_eval_mode(tmp_
     assert core.weight_identity == "ema"
     assert core.param_count == sum(p.numel() for p in core.model.parameters())
     assert not core.model.training
+
+    # Every trainable parameter in an EMA-labelled result must actually be EMA.
     ema = core.payload["weights"]["ema"]
-    for key, value in core.model.state_dict().items():
-        assert torch.equal(value.cpu(), ema[key].cpu())
+    trainable = {name: p for name, p in core.model.named_parameters() if p.requires_grad}
+    assert set(ema) == set(trainable)
+    for key, value in trainable.items():
+        assert torch.equal(value.detach().cpu(), ema[key].cpu())
+
+    # FakeBitLinear rho is non-persistent, so it must come from the explicit M04
+    # quantization snapshot rather than accidentally resetting to constructor rho=1.
+    expected_rho = core.payload["training"]["quantization"]["strengths"]
+    assert quant_strength_state(core.model) == expected_rho
+    assert set(expected_rho.values()) == {0.25}
 
 
 def test_manifest_task_config_mismatch_is_rejected_even_with_valid_digest(tmp_path: Path):
@@ -196,15 +207,20 @@ def test_incompatible_auxiliary_core_hash_is_rejected(tmp_path: Path):
         load_latent_verifier_checkpoint(bad, core)
 
 
-def test_search_rejects_nsup_as_ignored_knob_and_duplicate_realized_configs(tmp_path: Path):
+def test_search_rejects_ignored_nsup_and_rng_seed_knobs(tmp_path: Path):
     _, _, core, manifest = _make_artifacts(tmp_path)
-    verifier, action, _, _ = _trained_auxiliaries(tmp_path, core, manifest)
+    _, action, _, _ = _trained_auxiliaries(tmp_path, core, manifest)
     with pytest.raises(EvaluationContractError, match="not a latent-MCTS transition knob"):
         InferenceSetting(mode="latent_mcts", ordinary_n_sup=2, mcts_rollouts=2).validate()
+    with pytest.raises(EvaluationContractError, match="deterministic.*search_seed"):
+        InferenceSetting(mode="latent_mcts", mcts_rollouts=2, search_seed=99).validate()
 
-    setting = InferenceSetting(mode="latent_mcts", mcts_rollouts=2, search_seed=99)
+    setting = InferenceSetting(mode="latent_mcts", mcts_rollouts=2)
     realized = realized_setting(core, setting, action_policy=action)
     assert realized["N_sup_consumed_by_search_transition"] is False
+    assert "checkpoint_N_sup" not in realized
+    assert realized["search_stochastic"] is False
+    assert realized["search_seed_consumed"] is None
     assert "transition_T_cycles" in realized and "transition_inner_n" in realized
     with pytest.raises(EvaluationContractError, match="same realized computation"):
         assert_unique_realized_settings([realized, dict(realized)])
@@ -213,7 +229,7 @@ def test_search_rejects_nsup_as_ignored_knob_and_duplicate_realized_configs(tmp_
 def test_learned_search_emits_realized_counts_and_provenance_per_example(tmp_path: Path):
     _, _, core, manifest = _make_artifacts(tmp_path)
     verifier, action, _, _ = _trained_auxiliaries(tmp_path, core, manifest)
-    setting = InferenceSetting(mode="latent_mcts", mcts_rollouts=2, search_seed=123)
+    setting = InferenceSetting(mode="latent_mcts", mcts_rollouts=2)
     records = evaluate_setting(
         core, manifest, setting, verifier=verifier, action_policy=action
     )
@@ -235,7 +251,8 @@ def test_learned_search_emits_realized_counts_and_provenance_per_example(tmp_pat
         assert c["verifier_calls"] == 2
         assert c["rollouts_completed"] == 2
         assert c["stopping_reason"] == "rollout_budget_exhausted"
-        assert row["search_example_seed"] is not None
+        assert row["search_example_seed"] is None
+        assert row["realized_setting"]["search_stochastic"] is False
 
 
 def test_greedy_fixed_manifest_changes_only_realized_nsup_compute(tmp_path: Path):
