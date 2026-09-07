@@ -26,8 +26,17 @@ def rapl_available(root: str | Path = DEFAULT_POWERCAP_ROOT) -> bool:
 
 
 def energy_counter_inventory(root: str | Path = DEFAULT_POWERCAP_ROOT) -> dict[str, Any]:
-    """Serializable explicit powercap domain inventory for provenance."""
     return discover_energy_domains(root).record()
+
+
+def measure_energy_record(
+    fn: Callable[[], object],
+    n_runs: int = 1,
+    *,
+    root: str | Path = DEFAULT_POWERCAP_ROOT,
+) -> dict[str, Any]:
+    """Explicit M13 record; unavailable joule fields remain ``None`` with reason."""
+    return measure_energy(fn, n_runs=n_runs, root=root)
 
 
 def measure_energy_joules(
@@ -35,13 +44,16 @@ def measure_energy_joules(
     n_runs: int = 1,
     *,
     root: str | Path = DEFAULT_POWERCAP_ROOT,
-) -> dict[str, Any]:
-    """Measure CPU-package RAPL energy around ``fn``.
+) -> dict[str, Any] | None:
+    """Legacy-compatible wrapper.
 
-    Always returns an explicit record. If physical counters are unavailable or the
-    window is invalid, ``available`` is false and joule fields are ``None``.
+    Returns the validated record only when physical package energy is available;
+    otherwise returns ``None``. Call :func:`measure_energy_record` when the explicit
+    M13 failure reason/domain provenance is required. ``None`` is unavailable, not
+    a zero-joule observation.
     """
-    return measure_energy(fn, n_runs=n_runs, root=root)
+    record = measure_energy_record(fn, n_runs=n_runs, root=root)
+    return record if record["available"] else None
 
 
 def idle_power_watts(
@@ -49,31 +61,21 @@ def idle_power_watts(
     *,
     root: str | Path = DEFAULT_POWERCAP_ROOT,
 ) -> float | None:
-    """Observe idle CPU-package power without silently substituting zero."""
     if seconds <= 0:
         raise ValueError("seconds must be positive")
     start = read_energy_snapshot(root)
-    t0 = time.perf_counter()
-    time.sleep(float(seconds))
-    elapsed = time.perf_counter() - t0
-    end = read_energy_snapshot(root)
-    delta = energy_delta(start, end)
+    t0 = time.perf_counter(); time.sleep(float(seconds)); elapsed = time.perf_counter() - t0
+    end = read_energy_snapshot(root); delta = energy_delta(start, end)
     joules = delta["energy_joules"] if delta["available"] else None
     return (float(joules) / elapsed) if joules is not None and elapsed > 0 else None
 
 
-# --------------------------------------------------------------------------- #
-# cgroup constraints
-# --------------------------------------------------------------------------- #
 def cgroups_available() -> bool:
-    """True if ``systemd-run`` cgroup scoping is installed (usability is host-specific)."""
     import shutil
-
     return shutil.which("systemd-run") is not None
 
 
 def cgroup_command(cpu_cores: int, mem_max_mb: int, argv: list[str]) -> list[str]:
-    """Build a ``systemd-run`` scope command applying CPU/memory limits."""
     cmd = ["systemd-run", "--scope", "--quiet"]
     if cpu_cores and cpu_cores > 0:
         cmd += ["-p", f"CPUQuota={cpu_cores * 100}%"]
