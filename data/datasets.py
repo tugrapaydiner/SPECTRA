@@ -19,45 +19,29 @@ from data import maze as mz
 from data import smarthome as sh_task
 from data import sudoku as sk
 
-
 GENERATOR_VERSION = "spectra-m03-data-v1"
 
 
 class GridDataset(Dataset):
     def __init__(
-        self,
-        inputs: np.ndarray,
-        targets: np.ndarray,
-        height: int,
-        width: int,
-        *,
-        task: str | None = None,
-        num_tokens: int | None = None,
-        pad_token: int | None = None,
-        input_mask: np.ndarray | None = None,
-        target_mask: np.ndarray | None = None,
-        ids: list[str] | None = None,
+        self, inputs: np.ndarray, targets: np.ndarray, height: int, width: int, *,
+        task: str | None = None, num_tokens: int | None = None,
+        pad_token: int | None = None, input_mask: np.ndarray | None = None,
+        target_mask: np.ndarray | None = None, ids: list[str] | None = None,
         group_ids: list[str] | None = None,
         metadata: list[dict[str, Any]] | None = None,
     ):
-        x = np.asarray(inputs)
-        y = np.asarray(targets)
+        x = np.asarray(inputs); y = np.asarray(targets)
         if x.ndim != 2 or y.ndim != 2 or x.shape != y.shape:
             raise ValueError(f"inputs/targets must have identical [M,L] shape, got {x.shape}, {y.shape}")
         if not isinstance(height, int) or not isinstance(width, int) or height <= 0 or width <= 0:
             raise ValueError("height/width must be positive integers")
         if x.shape[1] != height * width:
-            raise ValueError(
-                f"flattened length {x.shape[1]} disagrees with height*width={height*width}"
-            )
+            raise ValueError(f"flattened length {x.shape[1]} disagrees with height*width={height*width}")
         self.inputs = np.ascontiguousarray(x, dtype=np.int64)
         self.targets = np.ascontiguousarray(y, dtype=np.int64)
-        self.height = height
-        self.width = width
-        self.task = task
-        self.num_tokens = num_tokens
-        self.pad_token = pad_token
-
+        self.height, self.width = height, width
+        self.task, self.num_tokens, self.pad_token = task, num_tokens, pad_token
         if num_tokens is not None:
             if not isinstance(num_tokens, int) or num_tokens <= 0:
                 raise ValueError("num_tokens must be a positive integer")
@@ -68,7 +52,6 @@ class GridDataset(Dataset):
                     )
         if pad_token is not None and num_tokens is not None and not 0 <= pad_token < num_tokens:
             raise ValueError("pad_token must lie inside the declared vocabulary")
-
         shape = self.inputs.shape
         self.input_mask = np.ones(shape, dtype=bool) if input_mask is None else np.asarray(input_mask, dtype=bool)
         self.target_mask = np.ones(shape, dtype=bool) if target_mask is None else np.asarray(target_mask, dtype=bool)
@@ -76,7 +59,6 @@ class GridDataset(Dataset):
             raise ValueError("input_mask/target_mask must match dataset array shape")
         self.input_mask = np.ascontiguousarray(self.input_mask)
         self.target_mask = np.ascontiguousarray(self.target_mask)
-
         n = len(self.inputs)
         self.ids = ids if ids is not None else [f"row-{i}" for i in range(n)]
         self.group_ids = group_ids if group_ids is not None else list(self.ids)
@@ -92,85 +74,73 @@ class GridDataset(Dataset):
 
 
 def _default_num_tokens(task: str, kwargs: dict[str, Any]) -> int:
-    if task == "sudoku":
-        return sk.grid_size(int(kwargs.get("box", 3))) + 1
-    if task == "maze":
-        return 5
-    if task == "arc":
-        return int(kwargs.get("pad_token", 10)) + 1
-    if task == "babyai":
-        return babyai_task.NUM_TOKENS
-    if task == "smarthome":
-        return sh_task.NUM_TOKENS
+    if task == "sudoku": return sk.grid_size(int(kwargs.get("box", 3))) + 1
+    if task == "maze": return 5
+    if task == "arc": return int(kwargs.get("pad_token", 10)) + 1
+    if task == "babyai": return babyai_task.NUM_TOKENS
+    if task == "smarthome": return sh_task.NUM_TOKENS
     raise ValueError(f"Unknown task: {task!r}")
+
+
+def _default_pad_token(task: str, kwargs: dict[str, Any]) -> int | None:
+    if task == "arc": return int(kwargs.get("pad_token", 10))
+    if task == "smarthome": return int(kwargs.get("pad_token", sh_task.PAD))
+    value = kwargs.get("pad_token", None)
+    return None if value is None else int(value)
 
 
 def generate_example(
     task: str, rng: np.random.Generator, **kwargs: Any
 ) -> tuple[np.ndarray, np.ndarray, int, int, dict[str, Any]]:
-    """Generate one *unaugmented* example plus difficulty/provenance metadata."""
+    """Generate one unaugmented example plus difficulty/provenance metadata."""
     if task == "sudoku":
-        box = int(kwargs.get("box", 3))
-        side = sk.grid_size(box)
+        box = int(kwargs.get("box", 3)); side = sk.grid_size(box)
         min_clues = int(kwargs.get("min_clues", kwargs.get("num_clues", 40)))
         max_clues = int(kwargs.get("max_clues", kwargs.get("num_clues", min_clues)))
         if not 0 < min_clues <= max_clues <= side * side:
             raise ValueError("invalid Sudoku clue range")
         requested = int(rng.integers(min_clues, max_clues + 1))
         puzzle, solution = sk.generate_pair(
-            box,
-            requested,
-            rng,
+            box, requested, rng,
             require_unique=bool(kwargs.get("require_unique", True)),
             solution_method=str(kwargs.get("solution_method", "random_backtracking")),
         )
         actual = int((puzzle != 0).sum())
-        return (
-            puzzle.reshape(-1), solution.reshape(-1), side, side,
-            {
-                "difficulty": {"clues": actual, "blanks": side * side - actual},
-                "requested_clues": requested,
-                "box": box,
-                "solution_method": str(kwargs.get("solution_method", "random_backtracking")),
-            },
-        )
-
+        return puzzle.reshape(-1), solution.reshape(-1), side, side, {
+            "difficulty": {"clues": actual, "blanks": side * side - actual},
+            "requested_clues": requested, "box": box,
+            "solution_method": str(kwargs.get("solution_method", "random_backtracking")),
+        }
     if task == "maze":
         h = int(kwargs.get("height", 15)); w = int(kwargs.get("width", 15))
         x, y = mz.generate_pair(
-            h, w, rng,
-            min_path_len=int(kwargs.get("min_path_len", 0)),
+            h, w, rng, min_path_len=int(kwargs.get("min_path_len", 0)),
             max_path_len=kwargs.get("max_path_len", None),
         )
-        path_len = int((y == mz.PATH).sum()) + 2
-        wall_fraction = float((x == mz.WALL).mean())
         return x.reshape(-1), y.reshape(-1), h, w, {
-            "difficulty": {"path_length": path_len, "wall_fraction": wall_fraction},
+            "difficulty": {
+                "path_length": int((y == mz.PATH).sum()) + 2,
+                "wall_fraction": float((x == mz.WALL).mean()),
+            },
             "require_optimal": bool(kwargs.get("require_optimal", True)),
         }
-
     if task == "arc":
         h = int(kwargs.get("canvas_h", kwargs.get("height", 10)))
         w = int(kwargs.get("canvas_w", kwargs.get("width", 10)))
-        pad = int(kwargs.get("pad_token", 10))
-        transform = str(kwargs.get("transform", "flip_h"))
+        pad = int(kwargs.get("pad_token", 10)); transform = str(kwargs.get("transform", "flip_h"))
         x, y = arc_task.generate_pair(
-            transform, rng,
-            canvas_h=h, canvas_w=w,
+            transform, rng, canvas_h=h, canvas_w=w,
             max_h=int(kwargs.get("max_h", min(6, h))),
             max_w=int(kwargs.get("max_w", min(6, w))),
             n_colors=int(kwargs.get("n_colors", 5)), pad_token=pad,
         )
-        grid = x.reshape(h, w)
-        loc = np.argwhere(grid != pad)
+        loc = np.argwhere(x.reshape(h, w) != pad)
         source_h = int(loc[:, 0].max() + 1) if len(loc) else 0
         source_w = int(loc[:, 1].max() + 1) if len(loc) else 0
         return x, y, h, w, {
             "difficulty": {"source_height": source_h, "source_width": source_w},
-            "transform": transform,
-            "scope": "synthetic_local_arc_style_not_official_arc",
+            "transform": transform, "scope": "synthetic_local_arc_style_not_official_arc",
         }
-
     if task == "babyai":
         h = int(kwargs.get("height", 8)); w = int(kwargs.get("width", 8))
         x, y = babyai_task.generate_pair(h, w, rng, float(kwargs.get("wall_prob", 0.2)))
@@ -182,27 +152,17 @@ def generate_example(
             "difficulty": {"walls": int((xin == babyai_task.WALL).sum()), "moved": int(moved)},
             "scope": "synthetic_local_babyai_style_not_official_babyai",
         }
-
     if task == "smarthome":
         x, y = sh_task.generate_pair(rng)
         return x, y, 1, sh_task.SEQ_LEN, {
-            "difficulty": {
-                "action": int(y[0]),
-                "nonpad_sensor_tokens": int((x != sh_task.PAD).sum()),
-            }
+            "difficulty": {"action": int(y[0]), "nonpad_sensor_tokens": int((x != sh_task.PAD).sum())}
         }
-
     raise ValueError(f"Unknown task: {task!r}")
 
 
 def augment_example(
-    task: str,
-    x: np.ndarray,
-    y: np.ndarray,
-    height: int,
-    width: int,
-    rng: np.random.Generator,
-    **kwargs: Any,
+    task: str, x: np.ndarray, y: np.ndarray, height: int, width: int,
+    rng: np.random.Generator, **kwargs: Any,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Augment only after split/group assignment so derived examples cannot leak."""
     if not bool(kwargs.get("augment", False)):
@@ -227,8 +187,7 @@ def _content_masks(
     task: str, inputs: np.ndarray, targets: np.ndarray, pad_token: int | None
 ) -> tuple[np.ndarray, np.ndarray]:
     if task == "arc":
-        if pad_token is None:
-            raise ValueError("ARC-style dataset requires pad_token")
+        if pad_token is None: raise ValueError("ARC-style dataset requires pad_token")
         return inputs != pad_token, targets != pad_token
     if task == "smarthome":
         return inputs != sh_task.PAD, np.ones(targets.shape, dtype=bool)
@@ -237,74 +196,55 @@ def _content_masks(
 
 def build_dataset(task: str, n: int, rng: np.random.Generator, **kwargs: Any) -> GridDataset:
     """Build one dataset and enforce declared shape/vocabulary/mask invariants."""
-    if not isinstance(n, int) or n < 0:
-        raise ValueError("n must be a non-negative integer")
+    if not isinstance(n, int) or n < 0: raise ValueError("n must be a non-negative integer")
     examples = [generate_example(task, rng, **kwargs) for _ in range(n)]
     if n:
         h, w = examples[0][2], examples[0][3]
         if any((e[2], e[3]) != (h, w) for e in examples):
             raise RuntimeError("generator returned inconsistent spatial dimensions")
-        xs, ys, meta = [], [], []
+        xs: list[np.ndarray] = []; ys: list[np.ndarray] = []; meta: list[dict[str, Any]] = []
+        aug_kwargs = {k: v for k, v in kwargs.items() if k not in {"height", "width"}}
         for x0, y0, _, _, m in examples:
-            x, y = augment_example(task, x0, y0, h, w, rng, **kwargs)
+            x, y = augment_example(task, x0, y0, h, w, rng, **aug_kwargs)
             xs.append(x); ys.append(y); meta.append(m)
-        inputs = np.stack(xs).astype(np.int64)
-        targets = np.stack(ys).astype(np.int64)
+        inputs = np.stack(xs).astype(np.int64); targets = np.stack(ys).astype(np.int64)
     else:
         h = int(kwargs.get("height", kwargs.get("canvas_h", 1)))
         w = int(kwargs.get("width", kwargs.get("canvas_w", kwargs.get("seq_len", 1))))
-        if task == "sudoku":
-            h = w = sk.grid_size(int(kwargs.get("box", 3)))
-        if task == "smarthome":
-            h, w = 1, sh_task.SEQ_LEN
-        inputs = np.empty((0, h * w), dtype=np.int64)
-        targets = np.empty_like(inputs)
-        meta = []
-
+        if task == "sudoku": h = w = sk.grid_size(int(kwargs.get("box", 3)))
+        if task == "smarthome": h, w = 1, sh_task.SEQ_LEN
+        inputs = np.empty((0, h * w), dtype=np.int64); targets = np.empty_like(inputs); meta = []
     expected_seq_len = int(kwargs.get("seq_len", h * w))
     if expected_seq_len != h * w:
         raise ValueError(f"declared seq_len={expected_seq_len} disagrees with generated {h*w}")
     num_tokens = int(kwargs.get("num_tokens", _default_num_tokens(task, kwargs)))
-    pad_token = kwargs.get("pad_token", None)
-    pad_token = None if pad_token is None else int(pad_token)
+    pad_token = _default_pad_token(task, kwargs)
     input_mask, target_mask = _content_masks(task, inputs, targets, pad_token)
     return GridDataset(
-        inputs, targets, h, w,
-        task=task, num_tokens=num_tokens, pad_token=pad_token,
+        inputs, targets, h, w, task=task, num_tokens=num_tokens, pad_token=pad_token,
         input_mask=input_mask, target_mask=target_mask, metadata=meta,
     )
 
 
 def build_sudoku_arrays(
-    box: int,
-    n: int,
-    num_clues: int,
-    rng: np.random.Generator,
-    require_unique: bool = True,
-    augment: bool = False,
-    *,
-    min_clues: int | None = None,
-    max_clues: int | None = None,
+    box: int, n: int, num_clues: int, rng: np.random.Generator,
+    require_unique: bool = True, augment: bool = False, *,
+    min_clues: int | None = None, max_clues: int | None = None,
     solution_method: str = "random_backtracking",
 ) -> tuple[np.ndarray, np.ndarray, int, int]:
     ds = build_dataset(
         "sudoku", n, rng, box=box,
         min_clues=num_clues if min_clues is None else min_clues,
         max_clues=num_clues if max_clues is None else max_clues,
-        require_unique=require_unique, augment=augment,
-        solution_method=solution_method,
+        require_unique=require_unique, augment=augment, solution_method=solution_method,
         num_tokens=sk.grid_size(box) + 1, seq_len=sk.grid_size(box) ** 2,
     )
     return ds.inputs, ds.targets, ds.height, ds.width
 
 
 def build_maze_arrays(
-    h: int,
-    w: int,
-    n: int,
-    rng: np.random.Generator,
-    min_path_len: int = 0,
-    augment: bool = False,
+    h: int, w: int, n: int, rng: np.random.Generator,
+    min_path_len: int = 0, augment: bool = False,
     max_path_len: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, int, int]:
     ds = build_dataset(
@@ -324,15 +264,9 @@ def build_smarthome_arrays(n: int, rng: np.random.Generator) -> tuple[np.ndarray
 
 
 def build_arc_arrays(
-    n: int,
-    rng: np.random.Generator,
-    transform: str = "flip_h",
-    canvas_h: int = 10,
-    canvas_w: int = 10,
-    n_colors: int = 5,
-    pad_token: int = 10,
-    max_h: int = 6,
-    max_w: int = 6,
+    n: int, rng: np.random.Generator, transform: str = "flip_h",
+    canvas_h: int = 10, canvas_w: int = 10, n_colors: int = 5,
+    pad_token: int = 10, max_h: int = 6, max_w: int = 6,
 ) -> tuple[np.ndarray, np.ndarray, int, int]:
     ds = build_dataset(
         "arc", n, rng, transform=transform, canvas_h=canvas_h, canvas_w=canvas_w,
@@ -344,10 +278,7 @@ def build_arc_arrays(
 
 
 def build_babyai_arrays(
-    n: int,
-    rng: np.random.Generator,
-    height: int = 8,
-    width: int = 8,
+    n: int, rng: np.random.Generator, height: int = 8, width: int = 8,
     wall_prob: float = 0.2,
 ) -> tuple[np.ndarray, np.ndarray, int, int]:
     ds = build_dataset(
