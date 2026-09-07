@@ -1,0 +1,9 @@
+config_id,family,n_rows,n_seeds,semantic_validity,exact_reference_match,blank_cell_accuracy,latency_n,latency_median_ms,latency_p95_ms,latency_ratio_vs_primary_baseline,latency_match_status,pareto_nondominated_on_plotted_surface,evidence_surface,primary_candidate,primary_baseline
+fp64_n1,fp64,2560,5,0.8328125,0.8328125,0.9752473952015862,640,1.1583549999999998,1.183764275,1.0943352911334046,matched,False,development_reserve_dim64,True,False
+fp_n4,fp,2560,5,0.97734375,0.97734375,0.9961404079105705,640,2.88472525,2.9486432,2.725292890606622,unmatched,False,development_reserve_dim64,False,False
+fp_search_r2,fp_search,2560,5,0.7859375,0.7859375,0.9677081777248532,640,6.489778,6.63284335,6.1311023796859905,unmatched,False,development_reserve_dim64,False,False
+single_pass_fp,single_pass_fp,2560,5,0.837890625,0.837890625,0.9748817266896367,640,1.058501,1.088934775,1.0,matched,False,development_reserve_dim64,False,True
+single_pass_int8,single_pass_int8,2560,5,0.8375,0.8375,0.9748496396234259,640,1.23282775,1.263362775,1.1646920975983963,unmatched,False,development_reserve_dim64,False,False
+symbolic_exact,symbolic_exact,512,1,1.0,1.0,1.0,128,0.492818,0.54404735,0.46558104338115885,unmatched,True,development_reserve_dim64,False,False
+ternary_n4,ternary,2560,5,0.944921875,0.944921875,0.9906967694871127,640,6.17738575,6.316887725,5.835975355715299,unmatched,False,development_reserve_dim64,False,False
+ternary_search_r2,ternary_search,2560,5,0.740625,0.740625,0.9601006008684635,640,13.509263749999999,13.750467975,12.762636738179747,unmatched,False,development_reserve_dim64,False,False
