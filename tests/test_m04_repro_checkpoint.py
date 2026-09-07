@@ -9,6 +9,7 @@ import pytest
 import torch
 
 from common import load_config
+from model.stability import quant_strength_state
 from scripts._common import build_seeded_training_components
 from train.checkpoint import (
     CheckpointError,
@@ -177,6 +178,55 @@ def test_interrupted_resume_matches_uninterrupted_cpu_reference(tmp_path: Path):
     assert resumed_result["final"]["board_acc"] == pytest.approx(
         full_result["final"]["board_acc"], rel=M04_RTOL, abs=M04_ATOL
     )
+
+
+def test_ternary_resume_restores_quantization_state_and_continuation(tmp_path: Path):
+    # Use the same data/sampler contract but turn on ternary warmup so resume must
+    # restore both the current per-layer rho and the original quantization horizon.
+    cfg_a, model_a, train_a, val_a, tcfg_a, _ = _components(ternary=True)
+    tcfg_a.max_steps = 4
+    tcfg_a.quant_warmup_steps = 4
+    full = Trainer(model_a, train_a, val_a, tcfg_a, run_config=cfg_a)
+    full.fit()
+    full_raw = {k: v.detach().clone() for k, v in full.model.state_dict().items()}
+    full_ema = full.ema.state_dict()
+    full_quant = quant_strength_state(full.model)
+    full_sampler = full.train_sampler.state_dict()
+
+    cfg_b, model_b, train_b, val_b, tcfg_b, _ = _components(ternary=True)
+    tcfg_b.max_steps = 4
+    tcfg_b.quant_warmup_steps = 4
+    interrupted = Trainer(model_b, train_b, val_b, tcfg_b, run_config=cfg_b)
+    ckpt = tmp_path / "ternary_resume.pt"
+    interrupted.fit(stop_at_step=2, checkpoint_path=ckpt)
+    saved = load_checkpoint_payload(ckpt, require_resume=True)
+    saved_quant = saved["training"]["quantization"]["strengths"]
+    assert saved["training"]["quantization"]["warmup_steps"] == 4
+    assert saved_quant
+    assert set(saved_quant.values()) == {0.5}
+
+    cfg_c, model_c, train_c, val_c, tcfg_c, _ = _components(ternary=True)
+    tcfg_c.max_steps = 4
+    tcfg_c.quant_warmup_steps = 4
+    resumed = Trainer(model_c, train_c, val_c, tcfg_c, run_config=cfg_c)
+    # Prove load_checkpoint overwrites the freshly initialized rho rather than
+    # merely relying on the next train step to reconstruct it.
+    assert set(quant_strength_state(resumed.model).values()) == {1.0}
+    resumed.load_checkpoint(ckpt)
+    assert quant_strength_state(resumed.model) == saved_quant
+    assert resumed.quant_warmup.warmup_steps == 4
+    resumed.fit()
+
+    _assert_state_close(full_raw, resumed.model.state_dict())
+    _assert_state_close(full_ema, resumed.ema.state_dict())
+    assert quant_strength_state(resumed.model) == full_quant
+    assert set(full_quant.values()) == {1.0}
+    assert resumed.scheduler.get_last_lr() == pytest.approx(
+        full.scheduler.get_last_lr(), rel=M04_RTOL, abs=M04_ATOL
+    )
+    assert resumed.train_sampler.state_dict()["epoch"] == full_sampler["epoch"]
+    assert resumed.train_sampler.state_dict()["position"] == full_sampler["position"]
+    assert torch.equal(resumed.train_sampler.state_dict()["order"], full_sampler["order"])
 
 
 def test_nonfinite_loss_fails_before_optimizer_step(monkeypatch):
