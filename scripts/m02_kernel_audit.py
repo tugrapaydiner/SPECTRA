@@ -67,7 +67,17 @@ def compile_variant(source: Path, avx2: bool, build_dir: Path, tag: str):
     cmd = ["g++", "-O3", "-std=c++17", "-shared", "-fPIC"]
     if avx2:
         cmd.append("-mavx2")
-    subprocess.run(cmd + [str(wrapper), "-o", str(so)], check=True, capture_output=True)
+    full_cmd = cmd + [str(wrapper), "-o", str(so)]
+    proc = subprocess.run(full_cmd, text=True, capture_output=True)
+    if proc.returncode != 0:
+        print("[m02-audit] compiler command failed:", " ".join(full_cmd))
+        if proc.stdout:
+            print("[m02-audit] compiler stdout:\n" + proc.stdout)
+        if proc.stderr:
+            print("[m02-audit] compiler stderr:\n" + proc.stderr)
+        raise subprocess.CalledProcessError(
+            proc.returncode, full_cmd, output=proc.stdout, stderr=proc.stderr
+        )
     lib = C.CDLL(str(so))
     lib.m02_dot_packed.argtypes = [I8, U8, C.c_int]
     lib.m02_dot_packed.restype = C.c_int32
