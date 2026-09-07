@@ -22,15 +22,16 @@ This is the live milestone register. Complete historical registers are preserved
 | M07 | grounded verifier training/evaluation | accepted / merged through PR #8; `d15d5578878a175442895867de08d98efb31e6da` |
 | M08 | correct inspectable MCTS reference | accepted / merged through PR #9; `049ada6b01260662e1b3f037522fbe9a84d6d1c6` |
 | M09 | trained search action mechanism | **INCOMPLETE**; negative result preserved/merged through PR #10; `b667204da950aa989df13bb846166c7b1c2d761b` |
-| M10 | faithful CPU deployment for one trained configuration | **COMPLETE on `research/m10-cpu-deployment`; accepted implementation run `34142683006`; not merged at the time of this entry** |
+| M10 | faithful CPU deployment for one trained configuration | accepted / merged through PR #11; `17c60819e2b5aace48b7b9994d0254989df25ab9` |
+| M11 | real adaptive execution | **COMPLETE on `research/m11-adaptive-execution`; accepted implementation run `34151872552` at `c713f814c2382d5b2776d40160e3bcaef1e9b6b6`** |
 
-M09 remains scientifically incomplete: no allowed action-policy development variant met its fixed practical-effect threshold and its final comparison stayed sealed. The user explicitly directed M10 as an orthogonal deployment/fidelity milestone. M10 acceptance therefore does not retroactively pass M09 or establish learned-search benefit.
+M09 remains scientifically incomplete: no allowed action-policy development variant met its fixed practical-effect threshold and its final comparison stayed sealed. M10 and M11 are orthogonal deployment/execution milestones. Their acceptance does not retroactively pass M09 or establish learned-search benefit.
 
 ---
 
 # Milestone 10 — faithful CPU deployment
 
-**Stage status: COMPLETE on `research/m10-cpu-deployment`.**
+**Stage status: COMPLETE and merged through PR #11.**
 
 Authoritative preregistration: [`M10_PROTOCOL.md`](M10_PROTOCOL.md).
 Accepted evidence/claims boundary: [`M10_ACCEPTANCE_GATE.md`](M10_ACCEPTANCE_GATE.md).
@@ -270,4 +271,201 @@ M10 does not establish:
 
 **PASS.** A trained model can be exported, strict-loaded and run through the declared recursive CPU backend with verified layer/block/cycle/full fidelity. Actual native calls and all remaining floating-point/A8 work are visible.
 
-**Stop here for M10. Do not begin another milestone automatically.**
+---
+
+# Milestone 11 — real adaptive execution
+
+**Stage status: COMPLETE on `research/m11-adaptive-execution`.**
+
+Authoritative preregistration: [`M11_PROTOCOL.md`](M11_PROTOCOL.md).
+Accepted evidence/claims boundary: [`M11_ACCEPTANCE_GATE.md`](M11_ACCEPTANCE_GATE.md).
+
+## Execution interface
+
+Inference now has an explicit recurrent state and one-step primitive. `run_execution_step` performs exactly one deep-supervision step, updates `y/z`, emits logits/halt information and actual work counters, and leaves later steps uncomputed.
+
+`run_with_halting` consumes this state online instead of first calling a full forward. Recorded stopping reasons are:
+
+```text
+policy_halt
+budget_exhausted
+model_exhausted
+```
+
+Focused contracts verify first-step policy exit, full model exhaustion, forced two-step budget exit, returned-state observability and agreement with the corresponding independently truncated dense reference.
+
+## Real early exit
+
+The retained batch-size-one four-step experiment forced a policy halt after supervision step 0:
+
+```text
+executed steps        1 vs 4 full
+recursive cycles      1 vs 4
+block applications    2 vs 8
+Q/K/V vectors        32/32/32 vs 128/128/128
+FFN vectors           32 vs 128
+query-key pairs     2048 vs 8192
+```
+
+Mean descriptive wall timing:
+
+```text
+dense direct          9.6538 ms
+first-step halt       2.2547 ms
+```
+
+The halt path therefore skipped the later three supervision steps and was about `76.6%` faster in this small controlled measurement. The halter decision itself cost about `0.0832 ms` in the retained step-0 run.
+
+## Faithful active-token contract
+
+Partial batch-size-one sparsity compacts only operations whose semantics can be preserved exactly for the accepted one-block graph:
+
+- Q rows;
+- active-query attention score/output work;
+- attention output-projection rows;
+- FFN rows;
+- recurrent RMSNorm/A8 update rows.
+
+K and V remain dense over the complete token sequence. Frozen tokens are not removed from attention context and their recurrent `y/z` state is copied forward unchanged.
+
+At 50% active density over four steps:
+
+```text
+Q vectors              64 vs 128 dense
+K vectors             128 vs 128 dense
+V vectors             128 vs 128 dense
+attention outputs      64 vs 128
+FFN vectors            64 vs 128
+query-key pairs      4096 vs 8192
+active updates          64
+frozen copies           64
+```
+
+Multi-block/batched partial masks fall back to dense execution where exact intermediate frozen-context semantics are not implemented. M11 does not claim whole-model linear scaling with active density.
+
+## Empty-active and reactivation behavior
+
+Empty active set:
+
+```text
+recursive cycles    0
+block applications  0
+Q/K/V work          0
+FFN work            0
+y/z                  unchanged exactly
+```
+
+The step boundary can still execute output/halting logic so the result remains observable.
+
+Reactivation is explicit:
+
+- `allow` lets a later router decision reactivate a token;
+- `sticky` permanently freezes a token after its first frozen step.
+
+Both behaviors are covered by focused tests.
+
+## Native adaptive work
+
+The M11 native path reuses M10's accepted packed-ternary FP32 C++ linear. Active pointwise rows are gathered into that existing primitive; K/V calls remain dense.
+
+Four-step native work:
+
+```text
+                           full       50% active
+native input vectors        832          576
+native scalar products 1,583,104      927,744
+native linear calls          52           52
+Q vectors                   128           64
+K vectors                   128          128
+V vectors                   128          128
+```
+
+This is a `30.77%` reduction in native input vectors and `41.40%` reduction in native scalar products. Call count does not fall because the same layers are invoked with smaller row matrices.
+
+Full-density native incremental output agrees with the M10 dense runtime. Partial native output agrees with the corresponding PyTorch adaptive reference within the accepted numerical boundary. Native empty-active tests additionally verify no recursive Q/K/V/FFN work and exact state preservation.
+
+## Overhead and slower cases
+
+Retained internal timing for the 50%-active router+halter path:
+
+```text
+core              8.5758 ms
+router input      0.0892 ms
+router            0.3037 ms
+halter            0.3941 ms
+decode            0.0075 ms
+initialization     0.1358 ms
+total              9.7164 ms
+```
+
+External mean wall timing:
+
+```text
+dense direct               9.6538 ms
+full-density state         9.5655 ms
+50%-active router          9.9150 ms
+all-frozen first step      0.7331 ms
+native dense               9.5699 ms
+native full incremental    9.5787 ms
+native 50%-active          9.4965 ms
+```
+
+The reference 50%-active adaptive path was about `2.7%` slower than dense despite lower arithmetic because control, router and gather/scatter overhead dominated this tiny workload. Native 50%-active was only about `0.86%` faster than native full incremental and essentially tied with simple native dense execution. M11 therefore establishes work reduction, not a universal sparse latency speedup.
+
+## Descriptive output behavior
+
+On 32 retained held-out 4x4 examples:
+
+```text
+dense structural score             0.330078
+first-step halt score              0.332031
+first-step minus dense            +0.001953
+first-step/dense answer agreement   0.4375
+50%-active score                    0.326172
+50%-active minus dense             -0.003906
+50%-active/dense answer agreement   0.3750
+```
+
+The early result happened to score slightly higher in this small descriptive sample, while exact output agreement remained low. The 50%-active execution was modestly worse. These are not learned-policy-quality claims; they are retained evidence that execution adaptation can change predictions and accuracy.
+
+## Accepted execution
+
+```text
+head          c713f814c2382d5b2776d40160e3bcaef1e9b6b6
+run           34151872552
+job           101835666462
+artifact      m11-adaptive-execution-evidence
+artifact id   10029673915
+ZIP SHA256    9f26142027ad8b7facdad756b6f59b4ef098f2254ba35ca53eb3821eb6637d39
+size          29,653 bytes
+```
+
+```text
+focused M11   13 passed, 1 deselected
+full fast     263 passed, 16 deselected, 1 pre-existing test warning
+compile       0
+focused       0
+experiment    0
+evidence      0
+fast          0
+```
+
+## Remaining boundary
+
+M11 does not establish:
+
+- learned router quality;
+- learned halter quality;
+- universal latency improvement;
+- whole-model linear density scaling;
+- multi-block token compaction;
+- batched/ragged compaction throughput;
+- exact-solve improvement;
+- energy superiority;
+- learned-search benefit.
+
+## M11 decision
+
+**PASS.** Earlier halting executes fewer real steps; sparse execution skips the declared active-query/pointwise operations while preserving dense K/V context; full-density, truncated-reference and native/reference equivalence contracts pass; and router/halter overhead is explicitly measured.
+
+**Stop here for M11. Do not begin M12 automatically.**
