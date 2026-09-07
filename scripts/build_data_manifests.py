@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
-from common import load_config
-from scripts._common import build_data_splits
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common import load_config  # noqa: E402
+from scripts._common import build_data_splits  # noqa: E402
 
 
 def main() -> None:
