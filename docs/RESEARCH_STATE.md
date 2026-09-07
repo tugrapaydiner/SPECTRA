@@ -3,10 +3,11 @@
 This is the live milestone register. Historical cumulative state is preserved rather than rewritten:
 
 - M01–M04: [`RESEARCH_STATE_M01_M04.md`](RESEARCH_STATE_M01_M04.md)
-- complete M05-era register: [`RESEARCH_STATE_M05.md`](RESEARCH_STATE_M05.md)
-- complete pre-M07/M06-era live register: [`RESEARCH_STATE_M06.md`](RESEARCH_STATE_M06.md)
+- M05-era register: [`RESEARCH_STATE_M05.md`](RESEARCH_STATE_M05.md)
+- M06-era register: [`RESEARCH_STATE_M06.md`](RESEARCH_STATE_M06.md)
+- complete M07-era live register: [`RESEARCH_STATE_M07.md`](RESEARCH_STATE_M07.md)
 
-The live register below records accepted milestone status and the latest experimental boundary.
+The live register below records accepted milestone status and the latest tested boundary.
 
 ## Accepted milestone index
 
@@ -18,305 +19,342 @@ The live register below records accepted milestone status and the latest experim
 | M04 | reproducible training/checkpoint state | merged through PR #4; `370caf708755e1c68c59d5696778597f0290ea68` |
 | M05 | checkpoint-backed evaluation | merged through PR #5; `1003c59e17dc17e652438317b7480c9e898379af` |
 | M06 | controlled trained baseline | merged through PR #6; `385da5ef822dcb001c8193a2b8802fa292b31428`; evidence gate clarified through PR #7 `dbec23dd2077fc9f23e6a031b1b2b82c7c731de6` |
-| M07 | grounded verifier training/evaluation | **COMPLETE ON `research/m07-grounded-verifier`; accepted run `34128295166`; not merged at the time of this entry** |
+| M07 | grounded verifier training/evaluation | merged through PR #8; `d15d5578878a175442895867de08d98efb31e6da` |
+| M08 | correct, inspectable MCTS reference | **COMPLETE ON `research/m08-mcts-reference`; accepted implementation run `34130972353`; not merged at the time of this entry** |
 
-M06 progress is evidence-based, not conditioned on beating a baseline. Its authoritative acceptance definition is [`M06_ACCEPTANCE_GATE.md`](M06_ACCEPTANCE_GATE.md).
+M06 progress is evidence-based rather than conditioned on beating a baseline. M07 establishes useful shallow meaning for its independently grounded one-cycle verifier target but explicitly does not establish deep-state verifier reliability or MCTS benefit.
 
 ---
 
-## Milestone 07 — grounded verifier training and evaluation
+## Milestone 08 — correct, inspectable MCTS reference
 
-**Stage status:** COMPLETE ON `research/m07-grounded-verifier`; accepted execution/evidence gate green; not merged at the time of this entry.
+**Stage status:** COMPLETE ON `research/m08-mcts-reference`; implementation/evidence gate green; not merged at the time of this entry.
 
-Full preregistration: [`M07_PROTOCOL.md`](M07_PROTOCOL.md).  Accepted evidence and claims boundary: [`M07_ACCEPTANCE_GATE.md`](M07_ACCEPTANCE_GATE.md).
+Full preregistration: [`M08_PROTOCOL.md`](M08_PROTOCOL.md). Accepted evidence and claims boundary: [`M08_ACCEPTANCE_GATE.md`](M08_ACCEPTANCE_GATE.md).
 
-### M07 target
+M08 changes search semantics, budget accounting, tree inspection, virtual-loss safety, and research-evaluation work provenance. It does not perform or claim a task-accuracy improvement experiment.
 
-M07 does not train a verifier to predict eventual Sudoku solve probability.
+### Native search state
 
-The independently grounded target is:
-
-```text
-sudoku_one_cycle_improvement_v1
-```
-
-For frozen search state `s=(x,y,z)`:
+For positive search budgets, `x` and `x_emb` are fixed problem context. Each native tree node stores:
 
 ```text
-Q_before = sudoku_score(x, argmax(out_head(y)), box=3)
-(y',z')  = frozen_TRM.recursive_cycle(x,y,z)
-Q_after  = sudoku_score(x, argmax(out_head(y')), box=3)
-label     = 1[Q_after > Q_before + 1e-6]
+(y, z_codes, z_scale, depth, action_from_parent, path)
 ```
 
-Continuation policy is exactly one deterministic frozen reasoner cycle with no search action, noise, router, MCTS backup, or test reference answer.
-
-The score therefore means: estimated probability that this declared continuation improves the validated symbolic Sudoku structural score on the declared state distribution.
-
-Grounding metadata records:
+where `z_codes` is literal INT8 latent storage and `z_scale` is the per-token dequantization scale. Search statistics are separate:
 
 ```text
-oracle                = model.verifier.sudoku_score
-reference_target_used = false
-bootstrapped           = false
+prior P
+visits N
+value_sum W
+q = W/N
 ```
 
-Held-out reference solutions are not passed to label construction.
+`path` is the ordered action-id trajectory from the root and provides an inspectable deterministic node identity.
 
-### Search-state representation
+### Action and transition
 
-Version:
+Actions are integer codebook ids in ascending order:
 
 ```text
-search_state_xyz_v1 = (x,y,z)
+0 .. n_actions-1
 ```
 
-This replaces the unverified assumption that `(x,z)` alone is sufficient. The reasoner transition consumes both states:
+For each action transition:
+
+1. dequantize the node's `z`;
+2. apply the codebook residual action;
+3. preserve/use the node's actual `y`;
+4. run exactly model/checkpoint `T` calls to `TRM.recursive_cycle(x_emb,y,z)`;
+5. optionally apply configured latent VQ;
+6. requantize the resulting `z` to INT8 storage;
+7. create the child at `depth+1` with its action id/path.
+
+Initial root expansion uses the same transition path and is counted as real work.
+
+### Selection and deterministic ties
+
+PUCT is:
 
 ```text
-update_z = f(x_emb + y + z)
-update_y = f(y + z)
+q(child) + c_puct * prior(child) * sqrt(parent.visits + 1) / (1 + child.visits)
 ```
 
-A counterfactual state-sufficiency audit held `x,z` fixed and substituted another real `y` from the same puzzle trajectory. The independent continuation label changed in:
+Children are stored in ascending action order. Python's first-maximum behavior is part of the contract: exact PUCT ties choose the lowest action id.
+
+Selection stops at an unexpanded node or at `max_depth`.
+
+### Evaluation timing and backup
+
+One serial rollout is:
+
+1. select the leaf/horizon state;
+2. if below `max_depth`, expand that selected node once;
+3. evaluate the **selected state itself**;
+4. update best-observed node using strict `>` (earliest evaluation wins exact value ties);
+5. back the real scalar value up to every node on the selected path, including the selected node.
+
+Real backup is:
 
 ```text
-127 / 256 pairs = 0.49609375
+N <- N + 1
+W <- W + value
+q <- W/N
 ```
 
-This is not evidence of naturally occurring exact-z collisions; it is direct evidence that omitted `y` can change the target under fixed `x,z`.
+New children created by the expansion are future choices. They are not silently used as the current rollout's evaluation target.
 
-A separately typed z-only learned ablation was trained on the same rows/protocol. On shallow held-out states it was essentially tied/slightly better:
+MCTS `q=W/N` remains a bootstrapped search statistic/target, not independent ground truth.
+
+### Horizon and final answer
+
+`max_depth` must be a positive integer. No child can be expanded beyond that bound.
+
+For positive budgets, search returns the **evaluated node with the highest observed verifier value**. This is intentionally not visit-max robust-child selection. `decode(node)` is separate from search and is counted.
+
+### Explicit zero-search baseline
+
+`n_rollouts = 0` is the ordinary greedy TRM baseline:
 
 ```text
-full xyz ROC AUC = 0.88160735
-z-only ROC AUC   = 0.88585556
-delta            = -0.00424820
+model.forward(x, height, width)
 ```
 
-Therefore M07 does **not** claim that `y` improves average shallow ranking. The full representation is retained because it matches the actual transition state and avoids a known state-sufficiency omission.
-
-### Frozen reasoner
-
-M07 trains one small FP reasoner only as a trajectory generator, saves it through the existing versioned SPECTRA training checkpoint path, reloads its recorded evaluation identity, and then freezes it before verifier data generation/training.
-
-Reasoner checkpoint SHA-256:
+The final greedy `(y,z)` becomes a one-node inspectable root. The zero-search record contains:
 
 ```text
-d23ac0c629658257c96d50b71b4da42243094768d2352fb9bffb5f01e3be1625
+greedy_forward_calls = 1
+codebook transitions = 0
+verifier evaluations = 0
 ```
 
-Tensor-state hash before/after verifier training:
+It is not an all-zero-root decode and is not labeled an MCTS gain.
+
+### Exact rollout-budget semantics
+
+`n_rollouts` is an integer `>=0` and for positive search means exactly the number of real selected-state verifier evaluations.
+
+Batched scheduling uses:
 
 ```text
-04d97ee472b983375a8450457d6820ab6154e073503ec1c1fc31efb1477aaec1
+current_batch = min(leaf_batch, remaining_rollouts)
 ```
 
-The hashes were identical; all reasoner parameters were `requires_grad=false`; the reasoner stayed in eval mode.
+until the budget is exhausted. The previous floor-division form `max(1, n_rollouts // leaf_batch)` is removed.
 
-The reasoner's own final validation board accuracy was 0.0 and cell accuracy about 0.19039. Reasoner task success is not an M07 acceptance condition.
+Focused batch-budget cases (`leaf_batch=4`):
 
-### Data and independent labels
+| Requested | Completed real evaluations | Batch sizes |
+|---:|---:|---|
+| 0 | 0 | `[]` |
+| 1 | 1 | `[1]` |
+| 3 | 3 | `[3]` |
+| 4 | 4 | `[4]` |
+| 5 | 5 | `[4,1]` |
+| 8 | 8 | `[4,4]` |
 
-Validated generated 9×9 Sudoku, unique solutions, 30–35 clues.
+Thus small, less-than-batch, exact-batch, non-divisible, and multiple-exact-batch budgets have explicit tested semantics.
+
+### Canonical actual-work record
+
+`LatentNativeMCTS` now owns one per-search work record shared by serial search, batched search, tree export, and checkpoint-backed research evaluation. Recorded work includes:
+
+- requested/completed rollouts;
+- initial expansion calls/transitions;
+- expansion calls;
+- transition calls;
+- recursive-cycle calls;
+- latent-VQ calls;
+- verifier API calls;
+- successful verifier evaluations;
+- selection edges;
+- actual leaf-batch sizes;
+- virtual-loss applications/cleanups;
+- greedy-forward calls;
+- decode calls;
+- maximum depth reached;
+- evaluated paths;
+- best path/value;
+- completion/error status.
+
+`CountingLatentNativeMCTS` no longer maintains a second set of private counters. It maps this canonical record to the historical M05 research fields.
+
+Checkpoint-backed learned-search provenance now explicitly includes:
 
 ```text
-data seed   20260907
-train       256 puzzles
-validation   64 puzzles
-test         96 puzzles
+mcts_rollout_semantics    real_leaf_state_evaluations
+mcts_max_depth            32
+initial_expansion_counted true
 ```
 
-Verifier trajectory subsets:
+### Inspectable tree export
+
+After serial or batched search, `self.root` retains the finished tree. `export_tree()` emits stable, non-latent-heavy records with:
+
+- path/depth/action-from-parent;
+- prior;
+- visits/value sum/q;
+- child paths;
+- `y`/INT8-z shape/dtype metadata;
+- `y` norm;
+- canonical work/statistics record.
+
+Repeated calls reset root, best-node metadata and counters. A test verifies the second call receives a fresh root object and contains only the second call's budget/statistics.
+
+On a raised search exception, the partial root/tree and an `error` work record remain inspectable.
+
+### Neural-independent deterministic reference
+
+`eval/mcts_reference.py` contains no torch/TRM/learned-verifier dependency.
+
+Frozen fixture:
 
 ```text
-train puzzles       192
-validation puzzles   48
-held-out puzzles     64
-training depths     0..3
-deep stress depths  4..7
+priors       [0.5,0.5]
+c_puct       1.0
+max_depth    2
+rollouts     4
+value(0)     0.2
+value(1)     0.8
+value(1,0)   0.9
+other paths  0.0
 ```
 
-Label counts:
+Preregistered and observed result:
 
-| State split | Positive | Negative | Total |
+| Path | N | W | q |
 |---|---:|---:|---:|
-| train | 245 | 523 | 768 |
-| validation | 55 | 137 | 192 |
-| held-out depths 0–3 | 83 | 173 | 256 |
-| held-out depths 4–7 | 38 | 218 | 256 |
-
-The target was non-degenerate on training and held-out states.
-
-### Trained grounded verifier checkpoint
-
-Architecture:
+| `()` | 4 | 2.8 | 0.7 |
+| `(0,)` | 1 | 0.2 | 0.2 |
+| `(1,)` | 3 | 2.6 | 0.8666666667 |
+| `(1,0)` | 2 | 1.8 | 0.9 |
+| `(1,1)` | 0 | 0.0 | 0.0 |
 
 ```text
-EnsembleGroundedStateVerifier
-members      3
-member seeds 7101,7202,7303
-dim          48
-layers       1
-heads        4
-z boundary   A8 fake quantization
-training     300 AdamW steps/member
-lr           2e-3
-weight decay 0.01
-batch        64 states
+chosen path          (1,0)
+best value           0.9
+expansion calls      3
+transition calls     6
+verifier evaluations 4
+selection edges      6
+max depth reached    2
 ```
 
-Accepted checkpoint SHA-256:
+This result is checked by `scripts/run_m08_reference.py` against literal expected values, not inferred from the neural search.
+
+### Virtual-loss invariant
+
+For `leaf_batch>1`, paths are selected sequentially under a temporary virtual penalty before batched real evaluation.
+
+All temporary visit/value modifications are removed before real backup. M08 tests cleanup when:
+
+1. batched verifier evaluation raises;
+2. a transition raises during leaf expansion after virtual penalties were installed.
+
+Both failure paths retain inspectable error trees and require:
 
 ```text
-ce68e1bc9b6d7dff52bdcdba41861c0ed676a00b861afbf5e3be822f2cb1e151
+virtual_loss_applications == virtual_loss_cleanups
+virtual_loss_outstanding  == 0
+completed_rollouts        == 0
 ```
 
-The checkpoint reuses `spectra.learned_auxiliary` v1, has kind `grounded_state_verifier`, records target/representation/provenance, and is strictly compatible with the exact frozen reasoner checkpoint SHA/task/dim/vocabulary/sequence metadata.
+No temporary visit or value penalty remains in exported node statistics. The transition-exception fixture also confirms the failed transition attempt remains visible in actual-work accounting.
 
-The z-only ablation is saved under a separate diagnostic format and cannot masquerade as the accepted grounded checkpoint.
+### Serial versus batched agreement boundary
 
-### Primary held-out evidence
+#### `leaf_batch=1`
 
-256 real states from 64 unseen puzzles, depths 0–3:
+Under equivalent deterministic settings, M08 requires batch-one search to agree with serial on:
 
-| Metric | Result |
-|---|---:|
-| ROC AUC | **0.88160735** |
-| Average precision | **0.86070040** |
-| Brier score | **0.07669393** |
-| ECE (10 bins) | **0.05412407** |
-| Accuracy @ 0.5 | **0.91796875** |
-| False-acceptance rate @ 0.5 | **0.015625** |
-| False-positive rate | **0.00578035** |
-| TP / FP / TN / FN | `63 / 1 / 172 / 20` |
+- chosen action path/output;
+- all exported node N/W/q statistics;
+- completed rollout count;
+- expansion/transition/recursive-cycle counts;
+- verifier counts;
+- maximum depth.
 
-This clears the preregistered useful-meaning floor (`ROC AUC >= 0.60`) without a one-class shortcut. The probability calibration metrics refer only to the declared one-cycle event.
+This passed.
 
-### Perturbation evidence
+#### `leaf_batch>1`
 
-Labels were independently recomputed after deterministic held-out perturbations:
+No identical-trajectory claim is made. Several leaf paths are scheduled before the current batch's true values are available, and virtual loss changes within-batch selection. Therefore a larger batch can legitimately take a different trajectory from serial search.
 
-| Set | ROC AUC | AP | Brier | ECE | False acceptance |
-|---|---:|---:|---:|---:|---:|
-| real depth 0–3 | 0.88161 | 0.86070 | 0.07669 | 0.05412 | 0.015625 |
-| perturbed y | 0.90229 | 0.89236 | 0.06789 | 0.02380 | 0.015625 |
-| perturbed z | 0.90010 | 0.88049 | 0.05993 | 0.03535 | 0.015625 |
+Only tested invariants are claimed: exact rollout budget, correct final partial batch, clean non-virtual statistics, valid horizon/resource bounds, deterministic behavior for deterministic components, actual-work accounting, and retained tree metadata.
 
-The verifier remained useful under these small perturbations in this experiment.
+### Tests / accepted implementation evidence
 
-### Deeper-state failure
-
-On unseen depths 4–7, verifier meaning degraded sharply:
+Accepted implementation head:
 
 ```text
-ROC AUC           0.53331721
-average precision 0.21949778
-Brier             0.13113642
-ECE(10)           0.07440630
-TP/FP/TN/FN       0/0/218/38
+6651d5088cce6cd82d431558470346cb03067d94
 ```
 
-At threshold 0.5 the verifier accepted no deeper states. The resulting high raw accuracy is driven by class imbalance and is not useful deep ranking evidence.
-
-**M07 does not establish verifier generalization to deeper search states.** Any later search experiment using depths outside the validated regime must independently establish verifier meaning on that state distribution or explicitly report the extrapolation.
-
-### Ensemble disagreement
-
-Disagreement was treated as a heuristic and tested against actual held-out error.
-
-Shallow held-out states:
+Accepted run:
 
 ```text
-Spearman(disagreement, |prob-label|) = 0.863625
-mean |error| low-disagreement half   = 0.041644
-mean |error| high-disagreement half  = 0.214714
+Actions run          34130972353
+job                  101770742147
+artifact             m08-mcts-reference-evidence
+artifact id          10022097839
+artifact ZIP SHA256  a0624e47c496e795400864b037984fad47f28daaf7e91971f6bd8cbd06c2c251
+artifact size        6,137 bytes
+retention            14 days
 ```
 
-Deeper states: Spearman about 0.69008, but ranking performance itself was near random.
-
-Thus disagreement is error-correlated in this run, but M07 does not promote it to calibrated epistemic uncertainty and does not enable a nonzero MCTS uncertainty penalty.
-
-### Circularity boundary
-
-M07 independent labels did not use MCTS backups.
-
-Existing MCTS `q=W/N` process targets are now explicitly identified as:
+Test results:
 
 ```text
-mcts_bootstrap_value_v1
-independent_ground_truth = false
+reference CLI                PASS
+focused M08                  18 passed in 0.08 s
+native/M05/M07 compatibility 31 passed, 1 deselected in 4.62 s
+full fast                    233 passed, 16 deselected in 52.59 s
+all gate exit codes          0
 ```
 
-They remain available as later self-training targets, but cannot be cited as independent M07 verifier truth.
-
-`GroundedLatentNativeMCTS` passes both `node.y` and `node.latent()` to a grounded verifier. It refuses the legacy batched z-only path until batched leaves carry both components.
-
-### Tests and reproducibility
-
-Focused M07 contracts:
+Key retained hashes:
 
 ```text
-11 passed in 0.10 s
-```
-
-Full fast suite:
-
-```text
-215 passed, 16 deselected in 62.44 s
+reference_tree.json f6f8cfe428f5964a54fabb408b7fc1db06d5a5c26ad1e23e6946f87a69bdef67
+pytest_m08.txt       2ff158e0598d4e92245e9df28474438ab9988395c696e6ab3d61327663a2cf7b
+pytest_compat.txt    8a22548867ed1cc9e9b72ec1b9aabba8fa9924bf803d5a48db8ff089f5a215e2
+pytest_fast.txt      1c59b31237c1f7f6c8828aae44e05ebdf523821442c555462eed380c5a0f3fcb
 ```
 
 Exact commands:
 
 ```bash
-python scripts/train_grounded_verifier.py --out outputs/m07_grounded_verifier
-python -m pytest tests/test_m07_grounded_verifier.py -q
+python scripts/run_m08_reference.py --out outputs/m08_reference_tree.json
+python -m pytest tests/test_m08_mcts_reference.py tests/test_m08_virtual_loss_exception.py -q
+python -m pytest tests/test_latent_mcts_native.py tests/test_m05_checkpoint_eval.py tests/test_m07_grounded_verifier.py -m 'not slow' -q
 python -m pytest -m 'not slow' -ra
 ```
 
-The focused tests enforce target provenance, absence of a reference-answer target argument, frozen reasoner state, exact core binding, binary grounded labels, full-state MCTS input, rejection of incomplete z-only grounded search, and explicit bootstrapped MCTS provenance.
+### Pre-acceptance failure
 
-### Accepted evidence
+Run `34130363528` is retained as failed process evidence, not acceptance evidence.
 
-```text
-experimental head    b1b2d1cb53984ba2938e2156c4e8cf031fc67b6f
-Actions run          34128295166
-job                 101762049774
-artifact            m07-grounded-verifier-evidence
-artifact id         10021097338
-artifact ZIP SHA256 0a7a0888cf866fb89495791d80ce070dda8c0732bd181a281abf99e670d0633f
-artifact size       1,397,215 bytes
-retention           14 days
-```
+It exposed:
 
-Key hashes:
+1. the direct reference CLI lacked a repository-root import bootstrap;
+2. M05's legacy `CountingLatentNativeMCTS._expand` duplicate wrapper did not accept M08's explicit initial-expansion accounting hook.
 
-```text
-grounded_verifier.pt   ce68e1bc9b6d7dff52bdcdba41861c0ed676a00b861afbf5e3be822f2cb1e151
-reasoner.pt            d23ac0c629658257c96d50b71b4da42243094768d2352fb9bffb5f01e3be1625
-summary.json           25ac3123cf1366161c60495e61da1f28e589b4b6d619f0e3b6a5db7aeed05480
-metrics.json           3190c54be68b87201de2524188b0b86c7bdb727efb58752c407590e12e52dc63
-target_provenance.json c96e0feb52b4baf467e7782747dd68a80ca2995e428b208bbf267ff568ebb40d
-freeze_audit.json      1425590c51c4362c550440c87f7f1cd567c4ba0f8aae3dfe9cdf1f0f5564e426
-aliasing_audit.json    7e76b7f12a7a8a449ce497f72155e2f64e5ca92193969ebf7671ce80376285e9
-z_only_ablation.pt     626e0b7f5af1f15466271f4e25ca00550fb45a9a9e75d3083af2cf652c488bb4
-```
+The M08-focused semantics tests were already green in that failed run (`17 passed`). The CLI entry point was fixed and M05 duplicate counters were removed in favor of the canonical M08 search-work record. No selection, rollout, backup, horizon, final-answer, or batching acceptance rule was loosened after seeing the failure.
 
-The evidence artifact retains the reasoner/verifier checkpoints, six verifier learning curves, held-out/deep/perturbed per-state predictions, data manifest, depth metrics, aliasing/freeze audits, target provenance, exact commands, environment, test logs and per-file hashes.
+### Remaining approximations / unsupported claims
 
-### M07 decision
+- The tested M08 semantics are an inspectable reference contract, not proof that they are the only or optimal MCTS semantics.
+- Final answer selection is highest observed verifier value, not robust-child/visit-max selection.
+- A rollout evaluates the selected leaf after expansion, not one of its newly created children.
+- Checkpoint-backed learned-search evaluation currently fixes `max_depth=32`; it is explicit but not yet a user-facing sweep parameter.
+- `leaf_batch>1` is a scheduling variant and can diverge from serial trajectories.
+- M07's grounded `(x,y,z)` adapter still rejects the legacy batched z-only callback until batched leaves carry both state components. M08 preserves that boundary.
+- MCTS backup values are bootstrapped and are not independent verifier truth.
+- M08 does not establish task accuracy improvement, search benefit, energy savings, scaling laws, or target-hardware performance.
 
-M07 passes its acceptance gate: **a trained verifier checkpoint exists, target construction is independently grounded and documented, and held-out shallow-state evidence shows useful score meaning without a circular success claim.**
+### M08 decision
 
-Claims that remain unsupported:
+M08 passes its acceptance gate: **budget edge cases, reference-tree results, tree export, virtual-loss cleanup (including tested exceptions), repeated-call reset, horizon/tie rules, actual-work accounting, and batch-one serial equivalence are all tested; claims for larger batches are limited to validated invariants.**
 
-- eventual solve probability,
-- MCTS improvement from this verifier,
-- deep-state verifier generalization,
-- superiority of full xyz over z-only on shallow natural trajectories,
-- calibrated epistemic uncertainty from ensemble disagreement,
-- search/energy/scaling gains.
-
-The deep-state failure and z-only tie are retained as constraints for future experiment design, not as reasons to rewrite the M07 target after seeing results.
-
-**Stop here for M07.**
+**Stop here for M08.**
