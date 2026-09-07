@@ -1,0 +1,14 @@
+{
+  "accepted_ci_head": "4a700938cece1b041205d8ad16a48d280cfc9a99",
+  "accepted_ci_png_sha256": "de2f4a748c0cf1d554778c26cc305b49dae02600179a922077feed49722ad8d4",
+  "accepted_ci_run": 34155993914,
+  "bandwidth_bottleneck_claim": false,
+  "cache_residency_claim": false,
+  "figure": "results/m13/m13_full_solve_latency.svg",
+  "figure_sha256": "48c2e0c65151a29b68d36b69d23e1e88664f558e909176cde6411bcadf79596b",
+  "note": "SVG is a durable repository rendering of the same accepted raw timing CSV; CI retained PNG is presentation-equivalent evidence.",
+  "operation_convention": "1_MAC_equals_2_arithmetic_operations",
+  "raw_timing_csv": "results/m13/full_solve_timings.csv",
+  "raw_timing_csv_sha256": "e9fa3ca8aa09970aec79459c5ef1bac4c987b32bb7eca1e1b6f66d7e53a11ba2",
+  "workload": "actual_sequential_recurrence_complete_solve"
+}

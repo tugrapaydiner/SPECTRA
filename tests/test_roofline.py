@@ -1,45 +1,51 @@
-"""GT1 tests: the roofline / arithmetic-intensity physics is stated honestly.
+"""M13 arithmetic-intensity contracts.
 
-Proves: a single B=1 W1.58 GEMV is ~4 ops/byte (16x FP32 but still low / memory-
-bound on a starved core), and the recursion-resident reuse is what makes it
-compute-bound -- not cache-blocking a single GEMV (which is physically impossible
-at B=1).
+These tests verify units/traffic bookkeeping only. They do not treat a modelled
+roofline classification or a throughput curve as evidence of cache residency.
 """
+from eval.roofline import (
+    arithmetic_intensity,
+    classify,
+    precomputed_input_reuse_traffic,
+    roofline_report,
+)
 
-from eval.roofline import arithmetic_intensity, classify, roofline_report
 
-
-def test_fp32_is_memory_bound_and_ternary_is_16x_higher():
+def test_fp32_and_ternary_share_two_ops_per_mac_convention():
     O = H = 512
-    ai_fp32 = arithmetic_intensity(O, H, weight_bits=32, reuse=1)
-    ai_w158 = arithmetic_intensity(O, H, weight_bits=2, reuse=1)
-    assert ai_fp32 < 0.30                      # ~0.25 ops/byte: hopeless
-    assert 3.5 < ai_w158 < 4.1                 # ~4 ops/byte
-    assert ai_w158 / ai_fp32 > 14              # ~16x = 32-bit / 2-bit
+    fp = precomputed_input_reuse_traffic(O, H, weight_bits=32, reuse=1)
+    tq = precomputed_input_reuse_traffic(O, H, weight_bits=2, reuse=1)
+    assert fp.operations == 2 * fp.macs
+    assert tq.operations == 2 * tq.macs
+    assert 0.45 < arithmetic_intensity(O, H, 32, 1) < 0.55
+    assert 7.0 < arithmetic_intensity(O, H, 2, 1) < 8.1
+    # Approximately the bit-width ratio once activations/requant metadata are included.
+    assert arithmetic_intensity(O, H, 2, 1) / arithmetic_intensity(O, H, 32, 1) > 14
 
 
-def test_recursion_residency_scales_intensity_linearly():
+def test_precomputed_k_input_model_includes_activation_growth():
     O = H = 512
-    ai1 = arithmetic_intensity(O, H, weight_bits=2, reuse=1)
-    ai40 = arithmetic_intensity(O, H, weight_bits=2, reuse=40)
-    assert ai40 / ai1 > 35                     # AI ~ 4*reuse (weights streamed once)
+    t1 = precomputed_input_reuse_traffic(O, H, weight_bits=2, reuse=1)
+    t40 = precomputed_input_reuse_traffic(O, H, weight_bits=2, reuse=40)
+    assert t40.input_activation_bytes == 40 * t1.input_activation_bytes
+    assert t40.output_activation_bytes == 40 * t1.output_activation_bytes
+    ai1 = arithmetic_intensity(O, H, 2, 1)
+    ai40 = arithmetic_intensity(O, H, 2, 40)
+    assert ai40 > ai1
+    assert ai40 / ai1 < 40  # activations/output traffic prevents fictitious exact linear AI
 
 
-def test_single_gemv_memory_bound_but_recursion_compute_bound():
-    # Catastrophic edge: ~10 GB/s single-thread DDR3, ~40 GOPS int8 -> ridge = 4.
-    O, H, peak, bw = 512, 512, 40.0, 10.0
-    fp32 = classify(O, H, peak, bw, weight_bits=32, reuse=1)
-    single = classify(O, H, peak, bw, weight_bits=2, reuse=1)
-    recur = classify(O, H, peak, bw, weight_bits=2, reuse=42)
-    assert fp32.bound == "memory"
-    assert recur.bound == "compute"            # residency crosses the ridge
-    # A single ternary GEMV sits right AT the ridge (AI ~4 vs ridge 4).
-    assert abs(single.arithmetic_intensity - single.ridge_point) < 1.0
+def test_classify_is_explicit_model_not_hardware_cache_evidence():
+    point = classify(512, 512, peak_gops=40.0, bandwidth_gbs=10.0,
+                     weight_bits=2, reuse=1)
+    assert point.bound in {"memory", "compute"}
+    assert "not_cache_evidence" in point.classification_scope
 
 
-def test_roofline_report():
+def test_roofline_report_refuses_cache_and_bandwidth_claims():
     rep = roofline_report(512, 512, 40.0, 10.0, recursion_steps=42)
-    assert rep["fp32_bound"] == "memory"
-    assert rep["w158_bound"] in ("memory", "compute")  # borderline at the ridge
-    assert rep["recursion_bound"] == "compute"
-    assert rep["dram_byte_reduction_vs_fp32"] == 16 * 42
+    assert rep["operation_convention"] == "1_MAC_equals_2_arithmetic_operations"
+    assert rep["traffic_scope"] == "external_first_touch_logical_bytes_not_measured_dram"
+    assert "precomputed_k_input_ai" in rep
+    assert rep["cache_residency_established"] is False
+    assert rep["bandwidth_bottleneck_established"] is False

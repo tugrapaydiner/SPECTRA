@@ -1,0 +1,234 @@
+name: m13-measurement-protocol
+
+on:
+  push:
+    branches: [research/m13-measurement-protocol]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  measurement-protocol:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CPU measurement dependencies
+        run: |
+          set -euxo pipefail
+          mkdir -p .m13
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m13/install_torch.txt
+          timeout 180s python -m pip install -r requirements.txt matplotlib |& tee .m13/install_requirements.txt
+
+      - name: Compile M13 paths
+        shell: bash
+        run: |
+          set +e
+          python -m py_compile \
+            common/energy_counters.py common/measurement_env.py common/telemetry_logger.py \
+            eval/edge_energy.py eval/memory.py eval/roofline.py eval/benchmarks.py \
+            scripts/bench_kernel.py scripts/m13_measurement.py scripts/render_m13_measurement.py \
+            tests/test_m13_measurement_protocol.py
+          echo "$?" | tee .m13/compile_exit_code.txt
+          exit 0
+
+      - name: Controlled counter fixtures and focused M13 contracts
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 600s python -m pytest \
+            tests/test_m13_measurement_protocol.py \
+            tests/test_energy_measurement.py tests/test_telemetry.py tests/test_roofline.py \
+            -m "not slow" -q |& tee .m13/controlled_counter_fixtures_and_focused.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m13/focused_exit_code.txt
+          exit 0
+
+      - name: Benchmark precomputed K-input reuse separately
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 600s python scripts/bench_kernel.py \
+            --out .m13/precomputed_input_reuse --target-seconds 0.05 \
+            |& tee .m13/precomputed_input_reuse.log
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m13/precomputed_exit_code.txt
+          exit 0
+
+      - name: Run retained real-workload measurement
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          rm -rf .m13/torch_extensions
+          mkdir -p .m13/torch_extensions
+          export TORCH_EXTENSIONS_DIR="$PWD/.m13/torch_extensions"
+          timeout 1800s python scripts/m13_measurement.py --out .m13/measurement \
+            |& tee .m13/measurement.log
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m13/measurement_exit_code.txt
+          exit 0
+
+      - name: Regenerate one M13 figure from raw data
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          python scripts/render_m13_measurement.py \
+            --timings .m13/measurement/raw/full_solve_timings.csv \
+            --summary .m13/measurement/measurement_summary.json \
+            --out .m13/measurement/m13_full_solve_latency.png \
+            --provenance .m13/measurement/m13_figure_provenance.json \
+            |& tee .m13/render.log
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m13/render_exit_code.txt
+          exit 0
+
+      - name: Verify M13 acceptance evidence
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY' |& tee .m13/evidence_check.txt
+          import csv, hashlib, json, pathlib, sys
+          m=pathlib.Path('.m13/measurement'); raw=m/'raw'; pre=pathlib.Path('.m13/precomputed_input_reuse')
+          required=[raw/'environment.json',raw/'energy_inventory.json',raw/'physical_energy.json',
+                    raw/'cold_start.json',raw/'full_solve_timings.csv',raw/'full_solve_summary.json',
+                    raw/'memory.json',raw/'instrumentation_overhead.json',raw/'sequential_recurrence.json',
+                    m/'measurement_summary.json',m/'m13_full_solve_latency.png',m/'m13_figure_provenance.json',
+                    pre/'bench_weight_stationary.csv',pre/'host.json']
+          missing=[str(p) for p in required if not p.is_file()]
+          print('missing=',missing)
+          if missing: sys.exit(2)
+          sha=lambda p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+          s=json.loads((m/'measurement_summary.json').read_text())
+          env=json.loads((raw/'environment.json').read_text())
+          energy=json.loads((raw/'physical_energy.json').read_text())
+          mem=json.loads((raw/'memory.json').read_text())
+          seq=json.loads((raw/'sequential_recurrence.json').read_text())
+          over=json.loads((raw/'instrumentation_overhead.json').read_text())
+          fig=json.loads((m/'m13_figure_provenance.json').read_text())
+          print(json.dumps(s,indent=2,sort_keys=True))
+          assert s['milestone']==13 and s['status']=='measurement_raw_ready'
+          assert s['primary_workload']=='actual_sequential_recurrence_complete_solve'
+          assert s['operation_convention']=='1_MAC_equals_2_arithmetic_operations'
+          assert s['timing']['distinct_heldout_examples'] >= 16
+          assert s['timing']['inference_mode'] is True
+          assert s['timing']['reference_targets_used'] is False
+          assert s['timing']['cold_start_ms'] > 0 and s['timing']['median_ms'] > 0
+          rows=list(csv.DictReader((raw/'full_solve_timings.csv').open()))
+          assert len({int(r['example_index']) for r in rows}) >= 16
+          assert all(r['workload']=='actual_sequential_recurrence_complete_solve' for r in rows)
+          assert all(int(r['native_linear_operations'])==2*int(r['native_linear_macs']) for r in rows)
+          assert all(r['operation_convention']=='1_MAC_equals_2_arithmetic_operations' for r in rows)
+          assert energy['scope']=='cpu_package_rapl_not_gpu_not_whole_system'
+          assert energy['idle_subtraction_performed'] is False
+          if energy['available']:
+              assert energy['energy_joules'] is not None
+              assert energy['joules_per_complete_solve'] is not None
+          else:
+              assert energy['energy_joules'] is None
+              assert energy['joules_per_complete_solve'] is None
+              assert energy['failure_reason'] is not None
+          assert mem['packed_weights_bytes'] > 0
+          assert mem['full_model_state_bytes'] > 0
+          assert mem['peak_ram_definition']=='window_local_sampled_process_rss_maximum'
+          assert mem['process_rss_peak_sampled_mb'] is not None
+          assert 'sampling interval' in mem['sampling_limitation']
+          assert mem['search_tree']['tensor_storage_bytes'] > 0
+          assert mem['search_tree']['quality_claim'] is False
+          assert over['energy_snapshot_read_mean_us'] >= 0
+          assert 'rss_sampler_observed_overhead_ms' in over
+          assert seq['operation_convention']=='1_MAC_equals_2_arithmetic_operations'
+          assert seq['native_linear_operations']==2*seq['native_linear_macs']
+          assert seq['native_fp32_input_output_boundary_bytes'] > 0
+          assert seq['recurrent_yz_read_write_lower_bound_bytes'] > 0
+          assert seq['cache_residency_established'] is False
+          assert seq['bandwidth_bottleneck_established'] is False
+          for key in ['cpu_model','process_affinity_cpus','torch_num_threads','frequency_policies',
+                      'backend','compiler_flags','platform','power_context','energy_scope_note']:
+              assert key in env
+          pre_rows=list(csv.DictReader((pre/'bench_weight_stationary.csv').open()))
+          assert pre_rows and all(r['workload']=='precomputed_input_reuse' for r in pre_rows)
+          for r in pre_rows:
+              assert int(r['operations'])==2*int(r['macs'])
+              assert float(r['input_activation_bytes']) > 0
+              assert float(r['output_activation_bytes']) > 0
+              assert r['traffic_scope']=='kernel_external_first_touch_logical_bytes_not_measured_dram'
+              assert r['cache_residency_established']=='False'
+              assert r['bandwidth_bottleneck_established']=='False'
+          assert fig['raw_timing_csv_sha256']==sha(raw/'full_solve_timings.csv')
+          assert fig['measurement_summary_sha256']==sha(m/'measurement_summary.json')
+          assert fig['figure_sha256']==sha(m/'m13_full_solve_latency.png')
+          assert fig['operation_convention']=='1_MAC_equals_2_arithmetic_operations'
+          assert fig['cache_residency_claim'] is False and fig['bandwidth_bottleneck_claim'] is False
+          assert len(list(m.rglob('*.png')))==1
+          print('M13_DEFENSIBLE_MEASUREMENT_GATE=PASS')
+          PY
+          echo "$?" | tee .m13/evidence_check_exit_code.txt
+          exit 0
+
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 900s python -m pytest -m "not slow" -ra |& tee .m13/pytest_fast.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m13/fast_exit_code.txt
+          exit 0
+
+      - name: Record provenance and hashes
+        if: always()
+        run: |
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "base=802b1a8eb5df7091383a127e3d853a1fbbb62690"
+            echo
+            git diff --stat 802b1a8eb5df7091383a127e3d853a1fbbb62690...HEAD
+          } | tee .m13/diff_stat.txt
+          python - <<'PY' | tee .m13/evidence_sha256.txt
+          import hashlib,pathlib
+          root=pathlib.Path('.m13')
+          for p in sorted(q for q in root.rglob('*') if q.is_file() and q.name!='evidence_sha256.txt'):
+              print(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.as_posix()}")
+          PY
+
+      - name: Upload M13 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m13-defensible-measurement-evidence
+          path: .m13/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce M13 acceptance
+        if: always()
+        run: |
+          compile=$(cat .m13/compile_exit_code.txt 2>/dev/null || echo 99)
+          focused=$(cat .m13/focused_exit_code.txt 2>/dev/null || echo 99)
+          precomputed=$(cat .m13/precomputed_exit_code.txt 2>/dev/null || echo 99)
+          measurement=$(cat .m13/measurement_exit_code.txt 2>/dev/null || echo 99)
+          render=$(cat .m13/render_exit_code.txt 2>/dev/null || echo 99)
+          evidence=$(cat .m13/evidence_check_exit_code.txt 2>/dev/null || echo 99)
+          fast=$(cat .m13/fast_exit_code.txt 2>/dev/null || echo 99)
+          echo "compile=$compile focused=$focused precomputed=$precomputed measurement=$measurement render=$render evidence=$evidence fast=$fast"
+          if [ "$compile" -ne 0 ] || [ "$focused" -ne 0 ] || [ "$precomputed" -ne 0 ] || \
+             [ "$measurement" -ne 0 ] || [ "$render" -ne 0 ] || [ "$evidence" -ne 0 ] || \
+             [ "$fast" -ne 0 ]; then
+            echo "M13 defensible-measurement acceptance not established; inspect retained evidence."
+            exit 1
+          fi
+          echo "M13 defensible-measurement acceptance passed."

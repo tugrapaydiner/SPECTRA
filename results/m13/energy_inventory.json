@@ -1,0 +1,7 @@
+{
+  "domains": [],
+  "package_discovery_complete": false,
+  "package_domain_ids": [],
+  "rejected": [],
+  "root": "/sys/class/powercap"
+}

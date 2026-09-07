@@ -1,0 +1,16 @@
+{
+  "batch_size": 1,
+  "cold_start_ms": 16417.175752,
+  "distinct_heldout_examples": 24,
+  "heldout_input_tensor_sha256": "d08c01edce649bd96d59c7acaac76e29ab98d2ab69fa9e15d02c378d846fb4b8",
+  "inference_mode": true,
+  "max_ms": 8.089556,
+  "mean_ms": 7.602571055555556,
+  "median_ms": 7.585985,
+  "min_ms": 7.35103,
+  "p95_ms": 7.819384,
+  "reference_targets_used": false,
+  "timed_rows": 72,
+  "warmup_distinct_examples": 4,
+  "workload": "actual_sequential_recurrence_complete_solve"
+}

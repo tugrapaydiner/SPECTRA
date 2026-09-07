@@ -1,45 +1,79 @@
-"""Roofline / arithmetic-intensity analysis for the W1.58A8 B=1 GEMV kernel.
+"""Auditable arithmetic-intensity helpers for SPECTRA kernel measurements.
 
-THE BRUTAL PHYSICS (read this before claiming the kernel "defeats" DRAM):
-
-At batch size 1 a matrix-vector product reads each weight EXACTLY ONCE and uses
-it in EXACTLY ONE multiply-accumulate. There is no reuse dimension, so:
-
-    Arithmetic Intensity (AI) = ops / DRAM_bytes
-                              = (O*H) / (O*H * bits/8)
-                              = 8 / bits   [ops per byte]
-
-For FP32 weights:  AI = 8/32 = 0.25 ops/byte   -> hopelessly memory-bound.
-For W1.58 (2-bit): AI = 8/2  = 4.0  ops/byte   -> 16x better, but STILL low.
-
-You CANNOT raise the AI of a single B=1 GEMV by cache-blocking: there is nothing
-to reuse. Quantization helps only by cutting the bytes 16x (the time at the
-memory-bound limit is ``weight_bytes / bandwidth``, so 16x fewer bytes = 16x
-faster). Whether AI=4 crosses the machine's ridge point depends on the device;
-on a bandwidth-starved single legacy core it sits right AT the ridge.
-
-The ONLY physically valid way to become compute-bound is to introduce reuse, and
-recursion provides it: the SAME ~1.4 MB ternary core is re-applied K = T*n*N_sup
-times. If those weights stay resident in L2/L3 across the recursion, DRAM pays for
-them ONCE and amortises over K applications:
-
-    AI_recursion = (K * O*H) / (O*H * bits/8) = K * 8/bits = 4K  for 2-bit.
-
-That is the real "cache-resident" claim, and it is sound -- realised by the
-weight-stationary recursion kernel (``spectra_weight_stationary_gemv``).
+M13 convention: one multiply-accumulate (MAC) is two arithmetic operations.
+Throughput in GOP/s and arithmetic intensity in operations/byte use the same
+numerator. Traffic is a declared *logical/external first-touch model*, not measured
+DRAM traffic. No cache-residency or bandwidth-bottleneck claim follows from these
+helpers or from a flat throughput curve.
 """
-
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+import math
 
 
-@dataclass
+@dataclass(frozen=True)
+class TrafficModel:
+    macs: int
+    operations: int
+    packed_weight_bytes: int
+    input_activation_bytes: int
+    output_activation_bytes: int
+    requant_parameter_bytes: int
+    total_external_first_touch_bytes: int
+    decoded_row_scratch_bytes: int
+    traffic_scope: str = "kernel_external_first_touch_logical_bytes_not_measured_dram"
+
+    def record(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class RooflinePoint:
-    arithmetic_intensity: float  # ops / DRAM byte
-    ridge_point: float           # peak_ops / bandwidth (ops/byte)
-    attainable_gops: float       # min(peak, AI * bandwidth)
-    bound: str                   # "memory" or "compute"
+    arithmetic_intensity: float
+    ridge_point: float
+    attainable_gops: float
+    bound: str
+    classification_scope: str = "model_from_supplied_peak_and_bandwidth_not_cache_evidence"
+
+
+def precomputed_input_reuse_traffic(
+    out_dim: int,
+    hidden: int,
+    *,
+    weight_bits: float = 2.0,
+    reuse: int = 1,
+    input_element_bytes: int = 1,
+    output_element_bytes: int = 1,
+    requant_bytes_per_output: int = 4,
+) -> TrafficModel:
+    """External first-touch model for the checked `[K,H]` weight-stationary call.
+
+    `reuse` is K precomputed input vectors passed into one kernel invocation. This
+    is not a model of sequential recurrent generation and does not assert a cache
+    level. Packed rows use row padding to whole bytes for the 2-bit representation.
+    """
+    if out_dim <= 0 or hidden <= 0 or reuse <= 0:
+        raise ValueError("out_dim, hidden and reuse must be positive")
+    if weight_bits <= 0 or input_element_bytes <= 0 or output_element_bytes <= 0:
+        raise ValueError("bit/element widths must be positive")
+    packed_row = int(math.ceil(hidden * weight_bits / 8.0))
+    packed = out_dim * packed_row
+    inputs = reuse * hidden * input_element_bytes
+    outputs = reuse * out_dim * output_element_bytes
+    requant = out_dim * requant_bytes_per_output
+    macs = reuse * out_dim * hidden
+    operations = 2 * macs
+    total = packed + inputs + outputs + requant
+    # The C++ implementation expands one row to int8 scratch before applying K
+    # precomputed vectors. Scratch is disclosed separately, not called DRAM traffic.
+    scratch = hidden
+    return TrafficModel(
+        macs=int(macs), operations=int(operations), packed_weight_bytes=int(packed),
+        input_activation_bytes=int(inputs), output_activation_bytes=int(outputs),
+        requant_parameter_bytes=int(requant), total_external_first_touch_bytes=int(total),
+        decoded_row_scratch_bytes=int(scratch),
+    )
 
 
 def arithmetic_intensity(
@@ -49,18 +83,12 @@ def arithmetic_intensity(
     reuse: int = 1,
     act_bytes: int = 1,
 ) -> float:
-    """Ops-per-DRAM-byte of a (possibly reuse-``reuse``) ternary GEMV.
-
-    ``reuse`` = number of times the (resident) weight matrix is re-applied before
-    being evicted -- 1 for a single GEMV, K for a recursion held in cache.
-    """
-    ops = reuse * out_dim * hidden
-    weight_bytes = out_dim * hidden * weight_bits / 8.0      # streamed from DRAM ONCE
-    # In a B=1 recursion the activation/answer states are generated on-chip and
-    # stay L1/L2-resident across the K applications, so they are first-touch only.
-    resident_bytes = hidden * act_bytes + out_dim
-    dram = weight_bytes + resident_bytes
-    return ops / dram
+    """Operations per declared external first-touch byte for precomputed K inputs."""
+    t = precomputed_input_reuse_traffic(
+        out_dim, hidden, weight_bits=weight_bits, reuse=reuse,
+        input_element_bytes=act_bytes, output_element_bytes=act_bytes,
+    )
+    return t.operations / t.total_external_first_touch_bytes
 
 
 def classify(
@@ -71,16 +99,17 @@ def classify(
     weight_bits: float = 2.0,
     reuse: int = 1,
 ) -> RooflinePoint:
-    """Place the kernel on the roofline for a given device."""
+    """Hypothetical roofline placement from explicitly supplied peak/bandwidth.
+
+    This is a model, not a hardware classification inferred from the throughput
+    curve. M13 retained measurements do not use it as evidence of cache residency.
+    """
+    if peak_gops <= 0 or bandwidth_gbs <= 0:
+        raise ValueError("peak_gops and bandwidth_gbs must be positive")
     ai = arithmetic_intensity(out_dim, hidden, weight_bits, reuse)
     ridge = peak_gops / bandwidth_gbs
-    attainable = min(peak_gops, ai * bandwidth_gbs)
-    return RooflinePoint(
-        arithmetic_intensity=ai,
-        ridge_point=ridge,
-        attainable_gops=attainable,
-        bound="compute" if ai >= ridge else "memory",
-    )
+    return RooflinePoint(ai, ridge, min(peak_gops, ai * bandwidth_gbs),
+                         "compute" if ai >= ridge else "memory")
 
 
 def roofline_report(
@@ -90,17 +119,20 @@ def roofline_report(
     bandwidth_gbs: float,
     recursion_steps: int,
 ) -> dict:
-    """Compare FP32 / W1.58 single-GEMV / W1.58 recursion-resident on one device."""
-    fp32 = classify(out_dim, hidden, peak_gops, bandwidth_gbs, weight_bits=32, reuse=1)
-    w158 = classify(out_dim, hidden, peak_gops, bandwidth_gbs, weight_bits=2, reuse=1)
-    recur = classify(out_dim, hidden, peak_gops, bandwidth_gbs, weight_bits=2, reuse=recursion_steps)
+    """Compatibility report with corrected units and explicit model-only scope."""
+    fp32 = classify(out_dim, hidden, peak_gops, bandwidth_gbs, 32, 1)
+    w158 = classify(out_dim, hidden, peak_gops, bandwidth_gbs, 2, 1)
+    precomputed = classify(out_dim, hidden, peak_gops, bandwidth_gbs, 2, recursion_steps)
     return {
+        "operation_convention": "1_MAC_equals_2_arithmetic_operations",
+        "traffic_scope": "external_first_touch_logical_bytes_not_measured_dram",
+        "classification_scope": "hypothetical_from_supplied_peak_and_bandwidth",
         "ridge_point": w158.ridge_point,
         "fp32_ai": fp32.arithmetic_intensity, "fp32_bound": fp32.bound,
         "w158_ai": w158.arithmetic_intensity, "w158_bound": w158.bound,
-        "recursion_ai": recur.arithmetic_intensity, "recursion_bound": recur.bound,
-        "recursion_steps": recursion_steps,
-        # The decisive number: how much faster the recursion-resident kernel is than
-        # FP32 at the memory-bound limit (= bytes ratio, since both are streamed).
-        "dram_byte_reduction_vs_fp32": (32 / 2) * recursion_steps,
+        "precomputed_k_input_ai": precomputed.arithmetic_intensity,
+        "precomputed_k_input_modelled_bound": precomputed.bound,
+        "K": int(recursion_steps),
+        "cache_residency_established": False,
+        "bandwidth_bottleneck_established": False,
     }

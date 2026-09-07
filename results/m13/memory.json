@@ -1,0 +1,33 @@
+{
+  "elapsed_seconds": 0.24244504500001085,
+  "full_model_state_bytes": 53184,
+  "full_model_state_scope": "parameters plus persistent buffers actual dtypes",
+  "linux_process_lifetime_hwm_mb": 375.42578125,
+  "linux_vmhwm_after_mb": 375.42578125,
+  "linux_vmhwm_before_mb": 375.42578125,
+  "linux_vmhwm_scope": "process_lifetime_high_water_not_window_local",
+  "packed_weight_scope": "packed ternary tensors only",
+  "packed_weights_bytes": 3112,
+  "peak_ram_definition": "window_local_sampled_process_rss_maximum",
+  "peak_ram_mb": 374.71875,
+  "process_rss_current_mb_after_measurement": 374.71875,
+  "process_rss_peak_sampled_mb": 374.71875,
+  "result_type": "NoneType",
+  "rss_after_mb": 374.71875,
+  "rss_available": true,
+  "rss_before_mb": 374.546875,
+  "rss_delta_after_minus_before_mb": 0.171875,
+  "sample_count": 324,
+  "sampling_interval_ms": 0.5,
+  "sampling_limitation": "allocations shorter than the sampling interval can be missed",
+  "search_tree": {
+    "applicable": true,
+    "measurement_kind": "controlled_reference_tree_structure_memory",
+    "node_count": 28,
+    "quality_claim": false,
+    "scope": "unique_tensor_storages_only_excludes_python_object_allocator_overhead",
+    "tensor_storage_bytes": 73472,
+    "trained_reasoner": true,
+    "trained_search_auxiliaries": false
+  }
+}
