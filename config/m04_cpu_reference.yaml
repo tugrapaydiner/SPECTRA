@@ -1,0 +1,48 @@
+# M04 deterministic CPU reference only; not a headline task/performance config.
+_base_: sudoku.yaml
+
+seed: 20260907
+device: cpu
+
+model:
+  dim: 16
+  n_layers: 1
+  heads: 2
+  n: 1
+  T: 1
+  N_sup: 1
+  alpha_y: 0.1
+  alpha_z: 0.1
+
+data:
+  num_tokens: 5
+  seq_len: 16
+  height: 4
+  width: 4
+  box: 2
+  min_clues: 8
+  max_clues: 8
+  require_unique: true
+  augment: false
+  solution_method: random_backtracking
+
+train:
+  lr: 5.0e-4
+  weight_decay: 0.0
+  batch_size: 4
+  max_steps: 8
+  warmup_steps: 2
+  quant_warmup_steps: 4
+  clip_grad_norm: 1.0
+  ema_decay: 0.9
+  # Keep the reference objective minimal: task CE only.
+  lambda_h: 0.0
+  lambda_improve: 0.0
+  margin: 0.0
+  log_every: 1
+  eval_every: 4
+  eval_batches: 2
+  ckpt_every: 4
+  precision: fp32
+  backend: pytorch_eager
+  deterministic: true
