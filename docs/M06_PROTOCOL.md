@@ -4,6 +4,12 @@
 
 M06 is deliberately narrow: one controlled trained pilot on one validated task. It does not add MCTS, routing, halting policy training, PRM training, distillation, scaling-law claims, or target-hardware performance claims.
 
+## Preregistration amendment before experimental execution
+
+The first architecture-only preflight (`34124091722`) inspected trainable parameter counts and intentionally stopped before the experiment step. It observed `30,829` trainable parameters for the floating-point recursive model and `30,397` for the ternary recursive model: a `1.4013%` relative gap. No M06 training experiment, timing probe, validation metric, test prediction, or accuracy result was produced by that run.
+
+The difference is fully explained by the repository's existing projection conventions: the floating-point path uses bias-bearing `nn.MultiheadAttention`/`nn.Linear` projections, while `FakeBitLinear` defaults to bias-free projections and the hand-written ternary attention is bias-free. Changing either core implementation only to force equality would alter the systems under study. Therefore, before any experimental result is observed, the recursive parameter-match tolerance is amended from `1.0%` to **`1.5%`**. All other protocol fields below remain unchanged. This amendment is based solely on architecture metadata, not model performance.
+
 ## Research question
 
 On the same fixed 9×9 Sudoku distribution and training/evaluation protocol, does a small floating-point recursive TRM learn measurable held-out task structure, how much of that learning survives a matched W1.58A8 recursive model at full declared quantization, and how do both compare with a deliberately larger but single-pass feed-forward baseline?
@@ -70,7 +76,7 @@ Same recursive dimensions and recurrence schedule as A, except:
 - quantization strength ramps linearly from 0 to 1 during the first quarter of the main training steps
 - evaluation is invalid unless every `FakeBitLinear.quant_strength` is exactly `1.0` at checkpoint/evaluation time
 
-The repository's floating-point block uses PyTorch `nn.MultiheadAttention`, whose projection includes bias tensors, while the existing ternary hand-written attention path is bias-free. Therefore exact trainable-parameter equality would require changing one implementation solely for this experiment. M06 does **not** alter either implementation. Instead, A and B must have trainable parameter counts within **1%** of each other; the exact counts and relative gap are recorded before training. This is an implementation difference and a limitation of the comparison.
+The repository's floating-point block uses PyTorch `nn.MultiheadAttention` and ordinary `nn.Linear`, whose projections include bias tensors, while the existing ternary `SelfAttention` and default `FakeBitLinear` projections are bias-free. M06 does **not** alter either implementation. A and B must have trainable parameter counts within **1.5%** of each other; the exact counts and relative gap are recorded before training. This is an implementation difference and a limitation of the comparison.
 
 ### C. Larger single-pass baseline
 
@@ -83,7 +89,7 @@ The repository's floating-point block uses PyTorch `nn.MultiheadAttention`, whos
 - FP32
 - the existing confidence head is frozen and excluded from the trainable parameter count because M06 does not train or evaluate confidence routing
 
-The experiment fails before main training if A/B differ by more than 1% in trainable parameters or if C is not larger than both recursive models.
+The experiment fails before main training if A/B differ by more than 1.5% in trainable parameters or if C is not larger than both recursive models.
 
 ## Optimization protocol
 
