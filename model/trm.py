@@ -66,10 +66,6 @@ class TRMExecutionState:
     ever_frozen: torch.Tensor | None = None
     work: dict[str, int] = field(default_factory=_zero_work)
 
-    @property
-    def exhausted(self) -> bool:
-        return False  # model-specific limit is checked by TRM.run_execution_step
-
 
 class TRM(nn.Module):
     """Recursive reasoning core with deep supervision and a halting head."""
@@ -190,22 +186,41 @@ class TRM(nn.Module):
             mask = mask & ~state.ever_frozen
         return mask
 
+    @staticmethod
+    def _record_dense_block_work(block: SwapBlock, b: int, n: int, work: dict[str, int]) -> None:
+        """Record dense work while still invoking ``block(...)`` through Module.__call__.
+
+        Using the ordinary module call matters: existing telemetry and third-party
+        instrumentation install forward hooks on ``SwapBlock``.  M11 full-density
+        and dense-fallback execution therefore preserve those hooks exactly.
+        """
+        block._record_dense_work(b, n, work)
+
     def _f_active(self, h: torch.Tensor, mask: torch.Tensor, work: dict[str, int]) -> torch.Tensor:
         b, n, _ = h.shape
         partial = int(mask.sum()) != b * n
-        # With >1 block, inactive block-1 outputs would be needed as exact K/V
-        # context for block 2.  Fall back to dense rather than changing semantics.
-        if partial and (b != 1 or len(self.blocks) != 1):
-            work["sparse_fallback_dense_block_applications"] += len(self.blocks)
-            full = torch.ones_like(mask)
+
+        # Full density is deliberately the historical module call, not a direct
+        # call to forward_active.  This preserves exact forward-hook semantics and
+        # gives telemetry an independent regression anchor.
+        if not partial:
             out = h
             for block in self.blocks:
-                out = block.forward_active(out, full, work)
+                self._record_dense_block_work(block, b, n, work)
+                out = block(out)
             return out
-        out = h
-        for block in self.blocks:
-            out = block.forward_active(out, mask, work)
-        return out
+
+        # With >1 block, inactive block-1 outputs would be needed as exact K/V
+        # context for block 2.  Fall back to dense rather than changing semantics.
+        if b != 1 or len(self.blocks) != 1:
+            work["sparse_fallback_dense_block_applications"] += len(self.blocks)
+            out = h
+            for block in self.blocks:
+                self._record_dense_block_work(block, b, n, work)
+                out = block(out)
+            return out
+
+        return self.blocks[0].forward_active(h, mask, work)
 
     def _commit_active_update(
         self,
@@ -229,9 +244,6 @@ class TRM(nn.Module):
             work["active_token_updates"] += total
             return out
         if b != 1:
-            # Partial batched execution has no compaction contract in M11.  The
-            # operator work has already fallen back to dense; state commit remains
-            # semantically masked.
             dense = self.act_quant(norm(base + alpha * update))
             work["recurrent_norm_vectors"] += total
             work["a8_vectors"] += total if self.act8 else 0
@@ -346,7 +358,6 @@ class TRM(nn.Module):
             if router is not None:
                 out["router_logprob"] = logprob
             step_outputs.append(out)
-            # Preserve the historical bounded-backprop boundary.
             state.y = state.y.detach()
             state.z = state.z.detach()
 
