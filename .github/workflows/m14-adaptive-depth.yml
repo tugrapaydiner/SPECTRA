@@ -1,0 +1,148 @@
+name: m14-validator-gated-adaptive-depth
+on:
+  push:
+    branches: [research/m14-primary-controlled-experiment]
+    paths:
+      - 'docs/M14_DEVELOPMENT_AMENDMENT_B.md'
+      - 'scripts/m14_adaptive_depth.py'
+      - 'scripts/render_m14_adaptive_depth.py'
+      - 'tests/test_m14_adaptive_depth.py'
+      - '.github/workflows/m14-adaptive-depth.yml'
+      - 'docs/M14_ACCEPTANCE_GATE.md'
+      - 'docs/RESEARCH_STATE.md'
+      - 'results/m14/**'
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  amendment-b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11', cache: pip}
+      - name: Install CPU dependencies
+        run: |
+          set -euxo pipefail
+          mkdir -p .m14b
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m14b/install_torch.txt
+          timeout 240s python -m pip install -r requirements.txt matplotlib |& tee .m14b/install_requirements.txt
+      - name: Verify preregistration and compile
+        shell: bash
+        run: |
+          set +e
+          git merge-base --is-ancestor e6cbb77ee09b73500bcd6f23c15e7ad2a0bf5e47 HEAD; echo "$?" | tee .m14b/prereg_exit_code.txt
+          python -m py_compile scripts/m14_adaptive_depth.py scripts/render_m14_adaptive_depth.py tests/test_m14_adaptive_depth.py; echo "$?" | tee .m14b/compile_exit_code.txt
+          exit 0
+      - name: Focused Amendment-B contracts
+        shell: bash
+        run: |
+          set +e; set -o pipefail
+          timeout 600s python -m pytest tests/test_m14_adaptive_depth.py tests/test_m14_primary_experiment.py tests/test_energy_measurement.py -m "not slow" -q |& tee .m14b/focused.txt
+          echo "${PIPESTATUS[0]}" | tee .m14b/focused_exit_code.txt
+          exit 0
+      - name: Run preregistered adaptive-depth experiment
+        shell: bash
+        run: |
+          set +e; set -o pipefail
+          rm -rf .m14b/experiment
+          timeout 2700s python scripts/m14_adaptive_depth.py --out .m14b/experiment |& tee .m14b/experiment.log
+          echo "${PIPESTATUS[0]}" | tee .m14b/experiment_exit_code.txt
+          exit 0
+      - name: Render raw table and Pareto plot
+        shell: bash
+        run: |
+          set +e; set -o pipefail
+          if [ -f .m14b/experiment/summary.json ]; then
+            python scripts/render_m14_adaptive_depth.py --experiment .m14b/experiment --out .m14b/rendered |& tee .m14b/render.log
+            code=${PIPESTATUS[0]}
+          else code=3; fi
+          echo "$code" | tee .m14b/render_exit_code.txt
+          exit 0
+      - name: Verify Amendment-B evidence hierarchy
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY' |& tee .m14b/evidence_check.txt
+          import hashlib,json,pathlib,sys
+          r=pathlib.Path('.m14b/experiment'); v=pathlib.Path('.m14b/rendered')
+          req=[r/'summary.json',r/'environment.json',r/'energy_inventory.json',r/'training_runs.jsonl',r/'validation_rows.jsonl',r/'validation_operating_points.json',r/'candidate_selection.json',r/'manifests/train_validation_development.json',r/'manifests/consumed_amendment_a_development.json',r/'manifests/amendment_b_development_reserve.json',r/'manifests/amendment_b_development_overlap_audit.json',r/'development_rows_amendment_b.jsonl',r/'development_effect_amendment_b.json',r/'development_decision_amendment_b.json',r/'development_operating_points_amendment_b.json',r/'development_amendment_b_energy.json',v/'result_table.csv',v/'result_table.md',v/'pareto.png',v/'provenance.json']
+          miss=[str(p) for p in req if not p.is_file()]; print('missing=',miss)
+          if miss: sys.exit(2)
+          s=json.loads((r/'summary.json').read_text()); print(json.dumps(s,indent=2,sort_keys=True))
+          assert s['milestone']==14 and s['development_amendment']=='B'
+          assert s['amendment_preregistered_before_results'] and s['amendment_prereg_sha']=='e6cbb77ee09b73500bcd6f23c15e7ad2a0bf5e47'
+          assert s['primary_metric']=='strict_sudoku_semantic_validity' and s['primary_baseline']=='single_pass_fp'
+          assert s['training_seeds']==[1401,2402,3403,4404,5405] and s['n_training_seeds']==5
+          assert not s['thresholds_changed_after_results'] and not s['baseline_weakened'] and not s['favorable_seed_filtering'] and not s['scaling_law_claim']
+          assert s['primary_gate_unchanged_from_m14'] and s['stopping_rule']=='reference_free_sudoku_semantic_validity'
+          assert [x['status'] for x in s['prior_attempts']]==['INCOMPLETE','INCOMPLETE'] and all(not x['confirmation_opened'] for x in s['prior_attempts'])
+          train=[json.loads(x) for x in (r/'training_runs.jsonl').read_text().splitlines() if x.strip()]
+          assert len(train)==20
+          for k in ['single_pass','fp_adaptive_w32','fp_adaptive_w48','fp_adaptive_w64']:
+              z=[x for x in train if x['kind']==k]; assert len(z)==5 and {x['seed'] for x in z}=={1401,2402,3403,4404,5405}
+          bp=next(iter({x['architecture']['trainable_params'] for x in train if x['kind']=='single_pass'}))
+          for k in ['fp_adaptive_w32','fp_adaptive_w48','fp_adaptive_w64']:
+              assert max({x['architecture']['trainable_params'] for x in train if x['kind']==k}) < bp
+          sel=json.loads((r/'candidate_selection.json').read_text()); assert not sel['selection_used_development'] and not sel['selection_used_confirmation']; assert s['selected_candidate']==sel['selected_config_id']
+          assert s['selected_candidate'] in {f'fp{w}_semstop{d}' for w in [32,48,64] for d in [2,3]}
+          audit=json.loads((r/'manifests/amendment_b_development_overlap_audit.json').read_text()); assert audit['overlap_count']==0 and audit['later_seed']==2026091405
+          dev=json.loads((r/'development_decision_amendment_b.json').read_text()); assert dev==s['development_gate']
+          assert dev['path_a']['min_quality_diff']==0.03 and dev['path_a']['max_latency_ratio']==1.15
+          assert dev['path_b']['min_quality_diff']==-0.02 and dev['path_b']['min_quality_ci_lower']==-0.03 and dev['path_b']['max_latency_ratio']==0.65 and dev['path_b']['max_latency_ci_upper']==0.75
+          dr=[json.loads(x) for x in (r/'development_rows_amendment_b.jsonl').read_text().splitlines() if x.strip()]
+          cand=[x for x in dr if x['config_id']==s['selected_candidate']]
+          assert cand and all(x['target_used_inside_solver'] is False for x in cand)
+          assert all(x['complete_solve_timing_includes_semantic_check'] is True for x in cand)
+          assert all(x['work_semantic_validator_calls_inside_solver']>=1 for x in cand)
+          assert all(1<=x['work_realized_steps']<=3 for x in cand)
+          if s['confirmation_opened']:
+              for p in [r/'confirmation_freeze_manifest.json',r/'manifests/confirmation_1.json',r/'manifests/confirmation_overlap_audit.json',r/'confirmation_rows.jsonl',r/'confirmation_effect.json',r/'confirmation_decision.json']: assert p.is_file(),p
+              assert dev['pass'] is True
+              ca=json.loads((r/'manifests/confirmation_overlap_audit.json').read_text()); freeze=json.loads((r/'confirmation_freeze_manifest.json').read_text()); cg=json.loads((r/'confirmation_decision.json').read_text())
+              assert ca['overlap_count']==0 and ca['confirmation_seed']==2026091402 and freeze['frozen_before_confirmation'] and len(freeze['files'])==10
+              if s['status']=='COMPLETE': assert s['claim_confirmed'] and cg['pass']
+              else: assert not s['claim_confirmed'] and s['confirmation_becomes_development_evidence_if_future_changes_follow']
+          else:
+              assert dev['pass'] is False and not (r/'manifests/confirmation_1.json').exists() and not (r/'confirmation_rows.jsonl').exists() and s['status']=='INCOMPLETE'
+              assert s['reserve_confirmation_seed_unopened']==2026091403
+          p=json.loads((v/'provenance.json').read_text()); sha=lambda q:hashlib.sha256(pathlib.Path(q).read_bytes()).hexdigest()
+          assert p['raw_rows_sha256']==sha(pathlib.Path(p['raw_rows'])) and p['summary_sha256']==sha(r/'summary.json') and p['result_table_sha256']==sha(v/'result_table.csv') and p['pareto_plot_sha256']==sha(v/'pareto.png')
+          assert p['primary_gate_unchanged_from_m14'] and 'unmatched points are not called iso-budget' in p['latency_matching_rule']
+          print('M14_AMENDMENT_B_EVIDENCE=VALID'); print('M14_STATUS='+s['status'])
+          PY
+          echo "$?" | tee .m14b/evidence_check_exit_code.txt
+          exit 0
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set +e; set -o pipefail
+          timeout 900s python -m pytest -m "not slow" -ra |& tee .m14b/pytest_fast.txt
+          echo "${PIPESTATUS[0]}" | tee .m14b/fast_exit_code.txt
+          exit 0
+      - name: Record provenance and hashes
+        if: always()
+        run: |
+          { echo "head=$(git rev-parse HEAD)"; echo "base=b9e2decf19dcc772bfcef3a78615c2f4c8b350c0"; echo "amendment_b_prereg=e6cbb77ee09b73500bcd6f23c15e7ad2a0bf5e47"; git diff --stat b9e2decf19dcc772bfcef3a78615c2f4c8b350c0...HEAD; } | tee .m14b/diff_stat.txt
+          python - <<'PY' | tee .m14b/evidence_sha256.txt
+          import hashlib,pathlib
+          for p in sorted(q for q in pathlib.Path('.m14b').rglob('*') if q.is_file() and q.name!='evidence_sha256.txt'): print(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.as_posix()}")
+          PY
+      - name: Upload Amendment-B evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: {name: m14-amendment-b-evidence, path: .m14b/, include-hidden-files: true, if-no-files-found: error, retention-days: 14}
+      - name: Enforce positive M14 acceptance
+        if: always()
+        run: |
+          prereg=$(cat .m14b/prereg_exit_code.txt 2>/dev/null || echo 99); compile=$(cat .m14b/compile_exit_code.txt 2>/dev/null || echo 99); focused=$(cat .m14b/focused_exit_code.txt 2>/dev/null || echo 99); experiment=$(cat .m14b/experiment_exit_code.txt 2>/dev/null || echo 99); render=$(cat .m14b/render_exit_code.txt 2>/dev/null || echo 99); evidence=$(cat .m14b/evidence_check_exit_code.txt 2>/dev/null || echo 99); fast=$(cat .m14b/fast_exit_code.txt 2>/dev/null || echo 99)
+          status=$(python - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('.m14b/experiment/summary.json'); print(json.loads(p.read_text()).get('status','MISSING') if p.is_file() else 'MISSING')
+          PY
+          )
+          echo "prereg=$prereg compile=$compile focused=$focused experiment=$experiment render=$render evidence=$evidence fast=$fast status=$status"
+          if [ "$prereg" -ne 0 ] || [ "$compile" -ne 0 ] || [ "$focused" -ne 0 ] || [ "$render" -ne 0 ] || [ "$evidence" -ne 0 ] || [ "$fast" -ne 0 ]; then exit 1; fi
+          if [ "$experiment" -ne 0 ] || [ "$status" != "COMPLETE" ]; then echo "Valid Amendment-B evidence, but M14 remains INCOMPLETE."; exit 1; fi
+          echo "M14 primary controlled experiment acceptance passed with independent confirmation."
