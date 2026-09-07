@@ -207,13 +207,21 @@ def test_incompatible_auxiliary_core_hash_is_rejected(tmp_path: Path):
         load_latent_verifier_checkpoint(bad, core)
 
 
-def test_search_rejects_ignored_nsup_and_rng_seed_knobs(tmp_path: Path):
+def test_search_rejects_ignored_nsup_rng_and_uncertainty_knobs(tmp_path: Path):
     _, _, core, manifest = _make_artifacts(tmp_path)
-    _, action, _, _ = _trained_auxiliaries(tmp_path, core, manifest)
+    verifier, action, _, _ = _trained_auxiliaries(tmp_path, core, manifest)
     with pytest.raises(EvaluationContractError, match="not a latent-MCTS transition knob"):
         InferenceSetting(mode="latent_mcts", ordinary_n_sup=2, mcts_rollouts=2).validate()
     with pytest.raises(EvaluationContractError, match="deterministic.*search_seed"):
         InferenceSetting(mode="latent_mcts", mcts_rollouts=2, search_seed=99).validate()
+    with pytest.raises(EvaluationContractError, match="uncertainty_beta.*not consumed"):
+        evaluate_setting(
+            core,
+            manifest,
+            InferenceSetting(mode="latent_mcts", mcts_rollouts=2, uncertainty_beta=0.5),
+            verifier=verifier,
+            action_policy=action,
+        )
 
     setting = InferenceSetting(mode="latent_mcts", mcts_rollouts=2)
     realized = realized_setting(core, setting, action_policy=action)
