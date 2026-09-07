@@ -264,6 +264,23 @@ def run_checkpoint_scaling_grid(
             )
             summary_rows.append({
                 **aggregate,
+                # Summary rows are research rows too: preserve the exact trained
+                # artifact identities and runtime metadata already present on each
+                # per-example record instead of dropping them during aggregation.
+                "checkpoint_format": records[0]["checkpoint_format"],
+                "checkpoint_version": records[0]["checkpoint_version"],
+                "checkpoint_global_step": records[0]["checkpoint_global_step"],
+                "checkpoint_n": records[0]["checkpoint_n"],
+                "checkpoint_T": records[0]["checkpoint_T"],
+                "checkpoint_N_sup": records[0]["checkpoint_N_sup"],
+                "evaluation_manifest_file_sha256": records[0]["evaluation_manifest_file_sha256"],
+                "evaluation_split": records[0]["evaluation_split"],
+                "task": records[0]["task"],
+                "task_scope": records[0]["task_scope"],
+                "verifier_checkpoint_sha256": records[0]["verifier_checkpoint_sha256"],
+                "action_policy_checkpoint_sha256": records[0]["action_policy_checkpoint_sha256"],
+                "eval_parameter_dtype": records[0]["eval_parameter_dtype"],
+                "training_runtime": records[0]["training_runtime"],
                 **cost,
                 "energy_available_on_host": bool(rapl_available()),
             })
