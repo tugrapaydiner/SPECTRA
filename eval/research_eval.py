@@ -63,47 +63,38 @@ class InferenceSetting:
 
 
 class CountingLatentNativeMCTS(LatentNativeMCTS):
-    """Instrumentation wrapper; search mathematics remain in LatentNativeMCTS."""
+    """Compatibility wrapper exposing M05 field names from M08 canonical work.
 
-    def reset_compute_stats(self) -> None:
-        self._transition_calls = 0
-        self._expansions = 0
-        self._verifier_calls = 0
-        self._stopping_reason = "not_started"
-        self._rollouts_completed = 0
-
-    def _step(self, x_emb, node, action):
-        self._transition_calls += 1
-        return super()._step(x_emb, node, action)
-
-    def _expand(self, node, x_emb):
-        self._expansions += 1
-        return super()._expand(node, x_emb)
-
-    def _value(self, x, node):
-        self._verifier_calls += 1
-        return super()._value(x, node)
-
-    @torch.no_grad()
-    def search(self, x: torch.Tensor):
-        self.reset_compute_stats()
-        try:
-            out = super().search(x)
-        except Exception:
-            self._stopping_reason = "error"
-            raise
-        self._rollouts_completed = self._verifier_calls
-        self._stopping_reason = "rollout_budget_exhausted"
-        return out
+    M08 moved actual-work accounting into ``LatentNativeMCTS`` itself so serial,
+    batched, tree export, and checkpoint-backed research paths cannot silently
+    maintain different counters. This wrapper now maps that one source of truth
+    to the historical research-evaluation keys.
+    """
 
     def compute_stats(self) -> dict[str, Any]:
+        if not self.last_search_stats:
+            raise RuntimeError("run search before requesting compute stats")
+        s = self.last_search_stats
+        status = str(s.get("status"))
+        if status == "error":
+            stopping = "error"
+        elif int(s.get("requested_rollouts", 0)) == 0:
+            stopping = "greedy_zero_search_complete"
+        else:
+            stopping = "rollout_budget_exhausted"
         return {
-            "search_transition_calls": int(self._transition_calls),
-            "search_expansions": int(self._expansions),
-            "verifier_calls": int(self._verifier_calls),
-            "rollouts_requested": int(self.n_rollouts),
-            "rollouts_completed": int(self._rollouts_completed),
-            "stopping_reason": str(self._stopping_reason),
+            "search_transition_calls": int(s.get("transition_calls", 0)),
+            "search_expansions": int(s.get("expansion_calls", 0)),
+            "initial_expansion_transition_calls": int(
+                s.get("initial_expansion_transition_calls", 0)
+            ),
+            "verifier_calls": int(s.get("verifier_calls", 0)),
+            "verifier_evaluations": int(s.get("verifier_evaluations", 0)),
+            "selection_edges": int(s.get("selection_edges", 0)),
+            "max_depth_reached": int(s.get("max_depth_reached", 0)),
+            "rollouts_requested": int(s.get("requested_rollouts", 0)),
+            "rollouts_completed": int(s.get("completed_rollouts", 0)),
+            "stopping_reason": stopping,
         }
 
 
@@ -140,6 +131,9 @@ def realized_setting(
         "transition_inner_n": int(model.n),
         "n_actions": n_actions,
         "mcts_rollouts": int(setting.mcts_rollouts),
+        "mcts_rollout_semantics": "real_leaf_state_evaluations",
+        "mcts_max_depth": 32,
+        "initial_expansion_counted": True,
         "c_puct": float(setting.c_puct),
         "uncertainty_beta": float(setting.uncertainty_beta),
         "search_stochastic": False,
@@ -185,7 +179,11 @@ def _empty_compute(setting: InferenceSetting, core: LoadedTRMCheckpoint) -> dict
             "ordinary_shared_operator_applications": cycles * (int(core.model.n) + 1),
             "search_transition_calls": 0,
             "search_expansions": 0,
+            "initial_expansion_transition_calls": 0,
             "verifier_calls": 0,
+            "verifier_evaluations": 0,
+            "selection_edges": 0,
+            "max_depth_reached": 0,
             "rollouts_requested": 0,
             "rollouts_completed": 0,
             "stopping_reason": "greedy_forward_complete",
@@ -284,6 +282,7 @@ def evaluate_setting(
                     n_rollouts=int(setting.mcts_rollouts),
                     c_puct=float(setting.c_puct),
                     uncertainty_beta=float(setting.uncertainty_beta),
+                    max_depth=int(realized["mcts_max_depth"]),
                 )
                 pred = controller.search_and_decode(x)
                 search_stats = controller.compute_stats()
@@ -327,7 +326,8 @@ def aggregate_example_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     compute_keys = (
         "ordinary_forward_calls", "ordinary_recursive_cycle_calls",
         "ordinary_shared_operator_applications", "search_transition_calls",
-        "search_expansions", "verifier_calls", "rollouts_requested", "rollouts_completed",
+        "search_expansions", "initial_expansion_transition_calls", "verifier_calls",
+        "verifier_evaluations", "selection_edges", "rollouts_requested", "rollouts_completed",
     )
     totals = {
         key: int(sum(int(r["realized_compute"].get(key, 0)) for r in records))
