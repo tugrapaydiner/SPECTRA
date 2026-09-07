@@ -102,7 +102,10 @@ def test_forced_budget_stop_is_observable_and_truncated():
     assert result.stop_reason == "budget_exhausted"
     assert result.executed_steps == 2
     assert result.halt_step.item() == 1
-    assert torch.equal(result.logits, legacy2[0])
+    # The FP MultiheadAttention path may choose numerically different but
+    # equivalent fused kernels under inference/no-grad.  The M11 contract is a
+    # fixed absolute tolerance, not bit identity, for this FP reference case.
+    assert torch.allclose(result.logits, legacy2[0], atol=2e-6, rtol=0)
 
 
 def test_partial_active_path_matches_dense_masked_reference_and_saves_declared_rows():
