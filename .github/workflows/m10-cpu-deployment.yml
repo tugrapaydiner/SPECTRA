@@ -25,13 +25,149 @@ jobs:
       - name: Install CPU dependencies
         run: |
           set -euxo pipefail
-          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
-          timeout 180s python -m pip install -r requirements.txt
+          mkdir -p .m10
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m10/install_torch.txt
+          timeout 180s python -m pip install -r requirements.txt |& tee .m10/install_requirements.txt
+          python - <<'PY' | tee .m10/environment_bootstrap.txt
+          import os, platform, sys, torch, numpy
+          print('python=', sys.version)
+          print('platform=', platform.platform())
+          print('machine=', platform.machine())
+          print('logical_cpus=', os.cpu_count())
+          print('torch=', torch.__version__)
+          print('numpy=', numpy.__version__)
+          print('cuda_available=', torch.cuda.is_available())
+          PY
 
-      - name: Compile M10 Python paths
+      - name: Compile M10 paths
+        shell: bash
         run: |
-          python -m py_compile deploy/m10_native.py deploy/m10_artifact.py deploy/m10_runtime.py
+          set +e
+          python -m py_compile deploy/m10_native.py deploy/m10_artifact.py deploy/m10_runtime.py scripts/m10_cpu_deployment.py
+          echo "$?" | tee .m10/compile_exit_code.txt
+          exit 0
 
       - name: Focused M10 deployment contracts
+        shell: bash
         run: |
-          python -m pytest tests/test_m10_cpu_deployment.py -q
+          set +e
+          set -o pipefail
+          timeout 300s python -m pytest tests/test_m10_cpu_deployment.py -q |& tee .m10/pytest_m10.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m10/focused_exit_code.txt
+          exit 0
+
+      - name: Run trained M10 deployment experiment
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 1800s python scripts/m10_cpu_deployment.py --out .m10/experiment |& tee .m10/run.log
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m10/experiment_exit_code.txt
+          exit 0
+
+      - name: Verify M10 empirical acceptance gate
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY' |& tee .m10/evidence_check.txt
+          import json, pathlib, sys
+          root = pathlib.Path('.m10/experiment')
+          required = [
+              'trained_source.pt', 'training.json', 'training_curve.jsonl',
+              'spectra_cpu_v1.pt', 'artifact_manifest.json', 'backend_identity.json',
+              'fidelity.json', 'timing.json', 'profiler_trace.json', 'profiler_table.txt',
+              'profiler_record.json', 'summary.json', 'exact_commands.json', 'SUMMARY.md',
+              'data_manifest.json', 'environment.json',
+          ]
+          missing = [p for p in required if not (root / p).is_file()]
+          print('missing=', missing)
+          if missing: sys.exit(2)
+          s = json.loads((root / 'summary.json').read_text())
+          print(json.dumps(s, indent=2, sort_keys=True))
+          assert s['status'] == 'complete'
+          assert s['acceptance_pass'] is True
+          assert s['hard_ternary_verified'] is True
+          assert s['fidelity_pass'] is True
+          assert s['mixed_precision'] is True
+          assert s['full_integer_inference_claim'] is False
+          assert s['gelu_preserved'] is True
+          assert s['historical_fused_int8_ffn_used'] is False
+          assert s['bitnet_cpp_supported'] is False
+          assert s['backend']['bitnet_cpp_supported'] is False
+          assert s['backend']['vectorized'] is False
+          assert s['backend']['operator'] == 'packed_ternary_fp32_scalar_linear_v1'
+          f = s['fidelity']
+          assert all(v['pass'] for v in f['native_linears'].values())
+          assert f['block']['pass'] is True
+          assert f['cycle_y']['pass'] is True and f['cycle_z']['pass'] is True
+          assert f['full_heldout_16']['pass'] is True
+          assert f['full_heldout_16']['decoded_exact_all'] is True
+          assert f['full_heldout_16']['semantic_decision_exact_all'] is True
+          assert all(f['full_heldout_16']['step_decoded_exact'])
+          w = f['runtime_work_heldout_16']
+          assert w['native_linear_calls'] > 0
+          assert w['native_call_count_matches_architecture'] is True
+          assert w['native_linear_calls'] == w['expected_native_linear_calls']
+          assert s['profile']['runtime_work']['native_linear_calls'] > 0
+          assert s['profile']['prediction_matches_reference'] is True
+          assert (root / 'profiler_trace.json').stat().st_size > 0
+          t = s['timing']
+          for key in ['export_pack_write_seconds','cold_artifact_load_validate_seconds','cold_native_compile_load_seconds','warmed_mean_seconds']:
+              assert t[key] is not None and t[key] >= 0
+          print('M10_EVIDENCE_GATE=PASS')
+          PY
+          echo "$?" | tee .m10/evidence_check_exit_code.txt
+          exit 0
+
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 600s python -m pytest -m "not slow" -ra |& tee .m10/pytest_fast.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m10/fast_exit_code.txt
+          exit 0
+
+      - name: Record provenance and evidence hashes
+        if: always()
+        run: |
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "base=b667204da950aa989df13bb846166c7b1c2d761b"
+            echo
+            git diff --stat b667204da950aa989df13bb846166c7b1c2d761b...HEAD
+          } | tee .m10/diff_stat.txt
+          python - <<'PY' | tee .m10/evidence_sha256.txt
+          import hashlib, pathlib
+          root = pathlib.Path('.m10')
+          for p in sorted(q for q in root.rglob('*') if q.is_file() and q.name != 'evidence_sha256.txt'):
+              print(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.as_posix()}")
+          PY
+
+      - name: Upload M10 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m10-cpu-deployment-evidence
+          path: .m10/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce M10 acceptance execution
+        if: always()
+        run: |
+          compile=$(cat .m10/compile_exit_code.txt 2>/dev/null || echo 99)
+          focused=$(cat .m10/focused_exit_code.txt 2>/dev/null || echo 99)
+          experiment=$(cat .m10/experiment_exit_code.txt 2>/dev/null || echo 99)
+          evidence=$(cat .m10/evidence_check_exit_code.txt 2>/dev/null || echo 99)
+          fast=$(cat .m10/fast_exit_code.txt 2>/dev/null || echo 99)
+          echo "compile=$compile focused=$focused experiment=$experiment evidence=$evidence fast=$fast"
+          if [ "$compile" -ne 0 ] || [ "$focused" -ne 0 ] || [ "$experiment" -ne 0 ] || [ "$evidence" -ne 0 ] || [ "$fast" -ne 0 ]; then
+            echo "M10 acceptance failed; inspect retained evidence."
+            exit 1
+          fi
+          echo "M10 acceptance passed."
