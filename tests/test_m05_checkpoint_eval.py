@@ -278,3 +278,60 @@ def test_greedy_fixed_manifest_changes_only_realized_nsup_compute(tmp_path: Path
     assert by_setting[1] == by_setting[2] == manifest.dataset.ids
     assert rows[0]["realized_setting"]["ordinary_recursive_cycle_calls_per_example"] == 1
     assert rows[1]["realized_setting"]["ordinary_recursive_cycle_calls_per_example"] == 2
+
+
+def test_acceptance_every_learned_research_summary_identifies_trained_artifacts_and_execution(tmp_path: Path):
+    _, _, core, manifest = _make_artifacts(tmp_path)
+    verifier, action, _, _ = _trained_auxiliaries(tmp_path, core, manifest)
+    summaries, examples = run_checkpoint_scaling_grid(
+        [core],
+        manifest,
+        greedy_n_sup=[],
+        search_rollouts=[1, 2],
+        auxiliary_pairs=[(verifier, action)],
+        n_latency_runs=0,
+    )
+    assert len(summaries) == 2
+    assert len(examples) == 2 * len(manifest.dataset)
+    for row in summaries:
+        assert row["result_kind"] == "research_checkpoint"
+        assert row["checkpoint_sha256"] == core.sha256
+        assert row["checkpoint_global_step"] > 0
+        assert row["verifier_checkpoint_sha256"] == verifier.sha256
+        assert row["action_policy_checkpoint_sha256"] == action.sha256
+        assert row["evaluation_manifest_sha256"] == manifest.canonical_sha256
+        assert row["eval_backend"] == "pytorch_eager"
+        assert row["eval_device"] == "cpu"
+        assert row["eval_parameter_dtype"]
+        assert row["inference_setting"]["mode"] == "latent_mcts"
+        assert row["realized_setting"]["mode"] == "latent_mcts"
+        assert row["realized_setting"]["N_sup_consumed_by_search_transition"] is False
+        assert row["realized_setting"]["search_stochastic"] is False
+
+
+def test_acceptance_compute_knobs_change_intended_realized_computation(tmp_path: Path):
+    _, _, core, manifest = _make_artifacts(tmp_path)
+    verifier, action, _, _ = _trained_auxiliaries(tmp_path, core, manifest)
+
+    greedy, _ = run_checkpoint_scaling_grid(
+        [core], manifest, greedy_n_sup=[1, 2], search_rollouts=[],
+        auxiliary_pairs=[None], n_latency_runs=0,
+    )
+    assert greedy[0]["realized_setting"] != greedy[1]["realized_setting"]
+    assert greedy[0]["realized_compute_totals"]["ordinary_recursive_cycle_calls"] < (
+        greedy[1]["realized_compute_totals"]["ordinary_recursive_cycle_calls"]
+    )
+
+    search, _ = run_checkpoint_scaling_grid(
+        [core], manifest, greedy_n_sup=[], search_rollouts=[1, 2],
+        auxiliary_pairs=[(verifier, action)], n_latency_runs=0,
+    )
+    assert search[0]["realized_setting"] != search[1]["realized_setting"]
+    assert search[0]["realized_setting"]["mcts_rollouts"] == 1
+    assert search[1]["realized_setting"]["mcts_rollouts"] == 2
+    assert search[0]["realized_compute_totals"]["search_transition_calls"] < (
+        search[1]["realized_compute_totals"]["search_transition_calls"]
+    )
+    assert search[0]["realized_compute_totals"]["verifier_calls"] < (
+        search[1]["realized_compute_totals"]["verifier_calls"]
+    )
