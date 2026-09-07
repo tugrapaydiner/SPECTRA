@@ -56,7 +56,11 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          timeout 300s python -m pytest tests/test_kernel.py tests/test_kernel_contract.py -ra |& tee .m02/pytest_focused.txt
+          timeout 300s python -m pytest \
+            tests/test_kernel.py \
+            tests/test_kernel_contract.py \
+            tests/test_m02_acceptance_gate.py \
+            -ra |& tee .m02/pytest_focused.txt
 
       - name: Build PyTorch extension and check backend
         shell: bash
