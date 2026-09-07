@@ -1,7 +1,7 @@
 """Benchmark harness: accuracy + representative B=1 latency/memory/energy.
 
-M13 keeps physical package-energy availability explicit. Legacy callers should not
-interpret an unavailable counter as zero energy.
+M13 keeps physical package-energy availability explicit, times distinct examples,
+and labels current RSS separately from the sampled window-local peak.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import torch
 
 from eval.edge_energy import measure_energy_record
 from eval.latency import measure_latency
-from eval.memory import model_size_mb, process_rss_mb
+from eval.memory import measure_peak_ram, model_size_mb, process_rss_mb
 from eval.metrics import board_accuracy, cell_accuracy
 from eval.reports import edge_report
 from model.trm import TRM
@@ -55,14 +55,22 @@ def benchmark(model: TRM, x: torch.Tensor, y: torch.Tensor, height: int, width: 
 
     energy = measure_energy_record(representative_pass, n_runs=1)
     joules = (energy["energy_joules"] / n_energy) if energy["available"] else None
+    memory = measure_peak_ram(representative_pass, interval_s=0.001)
+    current_rss = process_rss_mb()
     report = edge_report(accuracy=acc["board_acc"], latency_ms=latency["latency_ms_mean"],
-        peak_ram_mb=process_rss_mb(), model_size_mb=model_size_mb(model),
+        peak_ram_mb=memory["process_rss_peak_sampled_mb"], model_size_mb=model_size_mb(model),
         joules_per_problem=joules, cell_acc=acc["cell_acc"],
         latency_ms_p95=latency["latency_ms_p95"])
     report["energy_available"] = bool(energy["available"])
     report["energy_failure_reason"] = energy["failure_reason"]
     report["energy_scope"] = energy["scope"]
     report["representative_latency_examples"] = latency["representative_examples"]
+    report["process_rss_current_mb"] = current_rss
+    report["process_rss_peak_sampled_mb"] = memory["process_rss_peak_sampled_mb"]
+    report["peak_ram_definition"] = memory["peak_ram_definition"]
+    report["rss_sampling_interval_ms"] = memory["sampling_interval_ms"]
+    report["rss_sampling_limitation"] = memory["sampling_limitation"]
+    report["linux_vmhwm_mb"] = memory["linux_vmhwm_after_mb"]
     return report
 
 
