@@ -323,7 +323,7 @@ The M01 known AVX2 shape/numerical boundary is closed for the documented M02 con
 
 ## Milestone 03 — trustworthy task/data/evaluation contracts
 
-**Stage status:** COMPLETE ON `research/m03-task-data-eval`; not merged at the time of this entry.
+**Stage status:** COMPLETE; accepted and merged to `main` before M04.
 
 M03 changes task/data construction, symbolic validation, task metrics, split/manifests, retained task configuration, tests, and audit infrastructure only. It does **not** change SPECTRA's reasoning/search/training algorithms.
 
@@ -340,7 +340,7 @@ M03 changes task/data construction, symbolic validation, task metrics, split/man
 - Manifest reference seed: `314159`
 - Manifest reference sizes for each retained task: train 8 / validation 4 / test 4
 - Generator version: `spectra-m03-data-v1`
-- A subsequent parity refinement also made the tensor Sudoku validator reject non-integral tensor dtypes to match the NumPy contract and added `tests/test_m03_validator_parity.py`; final branch CI must remain green before merge.
+- A subsequent parity refinement also made the tensor Sudoku validator reject non-integral tensor dtypes to match the NumPy contract and added `tests/test_m03_validator_parity.py`; the accepted final M03 branch-head gate was green before merge.
 
 ### Task-construction root cause and explicit retained contracts
 
@@ -477,4 +477,236 @@ No final accepted M03 check may be described as passing until the final branch g
 
 M03 closes the task/data/evaluation **contract** layer for the retained local experiments: construction is explicit, malformed Sudoku and false maze successes are rejected, primary metrics have distinct meanings, and split/manifests are reproducible and leakage-audited.
 
-**Next action:** stop here for M03. Do not expand this milestone into training/scaling/performance claims. Merge only after the final branch CI including the dtype-parity regression is green and the user accepts the milestone.
+**Next action:** stop here for M03. Do not expand this milestone into training/scaling/performance claims.
+
+---
+
+## Milestone 04 — reproducible training and checkpoint state
+
+**Stage status:** COMPLETE ON `research/m04-repro-checkpoints`; not merged at the time of this entry.
+
+M04 changes training construction/order, runtime precision declarations, checkpoint/resume state, deterministic sampling, EMA restoration, bounded validation, finite-value guards, training metrics, and reproducibility audit infrastructure. It does **not** change SPECTRA's reasoning/search algorithms or native kernel mathematics.
+
+### Verified implementation / evidence
+
+- M04 base: accepted M03 merge on `main`, `01638b10777029fb28bb35229e374f0865c6e5d4`
+- Green implementation head: `da86701c87cf9c5c4137ca5e1bc8508caa48ff69`
+- Green GitHub Actions run: `34079875098`
+- Job: `101613009001`
+- Evidence artifact: `m04-repro-training-evidence`, artifact id `10003360512`
+- Evidence ZIP SHA-256: `062b1695ccee50ebf9fd4d2c491e1ccbb5d60e82bc07c5128d58aa23ef28966e`
+- Evidence artifact size: 163,357 bytes; retention: 14 days
+- Focused M04/stability gate: **10 passed, 1 deselected in 5.51 s**
+- Full fast suite: **190 passed, 16 deselected in 60.89 s**
+- CI host: Ubuntu 24.04.4, Python 3.11.16, torch 2.14.0+cpu, NumPy 2.4.6, pytest 9.1.1
+- CUDA availability in the accepted implementation run: **false**
+
+### Root cause: seeding occurred after model/data construction
+
+Before M04, both `scripts/train_teacher.py` and `scripts/train_bit_student.py` constructed datasets and initialized the model before `Trainer.__init__`; the only call to `set_seed` lived inside `Trainer.__init__`. Therefore the configured seed did **not** determine the already-created data or initial model weights.
+
+M04 defines stable, independent SHA-256-derived streams from one experiment seed:
+
+- `data`: used before dataset construction
+- `model`: used before model initialization
+- `train`: used for training stochasticity and the private batch sampler
+- `eval`: used only inside an isolated validation RNG context
+
+Evaluation snapshots/restores the training RNG state, so bounded validation does not advance training randomness. The M04 reference run recorded:
+
+```text
+base  = 20260907
+data  = 5775192201672740212
+model = 1354837862885235148
+train = 1575798474109088405
+eval  = 241666879215927776
+```
+
+Two fresh reference builds using the same original seed produced **bitwise-identical initial model weights and bitwise-identical generated train/validation data**, even after the global RNGs were deliberately perturbed between constructions.
+
+### Actual precision/backend contract
+
+Compute precision is now a runtime/training setting rather than an informal model label:
+
+- `precision: fp32` means ordinary FP32 PyTorch eager compute.
+- `precision: fp16_amp` is an implemented CUDA path using `torch.autocast(device_type="cuda", dtype=torch.float16)` and `GradScaler`.
+- requesting `fp16_amp` on CPU is rejected; it cannot silently fall back to FP32 while retaining an FP16 label.
+- checkpoints record backend, device/device type, precision mode, parameter dtype, autocast dtype, and GradScaler use/state.
+
+The deterministic M04 reference used:
+
+```text
+backend         = pytorch_eager
+device           = cpu
+precision_mode   = fp32
+parameter_dtype  = float32
+autocast_dtype   = none
+grad_scaler      = false
+```
+
+The M04 CI host had no CUDA device. The CUDA `fp16_amp` path is therefore **implemented but not executed/validated by this milestone**, and M04 makes no universal GPU bitwise-determinism claim.
+
+### Versioned checkpoint format
+
+`train/checkpoint.py` defines:
+
+```text
+format  = spectra.training
+version = 1
+```
+
+A resume-capable M04 checkpoint records:
+
+- raw model state used for continued training
+- EMA state used for EMA evaluation
+- explicit `training_identity = raw`
+- explicit `evaluation_identity = ema`
+- resolved architecture/model configuration
+- task/data configuration and train/validation dataset SHA-256 fingerprints
+- actual backend/device/precision settings
+- resolved run configuration
+- optimizer state
+- scheduler state
+- global step and examples seen
+- original schedule signature, including the original `max_steps`
+- quantization enabled state, quantization warmup schedule, and current per-layer quantization strengths
+- GradScaler state when AMP is active
+- Python RNG state
+- NumPy RNG state
+- PyTorch CPU RNG state
+- CUDA RNG states when available
+- deterministic sampler state: private generator, epoch, permutation, next position, batch size, dataset size, seed, and drop-last policy
+
+Writes use a same-directory temporary file, flush/fsync, and atomic `os.replace`; failed writes clean up the temporary file.
+
+### Legacy checkpoint compatibility and EMA identity
+
+The supported historical format `{model: state_dict, ema: state_dict?}` is explicitly validated/migrated as `spectra.legacy_weights` **weights-only** state.
+
+Those legacy files are not declared resume-capable because they never contained optimizer, scheduler, RNG, sampler, or global-step state. Asking to deterministically resume one fails loudly.
+
+Raw and EMA identities are never silently substituted. If EMA weights are requested but absent, loading fails. Resume-capable M04 checkpoints require EMA state when they declare EMA as the evaluation identity.
+
+### Deterministic sampler/resume contract
+
+`StatefulBatchSampler` owns a private CPU `torch.Generator` and stores the current permutation and next index position. The M04 deterministic contract uses `num_workers=0`, so the recorded sampler position corresponds to the next batch actually consumed.
+
+Deterministic resume additionally validates that the current architecture, task/data fingerprints, original schedule, backend, device type, and precision match the checkpoint. Changing those fields rejects deterministic resume instead of silently continuing under a different experiment.
+
+### Fixed M04 CPU reference
+
+`config/m04_cpu_reference.yaml` deliberately keeps the reproducibility experiment small:
+
+- 4×4 Sudoku, box size 2
+- vocabulary 5, sequence length 16
+- exactly 8 clues, uniqueness required
+- random-backtracking completed boards
+- no augmentation
+- model dimension 16
+- one block, 2 heads
+- `n=1`, `T=1`, `N_sup=1`
+- batch size 4
+- original schedule: **8 optimizer steps**
+- LR `5e-4`, LR warmup 2
+- weight decay 0
+- EMA decay 0.9
+- gradient clip norm 1.0
+- `lambda_h=0`, `lambda_improve=0`, `margin=0`
+- validation bounded to 2 batches
+- CPU FP32 eager compute
+- deterministic algorithms enabled
+
+The reference intentionally uses the simple task cross-entropy objective before optional regularizers. Its tiny accuracy is not a scientific task-capability result.
+
+### Interrupted/resumed equivalence
+
+The audit compared:
+
+1. one uninterrupted run to step 8, and
+2. a separate fresh run interrupted at step 4, checkpointed, reconstructed from fresh Python/model/data objects, restored, then continued to step 8 **without changing the original 8-step scheduler/quantization horizon**.
+
+Declared comparison tolerance:
+
+```text
+absolute tolerance = 1e-7
+relative tolerance = 1e-6
+```
+
+Observed on the M04 CPU reference:
+
+```text
+raw-weight maximum absolute difference = 0.0
+EMA-weight maximum absolute difference = 0.0
+sampler epoch/position/permutation equal = true
+full final cell accuracy    = 0.15625
+resumed final cell accuracy = 0.15625
+full final board accuracy    = 0.0
+resumed final board accuracy = 0.0
+```
+
+Thus the tested CPU reference is bitwise equal on the compared raw/EMA tensors, which is stronger than the declared tolerance. The documented guarantee remains the declared tolerance on this bounded CPU configuration, not a universal bitwise-determinism promise.
+
+### Bounded validation, finite checks, and metrics
+
+Validation now:
+
+- has an explicit positive `eval_batches` bound
+- uses deterministic validation order
+- defaults to EMA weights and reports `weight_identity = ema`
+- runs under the isolated eval RNG stream without consuming the training RNG
+- reports evaluated batch/example counts
+
+Training now hard-fails on:
+
+- non-finite loss before backward
+- non-finite gradients after backward/unscale
+- non-finite gradient clipping result (`error_if_nonfinite=True`)
+- non-finite parameters after the optimizer step
+
+Recorded training metrics include loss, raw/clipped gradient norms, LR, quantization strength, train cell accuracy, batch size/examples seen, bounded validation cell/board accuracy, per-step accuracy, collapse diagnostics, and explicit raw/EMA evaluation identity.
+
+### Exact M04 evidence commands
+
+```bash
+python -m pytest \
+  tests/test_m04_repro_checkpoint.py \
+  tests/test_stability.py \
+  -m "not slow" -ra
+
+python scripts/m04_repro_audit.py \
+  --config config/m04_cpu_reference.yaml \
+  --train-size 24 --val-size 12 \
+  --out .m04/repro_audit.json
+
+python scripts/train_teacher.py \
+  --config config/m04_cpu_reference.yaml \
+  --train-size 24 --val-size 12 \
+  --out .m04/cli_teacher
+
+python -m pytest -m "not slow" -ra
+```
+
+The teacher CLI smoke created `teacher.pt`, and independent readback confirmed format `spectra.training`, version 1, CPU/FP32/eager runtime, `global_step=8`, raw training identity, EMA evaluation identity, and sampler state.
+
+### M04 failures/iterations retained explicitly
+
+The final implementation gate is green. Two intermediate failures were preserved and fixed without relaxing the tests or tolerance:
+
+1. The first standalone `scripts/m04_repro_audit.py` CI execution failed with `ModuleNotFoundError: common` because the direct script lacked the repository-root bootstrap used by the other scripts. The entry point was fixed; the focused reproducibility test had already passed, and no tolerance changed.
+2. After the standalone audit passed with zero weight differences, the teacher CLI exposed a duplicate `step` argument in metric logging: the evaluation row contained `step` while `MetricLogger.log` also used `step` as its positional parameter name. The logger now accepts an authoritative `global_step`, permits a row `step` only when equal, and emits exactly one consistent step value. No training mathematics changed.
+
+### Remaining limitations / unsupported claims
+
+- Deterministic interruption/resumption is explicitly proven only for the bounded CPU FP32 eager reference with `num_workers=0` and matching architecture/task/data/original schedule/backend/precision.
+- CUDA was unavailable in M04 CI. The real CUDA FP16-AMP path exists but was not exercised by this milestone.
+- M04 does **not** claim universal GPU bitwise determinism, reproducibility across GPU models/drivers/kernel libraries, distributed training determinism, or deterministic multi-worker data loading.
+- A legacy `{model, ema}` checkpoint can be migrated for explicit weight loading but cannot be used as a full deterministic training resume state.
+- The checkpoint cannot reconstruct a dataset from nothing; it fingerprints the train/validation datasets/config and requires the caller to reconstruct the matching experiment before resume.
+- The tiny 8-step 4×4 Sudoku reference exists to verify training-state mechanics. Its `0.15625` cell accuracy and zero board accuracy are not evidence of trained reasoning quality.
+- M04 does not establish scaling laws, search advantage, production training convergence, energy savings, or target-hardware performance.
+
+### M04 decision
+
+M04 closes the bounded **training-state reproducibility** layer for the tested CPU reference: seeding precedes data/model construction, data/model/train/eval RNG streams are separated, actual precision is declared, checkpoints preserve the state needed for exact tested CPU resumption, EMA identity cannot be silently changed, and failures are loud.
+
+**Next action:** stop here for M04. Do not broaden this milestone into GPU-determinism, trained-capability, scaling, energy, or hardware-performance claims. Merge only after the final documentation-inclusive branch-head CI is green and the user accepts the milestone.
