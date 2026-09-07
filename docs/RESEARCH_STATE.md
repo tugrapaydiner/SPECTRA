@@ -323,7 +323,7 @@ The M01 known AVX2 shape/numerical boundary is closed for the documented M02 con
 
 ## Milestone 03 — trustworthy task/data/evaluation contracts
 
-**Stage status:** COMPLETE; accepted and merged to `main` before M04.
+**Stage status:** COMPLETE ON `research/m03-task-data-eval`; accepted and merged to `main` as `01638b10777029fb28bb35229e374f0865c6e5d4` before M04.
 
 M03 changes task/data construction, symbolic validation, task metrics, split/manifests, retained task configuration, tests, and audit infrastructure only. It does **not** change SPECTRA's reasoning/search/training algorithms.
 
@@ -340,7 +340,7 @@ M03 changes task/data construction, symbolic validation, task metrics, split/man
 - Manifest reference seed: `314159`
 - Manifest reference sizes for each retained task: train 8 / validation 4 / test 4
 - Generator version: `spectra-m03-data-v1`
-- A subsequent parity refinement also made the tensor Sudoku validator reject non-integral tensor dtypes to match the NumPy contract and added `tests/test_m03_validator_parity.py`; the accepted final M03 branch-head gate was green before merge.
+- A subsequent parity refinement also made the tensor Sudoku validator reject non-integral tensor dtypes to match the NumPy contract and added `tests/test_m03_validator_parity.py`; final branch CI must remain green before merge.
 
 ### Task-construction root cause and explicit retained contracts
 
@@ -490,16 +490,16 @@ M04 changes training construction/order, runtime precision declarations, checkpo
 ### Verified implementation / evidence
 
 - M04 base: accepted M03 merge on `main`, `01638b10777029fb28bb35229e374f0865c6e5d4`
-- Green implementation head: `da86701c87cf9c5c4137ca5e1bc8508caa48ff69`
-- Green GitHub Actions run: `34079875098`
-- Job: `101613009001`
-- Evidence artifact: `m04-repro-training-evidence`, artifact id `10003360512`
-- Evidence ZIP SHA-256: `062b1695ccee50ebf9fd4d2c491e1ccbb5d60e82bc07c5128d58aa23ef28966e`
-- Evidence artifact size: 163,357 bytes; retention: 14 days
-- Focused M04/stability gate: **10 passed, 1 deselected in 5.51 s**
-- Full fast suite: **190 passed, 16 deselected in 60.89 s**
+- Green implementation head before acceptance refinement: `da86701c87cf9c5c4137ca5e1bc8508caa48ff69`
+- Green implementation workflow run: `34079875098`
+- Acceptance-specific quantization-resume refinement commit: `0cb317f1a027131a43994b35c892cd26215934c3`
+- Acceptance-specific green workflow run: `34080803213`
+- Acceptance-specific evidence artifact: `m04-repro-training-evidence`, artifact id `10003645300`
+- Acceptance-specific evidence ZIP SHA-256: `8bdda5f18d5adbeb60ee2fd24d7b76e126bef652615eba9a5ba8d0ea9ce37f99`
+- Focused M04/stability gate after acceptance refinement: **11 passed, 1 deselected in 5.85 s**
+- Full fast suite after acceptance refinement: **191 passed, 16 deselected in 63.57 s**
 - CI host: Ubuntu 24.04.4, Python 3.11.16, torch 2.14.0+cpu, NumPy 2.4.6, pytest 9.1.1
-- CUDA availability in the accepted implementation run: **false**
+- CUDA availability in the recorded M04 runs: **false**
 
 ### Root cause: seeding occurred after model/data construction
 
@@ -646,6 +646,23 @@ resumed final board accuracy = 0.0
 
 Thus the tested CPU reference is bitwise equal on the compared raw/EMA tensors, which is stronger than the declared tolerance. The documented guarantee remains the declared tolerance on this bounded CPU configuration, not a universal bitwise-determinism promise.
 
+### Acceptance-gate ternary quantization resume regression
+
+Acceptance review found one evidence gap: the main interruption/resume audit above used the non-ternary reference, while quantization state had only been serialization-tested. M04 therefore added `test_ternary_resume_restores_quantization_state_and_continuation`.
+
+That regression uses a four-step ternary CPU/FP32 run with `quant_warmup_steps=4`:
+
+- uninterrupted reference trains through step 4;
+- a second run is interrupted at step 2, where every recorded per-layer quantization strength is `rho=0.5`;
+- a freshly constructed ternary model starts at its default `rho=1.0`;
+- `load_checkpoint` is required to restore the checkpointed `rho=0.5` **before another training step occurs**;
+- the original quantization warmup horizon remains 4 steps;
+- resumed training continues to step 4 and finishes at `rho=1.0`;
+- final raw model state and EMA state match the uninterrupted ternary reference within the same M04 tolerance;
+- final scheduler LR, sampler epoch/position/permutation, and per-layer quantization strengths also match the uninterrupted reference.
+
+This closes the acceptance requirement that quantization state be preserved by a **tested resume path**, not merely present in serialized metadata.
+
 ### Bounded validation, finite checks, and metrics
 
 Validation now:
@@ -690,14 +707,16 @@ The teacher CLI smoke created `teacher.pt`, and independent readback confirmed f
 
 ### M04 failures/iterations retained explicitly
 
-The final implementation gate is green. Two intermediate failures were preserved and fixed without relaxing the tests or tolerance:
+The final implementation gate is green. Two intermediate failures and one acceptance-evidence refinement were preserved without relaxing tests or tolerance:
 
 1. The first standalone `scripts/m04_repro_audit.py` CI execution failed with `ModuleNotFoundError: common` because the direct script lacked the repository-root bootstrap used by the other scripts. The entry point was fixed; the focused reproducibility test had already passed, and no tolerance changed.
 2. After the standalone audit passed with zero weight differences, the teacher CLI exposed a duplicate `step` argument in metric logging: the evaluation row contained `step` while `MetricLogger.log` also used `step` as its positional parameter name. The logger now accepts an authoritative `global_step`, permits a row `step` only when equal, and emits exactly one consistent step value. No training mathematics changed.
+3. Acceptance review found that the general resume audit was non-ternary. A dedicated ternary interruption/resume regression was added rather than inferring quantization restoration from serialization alone.
 
 ### Remaining limitations / unsupported claims
 
-- Deterministic interruption/resumption is explicitly proven only for the bounded CPU FP32 eager reference with `num_workers=0` and matching architecture/task/data/original schedule/backend/precision.
+- Deterministic interruption/resumption is explicitly proven only for bounded CPU FP32 eager references with `num_workers=0` and matching architecture/task/data/original schedule/backend/precision.
+- The acceptance-specific quantization test is a tiny four-step ternary warmup regression, not evidence of large-scale QAT convergence.
 - CUDA was unavailable in M04 CI. The real CUDA FP16-AMP path exists but was not exercised by this milestone.
 - M04 does **not** claim universal GPU bitwise determinism, reproducibility across GPU models/drivers/kernel libraries, distributed training determinism, or deterministic multi-worker data loading.
 - A legacy `{model, ema}` checkpoint can be migrated for explicit weight loading but cannot be used as a full deterministic training resume state.
@@ -707,6 +726,6 @@ The final implementation gate is green. Two intermediate failures were preserved
 
 ### M04 decision
 
-M04 closes the bounded **training-state reproducibility** layer for the tested CPU reference: seeding precedes data/model construction, data/model/train/eval RNG streams are separated, actual precision is declared, checkpoints preserve the state needed for exact tested CPU resumption, EMA identity cannot be silently changed, and failures are loud.
+M04 closes the bounded **training-state reproducibility** layer for the tested CPU references: seeding precedes data/model construction, data/model/train/eval RNG streams are separated, actual precision is declared, checkpoints preserve the state needed for exact tested CPU resumption, quantization schedule/strength is restored on the tested ternary path, EMA identity cannot be silently changed, and failures are loud.
 
 **Next action:** stop here for M04. Do not broaden this milestone into GPU-determinism, trained-capability, scaling, energy, or hardware-performance claims. Merge only after the final documentation-inclusive branch-head CI is green and the user accepts the milestone.
