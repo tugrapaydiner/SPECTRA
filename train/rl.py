@@ -1,20 +1,13 @@
-"""Dense, verifier-bootstrapped RL for the router/halter (BLUEPRINT section 5.5).
+"""Actor-critic utilities for SPECTRA adaptive execution.
 
-This replaces the terminal-only REINFORCE objective (``router_reinforce_loss``)
-with a proper actor-critic that assigns *per-step* credit:
+The pre-M12 helpers are retained for compatibility, but M12 adds the contracts
+needed by a real router/halter episode: per-example valid/terminal/truncation
+masks, policy-invariant grounded potential shaping, and explicit decision masks
+so forced environment actions never receive policy-gradient credit.
 
-    r_k  = (V^psi_{k+1} - V^psi_k)            # dense verifier value delta (shaping)
-           - lambda_tokens * |A_k|/L          # active-token compute penalty
-           - lambda_step                      # per-step latency penalty
-           - lambda_E * dE_k                   # measured/estimated energy penalty
-    delta_k = r_k + gamma * V_phi(z^{k+1}) - V_phi(z^k)     # TD residual
-    A_k     = sum_l (gamma*lambda)^l delta_{k+l}            # GAE-lambda
-    R_k     = A_k + V_phi(z^k)                              # bootstrapped return
-
-where ``V^psi_k = -E_psi(x, z^k)`` is the (frozen) neural energy verifier's value
-of the latent state, and ``V_phi`` is the *learned* critic (``LatentValueHead``).
-The policy gradient weights each step's routing log-prob by its own advantage --
-the dense credit assignment the blueprint's section 5.5 actually specifies.
+M12's optimized cost is a *logical step/token proxy*.  Nothing in this module
+turns those proxies into measured energy; joules require the separate physical
+measurement protocol.
 """
 
 from __future__ import annotations
@@ -36,22 +29,14 @@ def dense_step_rewards(
     lambda_step: float = 0.01,
     lambda_energy: float = 0.0,
 ) -> torch.Tensor:
-    """Per-step rewards ``r_k`` ``[K, B]`` (BLUEPRINT section 5.5).
+    """Legacy dense reward helper retained for existing experiments.
 
-    Args:
-        verifier_values: ``V^psi_k = -E_psi(x, z^k)`` for each latent, shape
-            ``[K+1, B]`` (the extra entry bootstraps the final transition).
-        active_density: Active-token fraction ``|A_k|/L`` per step ``[K, B]``.
-        energy_delta: Optional incremental energy ``dE_k`` per step ``[K, B]``.
-        terminal_reward: Optional sparse final reward ``[B]`` added at the last
-            step (e.g. ``1[correct] - lambda_E * E_measured``).
-        lambda_tokens / lambda_step / lambda_energy: Penalty weights.
-
-    Returns:
-        Per-step reward tensor ``[K, B]``.
+    This historical helper uses ``Phi(next)-Phi(current)`` and therefore is only
+    the canonical potential-based form when the return discount is one.  M12 uses
+    :func:`grounded_step_rewards`, which explicitly implements
+    ``gamma*Phi(next)-Phi(current)`` plus terminal treatment.
     """
-    # Dense potential-based shaping from the verifier value (V_{k+1} - V_k).
-    verifier_delta = verifier_values[1:] - verifier_values[:-1]  # [K, B]
+    verifier_delta = verifier_values[1:] - verifier_values[:-1]
     rewards = verifier_delta - lambda_tokens * active_density - lambda_step
     if energy_delta is not None:
         rewards = rewards - lambda_energy * energy_delta
@@ -61,39 +46,260 @@ def dense_step_rewards(
     return rewards
 
 
+def _shape_kb(name: str, value: torch.Tensor, shape: tuple[int, int]) -> None:
+    if tuple(value.shape) != shape:
+        raise ValueError(f"{name} must have shape {shape}, got {tuple(value.shape)}")
+
+
+def grounded_step_rewards(
+    potentials: torch.Tensor,
+    active_density: torch.Tensor,
+    valid_mask: torch.Tensor,
+    terminated: torch.Tensor,
+    truncated: torch.Tensor,
+    success: torch.Tensor,
+    voluntary_halt_unsolved: torch.Tensor,
+    *,
+    gamma: float = 0.99,
+    success_reward: float = 1.0,
+    halt_failure_penalty: float = 0.25,
+    lambda_step: float = 0.01,
+    lambda_token: float = 0.02,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """M12 grounded reward with explicit terminal/truncation semantics.
+
+    ``potentials`` is ``[K+1,B]`` from the *frozen* grounded verifier.  All other
+    tensors are ``[K,B]``.  For a true terminal, the effective next potential is
+    zero.  A time-limit truncation keeps the real next potential.  The shaping
+    term is therefore exactly ``gamma*Phi(next_effective)-Phi(current)``.
+
+    Step/token charges are declared logical compute proxies, not energy.
+    """
+    if potentials.ndim != 2:
+        raise ValueError("potentials must have shape [K+1,B]")
+    k_steps, batch = potentials.shape[0] - 1, potentials.shape[1]
+    if k_steps <= 0:
+        raise ValueError("potentials must contain at least two states")
+    shape = (k_steps, batch)
+    for name, tensor in (
+        ("active_density", active_density), ("valid_mask", valid_mask),
+        ("terminated", terminated), ("truncated", truncated), ("success", success),
+        ("voluntary_halt_unsolved", voluntary_halt_unsolved),
+    ):
+        _shape_kb(name, tensor, shape)
+    if not 0.0 <= float(gamma) <= 1.0:
+        raise ValueError("gamma must be in [0,1]")
+    if bool((active_density < 0).any()) or bool((active_density > 1).any()):
+        raise ValueError("active_density must lie in [0,1]")
+
+    valid = valid_mask.bool()
+    term = terminated.bool()
+    trunc = truncated.bool()
+    succ = success.bool()
+    bad_halt = voluntary_halt_unsolved.bool()
+    if bool((term & trunc & valid).any()):
+        raise ValueError("a valid transition cannot be both terminated and truncated")
+    if bool((succ & ~term & valid).any()):
+        raise ValueError("exact success must be a terminal transition")
+    if bool((bad_halt & ~term & valid).any()):
+        raise ValueError("voluntary unsolved halt must be a terminal transition")
+
+    v = valid.to(potentials.dtype)
+    terminal_f = term.to(potentials.dtype)
+    success_f = succ.to(potentials.dtype)
+    bad_halt_f = bad_halt.to(potentials.dtype)
+
+    step_proxy = float(lambda_step) * v
+    token_proxy = float(lambda_token) * active_density.to(potentials.dtype) * v
+    base = (
+        float(success_reward) * success_f
+        - float(halt_failure_penalty) * bad_halt_f
+        - step_proxy
+        - token_proxy
+    )
+
+    next_phi = potentials[1:]
+    effective_next = next_phi * (1.0 - terminal_f)
+    shaping = (float(gamma) * effective_next - potentials[:-1]) * v
+    rewards = (base + shaping) * v
+    return rewards, {
+        "base_reward": base.detach(),
+        "potential_shaping": shaping.detach(),
+        "step_proxy_cost": step_proxy.detach(),
+        "token_proxy_cost": token_proxy.detach(),
+        "total_proxy_cost": (step_proxy + token_proxy).detach(),
+    }
+
+
 def compute_gae(
     rewards: torch.Tensor,
     values: torch.Tensor,
     gamma: float = 0.99,
     lam: float = 0.95,
     last_is_terminal: bool = True,
+    *,
+    valid_mask: torch.Tensor | None = None,
+    terminated: torch.Tensor | None = None,
+    truncated: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Generalized Advantage Estimation (Schulman et al., 2016).
+    """Generalized Advantage Estimation with per-example episode boundaries.
 
-    Args:
-        rewards: Per-step rewards ``[K, B]``.
-        values: Critic values ``V_phi(z^k)`` for ``k = 0..K``, shape ``[K+1, B]``
-            (``values[K]`` bootstraps the return past the last step).
-        gamma: Discount factor.
-        lam: GAE lambda (bias/variance trade-off).
-        last_is_terminal: If True, the episode ends after step ``K-1`` so the
-            bootstrap past the final step is masked out.
+    ``rewards`` is ``[K,B]`` and ``values`` is ``[K+1,B]``.  M12 semantics:
 
-    Returns:
-        ``(advantages [K, B], returns [K, B])``. ``returns = advantages +
-        values[:K]`` are the critic regression targets.
+    - a true ``terminated`` transition does **not** bootstrap;
+    - a ``truncated`` transition **does** bootstrap from ``values[k+1]``;
+    - both termination and truncation stop the GAE trace because no later sampled
+      transition belongs to that rollout segment;
+    - invalid post-episode slots contribute exactly zero.
+
+    The historical ``last_is_terminal`` argument remains as a compatibility
+    shorthand when no explicit masks are supplied.
     """
-    k_steps = rewards.shape[0]
+    if rewards.ndim != 2 or values.ndim != 2:
+        raise ValueError("rewards/values must be rank-2 [K,B]/[K+1,B]")
+    k_steps, batch = rewards.shape
+    if tuple(values.shape) != (k_steps + 1, batch):
+        raise ValueError(
+            f"values must have shape {(k_steps + 1, batch)}, got {tuple(values.shape)}"
+        )
+    if not 0.0 <= float(gamma) <= 1.0 or not 0.0 <= float(lam) <= 1.0:
+        raise ValueError("gamma and lam must lie in [0,1]")
+
+    shape = (k_steps, batch)
+    explicit = any(x is not None for x in (valid_mask, terminated, truncated))
+    if valid_mask is None:
+        valid = torch.ones(shape, dtype=torch.bool, device=rewards.device)
+    else:
+        _shape_kb("valid_mask", valid_mask, shape)
+        valid = valid_mask.bool()
+    if terminated is None:
+        term = torch.zeros(shape, dtype=torch.bool, device=rewards.device)
+        if not explicit and last_is_terminal and k_steps:
+            term[-1] = True
+    else:
+        _shape_kb("terminated", terminated, shape)
+        term = terminated.bool()
+    if truncated is None:
+        trunc = torch.zeros(shape, dtype=torch.bool, device=rewards.device)
+    else:
+        _shape_kb("truncated", truncated, shape)
+        trunc = truncated.bool()
+    if bool((term & trunc & valid).any()):
+        raise ValueError("a valid transition cannot be both terminated and truncated")
+
     advantages = torch.zeros_like(rewards)
-    last_adv = torch.zeros_like(rewards[0])
+    last_adv = torch.zeros_like(rewards[0]) if k_steps else rewards.new_zeros(batch)
     for k in reversed(range(k_steps)):
-        # Non-terminal mask for the bootstrap of step k -> k+1.
-        nonterminal = 0.0 if (k == k_steps - 1 and last_is_terminal) else 1.0
-        delta = rewards[k] + gamma * values[k + 1] * nonterminal - values[k]
-        last_adv = delta + gamma * lam * nonterminal * last_adv
+        vk = valid[k]
+        bootstrap = vk & ~term[k]
+        trace = vk & ~term[k] & ~trunc[k]
+        delta = (
+            rewards[k]
+            + float(gamma) * values[k + 1] * bootstrap.to(values.dtype)
+            - values[k]
+        )
+        delta = delta * vk.to(delta.dtype)
+        candidate = delta + float(gamma) * float(lam) * trace.to(delta.dtype) * last_adv
+        last_adv = torch.where(vk, candidate, torch.zeros_like(candidate))
         advantages[k] = last_adv
-    returns = advantages + values[:k_steps]
+
+    returns = (advantages + values[:k_steps]) * valid.to(values.dtype)
     return advantages, returns
+
+
+def _masked_standardize(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    out = values.detach().clone()
+    selected = out[mask]
+    if selected.numel() > 1:
+        mean = selected.mean()
+        std = selected.std(unbiased=False)
+        if float(std) > 0.0:
+            out = (out - mean) / (std + 1e-8)
+        else:
+            out = out - mean
+    return out
+
+
+def masked_policy_objective(
+    logprobs: torch.Tensor,
+    entropies: torch.Tensor,
+    advantages: torch.Tensor,
+    decision_mask: torch.Tensor,
+    *,
+    normalize_adv: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor, int]:
+    """Policy loss/entropy over decisions the policy actually made.
+
+    Forced actions are represented by ``decision_mask=False`` and therefore have
+    exactly zero gradient contribution even if a caller stores arbitrary synthetic
+    log-probabilities in those slots.
+    """
+    if not (logprobs.shape == entropies.shape == advantages.shape == decision_mask.shape):
+        raise ValueError("policy tensors and decision_mask must have identical [K,B] shape")
+    mask = decision_mask.bool()
+    count = int(mask.sum().item())
+    if count == 0:
+        zero = (logprobs * 0.0).sum()
+        return zero, (entropies * 0.0).sum(), 0
+    adv = _masked_standardize(advantages, mask) if normalize_adv else advantages.detach()
+    denom = decision_mask.to(logprobs.dtype).sum().clamp_min(1.0)
+    policy = -(adv * logprobs * decision_mask.to(logprobs.dtype)).sum() / denom
+    entropy = (entropies * decision_mask.to(entropies.dtype)).sum() / denom
+    return policy, entropy, count
+
+
+def masked_value_loss(
+    critic_values: torch.Tensor,
+    returns: torch.Tensor,
+    valid_mask: torch.Tensor,
+) -> torch.Tensor:
+    if not (critic_values.shape == returns.shape == valid_mask.shape):
+        raise ValueError("critic_values/returns/valid_mask must have identical [K,B] shape")
+    mask = valid_mask.bool()
+    if int(mask.sum()) == 0:
+        return (critic_values * 0.0).sum()
+    error = (critic_values - returns.detach()).square()
+    return (error * valid_mask.to(error.dtype)).sum() / valid_mask.to(error.dtype).sum()
+
+
+def grounded_actor_critic_loss(
+    *,
+    router_logprobs: torch.Tensor,
+    router_entropies: torch.Tensor,
+    router_decisions: torch.Tensor,
+    halter_logprobs: torch.Tensor,
+    halter_entropies: torch.Tensor,
+    halter_decisions: torch.Tensor,
+    advantages: torch.Tensor,
+    returns: torch.Tensor,
+    critic_values: torch.Tensor,
+    valid_mask: torch.Tensor,
+    value_coef: float = 0.5,
+    entropy_coef: float = 0.01,
+    normalize_adv: bool = True,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    """M12 joint actor-critic objective with separate router/halter telemetry."""
+    router_loss, router_entropy, router_n = masked_policy_objective(
+        router_logprobs, router_entropies, advantages, router_decisions,
+        normalize_adv=normalize_adv,
+    )
+    halter_loss, halter_entropy, halter_n = masked_policy_objective(
+        halter_logprobs, halter_entropies, advantages, halter_decisions,
+        normalize_adv=normalize_adv,
+    )
+    value_loss = masked_value_loss(critic_values, returns, valid_mask)
+    entropy_bonus = router_entropy + halter_entropy
+    total = router_loss + halter_loss + float(value_coef) * value_loss - float(entropy_coef) * entropy_bonus
+    return total, {
+        "router_policy": float(router_loss.detach()),
+        "halter_policy": float(halter_loss.detach()),
+        "value": float(value_loss.detach()),
+        "router_entropy": float(router_entropy.detach()),
+        "halter_entropy": float(halter_entropy.detach()),
+        "router_decisions": float(router_n),
+        "halter_decisions": float(halter_n),
+        "total": float(total.detach()),
+    }
 
 
 def dense_actor_critic_loss(
@@ -106,53 +312,28 @@ def dense_actor_critic_loss(
     entropy_coef: float = 0.01,
     normalize_adv: bool = True,
 ) -> tuple[torch.Tensor, dict[str, float]]:
-    """Actor-critic loss with per-step GAE advantages.
-
-    Args:
-        step_logprobs: Summed action log-prob per step ``[K, B]`` (e.g. routing
-            log-probs summed over tokens, or the halt-decision log-prob).
-        step_entropies: Policy entropy per step ``[K, B]`` (exploration bonus).
-        advantages: GAE advantages ``[K, B]`` (detached from the critic).
-        returns: Critic regression targets ``[K, B]``.
-        critic_values: ``V_phi(z^k)`` predictions for ``k=0..K-1`` ``[K, B]``
-            (these carry gradient to the value head).
-        value_coef / entropy_coef: Loss weights.
-        normalize_adv: Standardize advantages across the batch (stabilises PG).
-
-    Returns:
-        ``(total_loss, components)``.
-    """
-    adv = advantages.detach()
-    if normalize_adv and adv.numel() > 1:
-        adv = (adv - adv.mean()) / (adv.std() + 1e-8)
-
-    # Per-step policy gradient: each step weighted by ITS OWN advantage.
-    policy_loss = -(adv * step_logprobs).mean()
-    value_loss = F.mse_loss(critic_values, returns.detach())
-    entropy_loss = -step_entropies.mean()
-
-    total = policy_loss + value_coef * value_loss + entropy_coef * entropy_loss
+    """Backward-compatible dense single-actor objective."""
+    mask = torch.ones_like(step_logprobs, dtype=torch.bool)
+    policy_loss, entropy, _ = masked_policy_objective(
+        step_logprobs, step_entropies, advantages, mask,
+        normalize_adv=normalize_adv,
+    )
+    value_loss = masked_value_loss(critic_values, returns, mask)
+    total = policy_loss + float(value_coef) * value_loss - float(entropy_coef) * entropy
     return total, {
         "policy": float(policy_loss.detach()),
         "value": float(value_loss.detach()),
-        "entropy": float((-entropy_loss).detach()),
+        "entropy": float(entropy.detach()),
         "total": float(total.detach()),
     }
 
 
-# value_fn(x [B, L], z [B, L, D]) -> verifier value [B]  (V^psi = -E_psi)
+# value_fn(x [B, L], z [B, L, D]) -> legacy verifier value [B]
 VerifierValueFn = Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
 
 
 def make_target_critic(value_head: nn.Module) -> nn.Module:
-    """Frozen target copy of the critic for stationary TD bootstrapping.
-
-    Recursive cores share weights across steps, so the critic's input latent ``z``
-    moves as ``f_theta`` updates -- a violently non-stationary regression target.
-    Bootstrapping GAE from a slowly-tracking *target* critic (Polyak-updated via
-    :func:`soft_update`) decouples the targets from the actor's shifting latent
-    space, the standard DQN/actor-critic stabilisation.
-    """
+    """Frozen target copy of the online critic."""
     target = copy.deepcopy(value_head)
     for p in target.parameters():
         p.requires_grad_(False)
@@ -161,9 +342,11 @@ def make_target_critic(value_head: nn.Module) -> nn.Module:
 
 @torch.no_grad()
 def soft_update(target: nn.Module, online: nn.Module, tau: float = 0.01) -> None:
-    """Polyak update: ``target <- (1 - tau) * target + tau * online``."""
+    """Polyak update: ``target <- (1-tau)*target + tau*online``."""
+    if not 0.0 <= float(tau) <= 1.0:
+        raise ValueError("tau must lie in [0,1]")
     for tp, op in zip(target.parameters(), online.parameters()):
-        tp.mul_(1.0 - tau).add_(op.detach(), alpha=tau)
+        tp.mul_(1.0 - float(tau)).add_(op.detach(), alpha=float(tau))
 
 
 def rollout_router_gae(
@@ -184,16 +367,10 @@ def rollout_router_gae(
     value_coef: float = 0.5,
     entropy_coef: float = 0.01,
 ) -> tuple[torch.Tensor, dict[str, float], dict[str, torch.Tensor]]:
-    """Run one instrumented recursive rollout and return the dense AC loss.
+    """Legacy dense router-only rollout retained for prior tests/experiments.
 
-    Drives the TRM recursion with ``router`` sampling per-step masks, the learned
-    critic ``value_head`` (``V_phi``) scoring each latent, and the frozen
-    ``verifier_value_fn`` (``V^psi = -E_psi``) supplying the dense reward shaping.
-    Computes GAE advantages and the actor-critic loss. This is the production dense
-    training step the blueprint's section 5.5 describes.
-
-    Returns ``(loss, components, telemetry)`` where ``telemetry`` holds the
-    per-step advantages / rewards / densities for logging.
+    M12's real training entry point uses explicit M11 execution state, the full
+    grounded `(x,y,z)` verifier and per-example terminal/truncation masks instead.
     """
     x_emb = model.token_embed(x) + model.encode_positions(x, height, width)
     y = torch.zeros_like(x_emb)
@@ -207,28 +384,19 @@ def rollout_router_gae(
         mask, logprob, entropy = router.act(k, y, z, route_logits, device_state)
         for _ in range(model.T):
             y, z = model.recursive_cycle(x_emb, y, z, mask)
-        logprobs.append(logprob.sum(dim=1))            # [B] summed over tokens
-        entropies.append(entropy.mean(dim=1))          # [B] mean token entropy
-        densities.append(mask.mean(dim=(1, 2)))        # [B] active-token fraction
+        logprobs.append(logprob.sum(dim=1))
+        entropies.append(entropy.mean(dim=1))
+        densities.append(mask.mean(dim=(1, 2)))
         z_states.append(z)
 
-    # STOP-GRADIENT the latent into the critic: the value-regression loss must not
-    # warp the shared recursive trunk f_theta (only the actor's policy gradient
-    # shapes the representation). The actor path keeps its gradient through the
-    # routing log-probs, which still depend on z -> f_theta.
     z_detached = [zk.detach() for zk in z_states]
     target_head = target_value_head if target_value_head is not None else value_head
     with torch.no_grad():
-        # Stationary bootstrap from the (frozen/EMA) TARGET critic -- defeats the
-        # non-stationary-target trap. Plus the frozen verifier value for shaping.
-        bootstrap_values = torch.stack([target_head(zk, device_state) for zk in z_detached])  # [K+1, B]
-        verifier_values = torch.stack([verifier_value_fn(x, zk) for zk in z_detached])         # [K+1, B]
-    # Online critic predictions for the regression loss (gradient to critic only).
-    online_values = torch.stack(
-        [value_head(z_detached[k], device_state) for k in range(k_steps)]
-    )  # [K, B]
+        bootstrap_values = torch.stack([target_head(zk, device_state) for zk in z_detached])
+        verifier_values = torch.stack([verifier_value_fn(x, zk) for zk in z_detached])
+    online_values = torch.stack([value_head(z_detached[k], device_state) for k in range(k_steps)])
 
-    density = torch.stack(densities)  # [K, B]
+    density = torch.stack(densities)
     rewards = dense_step_rewards(
         verifier_values, density, terminal_reward=terminal_reward,
         lambda_tokens=lambda_tokens, lambda_step=lambda_step,

@@ -1,9 +1,8 @@
-"""RL-driven hardware-aware halting plus M11 real online inference.
+"""RL-driven hardware-aware halting plus real online adaptive inference.
 
-The training helpers still support precomputed trajectories.  Inference no longer
-runs the full TRM before choosing an answer: ``run_with_halting`` advances the
-explicit TRM execution state one supervision step at a time and returns as soon
-as a policy/budget/model stop is reached.
+M11 made inference physically incremental.  M12 adds a training-facing Bernoulli
+action interface and fixes the historical precomputed ``halting_episode`` helper
+so the forced final stop is an environment action with no policy-gradient credit.
 """
 
 from __future__ import annotations
@@ -80,6 +79,7 @@ def compute_penalty_lambda(
 class HaltingPolicy(nn.Module):
     def __init__(self, dim: int, device_dim: int = DEVICE_DIM):
         super().__init__()
+        self.device_dim = int(device_dim)
         self.net = nn.Sequential(
             nn.Linear(dim + device_dim, dim),
             nn.GELU(),
@@ -89,6 +89,29 @@ class HaltingPolicy(nn.Module):
     def forward(self, y: torch.Tensor, device_state: torch.Tensor) -> torch.Tensor:
         pooled = y.mean(dim=1) if y.dim() == 3 else y
         return self.net(torch.cat([pooled, device_state], dim=-1)).squeeze(-1)
+
+    def action_distribution(
+        self, y: torch.Tensor, device_state: torch.Tensor
+    ) -> torch.distributions.Bernoulli:
+        """Bernoulli distribution where action 1 means halt and 0 means continue."""
+        return torch.distributions.Bernoulli(logits=self.forward(y, device_state))
+
+    def act(
+        self,
+        y: torch.Tensor,
+        device_state: torch.Tensor,
+        *,
+        sample: bool | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return ``(halt_action, logprob, entropy)`` for genuine policy decisions.
+
+        Forced environment stops are intentionally handled by the caller and must
+        not be passed through this method as if the policy selected them.
+        """
+        dist = self.action_distribution(y, device_state)
+        do_sample = self.training if sample is None else bool(sample)
+        action = dist.sample() if do_sample else (dist.probs > 0.5).to(dist.probs.dtype)
+        return action, dist.log_prob(action), dist.entropy()
 
     def halt_prob(self, y: torch.Tensor, device_state: torch.Tensor) -> torch.Tensor:
         return torch.sigmoid(self.forward(y, device_state))
@@ -100,6 +123,13 @@ def halting_episode(
     device_state: torch.Tensor,
     sample: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    """Historical precomputed episode helper with correct forced-final credit.
+
+    The last step is a horizon stop, not a policy decision.  Examples that survive
+    to it are assigned that halt step but **no** log-probability term is added for
+    the forced action.  This keeps the older helper usable without inventing
+    REINFORCE credit for a decision the policy did not make.
+    """
     k_steps, b = y_steps.shape[0], y_steps.shape[1]
     device = y_steps.device
     active = torch.ones(b, dtype=torch.bool, device=device)
@@ -107,19 +137,19 @@ def halting_episode(
     traj_logprob = torch.zeros(b, device=device)
 
     for k in range(k_steps):
-        logit = policy(y_steps[k], device_state)
-        p = torch.sigmoid(logit).clamp(1e-6, 1.0 - 1e-6)
         if k == k_steps - 1:
-            action = torch.ones(b, device=device)
-        elif sample:
-            action = torch.bernoulli(p)
-        else:
-            action = (p > 0.5).float()
-        logp_k = torch.where(action.bool(), torch.log(p), torch.log(1.0 - p))
+            # Environment-forced horizon stop. No policy call and no PG credit.
+            halts_now = active
+            halt_step = torch.where(halts_now, torch.full_like(halt_step, k), halt_step)
+            active = active & ~halts_now
+            continue
+
+        action, logp_k, _ = policy.act(y_steps[k], device_state, sample=sample)
+        action_bool = action.bool()
         traj_logprob = traj_logprob + active.float() * logp_k
-        halts_now = active & action.bool()
+        halts_now = active & action_bool
         halt_step = torch.where(halts_now, torch.full_like(halt_step, k), halt_step)
-        active = active & ~action.bool()
+        active = active & ~action_bool
     return halt_step, traj_logprob
 
 

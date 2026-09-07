@@ -23,9 +23,10 @@ This is the live milestone register. Complete historical registers are preserved
 | M08 | correct inspectable MCTS reference | accepted / merged through PR #9; `049ada6b01260662e1b3f037522fbe9a84d6d1c6` |
 | M09 | trained search action mechanism | **INCOMPLETE**; negative result preserved/merged through PR #10; `b667204da950aa989df13bb846166c7b1c2d761b` |
 | M10 | faithful CPU deployment for one trained configuration | accepted / merged through PR #11; `17c60819e2b5aace48b7b9994d0254989df25ab9` |
-| M11 | real adaptive execution | **COMPLETE on `research/m11-adaptive-execution`; accepted implementation run `34151872552` at `c713f814c2382d5b2776d40160e3bcaef1e9b6b6`** |
+| M11 | real adaptive execution | accepted / merged through PR #12; `40ce9c65f97e3950bb927713d8e117ab6c4b6e1c` |
+| M12 | grounded router/halter RL training path | **COMPLETE on `research/m12-router-halter-rl`; accepted run `34154069653` at `c54a719f8c30c958e58b4ecb32abb54a75de3cfd`; learned-control quality NEGATIVE / COLLAPSED** |
 
-M09 remains scientifically incomplete: no allowed action-policy development variant met its fixed practical-effect threshold and its final comparison stayed sealed. M10 and M11 are orthogonal deployment/execution milestones. Their acceptance does not retroactively pass M09 or establish learned-search benefit.
+M09 remains scientifically incomplete: no allowed action-policy development variant met its fixed practical-effect threshold and its final comparison stayed sealed. M10 and M11 are orthogonal deployment/execution milestones. M12 establishes a grounded adaptive-policy training path but its bounded pilot did not show useful learned control. None of M10–M12 retroactively passes M09 or establishes learned-search benefit.
 
 ---
 
@@ -275,7 +276,7 @@ M10 does not establish:
 
 # Milestone 11 — real adaptive execution
 
-**Stage status: COMPLETE on `research/m11-adaptive-execution`.**
+**Stage status: COMPLETE and merged through PR #12.**
 
 Authoritative preregistration: [`M11_PROTOCOL.md`](M11_PROTOCOL.md).
 Accepted evidence/claims boundary: [`M11_ACCEPTANCE_GATE.md`](M11_ACCEPTANCE_GATE.md).
@@ -468,4 +469,203 @@ M11 does not establish:
 
 **PASS.** Earlier halting executes fewer real steps; sparse execution skips the declared active-query/pointwise operations while preserving dense K/V context; full-density, truncated-reference and native/reference equivalence contracts pass; and router/halter overhead is explicitly measured.
 
-**Stop here for M11. Do not begin M12 automatically.**
+---
+
+# Milestone 12 — grounded router/halter RL training path
+
+**Stage status: COMPLETE on `research/m12-router-halter-rl`.**
+
+Authoritative preregistration: [`M12_PROTOCOL.md`](M12_PROTOCOL.md).
+Accepted evidence/claims boundary: [`M12_ACCEPTANCE_GATE.md`](M12_ACCEPTANCE_GATE.md).
+
+## Real training path
+
+M12 adds a real command that strictly loads a `spectra.training` reasoner checkpoint and a compatible `grounded_state_verifier` checkpoint, freezes both, and runs 120 actor-critic optimizer updates over the M11 step/state execution interface.
+
+Trainable optimizer ownership is exactly:
+
+```text
+RLTokenRouter
+HaltingPolicy
+online LatentValueHead critic
+```
+
+The target critic, recursive core and grounded verifier are excluded from the optimizer. Every training update checks that those forbidden families receive no gradients. The target critic is gradient-free and changes only through explicit Polyak update.
+
+## Episode and reward semantics
+
+For each example the training path tracks transition validity, true termination and time-limit truncation separately.
+
+Independent terminal correctness is the symbolic Sudoku validator. Exact success bypasses the learned halter. A voluntary unsolved halt is terminal; an unsolved final-horizon stop is truncation.
+
+GAE uses per-example masks:
+
+```text
+bootstrap = valid * (1 - terminated)
+trace     = valid * (1 - terminated) * (1 - truncated)
+```
+
+so truncation retains the final next-state bootstrap but ends the sampled trace, while a true terminal has no bootstrap.
+
+Grounded potential shaping uses the same discount as the return:
+
+```text
+gamma * Phi(next_effective) - Phi(current)
+```
+
+with terminal next potential zero and real next potential retained for truncation.
+
+The cost objective uses only declared logical proxies:
+
+```text
+lambda_step          0.01
+lambda_active_token  0.02 * active_density
+cost_kind            logical_step_token_proxy_v1
+measured energy      not used
+```
+
+No step/token proxy is called joules or physical energy.
+
+## Forced actions
+
+The step-zero router action is forced all-active and receives zero actor credit. Exact-success termination and final-horizon stopping likewise do not manufacture halter decisions.
+
+The historical `halting_episode` helper was corrected so its forced final stop contributes no fake REINFORCE log-probability.
+
+Focused tests verify that changing a forced slot's synthetic log-probability does not change policy loss and that its gradient is exactly zero.
+
+## Hand-verified rollout math
+
+Focused M12 tests include hand-computed terminal, truncated and mixed-batch rollouts. They verify:
+
+- true terminal bootstrap is zero;
+- time-limit truncation retains the final critic bootstrap;
+- truncation ends the GAE trace;
+- invalid post-terminal batch slots contribute nothing;
+- discounted potential shaping uses the declared terminal treatment;
+- target critic remains gradient-free and updates only by Polyak.
+
+Accepted focused result:
+
+```text
+22 passed, 1 deselected
+```
+
+## Strict pilot artifacts
+
+```text
+reasoner SHA256       495ad9f7ff1a30cb1cfc8e7cacaa994bb5ca24257287f83757d83b53b9a1c736
+grounded verifier     af65d46981b8194b8d08660364de26fd79003ef552690c4b749f237d968bbf72
+RL input artifact     da8285841c7cd16765744d539339664fa472a8504e99fa9f16bfefc1a07aa967
+adaptive RL checkpoint ead326e0ee241008dedeed53beaa881e937fc445dcbb9330e958b438718ccffd
+```
+
+The RL input artifact contains 256 training and 96 held-out puzzle inputs and explicitly contains no solution targets.
+
+The reasoner is a bounded mechanics fixture, not a strong solver:
+
+```text
+validation board accuracy  0.0
+validation cell accuracy   0.169921875
+```
+
+The grounded verifier training states are strongly imbalanced (`24` positive / `616` negative). Its `0.942708` validation accuracy is therefore not treated as strong verifier evidence.
+
+## Real update and ownership evidence
+
+Before/after hashes changed for:
+
+```text
+router          true
+halter          true
+online critic   true
+target critic   true
+```
+
+and remained exactly unchanged for:
+
+```text
+reasoner        false
+verifier        false
+```
+
+The optimizer owned exactly 12 parameter tensors: the union of router, halter and online critic, with zero overlap with the target critic, verifier or recursive core. No forbidden gradients were observed.
+
+The strict `spectra.adaptive_rl` v1 checkpoint reloaded exact router, halter, online-critic and target-critic tensor states before held-out evaluation.
+
+## Bounded pilot training behavior
+
+Mean over the final ten updates:
+
+```text
+task success          0.000000
+realized steps        4.000000
+active density        0.253516
+router entropy        0.033420
+halter entropy        0.008408
+router policy loss   -0.069069
+halter policy loss    0.000029
+value loss            0.000081
+total loss           -0.069418
+```
+
+The actors became very low entropy. The router moved toward near-minimal optional activity, while the halter did not learn useful early termination.
+
+## Held-out comparison — negative policy result
+
+All controllers use the same 96 held-out puzzles, exact symbolic success gate and maximum four-step horizon.
+
+```text
+                 success   structural score   steps   active density   total proxy
+fixed depth      0 / 96       0.0378689        4.0         1.00           0.12
+heuristic        0 / 96       0.0378689        4.0         1.00           0.12
+learned RL       0 / 96       0.0348824        4.0         0.25           0.06
+```
+
+Every held-out example ended by budget truncation under all three controllers. The trained halter therefore produced no held-out early-exit benefit.
+
+Learned RL versus fixed depth:
+
+```text
+success delta          0.000000
+structural-score delta -0.0029865
+proxy-cost delta       -0.0600000
+```
+
+The learned controller cut the declared logical compute proxy in half but slightly worsened the already-low structural score. Mean density `0.25` over a four-step episode with a forced fully active first step is consistent with router collapse toward freezing almost all optional later work.
+
+**No learned-control superiority is established.**
+
+## Accepted execution
+
+```text
+head          c54a719f8c30c958e58b4ecb32abb54a75de3cfd
+run           34154069653
+job           101842113858
+artifact      m12-router-halter-rl-evidence
+artifact id   10030392531
+ZIP SHA256    8a23f819b00e47e60fd6d7c7f246fb4f362be305253749f2a9c044fdd1f7bdc4
+size          346,998 bytes
+```
+
+```text
+compile       0
+focused       0
+fixture       0
+training      0
+evidence      0
+fast          0
+full fast     272 passed, 16 deselected, 1 pre-existing test warning
+```
+
+The first end-to-end M12 attempt (`34153655193`) failed before any RL optimizer update because a Python boolean horizon flag was inverted with bitwise `~`, promoting the episode mask to integer. The accepted fix uses an explicit boolean horizon tensor; no reward, hyperparameter, baseline or success criterion changed after that failure.
+
+## M12 decision
+
+**PASS — grounded RL training path only.** A real training command updates the intended policies and critic, hand-verified rollout cases produce the declared targets, frozen checkpoint ownership is enforced, a strict adaptive-RL checkpoint is written/reloaded, and held-out behavior is compared with simple controls.
+
+**Learned-control quality result: NEGATIVE / COLLAPSED.** The pilot did not produce useful halting, solved no held-out puzzles, and traded lower logical proxy cost for a slightly worse structural score.
+
+M12 does not establish learned adaptive-control superiority, exact-solve improvement, latency speedup, measured-energy reduction, batched-compaction efficiency, broad generalization or learned-search benefit.
+
+**Stop here for M12. Do not begin M13 automatically.**
