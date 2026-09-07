@@ -16,7 +16,7 @@ import torch.nn as nn
 from eval.evaluation_manifest import LoadedEvaluationManifest
 from model.energy import LatentEnergyVerifier
 from model.latent_action import LatentActionCodebook
-from model.stability import quant_strength_state
+from model.stability import load_quant_strength_state, quant_strength_state
 from model.trm import TRM
 from train.checkpoint import CheckpointError, atomic_torch_save, load_checkpoint_payload, select_weight_state
 
@@ -61,9 +61,11 @@ def _load_evaluation_identity(model: nn.Module, payload: Mapping[str, Any], iden
     """Load raw or EMA with the same semantics used by ``EMA.average_parameters``.
 
     EMA checkpoints contain trainable parameters only. For EMA evaluation the
-    trainable parameter set must come entirely from EMA; only non-parameter model
-    state (for example quantization-strength buffers) is taken from the raw model
-    state. This is explicit buffer restoration, not raw-parameter substitution.
+    trainable parameter set must come entirely from EMA; only persistent
+    non-parameter model state is taken from the raw model state. Non-persistent
+    experiment state (for example quantization strength) is restored separately
+    from explicit checkpoint provenance. This never substitutes raw trainable
+    parameters for a requested EMA result.
     """
     if identity == "raw":
         model.load_state_dict(select_weight_state(payload, "raw"), strict=True)
@@ -125,7 +127,7 @@ class LoadedTRMCheckpoint:
             "checkpoint_global_step": int(self.payload["training"]["global_step"]),
             "weight_identity": self.weight_identity,
             "ema_buffer_policy": (
-                "ema_trainable_parameters_plus_raw_checkpoint_nonparameter_state"
+                "ema_trainable_parameters_plus_raw_persistent_state_plus_explicit_quantization_state"
                 if self.weight_identity == "ema" else None
             ),
             "model_family": self.architecture["class"],
@@ -208,16 +210,27 @@ def load_research_trm_checkpoint(
             f"checkpoint weights are incompatible with reconstructed model: {exc}"
         ) from exc
 
-    # Quantization strength is non-parameter state and must match the checkpoint's
-    # explicit quantization provenance after raw-buffer restoration.
-    quant = training.get("quantization", {})
+    # FakeBitLinear.quant_strength is deliberately a non-persistent buffer, so
+    # model state_dict/EMA cannot carry it. M04 stores it explicitly. Research
+    # evaluation must restore that exact experiment state before inference.
+    quant = _mapping(training.get("quantization", {}), "quantization")
     if bool(arch["ternary"]):
-        expected = dict(quant.get("strengths", {}))
+        if not bool(quant.get("enabled")):
+            raise EvaluationContractError("ternary checkpoint lacks enabled quantization provenance")
+        expected = _mapping(quant.get("strengths", {}), "quantization strengths")
+        if not expected:
+            raise EvaluationContractError("ternary checkpoint lacks quantization strengths")
+        try:
+            load_quant_strength_state(model, expected)
+        except ValueError as exc:
+            raise EvaluationContractError(f"invalid quantization state: {exc}") from exc
         actual = quant_strength_state(model)
         if expected != actual:
             raise EvaluationContractError(
-                f"checkpoint quantization buffer/provenance mismatch: expected={expected}, actual={actual}"
+                f"checkpoint quantization restore mismatch: expected={expected}, actual={actual}"
             )
+    elif bool(quant.get("enabled")) or quant.get("strengths"):
+        raise EvaluationContractError("non-ternary checkpoint carries active quantization state")
 
     dev = torch.device(device)
     model = model.to(dev).eval()
@@ -362,7 +375,7 @@ def load_latent_verifier_checkpoint(path: str | Path, core: LoadedTRMCheckpoint)
     return LoadedAuxiliary(p, digest, str(payload["kind"]), verifier.to(core.device).eval(), payload)
 
 
-def load_action_policy_checkpoint(path: str | Path, core: LoadedTRMCheckpoint) -> LoadedAuxiliary:
+def load_action_policy_checkpoint(path: str |Path, core: LoadedTRMCheckpoint) -> LoadedAuxiliary:
     p, digest, payload = _load_aux(path)
     if payload.get("kind") != "latent_action_codebook":
         raise EvaluationContractError("expected latent_action_codebook auxiliary checkpoint")
