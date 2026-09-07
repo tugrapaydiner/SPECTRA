@@ -1,98 +1,79 @@
-"""Physical energy profiling via RAPL + cgroup constraints (BLUEPRINT section 22).
+"""Physical CPU-package energy profiling with validated Linux powercap counters.
 
-The paper claim uses *measured joules*, not FLOP estimates. On Linux x86 we read
-Intel/AMD RAPL energy counters in ``/sys/class/powercap/intel-rapl`` and (for the
-catastrophic/standard edge profiles) launch under cgroup CPU/memory limits via
-``systemd-run``. None of this exists on Windows, so every entry point degrades
-gracefully (``rapl_available()`` is False and energy measurement returns ``None``)
--- the harness still runs; only the joule numbers require the Linux eval box.
+M13 centralizes all energy-counter logic in :mod:`common.energy_counters`. Invalid,
+partial, reset or corrupt readings remain unavailable; they are never clamped to
+zero. Package energy is not labelled as GPU or whole-system energy.
 """
-
 from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
-_RAPL_ROOT = Path("/sys/class/powercap/intel-rapl")
+from common.energy_counters import (
+    DEFAULT_POWERCAP_ROOT,
+    discover_energy_domains,
+    measure_energy,
+    package_energy_available,
+    read_energy_snapshot,
+    energy_delta,
+)
 
 
-# --------------------------------------------------------------------------- #
-# RAPL energy
-# --------------------------------------------------------------------------- #
-def rapl_available() -> bool:
-    """True if RAPL energy counters are readable (Linux Intel/AMD only)."""
-    return _RAPL_ROOT.exists() and any(_RAPL_ROOT.glob("intel-rapl:*/energy_uj"))
+def rapl_available(root: str | Path = DEFAULT_POWERCAP_ROOT) -> bool:
+    """Whether a complete readable CPU-package powercap measurement is available."""
+    return package_energy_available(root)
 
 
-def _read_rapl_microjoules() -> int | None:
-    """Sum the package-domain RAPL energy counters in microjoules."""
-    if not rapl_available():
-        return None
-    total = 0
-    for counter in _RAPL_ROOT.glob("intel-rapl:*/energy_uj"):
-        try:
-            total += int(counter.read_text().strip())
-        except (OSError, ValueError):
-            continue
-    return total
+def energy_counter_inventory(root: str | Path = DEFAULT_POWERCAP_ROOT) -> dict[str, Any]:
+    """Serializable explicit powercap domain inventory for provenance."""
+    return discover_energy_domains(root).record()
 
 
 def measure_energy_joules(
-    fn: Callable[[], object], n_runs: int = 1
-) -> dict[str, float] | None:
-    """Measure energy (J) and wall time (s) for ``n_runs`` of ``fn`` via RAPL.
+    fn: Callable[[], object],
+    n_runs: int = 1,
+    *,
+    root: str | Path = DEFAULT_POWERCAP_ROOT,
+) -> dict[str, Any]:
+    """Measure CPU-package RAPL energy around ``fn``.
 
-    Returns ``None`` when RAPL is unavailable (e.g. Windows). Energy is the RAPL
-    counter delta; subtract an idle baseline (see :func:`idle_power_watts`) for
-    net inference energy as in section 22.3.
+    Always returns an explicit record. If physical counters are unavailable or the
+    window is invalid, ``available`` is false and joule fields are ``None``.
     """
-    start_uj = _read_rapl_microjoules()
-    if start_uj is None:
-        return None
-    t0 = time.perf_counter()
-    for _ in range(n_runs):
-        fn()
-    elapsed = time.perf_counter() - t0
-    end_uj = _read_rapl_microjoules()
-    joules = max(0, (end_uj - start_uj)) / 1e6  # counters are monotonic per window
-    return {
-        "energy_joules": joules,
-        "joules_per_run": joules / max(1, n_runs),
-        "wall_seconds": elapsed,
-        "avg_power_watts": joules / elapsed if elapsed > 0 else float("nan"),
-    }
+    return measure_energy(fn, n_runs=n_runs, root=root)
 
 
-def idle_power_watts(seconds: float = 5.0) -> float | None:
-    """Estimate idle package power by sampling RAPL over an idle window (W)."""
-    start_uj = _read_rapl_microjoules()
-    if start_uj is None:
-        return None
+def idle_power_watts(
+    seconds: float = 5.0,
+    *,
+    root: str | Path = DEFAULT_POWERCAP_ROOT,
+) -> float | None:
+    """Observe idle CPU-package power without silently substituting zero."""
+    if seconds <= 0:
+        raise ValueError("seconds must be positive")
+    start = read_energy_snapshot(root)
     t0 = time.perf_counter()
-    time.sleep(seconds)
+    time.sleep(float(seconds))
     elapsed = time.perf_counter() - t0
-    end_uj = _read_rapl_microjoules()
-    return (max(0, end_uj - start_uj) / 1e6) / elapsed if elapsed > 0 else float("nan")
+    end = read_energy_snapshot(root)
+    delta = energy_delta(start, end)
+    joules = delta["energy_joules"] if delta["available"] else None
+    return (float(joules) / elapsed) if joules is not None and elapsed > 0 else None
 
 
 # --------------------------------------------------------------------------- #
-# cgroup constraints (section 22.2)
+# cgroup constraints
 # --------------------------------------------------------------------------- #
 def cgroups_available() -> bool:
-    """True if ``systemd-run`` cgroup scoping is usable (Linux)."""
+    """True if ``systemd-run`` cgroup scoping is installed (usability is host-specific)."""
     import shutil
 
     return shutil.which("systemd-run") is not None
 
 
 def cgroup_command(cpu_cores: int, mem_max_mb: int, argv: list[str]) -> list[str]:
-    """Build a ``systemd-run`` scope command applying CPU/memory limits.
-
-    ``CPUQuota=100%`` per core; ``MemoryMax`` caps RAM. Used to simulate the
-    Catastrophic Edge (1 core / 512 MB) and Standard Edge (2 cores / 2 GB)
-    profiles on a single machine (section 22.2). A value of 0 means unconstrained.
-    """
+    """Build a ``systemd-run`` scope command applying CPU/memory limits."""
     cmd = ["systemd-run", "--scope", "--quiet"]
     if cpu_cores and cpu_cores > 0:
         cmd += ["-p", f"CPUQuota={cpu_cores * 100}%"]
