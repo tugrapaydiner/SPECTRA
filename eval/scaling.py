@@ -11,7 +11,6 @@ from typing import Any, Callable
 
 import torch
 
-from common.seed import derive_seed, isolated_seed
 from eval.checkpoint_eval import EvaluationContractError, LoadedAuxiliary, LoadedTRMCheckpoint
 from eval.edge_energy import measure_energy_joules, rapl_available
 from eval.evaluation_manifest import LoadedEvaluationManifest
@@ -150,6 +149,7 @@ def _measure_setting_cost(
 ) -> dict[str, Any]:
     if n_runs <= 0 or len(manifest.dataset) == 0:
         return {"latency_ms": None, "microjoules_per_infer": None, "energy_measured": False}
+    setting.validate()
     ds = manifest.dataset
     x1 = torch.from_numpy(ds.inputs[:1]).to(core.device)
     original_n_sup = int(core.model.N_sup)
@@ -170,9 +170,7 @@ def _measure_setting_cost(
                 c_puct=float(setting.c_puct),
                 uncertainty_beta=float(setting.uncertainty_beta),
             )
-            seed = derive_seed(int(setting.search_seed), f"m05-cost:{ds.ids[0]}")
-            with isolated_seed(seed):
-                return controller.search_and_decode(x1)
+            return controller.search_and_decode(x1)
 
     try:
         latency = measure_latency(infer, n_runs=n_runs, warmup=min(2, n_runs))
@@ -194,12 +192,18 @@ def run_checkpoint_scaling_grid(
     greedy_n_sup: list[int] | None = None,
     search_rollouts: list[int] | None = None,
     auxiliary_pairs: list[tuple[LoadedAuxiliary, LoadedAuxiliary] | None] | None = None,
-    search_seed: int = 20260907,
+    search_seed: int | None = None,
     c_puct: float = 1.5,
     uncertainty_beta: float = 0.0,
     n_latency_runs: int = 3,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Evaluate actual checkpoint families/parameter counts on one fixed snapshot."""
+    """Evaluate actual checkpoint families/parameter counts on one fixed snapshot.
+
+    ``greedy_n_sup=None`` evaluates the checkpoint's recorded N_sup. An explicit
+    empty list means no greedy rows. Current LatentNativeMCTS is deterministic;
+    a non-None ``search_seed`` is rejected by ``InferenceSetting`` rather than
+    being recorded as a decorative configuration difference.
+    """
     if not cores:
         raise EvaluationContractError("research scaling requires at least one trained checkpoint")
     search_rollouts = [int(v) for v in (search_rollouts or [])]
@@ -215,7 +219,11 @@ def run_checkpoint_scaling_grid(
     for core_idx, core in enumerate(cores):
         pair = auxiliary_pairs[core_idx]
         verifier, action_policy = (None, None) if pair is None else pair
-        depths = [int(core.model.N_sup)] if not greedy_n_sup else [int(v) for v in greedy_n_sup]
+        depths = (
+            [int(core.model.N_sup)]
+            if greedy_n_sup is None
+            else [int(v) for v in greedy_n_sup]
+        )
         settings = [InferenceSetting(mode="greedy", ordinary_n_sup=v) for v in depths]
         settings += [
             InferenceSetting(
@@ -224,10 +232,12 @@ def run_checkpoint_scaling_grid(
                 mcts_rollouts=v,
                 c_puct=float(c_puct),
                 uncertainty_beta=float(uncertainty_beta),
-                search_seed=int(search_seed),
+                search_seed=search_seed,
             )
             for v in search_rollouts
         ]
+        if not settings:
+            raise EvaluationContractError("research evaluation requires at least one inference setting")
         realized = [realized_setting(core, s, action_policy=action_policy) for s in settings]
         assert_unique_realized_settings(realized)
 
