@@ -1,0 +1,118 @@
+name: m02-native-contract
+
+on:
+  push:
+    branches: ["research/m02-native-contract"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  native-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install CPU baseline dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p .m02
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m02/install_torch.txt
+          timeout 180s python -m pip install -r requirements.txt |& tee .m02/install_requirements.txt
+          python - <<'PY' | tee .m02/environment.txt
+          import platform, torch, numpy, pytest
+          from deploy.torch_kernel import cpu_supports_avx2
+          print("platform=", platform.platform())
+          print("python_torch=", torch.__version__)
+          print("numpy=", numpy.__version__)
+          print("pytest=", pytest.__version__)
+          print("torch_cpu_capability=", getattr(torch.backends.cpu, "get_cpu_capability", lambda: "unknown")())
+          print("cpu_supports_avx2=", cpu_supports_avx2())
+          PY
+          grep -qm1 -w avx2 /proc/cpuinfo || { echo "M02 exact AVX2 reproduction unavailable on this runner" | tee .m02/avx2_unavailable.txt; exit 2; }
+
+      - name: Reproduce pre-M02 mismatch and measure before-after
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git show 40745dbe185c069aeee9eff3cf63dd411d9e17da:deploy/cpp_sparse_kernel/spectra_kernel.cpp > /tmp/spectra_kernel_before.cpp
+          timeout 120s python scripts/m02_kernel_audit.py \
+            --before /tmp/spectra_kernel_before.cpp \
+            --after deploy/cpp_sparse_kernel/spectra_kernel.cpp \
+            --out .m02/before_after.json |& tee .m02/before_after.txt
+
+      - name: Focused native correctness and contract regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 300s python -m pytest \
+            tests/test_kernel.py \
+            tests/test_kernel_contract.py \
+            tests/test_m02_acceptance_gate.py \
+            -ra |& tee .m02/pytest_focused.txt
+
+      - name: Build PyTorch extension and check backend
+        shell: bash
+        run: |
+          set -euxo pipefail
+          timeout 180s python setup.py build_ext --inplace |& tee .m02/build_extension.txt
+          python - <<'PY' | tee .m02/extension_backend.txt
+          import torch
+          import spectra_kernel_ext
+          print("backend=", spectra_kernel_ext.backend_name())
+          assert spectra_kernel_ext.backend_name() in {"avx2", "scalar"}
+          PY
+
+      - name: Prove scalar fallback build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S deploy/cpp_sparse_kernel -B /tmp/spectra_m02_scalar \
+            -DCMAKE_BUILD_TYPE=Release -DSPECTRA_AVX2=OFF |& tee .m02/cmake_scalar_config.txt
+          cmake --build /tmp/spectra_m02_scalar --config Release |& tee .m02/cmake_scalar_build.txt
+          python - <<'PY' | tee .m02/cmake_scalar_probe.txt
+          import ctypes, glob
+          paths = glob.glob('/tmp/spectra_m02_scalar/*spectra_kernel*.so') + glob.glob('/tmp/spectra_m02_scalar/**/*.so', recursive=True)
+          assert paths, 'scalar shared library not produced'
+          lib = ctypes.CDLL(paths[0])
+          lib.spectra_compiled_with_avx2.restype = ctypes.c_int
+          print('compiled_with_avx2=', lib.spectra_compiled_with_avx2())
+          assert lib.spectra_compiled_with_avx2() == 0
+          PY
+
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 360s python -m pytest -m "not slow" -ra |& tee .m02/pytest_fast.txt
+
+      - name: Record branch diff
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "base=40745dbe185c069aeee9eff3cf63dd411d9e17da"
+            git diff --stat 40745dbe185c069aeee9eff3cf63dd411d9e17da...HEAD
+          } | tee .m02/diff_stat.txt
+
+      - name: Upload M02 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m02-native-contract-evidence
+          path: .m02/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

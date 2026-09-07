@@ -17,54 +17,33 @@ Milestone 01 establishes a reproducible, bounded baseline only. No substantive m
 - Evidence ZIP SHA-256 reported by Actions: `005d197a2d0c6fffb538282acc3461dccdf1c61143cc511f8928091c955b832b`
 - Artifact retention configured by the audit workflow: 14 days. This document is the persistent summary after the ephemeral artifact expires.
 
-`main` was not modified. The work was isolated on `research/m01-baseline` so existing repository state was not overwritten.
+`main` was not modified during M01 until the milestone was accepted and merged.
 
 ### Working-tree limitation
 
 The model execution sandbox could not directly clone GitHub (`Could not resolve host: github.com`), so the user's own local checkout and any unpushed/uncommitted working-tree edits were **unavailable for inspection**. They are therefore neither described as clean nor modified by this milestone.
 
-The GitHub Actions checkout used for the reproducible audit **was clean before audit outputs were created**. The workflow records `git status --short` before creating `.m01/`; the final clean run recorded no entries.
+The GitHub Actions checkout used for the reproducible audit **was clean before audit outputs were created**.
 
 ### Applicable repository instructions
 
 No `AGENTS.md` or equivalent agent-specific instruction file, and no additional `CONTRIBUTING.md` instruction layer, was found in the inspected repository tree. The applicable baseline instructions were therefore the repository README/build guidance, `requirements.txt`, `pyproject.toml`, `setup.py`, and pytest configuration.
 
-## Minimal setup changes
+### Minimal setup changes
 
 Only setup/audit compatibility changes were made:
 
 1. Added `.github/workflows/m01-baseline.yml` to make the baseline commands, budgets, host probes, and evidence collection repeatable.
-2. Changed the optional PyTorch C++ extension compile standard from C++17 to C++20 in:
-   - `setup.py`
-   - `deploy/cpp_sparse_kernel/setup.py`
-   - `deploy/torch_kernel.py`
+2. Changed the optional PyTorch C++ extension compile standard from C++17 to C++20 in `setup.py`, `deploy/cpp_sparse_kernel/setup.py`, and `deploy/torch_kernel.py` because the then-current unconstrained `torch>=2.4` resolver selected PyTorch 2.14.0+cpu, whose headers reject C++17.
 
-Reason: the current unconstrained requirement `torch>=2.4` resolved on the audit host to `torch==2.14.0+cpu`, whose headers reject the repository's previous `-std=c++17` build. The first audit reproduced that failure; C++20 was the minimum compatibility fix. Standalone C++ kernel logic was not changed.
+No test was weakened, skipped by modification, or rewritten to accommodate a scientific failure.
 
-No test was weakened, skipped by modification, or rewritten to accommodate a failure.
+### Reproducible environment
 
-## Reproducible environment
+Final clean M01 audit host:
 
-Final clean audit host:
-
-- GitHub-hosted runner: Ubuntu 24.04.4 LTS (`ubuntu-24.04`, image `20260831.293.1`)
-- Linux: `6.17.0-1022-azure`, x86_64
-- CPU allocation: 4 logical CPUs
-- Reported CPU: AMD EPYC 9V74 80-Core Processor, virtualized under Microsoft/Azure
-- L3 visible to runner: 32 MiB
-- AVX2: **supported** (`avx2` present in `/proc/cpuinfo`)
-- `g++`: 13.3.0
-- `clang++`: 18.1.3
-- GPU: **unavailable** (`nvidia-smi` unavailable; no `/dev/nvidia*` devices)
-- CUDA in PyTorch: **unavailable** (`torch.version.cuda=None`, `torch.cuda.is_available() == False`, device count 0)
-- Intel RAPL root: **unavailable** (`/sys/class/powercap/intel-rapl` absent)
-- Readable `energy_uj` counters: **none available**
-- Repository energy API probe: `rapl_available=False`; `measure_energy_joules(...)` returned `None` without error
-
-Resolved primary Python packages:
-
+- GitHub-hosted runner: Ubuntu 24.04.4 LTS
 - Python 3.11.16
-- pip 26.2.1
 - torch 2.14.0+cpu
 - numpy 2.4.6
 - PyYAML 6.0.3
@@ -73,197 +52,269 @@ Resolved primary Python packages:
 - pandas 3.0.5
 - psutil 7.2.2
 - pytest 9.1.1
+- AVX2: supported
+- GPU/CUDA: unavailable
+- readable RAPL `energy_uj`: unavailable
 
-The Actions artifact contains the sorted full `pip freeze` from the run.
-
-## Exact baseline commands
-
-The authoritative executable form is `.github/workflows/m01-baseline.yml`. The final clean run executed the following relevant commands.
-
-### Host/repository probes
+### M01 exact baseline commands
 
 ```bash
-git rev-parse HEAD
-git branch --show-current
-git status --short
-python --version
-python -m pip --version
-uname -a
-getconf _NPROCESSORS_ONLN
-lscpu
-g++ --version
-clang++ --version
-grep -qm1 -w avx2 /proc/cpuinfo
-nvidia-smi
-ls /dev/nvidia*
-find /sys/class/powercap -type f -name energy_uj
-# Each discovered energy_uj path is checked for readability and read with cat.
+python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
+python -m pip install -r requirements.txt
+python -m pytest -m "not slow" -ra
+python -m pytest tests/test_kernel.py -ra
+python setup.py build_ext --inplace
 ```
 
-### Dependency setup
+A bounded two-optimizer-step CPU training smoke was also run from `.github/workflows/m01-baseline.yml`.
 
-```bash
-timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
-timeout 180s python -m pip install -r requirements.txt
-python -m pip freeze | sort
+### M01 results
+
+#### Passed
+
+- dependency installation
+- repository energy API graceful-unavailable probe
+- existing fast test gate: **151 passed**, 16 slow tests deselected
+- native kernel correctness: **4 passed**
+- optional PyTorch extension build
+- tiny CPU training smoke with finite gradients and a parameter update
+
+#### Failed
+
+Final clean baseline: none.
+
+Failures encountered while establishing the baseline and retained in the record:
+
+1. PyTorch 2.14 required C++20 while the repository requested C++17.
+2. The first evidence upload excluded hidden `.m01/` files.
+3. The first status formatter emitted a spurious timeout line due to shell operator precedence.
+
+#### Skipped
+
+- 16 `slow` pytest items explicitly deselected by `-m "not slow"`.
+
+#### Timed out
+
+None.
+
+#### Unavailable
+
+- user's unpushed local working tree
+- GPU/CUDA
+- readable RAPL counters / physical Joule measurements
+- target-device physical-performance recertification
+- complete raw provenance sufficient to independently regenerate all README performance figures
+
+### M01 claim boundaries
+
+M01 established that Python plumbing, tested ternary/INT8 mechanics, AVX2 correctness on the then-tested aligned shapes, extension buildability, synthetic VQ boundedness, MCTS/verifier mechanics, postprocessed halting mechanics, and tiny trainability worked. It did **not** establish the README's broad physical performance/energy numbers, a trained scaling law, end-to-end sequential `K` reuse, arbitrary-depth real-task VQ guarantees, actual compute-saving halting, or grounded verifier self-improvement.
+
+---
+
+## Milestone 02 — native-kernel correctness and input contracts
+
+**Stage status:** COMPLETE ON `research/m02-native-contract`; not merged at the time of this entry.
+
+M02 changes only native-kernel correctness, packing/backend/input contracts, native-facing benchmark callers, tests, and audit infrastructure. It does not change the reasoning/search/training algorithms.
+
+### Verified implementation / evidence
+
+- M02 base: M01 merge on `main`, `40745dbe185c069aeee9eff3cf63dd411d9e17da`
+- Verified implementation commit: `ba8fa0acf3fe9015235d281be807f40124027cec`
+- Green GitHub Actions run: `34075718044`
+- Evidence artifact: `m02-native-contract-evidence`, artifact id `10001994671`
+- Evidence ZIP SHA-256: `d2367d39eae331ff86a47d2fdbe521963ea6a4c3da1d7e05b9d5dffb6ce82aa9`
+- Focused tests: **16 passed in 34.26 s**
+- Full fast suite: **163 passed, 16 deselected in 33.05 s**
+- PyTorch extension backend in the accepted run: **AVX2**
+- Forced CMake scalar build probe: `spectra_compiled_with_avx2() == 0`
+
+### Root cause: `INT8_MIN * -1`
+
+The requested reproduction is real in the M01 kernel:
+
+- hidden dimension: 32
+- one output
+- activation: `x[0] = -128`, all other activations `0`
+- ternary weight: `w[0] = -1`, all other weights `0`
+- multiplier: `1`
+- requantization shift: `7`
+
+The independent audit compiled the M01 source twice and observed:
+
+| Path | accumulator | requantized output |
+|---|---:|---:|
+| M01 scalar packed | +128 | +1 |
+| M01 scalar decoded | +128 | +1 |
+| M01 AVX2 packed | -128 | -1 |
+| M01 AVX2 decoded | -128 | -1 |
+| M02 scalar packed/decoded | +128 | +1 |
+| M02 AVX2 packed/decoded | +128 | +1 |
+
+The M01 AVX2 code used `_mm256_sign_epi8(x, w)`. `VPSIGNB` performs signed **byte** negation. For `x=-128` and `w=-1`, the true product is `+128`, which cannot be represented in signed INT8. The byte-level negate therefore remains `0x80`, interpreted as `-128`. The scalar path first promotes the operands and therefore produces the mathematical `+128`.
+
+### Numerical fix
+
+M02 deliberately keeps the **full INT8 activation contract**; it does not ban `-128`.
+
+Both packed and already-decoded AVX2 dot-product paths retain the fast `VPSIGNB` product for ordinary lanes and detect the unique exceptional lane condition:
+
+```text
+activation == -128 AND ternary_weight == -1
 ```
 
-### Energy API probe
+For each exceptional lane, the byte result `-128` is exactly `256` below the mathematical `+128`, so M02 adds **+256 per exceptional lane** to the widened vector sum. Scalar tails continue to multiply after integer promotion.
 
-```bash
-python - <<'PY'
-from eval.edge_energy import rapl_available, measure_energy_joules
-print("rapl_available=", rapl_available())
-result = measure_energy_joules(lambda: sum(range(1000)), n_runs=1)
-print("measurement=", result)
-PY
+An earlier correctness-first M02 prototype widened every activation/weight before multiplication. It was correct but measurably slower, so it was replaced with this exact exceptional-lane correction before M02 completion.
+
+### Native numerical contract
+
+#### Activations
+
+- type: signed INT8
+- valid values: **all `[-128, 127]`**
+- public PyTorch/native extension tensors: CPU only, rank 2, contiguous
+
+#### Ternary weights and packing
+
+- semantic values: `{-1, 0, +1}`
+- codes: `00 -> 0`, `01 -> +1`, `10 -> -1`
+- code `11`: reserved/invalid and rejected by checked native entry points
+- each output row uses exactly `ceil(hidden_dim / 4)` packed bytes
+- rows are padded **independently**
+- unused 2-bit codes in the final byte of a row must be zero
+- `deploy.pack_ternary.pack_ternary_rows` is the native row-padded producer
+- non-multiple-of-four widths are supported through a scalar tail; representative tails are tested
+
+#### Dimensions and accumulator bound
+
+For an INT8 activation and ternary weight, the maximum absolute per-element mathematical product is 128. Native dot widths are therefore restricted to:
+
+```text
+1 <= hidden/inter width <= floor(INT32_MAX / 128) = 16,777,215
 ```
 
-### Existing fast test gate — 360 second budget
+This keeps the mathematical dot-product accumulator inside signed INT32. Token/output dimensions passed through the public extension must be positive and fit the native `int` interface.
 
-```bash
-timeout 360s python -m pytest -m "not slow" -ra
+The contract limit is enforced; M02 does not allocate/test a 16.7-million-wide tensor in CI.
+
+#### Requantization
+
+- accumulator: checked signed INT32 domain above
+- fixed-point multiplier: non-negative signed INT32
+- shift: **integer `0..62` inclusive**
+- `shift=0` is handled explicitly without a negative/undefined rounding shift
+- intermediate `acc * multiplier` and rounding are performed in signed INT64
+- final result saturates to `[-128,127]`
+
+The public scale helper implements:
+
+```text
+mult[o] = round(weight_scale[o] * act_scale / out_scale * 2**shift)
 ```
 
-### Native correctness — 180 second budget
+with:
 
-The workflow first requires both AVX2 and a C++ compiler, then runs:
+- finite non-negative weight scales
+- finite non-negative activation scale
+- finite strictly-positive output scale
+- rejection if the resulting multiplier exceeds signed INT32
 
-```bash
-timeout 180s python -m pytest tests/test_kernel.py -ra
+Negative fixed-point multipliers are unsupported by design and rejected.
+
+#### Active indices / sparse semantics
+
+- every active index must satisfy `0 <= index < num_tokens`
+- out-of-range indices are rejected before native work begins
+- zero active indices is valid and performs no writes
+- frozen/unselected rows in the raw C API are untouched
+- the public PyTorch extension allocates a zero output, so unselected rows are zero there
+- **duplicate indices are valid**: each duplicate deterministically recomputes and overwrites the same output row; there is no scatter-add/accumulation behavior
+
+#### Buffer lengths
+
+The checked C ABI receives explicit element counts for every raw buffer and requires exact expected lengths. Examples:
+
+```text
+X elements       = num_tokens * hidden
+W packed bytes   = out_dim * ceil(hidden/4)
+requant entries  = out_dim
+Y elements       = num_tokens * out_dim
 ```
 
-### Optional PyTorch C++ extension build — 180 second budget
+The fused FFN applies the corresponding exact checks to both layers.
 
-```bash
-timeout 180s python setup.py build_ext --inplace
-```
+Raw C pointers cannot prove the actual allocation size behind a dishonest pointer/length pair and do not encode a device concept. CPU/device/dtype/rank/contiguity are therefore enforced by both the public Python wrapper and the PyTorch C++ extension boundary; the raw C ABI independently rechecks dimensions, lengths, packed contents, multipliers, shifts, indices, null pointers, and allocation failure.
 
-### Tiny training smoke — 30 second budget
+### Backend contract
 
-```bash
-timeout 30s python - <<'PY'
-import time
-import torch
-from model.trm import TRM
-from train.losses import deep_supervision_loss
+- `deploy/torch_kernel.py` detects host AVX2 conservatively.
+- On a supported x86 host the JIT/setup extension builds the AVX2 implementation.
+- On a host without AVX2 it builds the same source without `-mavx2`, activating the real scalar implementation.
+- CMake exposes `SPECTRA_AVX2=AUTO|ON|OFF`; M02 CI explicitly builds `OFF` and confirms the library reports scalar.
+- Native/JIT build failures are raised with the backend/flags and original exception rather than silently treated as success.
+- The ctypes adapter refuses to load a library compiled for AVX2 on a CPU that does not advertise AVX2.
 
-torch.manual_seed(0)
-t0 = time.perf_counter()
-model = TRM(
-    dim=16, num_tokens=5, seq_len=4, n_layers=1, n=1, T=1,
-    N_sup=1, heads=1, max_grid_size=4,
-)
-opt = torch.optim.AdamW(model.parameters(), lr=1e-3)
-x = torch.randint(0, 5, (2, 4))
-y = torch.randint(0, 5, (2, 4))
-before = next(model.parameters()).detach().clone()
-losses = []
-for _ in range(2):
-    _, steps = model(x, height=2, width=2)
-    loss = deep_supervision_loss(steps, y)
-    assert torch.isfinite(loss), loss
-    opt.zero_grad()
-    loss.backward()
-    grads = [p.grad for p in model.parameters() if p.grad is not None]
-    assert grads and all(torch.isfinite(g).all() for g in grads)
-    opt.step()
-    losses.append(float(loss.detach()))
-after = next(model.parameters()).detach()
-assert not torch.equal(before, after), "optimizer did not update parameters"
-print("device=cpu")
-print("steps=2")
-print("losses=", losses)
-print("parameter_update=yes")
-print("elapsed_s=", round(time.perf_counter() - t0, 6))
-PY
-```
+### M02 test coverage
 
-## Check results
+`tests/test_kernel.py` plus `tests/test_kernel_contract.py` exercise:
 
-### Passed
+- exact requested `-128 * -1` reproduction/fix in scalar and AVX2
+- both packed and decoded dot-product paths
+- **every one of the 256 INT8 activation values** against all ternary signs `-1/0/+1`
+- independent wide-integer Python reference
+- representative widths `1, 3, 4, 31, 32, 33, 63, 64, 65`
+- vector and scalar-tail boundaries
+- positive and negative saturation
+- zero active indices
+- frozen tokens
+- duplicate active indices
+- invalid shifts
+- negative multipliers
+- active-index bounds
+- off-by-one raw buffer lengths
+- reserved ternary code `11`
+- nonzero row-padding bits
+- row-packed producer round-trip
+- public Python CPU/dtype/rank/contiguity/length checks
+- scale conversion checks
+- direct PyTorch extension invalid-input checks
+- backend detection and visible loader failure
+- fused FFN correctness with non-aligned widths
+- weight-stationary decoded correctness with non-aligned widths
 
-| Check | Result | Recorded budget / elapsed |
-|---|---|---|
-| Dependency installation | passed | 30 s elapsed; install sub-budgets 360 s + 180 s |
-| Repository energy API graceful-unavailable probe | passed | returned `rapl_available=False`, measurement `None` |
-| Existing fast test gate | **151 passed** | 360 s budget; 50 s workflow elapsed; pytest 48.04 s |
-| Native kernel correctness | **4 passed** | 180 s budget; 3 s workflow elapsed; pytest 1.85 s |
-| Optional PyTorch C++ extension build | passed | 180 s budget; 27 s elapsed |
-| Tiny training smoke | passed | 30 s budget; 3 s workflow elapsed; internal loop ~0.955 s |
+### Before/after microbenchmark
 
-Tiny smoke losses were `1.9163410663604736` then `1.8603845834732056`; gradients were finite and at least one model parameter changed after the optimizer steps. The smoke is a trainability/plumbing check, **not** a learning-quality claim.
+This is a small CI-host microbenchmark of the internal dot kernels only; it is **not** a publication or target-device performance claim. Configuration: hidden width 512, 32 input rows, 20,000 dot calls, five rounds, median ns/dot.
 
-### Failed
+| Path | M01 buggy AVX2 | M02 corrected AVX2 | ratio |
+|---|---:|---:|---:|
+| packed dot | 54.01875 ns | 57.33455 ns | **1.0614x** (+6.1%) |
+| decoded dot | 23.8339 ns | 28.19465 ns | **1.1830x** (+18.3%) |
 
-**Final clean baseline:** none.
+The checksums differ because the M01 AVX2 implementation computes incorrect values whenever the random benchmark contains `-128 * -1`; the after checksum reflects corrected arithmetic. The timing comparison is retained only to expose the cost of correctness on that workload.
 
-Failures encountered while establishing the baseline, before the final clean run:
+### M02 failures/iterations retained explicitly
 
-1. The optional PyTorch extension failed because PyTorch 2.14 headers require C++20 while the repository requested C++17. Fixed minimally by switching extension/JIT build flags to C++20.
-2. The first audit workflow did not upload `.m01/` because hidden files/directories were excluded by the artifact action default. Fixed with `include-hidden-files: true`.
-3. The first audit status formatter used a shell expression with incorrect operator precedence and emitted a spurious `timed_out` status line for otherwise successful dependency installation. Replaced with explicit `if/elif/else` status assignment.
+No final M02 check failed, but several issues were found while establishing the gate and remain part of the record:
 
-These were setup/audit failures; none was hidden or described as a passing scientific check.
+1. A test that constructed reserved code `11` used Python `~0x3` against NumPy `uint8`; NumPy 2.4 rejects the negative mask. The test was corrected to unsigned `0xFC`. Production code was unchanged.
+2. An extension smoke probe attempted to import the built PyTorch extension before importing PyTorch, so `libc10.so` was not loaded. The probe now imports `torch` first; the extension build itself had succeeded.
+3. The first optimized exceptional-lane rewrite accidentally supplied 30 arguments to a 32-byte AVX2 LUT initializer. GCC rejected the AVX2 build. The LUT is now defined once as an exact 16-byte table and broadcast to both AVX2 lanes.
+4. The audit initially captured compiler stderr and surfaced only `CalledProcessError`. It now prints the complete failed compiler command/stdout/stderr before raising.
+5. A full-widen arithmetic prototype was correct but caused a larger measured regression; it was replaced by the exact `+256` exceptional-lane correction. This optimization did not relax the tests or the full INT8 contract.
 
-### Skipped / not run by design
+### Remaining unsupported / unproven cases
 
-- **16 pytest items** carrying the excluded `slow` marker were deselected by the explicitly requested fast baseline command `-m "not slow"`. They are **not** counted as passing.
-- Dependency-gated “unavailable” fallback bookkeeping was skipped in the final run because dependency installation succeeded.
-- Long training/evaluation campaigns and publication benchmark reruns were intentionally outside Milestone 01.
+- Windows/MSVC execution was not tested by the M02 GitHub Actions gate.
+- A forced scalar build was tested on x86; non-x86/ARM compilation and execution were not exercised.
+- The maximum allowed width (`16,777,215`) is contract-checked but not allocated/executed in CI.
+- Raw C callers can lie about pointer allocation size; native code can validate only the explicit lengths it is given.
+- Negative requantization multipliers/scales are intentionally unsupported.
+- M02 does not re-certify the README's historical throughput/cache/energy headline measurements on target hardware. The small before/after microbenchmark is only a regression check.
 
-### Timed out
+### M02 decision
 
-**None** in the final clean baseline.
+The M01 known AVX2 shape/numerical boundary is closed for the documented M02 contract: full INT8 values are supported, representative vector tails are tested, row padding is explicit, invalid inputs fail loudly, and a scalar backend is real and testable.
 
-### Unavailable
-
-- User's actual local working tree / unpushed edits: unavailable to this execution environment; not touched.
-- GPU/CUDA: unavailable on the GitHub Actions host.
-- Readable RAPL/`energy_uj` counters: unavailable on the GitHub Actions host.
-- Physical-target energy measurements: unavailable because no readable counters exist on this host.
-- Claimed target-device physical performance validation: unavailable from this AMD EPYC virtual CI host.
-- A complete raw-data/provenance set sufficient to regenerate every published README performance figure was not established in the inspected commit; therefore Milestone 01 did not re-certify the numeric performance headlines.
-
-## Baseline findings that constrain later claims
-
-The corresponding evidence map is maintained in `docs/CLAIMS.md`. The most important baseline boundaries are:
-
-1. **AVX2 boundary:** native bit-exact tests pass on tested hidden dimensions divisible by 4. The packed kernel's `hidden_dim / 4` stride and bridge contract do not establish correctness for unaligned hidden dimensions.
-2. **Scaling is checkpoint-free in the inspected path:** the scaling harness creates fresh models and does not establish a trained scaling law.
-3. **`K`-reuse benchmark precomputes the input vectors:** it demonstrates kernel-level weight reuse under that benchmark setup, not end-to-end reuse across causally dependent recursive states.
-4. **VQ evidence is narrower than the strongest prose claim:** VQ snapping/idempotence and boundedness in a constructed 30-step expansive recurrence are tested; arbitrary-depth real-task trajectory error/topology preservation is not.
-5. **Halting is postprocessed:** `run_with_halting` first executes the full recursion and selects/freezes an earlier result afterward, so it does not currently establish wall-time/energy savings from early termination.
-6. **Verifier backups are mechanically valid but not grounded:** PRM/MCTS tests validate backup/distillation plumbing using verifier-produced values; they do not establish that those values correspond to true task quality.
-
-## What this baseline can support
-
-At Milestone 01, it is defensible to state that:
-
-- the selected non-slow Python test suite passes in the recorded CPU environment;
-- the standalone native kernel passes its four correctness tests on an AVX2 host and the tested aligned shapes;
-- the optional PyTorch extension builds under the currently resolved PyTorch after the minimal C++20 setup update;
-- a tiny CPU forward/backward/optimizer loop produces finite gradients and updates parameters;
-- the repository's synthetic VQ boundedness test, latent-MCTS/verifier mechanics, quantization/export mechanics, and postprocessed halting mechanics pass their selected fast tests.
-
-This baseline **cannot** support, without later evidence:
-
-- the README's exact physical throughput/speedup/cache/energy headline numbers;
-- a trained parameter-scaling law from the current checkpoint-free scaling path;
-- end-to-end sequential recursive `K`-reuse from a benchmark that precomputes the `K` inputs;
-- arbitrary-depth real-task VQ trajectory/topology guarantees;
-- real compute/wall-time/energy savings from the current postprocessed halting helper;
-- task-grounded verifier backup quality or a real self-improvement/flywheel claim;
-- energy/Joule claims on the Milestone 01 CI host.
-
-## Current blockers
-
-1. **Evidence provenance:** raw measurement artifacts/checkpoints needed to independently substantiate the broad README performance/scaling claims are incomplete or not established by this baseline.
-2. **Energy hardware:** no readable RAPL counters on the reproducible CI host.
-3. **AVX2 shape contract:** non-multiple-of-4 hidden dimensions are not guarded/tested at the native bridge boundary.
-4. **Scientific grounding:** scaling, verifier-backup, halting-savings, and broad VQ claims need trained/task-grounded experiments rather than plumbing-only tests.
-5. **Local state visibility:** this environment cannot certify or preserve by inspection any unpushed user-local changes; it avoids the risk by keeping all work on a separate remote branch.
-
-## Next action
-
-**Do not change the algorithm yet.** The next milestone should begin by closing the highest-value evidence/provenance gaps: identify or regenerate the raw benchmark/checkpoint artifacts under explicit hardware/configuration records, add a precise test/guard for the AVX2 hidden-dimension boundary, and define trained/task-grounded evaluation protocols before interpreting scaling, verifier, halting, VQ, or energy outcomes.
+**Next action:** stop here for M02. Do not treat this milestone as evidence for broader system-level performance, energy, reasoning-quality, or trained-scaling claims; those remain separate later milestones.
