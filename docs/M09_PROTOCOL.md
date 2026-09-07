@@ -36,11 +36,13 @@ untouched test         128 puzzles
 The frozen action-trajectory source is partitioned before action fitting:
 
 ```text
-action-fit puzzles     first 256 reasoner-train puzzles
-action-development     remaining 128 reasoner-train puzzles
+action-fit puzzles     first 240 reasoner-train puzzles
+action-development     remaining 144 reasoner-train puzzles
 trajectory depths      0..3
 untouched evaluation   all 128 test puzzles; root search only
 ```
+
+This makes the full train candidate-table cost exactly `240 * 4 * 25 = 24,000` state-action equivalents, below the predeclared 25,000 cap.
 
 The action-development puzzles are not used in optimizer steps or candidate selection. The untouched test inputs are not inspected for action choice, hyperparameters, revision decisions, or stopping.
 
@@ -150,7 +152,7 @@ Required training evidence:
 
 ## 7. Search integration / evaluation harness
 
-`LatentNativeMCTS` may consume `priors_for_state(x,y,z)` when an action module exposes it; otherwise it uses the legacy global `priors()` path.
+M09 uses a `StateConditionedLatentNativeMCTS` adapter over the unchanged M08 reference semantics. The adapter consumes `priors_for_state(x,y,z)` when an action module exposes it; legacy codebooks continue to use their global `priors()` path.
 
 M09's controlled action-isolation comparison uses the M08 serial search semantics with:
 
