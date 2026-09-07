@@ -1,731 +1,397 @@
 # SPECTRA Research State
 
-## Milestone 01 — trustworthy baseline
+This is the live milestone register. The complete pre-M05 M01–M04 state log is preserved **verbatim** in [`RESEARCH_STATE_M01_M04.md`](RESEARCH_STATE_M01_M04.md), copied from the exact M04-era blob `0a3a815e040d12aa9686dfe164111a686c64d08b` before this register was compacted. Git history therefore retains both the original cumulative record and the live register below.
 
-**Stage status:** COMPLETE, with explicit environment/provenance limitations below.
+## Accepted milestone index
 
-Milestone 01 establishes a reproducible, bounded baseline only. No substantive model, search, training, or evaluation algorithm was changed.
-
-### Repository state
-
-- Repository: `tugrapaydiner/SPECTRA`
-- Source baseline (`main` when Milestone 01 began): `ece509593198dd780d71969bc7749556d40b2e7e`
-- Working branch: `research/m01-baseline`
-- Baseline code/infrastructure commit exercised by the final clean audit: `7a1b8ba6a6796ab2581315784764d4426022b42d`
-- Final clean workflow run: GitHub Actions run `34073485472`
-- Evidence artifact: `m01-baseline-evidence`, artifact id `10001279309`
-- Evidence ZIP SHA-256 reported by Actions: `005d197a2d0c6fffb538282acc3461dccdf1c61143cc511f8928091c955b832b`
-- Artifact retention configured by the audit workflow: 14 days. This document is the persistent summary after the ephemeral artifact expires.
-
-`main` was not modified during M01 until the milestone was accepted and merged.
-
-### Working-tree limitation
-
-The model execution sandbox could not directly clone GitHub (`Could not resolve host: github.com`), so the user's own local checkout and any unpushed/uncommitted working-tree edits were **unavailable for inspection**. They are therefore neither described as clean nor modified by this milestone.
-
-The GitHub Actions checkout used for the reproducible audit **was clean before audit outputs were created**.
-
-### Applicable repository instructions
-
-No `AGENTS.md` or equivalent agent-specific instruction file, and no additional `CONTRIBUTING.md` instruction layer, was found in the inspected repository tree. The applicable baseline instructions were therefore the repository README/build guidance, `requirements.txt`, `pyproject.toml`, `setup.py`, and pytest configuration.
-
-### Minimal setup changes
-
-Only setup/audit compatibility changes were made:
-
-1. Added `.github/workflows/m01-baseline.yml` to make the baseline commands, budgets, host probes, and evidence collection repeatable.
-2. Changed the optional PyTorch C++ extension compile standard from C++17 to C++20 in `setup.py`, `deploy/cpp_sparse_kernel/setup.py`, and `deploy/torch_kernel.py` because the then-current unconstrained `torch>=2.4` resolver selected PyTorch 2.14.0+cpu, whose headers reject C++17.
-
-No test was weakened, skipped by modification, or rewritten to accommodate a scientific failure.
-
-### Reproducible environment
-
-Final clean M01 audit host:
-
-- GitHub-hosted runner: Ubuntu 24.04.4 LTS
-- Python 3.11.16
-- torch 2.14.0+cpu
-- numpy 2.4.6
-- PyYAML 6.0.3
-- einops 0.8.2
-- tqdm 4.70.0
-- pandas 3.0.5
-- psutil 7.2.2
-- pytest 9.1.1
-- AVX2: supported
-- GPU/CUDA: unavailable
-- readable RAPL `energy_uj`: unavailable
-
-### M01 exact baseline commands
-
-```bash
-python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
-python -m pip install -r requirements.txt
-python -m pytest -m "not slow" -ra
-python -m pytest tests/test_kernel.py -ra
-python setup.py build_ext --inplace
-```
-
-A bounded two-optimizer-step CPU training smoke was also run from `.github/workflows/m01-baseline.yml`.
-
-### M01 results
-
-#### Passed
-
-- dependency installation
-- repository energy API graceful-unavailable probe
-- existing fast test gate: **151 passed**, 16 slow tests deselected
-- native kernel correctness: **4 passed**
-- optional PyTorch extension build
-- tiny CPU training smoke with finite gradients and a parameter update
-
-#### Failed
-
-Final clean baseline: none.
-
-Failures encountered while establishing the baseline and retained in the record:
-
-1. PyTorch 2.14 required C++20 while the repository requested C++17.
-2. The first evidence upload excluded hidden `.m01/` files.
-3. The first status formatter emitted a spurious timeout line due to shell operator precedence.
-
-#### Skipped
-
-- 16 `slow` pytest items explicitly deselected by `-m "not slow"`.
-
-#### Timed out
-
-None.
-
-#### Unavailable
-
-- user's unpushed local working tree
-- GPU/CUDA
-- readable RAPL counters / physical Joule measurements
-- target-device physical-performance recertification
-- complete raw provenance sufficient to independently regenerate all README performance figures
-
-### M01 claim boundaries
-
-M01 established that Python plumbing, tested ternary/INT8 mechanics, AVX2 correctness on the then-tested aligned shapes, extension buildability, synthetic VQ boundedness, MCTS/verifier mechanics, postprocessed halting mechanics, and tiny trainability worked. It did **not** establish the README's broad physical performance/energy numbers, a trained scaling law, end-to-end sequential `K` reuse, arbitrary-depth real-task VQ guarantees, actual compute-saving halting, or grounded verifier self-improvement.
-
----
-
-## Milestone 02 — native-kernel correctness and input contracts
-
-**Stage status:** COMPLETE; accepted and merged to `main` before M03.
-
-M02 changes only native-kernel correctness, packing/backend/input contracts, native-facing benchmark callers, tests, and audit infrastructure. It does not change the reasoning/search/training algorithms.
-
-### Verified implementation / evidence
-
-- M02 base: M01 merge on `main`, `40745dbe185c069aeee9eff3cf63dd411d9e17da`
-- Verified implementation commit: `ba8fa0acf3fe9015235d281be807f40124027cec`
-- Green GitHub Actions run: `34075718044`
-- Evidence artifact: `m02-native-contract-evidence`, artifact id `10001994671`
-- Evidence ZIP SHA-256: `d2367d39eae331ff86a47d2fdbe521963ea6a4c3da1d7e05b9d5dffb6ce82aa9`
-- Focused tests: **16 passed in 34.26 s**
-- Full fast suite: **163 passed, 16 deselected in 33.05 s**
-- PyTorch extension backend in the accepted run: **AVX2**
-- Forced CMake scalar build probe: `spectra_compiled_with_avx2() == 0`
-
-### Root cause: `INT8_MIN * -1`
-
-The requested reproduction is real in the M01 kernel:
-
-- hidden dimension: 32
-- one output
-- activation: `x[0] = -128`, all other activations `0`
-- ternary weight: `w[0] = -1`, all other weights `0`
-- multiplier: `1`
-- requantization shift: `7`
-
-The independent audit compiled the M01 source twice and observed:
-
-| Path | accumulator | requantized output |
-|---|---:|---:|
-| M01 scalar packed | +128 | +1 |
-| M01 scalar decoded | +128 | +1 |
-| M01 AVX2 packed | -128 | -1 |
-| M01 AVX2 decoded | -128 | -1 |
-| M02 scalar packed/decoded | +128 | +1 |
-| M02 AVX2 packed/decoded | +128 | +1 |
-
-The M01 AVX2 code used `_mm256_sign_epi8(x, w)`. `VPSIGNB` performs signed **byte** negation. For `x=-128` and `w=-1`, the true product is `+128`, which cannot be represented in signed INT8. The byte-level negate therefore remains `0x80`, interpreted as `-128`. The scalar path first promotes the operands and therefore produces the mathematical `+128`.
-
-### Numerical fix
-
-M02 deliberately keeps the **full INT8 activation contract**; it does not ban `-128`.
-
-Both packed and already-decoded AVX2 dot-product paths retain the fast `VPSIGNB` product for ordinary lanes and detect the unique exceptional lane condition:
-
-```text
-activation == -128 AND ternary_weight == -1
-```
-
-For each exceptional lane, the byte result `-128` is exactly `256` below the mathematical `+128`, so M02 adds **+256 per exceptional lane** to the widened vector sum. Scalar tails continue to multiply after integer promotion.
-
-An earlier correctness-first M02 prototype widened every activation/weight before multiplication. It was correct but measurably slower, so it was replaced with this exact exceptional-lane correction before M02 completion.
-
-### Native numerical contract
-
-#### Activations
-
-- type: signed INT8
-- valid values: **all `[-128, 127]`**
-- public PyTorch/native extension tensors: CPU only, rank 2, contiguous
-
-#### Ternary weights and packing
-
-- semantic values: `{-1, 0, +1}`
-- codes: `00 -> 0`, `01 -> +1`, `10 -> -1`
-- code `11`: reserved/invalid and rejected by checked native entry points
-- each output row uses exactly `ceil(hidden_dim / 4)` packed bytes
-- rows are padded **independently**
-- unused 2-bit codes in the final byte of a row must be zero
-- `deploy.pack_ternary.pack_ternary_rows` is the native row-padded producer
-- non-multiple-of-four widths are supported through a scalar tail; representative tails are tested
-
-#### Dimensions and accumulator bound
-
-For an INT8 activation and ternary weight, the maximum absolute per-element mathematical product is 128. Native dot widths are therefore restricted to:
-
-```text
-1 <= hidden/inter width <= floor(INT32_MAX / 128) = 16,777,215
-```
-
-This keeps the mathematical dot-product accumulator inside signed INT32. Token/output dimensions passed through the public extension must be positive and fit the native `int` interface.
-
-The contract limit is enforced; M02 does not allocate/test a 16.7-million-wide tensor in CI.
-
-#### Requantization
-
-- accumulator: checked signed INT32 domain above
-- fixed-point multiplier: non-negative signed INT32
-- shift: **integer `0..62` inclusive**
-- `shift=0` is handled explicitly without a negative/undefined rounding shift
-- intermediate `acc * multiplier` and rounding are performed in signed INT64
-- final result saturates to `[-128,127]`
-
-The public scale helper implements:
-
-```text
-mult[o] = round(weight_scale[o] * act_scale / out_scale * 2**shift)
-```
-
-with:
-
-- finite non-negative weight scales
-- finite non-negative activation scale
-- finite strictly-positive output scale
-- rejection if the resulting multiplier exceeds signed INT32
-
-Negative fixed-point multipliers are unsupported by design and rejected.
-
-#### Active indices / sparse semantics
-
-- every active index must satisfy `0 <= index < num_tokens`
-- out-of-range indices are rejected before native work begins
-- zero active indices is valid and performs no writes
-- frozen/unselected rows in the raw C API are untouched
-- the public PyTorch extension allocates a zero output, so unselected rows are zero there
-- **duplicate indices are valid**: each duplicate deterministically recomputes and overwrites the same output row; there is no scatter-add/accumulation behavior
-
-#### Buffer lengths
-
-The checked C ABI receives explicit element counts for every raw buffer and requires exact expected lengths. Examples:
-
-```text
-X elements       = num_tokens * hidden
-W packed bytes   = out_dim * ceil(hidden/4)
-requant entries  = out_dim
-Y elements       = num_tokens * out_dim
-```
-
-The fused FFN applies the corresponding exact checks to both layers.
-
-Raw C pointers cannot prove the actual allocation size behind a dishonest pointer/length pair and do not encode a device concept. CPU/device/dtype/rank/contiguity are therefore enforced by both the public Python wrapper and the PyTorch C++ extension boundary; the raw C ABI independently rechecks dimensions, lengths, packed contents, multipliers, shifts, indices, null pointers, and allocation failure.
-
-### Backend contract
-
-- `deploy/torch_kernel.py` detects host AVX2 conservatively.
-- On a supported x86 host the JIT/setup extension builds the AVX2 implementation.
-- On a host without AVX2 it builds the same source without `-mavx2`, activating the real scalar implementation.
-- CMake exposes `SPECTRA_AVX2=AUTO|ON|OFF`; M02 CI explicitly builds `OFF` and confirms the library reports scalar.
-- Native/JIT build failures are raised with the backend/flags and original exception rather than silently treated as success.
-- The ctypes adapter refuses to load a library compiled for AVX2 on a CPU that does not advertise AVX2.
-
-### M02 test coverage
-
-`tests/test_kernel.py` plus `tests/test_kernel_contract.py` exercise:
-
-- exact requested `-128 * -1` reproduction/fix in scalar and AVX2
-- both packed and decoded dot-product paths
-- **every one of the 256 INT8 activation values** against all ternary signs `-1/0/+1`
-- independent wide-integer Python reference
-- representative widths `1, 3, 4, 31, 32, 33, 63, 64, 65`
-- vector and scalar-tail boundaries
-- positive and negative saturation
-- zero active indices
-- frozen tokens
-- duplicate active indices
-- invalid shifts
-- negative multipliers
-- active-index bounds
-- off-by-one raw buffer lengths
-- reserved ternary code `11`
-- nonzero row-padding bits
-- row-packed producer round-trip
-- public Python CPU/dtype/rank/contiguity/length checks
-- scale conversion checks
-- direct PyTorch extension invalid-input checks
-- backend detection and visible loader failure
-- fused FFN correctness with non-aligned widths
-- weight-stationary decoded correctness with non-aligned widths
-
-### Before/after microbenchmark
-
-This is a small CI-host microbenchmark of the internal dot kernels only; it is **not** a publication or target-device performance claim. Configuration: hidden width 512, 32 input rows, 20,000 dot calls, five rounds, median ns/dot.
-
-| Path | M01 buggy AVX2 | M02 corrected AVX2 | ratio |
-|---|---:|---:|---:|
-| packed dot | 54.01875 ns | 57.33455 ns | **1.0614x** (+6.1%) |
-| decoded dot | 23.8339 ns | 28.19465 ns | **1.1830x** (+18.3%) |
-
-The checksums differ because the M01 AVX2 implementation computes incorrect values whenever the random benchmark contains `-128 * -1`; the after checksum reflects corrected arithmetic. The timing comparison is retained only to expose the cost of correctness on that workload.
-
-### M02 failures/iterations retained explicitly
-
-No final M02 check failed, but several issues were found while establishing the gate and remain part of the record:
-
-1. A test that constructed reserved code `11` used Python `~0x3` against NumPy `uint8`; NumPy 2.4 rejects the negative mask. The test was corrected to unsigned `0xFC`. Production code was unchanged.
-2. An extension smoke probe attempted to import the built PyTorch extension before importing PyTorch, so `libc10.so` was not loaded. The probe now imports `torch` first; the extension build itself had succeeded.
-3. The first optimized exceptional-lane rewrite accidentally supplied 30 arguments to a 32-byte AVX2 LUT initializer. GCC rejected the AVX2 build. The LUT is now defined once as an exact 16-byte table and broadcast to both AVX2 lanes.
-4. The audit initially captured compiler stderr and surfaced only `CalledProcessError`. It now prints the complete failed compiler command/stdout/stderr before raising.
-5. A full-widen arithmetic prototype was correct but caused a larger measured regression; it was replaced by the exact `+256` exceptional-lane correction. This optimization did not relax the tests or the full INT8 contract.
-
-### Remaining unsupported / unproven cases
-
-- Windows/MSVC execution was not tested by the M02 GitHub Actions gate.
-- A forced scalar build was tested on x86; non-x86/ARM compilation and execution were not exercised.
-- The maximum allowed width (`16,777,215`) is contract-checked but not allocated/executed in CI.
-- Raw C callers can lie about pointer allocation size; native code can validate only the explicit lengths it is given.
-- Negative requantization multipliers/scales are intentionally unsupported.
-- M02 does not re-certify the README's historical throughput/cache/energy headline measurements on target hardware. The small before/after microbenchmark is only a regression check.
-
-### M02 decision
-
-The M01 known AVX2 shape/numerical boundary is closed for the documented M02 contract: full INT8 values are supported, representative vector tails are tested, row padding is explicit, invalid inputs fail loudly, and a scalar backend is real and testable.
-
-**Next action:** stop here for M02. Do not treat this milestone as evidence for broader system-level performance, energy, reasoning-quality, or trained-scaling claims; those remain separate later milestones.
-
----
-
-## Milestone 03 — trustworthy task/data/evaluation contracts
-
-**Stage status:** COMPLETE ON `research/m03-task-data-eval`; accepted and merged to `main` as `01638b10777029fb28bb35229e374f0865c6e5d4` before M04.
-
-M03 changes task/data construction, symbolic validation, task metrics, split/manifests, retained task configuration, tests, and audit infrastructure only. It does **not** change SPECTRA's reasoning/search/training algorithms.
-
-### Verified implementation / evidence
-
-- M03 base: accepted M02 merge on `main`, `e0781ec8b4e649ab4ccd48d4cd5f432a9b88d249`
-- First complete green implementation commit: `03c4a8070bd250f4c7ff17a5eb98073293ce8c67`
-- Green implementation workflow run: `34077748173`
-- Evidence artifact: `m03-task-data-evidence`, artifact id `10002690239`
-- Evidence ZIP SHA-256: `60ec3325d84c529c779f9ac32eafec053c61fbca7b2a053ded81b15b2cf74c20`
-- Evidence artifact size: 17,500 bytes; retention: 14 days
-- Focused M03/data/verifier gate at the recorded run: **42 passed, 3 deselected in 1.31 s**
-- Full fast suite at the recorded run: **182 passed, 16 deselected in 64.00 s**
-- Manifest reference seed: `314159`
-- Manifest reference sizes for each retained task: train 8 / validation 4 / test 4
-- Generator version: `spectra-m03-data-v1`
-- A subsequent parity refinement also made the tensor Sudoku validator reject non-integral tensor dtypes to match the NumPy contract and added `tests/test_m03_validator_parity.py`; final branch CI must remain green before merge.
-
-### Task-construction root cause and explicit retained contracts
-
-M03 removed the old `scripts/_common.py` shortcut that effectively behaved as **Sudoku vs. everything-else-is-maze**. The shortcut passed maze-shaped kwargs to every non-Sudoku task. This silently left ARC-style construction at generator defaults even though `config/arc.yaml` declared a different shape.
-
-Each retained task now resolves through `data/task_contracts.py` before construction. The executable task contract validates shape, vocabulary, spatial dimensions, sequence length, padding/mask policy, task-specific generator parameters, and benchmark scope.
-
-Retained local configurations are:
-
-| Task | Retained M03 contract | Benchmark scope |
+| Milestone | Scope | Accepted / merged state |
 |---|---|---|
-| Sudoku | 9×9, seq 81, vocabulary 0..9, box 3, 30–50 requested clues, uniqueness on, randomized completion | generated local Sudoku |
-| Maze | 15×15, seq 225, tokens 0=wall/1=open/2=start/3=goal/4=path, shortest-path optimality required | synthetic perfect-maze path overlay |
-| ARC-style | 30×30 padded canvas, seq 900, pad 10, local `flip_h`, source max 6×6 | **synthetic local variant; NOT official ARC/ARC-AGI** |
-| BabyAI-style | 8×8, seq 64, exact local 8-token vocabulary, wall probability 0.2 | **synthetic local one-step variant; NOT official BabyAI** |
-| SmartHome | 1×16, seq 16, exact local 17-token vocabulary, pad 0 | synthetic deterministic policy snapshot |
+| M01 | trustworthy baseline | accepted and merged; `main` merge `40745dbe185c069aeee9eff3cf63dd411d9e17da` |
+| M02 | native-kernel correctness and input contracts | accepted and merged; `main` merge `e0781ec8b4e649ab4ccd48d4cd5f432a9b88d249` |
+| M03 | trustworthy task/data/evaluation contracts | accepted and merged; `main` merge `01638b10777029fb28bb35229e374f0865c6e5d4` |
+| M04 | reproducible training and checkpoint state | accepted and merged through PR #4; `main` merge `370caf708755e1c68c59d5696778597f0290ea68` |
+| M05 | checkpoint-backed evaluation | **COMPLETE ON `research/m05-checkpoint-eval`; not merged at the time of this entry** |
 
-`GridDataset` now rejects generator/config disagreements in flattened length or declared vocabulary and carries input/target content masks. ARC-style masks exclude pad token 10. SmartHome input masks exclude PAD while the repeated action target remains fully evaluated.
-
-### Sudoku validation and generation contract
-
-The NumPy validator in `data/sudoku.py` now requires:
-
-- exact `(N,N)` shape implied by `box`
-- integral NumPy representation
-- partial-grid domain `0..N`
-- completed-grid domain `1..N`
-- no repeated nonzero digit in any row, column, or box
-
-Malformed or contradictory puzzles return invalid; `count_solutions` returns 0 and `solve` returns `None` rather than entering solver work with contradictory masks.
-
-`model/verifier.py` implements the corresponding tensor partial-grid semantics and now requires integer tensor dtypes as well. M03 adversarial/parity tests cross-check NumPy and tensor validity on valid puzzles and contradictory clues and include an explicit dtype-parity regression.
-
-Sudoku completed-board generation is no longer restricted to row/column/digit/transposition transformations of one canonical completed solution. The retained M03 config uses randomized MRV/backtracking **from an empty board**. The legacy canonical-symmetry construction remains available only through an explicit `solution_method: canonical_symmetry` experiment.
-
-This broadens the construction process but does **not** establish uniform sampling over all Sudoku solutions or equivalence classes, and does not make a real-world Sudoku distribution/generalization claim.
-
-### Maze semantic-success contract
-
-`data/maze.py::candidate_success` is independent of the stored reference target. A successful candidate must:
-
-- have the declared shape/token domain
-- preserve exactly one declared start and one goal
-- preserve walls exactly
-- place path cells only on originally open cells
-- form one connected simple 4-neighbour start-to-goal route
-- have endpoint degree 1 and interior route degree 2 (no branches/disconnected path components)
-- satisfy BFS shortest-path length when `require_optimal` is true
-
-The retained maze config requires optimality. Copying a non-trivial unsolved input does **not** count as success. Adversarial tests cover unsolved copies, wall crossings, branches, longer-but-valid routes when optimality is disabled, and rejection of those longer routes when optimality is required.
-
-### Primary task metrics
-
-`eval/metrics.py` separates:
-
-1. `exact_reference_match`: candidate equals the retained target cell-for-cell.
-2. `semantic_validity`: strict task success independent of target identity where a complete symbolic checker exists (currently Sudoku and maze).
-3. `blank_cell_accuracy`: Sudoku accuracy only on cells blank in the input.
-4. `content_cell_accuracy`: padding-aware content accuracy for the local ARC-style padded task.
-
-These metrics are intentionally not interchangeable. M03 includes a 4×4 Sudoku regression where a candidate can be semantically valid while differing from a separate valid reference solution, so semantic validity is 1 while exact reference match is 0.
-
-No official benchmark semantic metric is claimed for the synthetic local ARC-style or BabyAI-style generators.
-
-### Reproducible grouped split/manifests contract
-
-`data/splits.py` and `scripts/build_data_manifests.py` now provide reproducible train/validation/test manifests with:
-
-- one root integer seed
-- NumPy `SeedSequence.spawn(6)` with **separate generation and augmentation child streams for train, validation, and test**
-- stable example IDs
-- a base `group_id` computed from the **unaugmented** input/target pair before augmentation
-- augmentation applied only after split ownership is fixed
-- cross-split regenerated base-group rejection
-- cross-split exact-fingerprint audit
-- generator version, task scope, generator kwargs, RNG spawn keys, split counts, stable IDs, and per-example/task-specific difficulty metadata
-
-SmartHome is a special finite-universe case: all 64 exact binary states are deterministically partitioned into disjoint 52/6/6 train/validation/test state pools before sampling. Repeats may occur **within** a split when sampling from its assigned finite pool; that is reported rather than hidden. Cross-split state/group overlap remains forbidden.
-
-### M03 reference manifests and duplicate audit
-
-The retained evidence artifact contains `arc.json`, `babyai.json`, `maze.json`, `smarthome.json`, and `sudoku.json`, each generated at seed `314159`, sizes 8/4/4.
-
-For **all five** reference manifests:
-
-- train/validation group overlap: 0
-- train/test group overlap: 0
-- validation/test group overlap: 0
-- train/validation exact overlap: 0
-- train/test exact overlap: 0
-- validation/test exact overlap: 0
-
-Within-split exact/group duplicates in this small reference run:
-
-- Sudoku: 0 / 0 / 0 for train/validation/test
-- Maze: 0 / 0 / 0
-- ARC-style: 0 / 0 / 0
-- BabyAI-style: 0 / 0 / 0
-- SmartHome: 2 / 1 / 2 repeated examples/groups in train/validation/test, reflecting finite split-specific state sampling; this does not cross split boundaries
-
-### Recorded reference difficulty distributions
-
-The manifests persist full counts/min/max/mean. Selected ranges from the retained 8/4/4 reference run:
-
-- Sudoku clues: train 30–50, validation 31–45, test 30–48; corresponding blanks are recorded.
-- Maze shortest-path length: train 33–57, validation 37–49, test 49–77. Perfect-maze wall fraction was 0.568888… for all reference samples at 15×15.
-- ARC-style source grids: source height/width are recorded per split within the declared 2..6 generated range.
-- BabyAI-style: wall counts and whether the one-step agent moved are recorded; reference wall counts ranged 8–18 across splits.
-- SmartHome: action-token and non-pad sensor-token distributions are recorded; every encoded state contains six non-pad feature tokens.
-
-These are descriptive distributions of the small reference manifests, not claims that the splits are population-matched or IID.
-
-### M03 failures/iterations retained explicitly
-
-No final accepted M03 check may be described as passing until the final branch gate is green. During construction the following failures were exposed and fixed without weakening tests:
-
-1. Initial split augmentation passed `height/width` both positionally and through task kwargs, causing Python argument collisions for retained configs. The split/build layers now remove duplicate spatial kwargs before augmentation.
-2. The direct legacy ARC builder inherited the generator's default pad token 10, but the first M03 mask implementation required an explicit pad token. The builder now inherits the same historical default while config-driven construction remains explicit.
-3. The direct manifest CLI initially lacked the repository root on `sys.path`; it now mirrors the repository's other directly runnable script entry points.
-4. A final validator parity review found NumPy Sudoku rejected floating representations while the tensor validator could accept integral-valued floats. The tensor validator now requires an integer dtype and has a dedicated regression test.
-
-### Remaining limitations / unsupported claims
-
-- The local ARC-style generator is **not** ARC/ARC-AGI and has no official ARC dataset/evaluation integration.
-- The local BabyAI-style generator is **not** the official BabyAI environment/benchmark and evaluates only a local one-step next-state construction.
-- The split mechanism prevents observed base/augmentation leakage and audits exact/group duplicates; it does not prove IID sampling, matched population difficulty, absence of semantic near-duplicates, or external benchmark generalization.
-- Sudoku randomized backtracking is not proven uniform over completed solutions/equivalence classes.
-- Uniqueness is enforced for the retained Sudoku puzzle maker but the manifest difficulty field is clue/blanks, not a calibrated human difficulty rating.
-- Maze difficulty records path length/wall fraction; no human/navigation difficulty calibration is claimed.
-- SmartHome has only 64 exact binary states; large datasets necessarily reuse states within their split-specific pool unless the experiment explicitly caps examples to unique states.
-- M03 does not establish trained task accuracy, search advantage, scaling behavior, energy savings, or published hardware performance claims.
-
-### M03 decision
-
-M03 closes the task/data/evaluation **contract** layer for the retained local experiments: construction is explicit, malformed Sudoku and false maze successes are rejected, primary metrics have distinct meanings, and split/manifests are reproducible and leakage-audited.
-
-**Next action:** stop here for M03. Do not expand this milestone into training/scaling/performance claims.
+Detailed M01–M04 evidence, numerical contracts, test counts, failures, and limitations are unchanged in the archived register linked above. The sections below record M05 in full.
 
 ---
 
-## Milestone 04 — reproducible training and checkpoint state
+## Milestone 05 — checkpoint-backed evaluation
 
-**Stage status:** COMPLETE ON `research/m04-repro-checkpoints`; not merged at the time of this entry.
+**Stage status:** COMPLETE ON `research/m05-checkpoint-eval`; not merged at the time of this entry.
 
-M04 changes training construction/order, runtime precision declarations, checkpoint/resume state, deterministic sampling, EMA restoration, bounded validation, finite-value guards, training metrics, and reproducibility audit infrastructure. It does **not** change SPECTRA's reasoning/search algorithms or native kernel mathematics.
+M05 changes evaluation loading, immutable evaluation snapshots, research-vs-smoke boundaries, inference-setting contracts, realized-compute accounting, per-example provenance, tests, and audit infrastructure. It does **not** change TRM training mathematics, native-kernel mathematics, or the underlying LatentNativeMCTS search algorithm; the MCTS subclass added in M05 only counts calls around the existing implementation.
 
-### Verified implementation / evidence
+### Repository / evidence state
 
-- M04 base: accepted M03 merge on `main`, `01638b10777029fb28bb35229e374f0865c6e5d4`
-- Green implementation head before acceptance refinement: `da86701c87cf9c5c4137ca5e1bc8508caa48ff69`
-- Green implementation workflow run: `34079875098`
-- Acceptance-specific quantization-resume refinement commit: `0cb317f1a027131a43994b35c892cd26215934c3`
-- Acceptance-specific green workflow run: `34080803213`
-- Acceptance-specific evidence artifact: `m04-repro-training-evidence`, artifact id `10003645300`
-- Acceptance-specific evidence ZIP SHA-256: `8bdda5f18d5adbeb60ee2fd24d7b76e126bef652615eba9a5ba8d0ea9ce37f99`
-- Focused M04/stability gate after acceptance refinement: **11 passed, 1 deselected in 5.85 s**
-- Full fast suite after acceptance refinement: **191 passed, 16 deselected in 63.57 s**
+- M05 base: accepted M04 merge on `main`, `370caf708755e1c68c59d5696778597f0290ea68`
+- Final green implementation head: `5ccd87d907e635b0e47a2e296f65de4c4de78071`
+- Final green implementation workflow: GitHub Actions run `34082746876`
+- Job: `101621021178`
+- Evidence artifact: `m05-checkpoint-eval-evidence`
+- Artifact id: `10004234258`
+- Evidence ZIP SHA-256: `2dc88643726db54eec5c15a66d6833bc178a113ac1d0bad311094bdf67856ed5`
+- Artifact size: 91,098 bytes; workflow retention: 14 days
+- Focused M05 gate: **14 passed in 4.43 s**
+- Full fast suite: **202 passed, 16 deselected in 61.09 s**
 - CI host: Ubuntu 24.04.4, Python 3.11.16, torch 2.14.0+cpu, NumPy 2.4.6, pytest 9.1.1
-- CUDA availability in the recorded M04 runs: **false**
+- CUDA availability: false
+- RAPL energy on the CI host: unavailable
 
-### Root cause: seeding occurred after model/data construction
+### Root causes closed by M05
 
-Before M04, both `scripts/train_teacher.py` and `scripts/train_bit_student.py` constructed datasets and initialized the model before `Trainer.__init__`; the only call to `set_seed` lived inside `Trainer.__init__`. Therefore the configured seed did **not** determine the already-created data or initial model weights.
+Before M05, the research-facing evaluation paths were not trustworthy enough for scientific result labels:
 
-M04 defines stable, independent SHA-256-derived streams from one experiment seed:
+1. `scripts/eval_scaling_laws.py` constructed fresh random TRMs for requested parameter budgets instead of loading trained checkpoints.
+2. The same scaling path constructed fresh random `LatentEnergyVerifier` and `LatentActionCodebook` objects while presenting the configuration as learned search.
+3. `scripts/eval_edge.py` allowed a missing checkpoint to fall through to random initialization.
+4. Scaling rows treated `N_sup` as a generic recursion/search-depth knob even though `LatentNativeMCTS._step()` does not consume `N_sup`; changing it could therefore label two search rows differently while executing identical MCTS transition computation.
+5. M03 split manifests recorded stable IDs/split provenance but did not contain the exact input/target arrays, so evaluation replay still depended on generator code and seed reconstruction.
+6. M04 EMA state tracks trainable parameters only, while ternary `quant_strength` is deliberately a non-persistent buffer stored separately in checkpoint quantization provenance. A research evaluator must restore both pieces explicitly rather than instantiate a fresh rho or substitute raw trainable weights.
 
-- `data`: used before dataset construction
-- `model`: used before model initialization
-- `train`: used for training stochasticity and the private batch sampler
-- `eval`: used only inside an isolated validation RNG context
+### Immutable evaluation snapshot contract
 
-Evaluation snapshots/restores the training RNG state, so bounded validation does not advance training randomness. The M04 reference run recorded:
-
-```text
-base  = 20260907
-data  = 5775192201672740212
-model = 1354837862885235148
-train = 1575798474109088405
-eval  = 241666879215927776
-```
-
-Two fresh reference builds using the same original seed produced **bitwise-identical initial model weights and bitwise-identical generated train/validation data**, even after the global RNGs were deliberately perturbed between constructions.
-
-### Actual precision/backend contract
-
-Compute precision is now a runtime/training setting rather than an informal model label:
-
-- `precision: fp32` means ordinary FP32 PyTorch eager compute.
-- `precision: fp16_amp` is an implemented CUDA path using `torch.autocast(device_type="cuda", dtype=torch.float16)` and `GradScaler`.
-- requesting `fp16_amp` on CPU is rejected; it cannot silently fall back to FP32 while retaining an FP16 label.
-- checkpoints record backend, device/device type, precision mode, parameter dtype, autocast dtype, and GradScaler use/state.
-
-The deterministic M04 reference used:
+`eval/evaluation_manifest.py` introduces:
 
 ```text
-backend         = pytorch_eager
-device           = cpu
-precision_mode   = fp32
-parameter_dtype  = float32
-autocast_dtype   = none
-grad_scaler      = false
-```
-
-The M04 CI host had no CUDA device. The CUDA `fp16_amp` path is therefore **implemented but not executed/validated by this milestone**, and M04 makes no universal GPU bitwise-determinism claim.
-
-### Versioned checkpoint format
-
-`train/checkpoint.py` defines:
-
-```text
-format  = spectra.training
+format  = spectra.eval_manifest
 version = 1
 ```
 
-A resume-capable M04 checkpoint records:
+A research evaluation snapshot embeds the exact selected split:
 
-- raw model state used for continued training
-- EMA state used for EMA evaluation
-- explicit `training_identity = raw`
-- explicit `evaluation_identity = ema`
-- resolved architecture/model configuration
-- task/data configuration and train/validation dataset SHA-256 fingerprints
-- actual backend/device/precision settings
-- resolved run configuration
-- optimizer state
-- scheduler state
-- global step and examples seen
-- original schedule signature, including the original `max_steps`
-- quantization enabled state, quantization warmup schedule, and current per-layer quantization strengths
-- GradScaler state when AMP is active
-- Python RNG state
-- NumPy RNG state
-- PyTorch CPU RNG state
-- CUDA RNG states when available
-- deterministic sampler state: private generator, epoch, permutation, next position, batch size, dataset size, seed, and drop-last policy
+- input arrays
+- target arrays
+- input masks
+- target masks
+- stable data IDs
+- pre-augmentation group IDs
+- per-example metadata
+- task/scope/official-benchmark label
+- exact task configuration
+- height, width, sequence length, vocabulary and pad token
+- SHA-256 of the source M03 data manifest when available
+- a canonical `manifest_sha256`
 
-Writes use a same-directory temporary file, flush/fsync, and atomic `os.replace`; failed writes clean up the temporary file.
+The canonical digest excludes only its own digest field. Loading recomputes it and rejects tampering. Evaluation constructs the dataset directly from the embedded arrays; it does **not** regenerate examples at evaluation time.
 
-### Legacy checkpoint compatibility and EMA identity
-
-The supported historical format `{model: state_dict, ema: state_dict?}` is explicitly validated/migrated as `spectra.legacy_weights` **weights-only** state.
-
-Those legacy files are not declared resume-capable because they never contained optimizer, scheduler, RNG, sampler, or global-step state. Asking to deterministically resume one fails loudly.
-
-Raw and EMA identities are never silently substituted. If EMA weights are requested but absent, loading fails. Resume-capable M04 checkpoints require EMA state when they declare EMA as the evaluation identity.
-
-### Deterministic sampler/resume contract
-
-`StatefulBatchSampler` owns a private CPU `torch.Generator` and stores the current permutation and next index position. The M04 deterministic contract uses `num_workers=0`, so the recorded sampler position corresponds to the next batch actually consumed.
-
-Deterministic resume additionally validates that the current architecture, task/data fingerprints, original schedule, backend, device type, and precision match the checkpoint. Changing those fields rejects deterministic resume instead of silently continuing under a different experiment.
-
-### Fixed M04 CPU reference
-
-`config/m04_cpu_reference.yaml` deliberately keeps the reproducibility experiment small:
-
-- 4×4 Sudoku, box size 2
-- vocabulary 5, sequence length 16
-- exactly 8 clues, uniqueness required
-- random-backtracking completed boards
-- no augmentation
-- model dimension 16
-- one block, 2 heads
-- `n=1`, `T=1`, `N_sup=1`
-- batch size 4
-- original schedule: **8 optimizer steps**
-- LR `5e-4`, LR warmup 2
-- weight decay 0
-- EMA decay 0.9
-- gradient clip norm 1.0
-- `lambda_h=0`, `lambda_improve=0`, `margin=0`
-- validation bounded to 2 batches
-- CPU FP32 eager compute
-- deterministic algorithms enabled
-
-The reference intentionally uses the simple task cross-entropy objective before optional regularizers. Its tiny accuracy is not a scientific task-capability result.
-
-### Interrupted/resumed equivalence
-
-The audit compared:
-
-1. one uninterrupted run to step 8, and
-2. a separate fresh run interrupted at step 4, checkpointed, reconstructed from fresh Python/model/data objects, restored, then continued to step 8 **without changing the original 8-step scheduler/quantization horizon**.
-
-Declared comparison tolerance:
+The M05 reference snapshot was built from `config/m04_cpu_reference.yaml`, seed `20260907`, test size 4. Its canonical SHA-256 was:
 
 ```text
-absolute tolerance = 1e-7
-relative tolerance = 1e-6
+d8d4bb166a632fd735f7e2c1380e6cb815c8f5f0f86aefd42a39106e47908747
 ```
 
-Observed on the M04 CPU reference:
+The four frozen test IDs were:
 
 ```text
-raw-weight maximum absolute difference = 0.0
-EMA-weight maximum absolute difference = 0.0
-sampler epoch/position/permutation equal = true
-full final cell accuracy    = 0.15625
-resumed final cell accuracy = 0.15625
-full final board accuracy    = 0.0
-resumed final board accuracy = 0.0
+9d3eda1cb2139845b28a16b2
+9dfaae0192c1ac074bba42eb
+fb66cbcdc44afb5d0818ddff
+1c7f1319ecce8ca1e48f2c37
 ```
 
-Thus the tested CPU reference is bitwise equal on the compared raw/EMA tensors, which is stronger than the declared tolerance. The documented guarantee remains the declared tolerance on this bounded CPU configuration, not a universal bitwise-determinism promise.
+Both the `N_sup=1` and `N_sup=2` reference evaluations consumed these exact four IDs in the same order.
 
-### Acceptance-gate ternary quantization resume regression
+### Strict trained-core checkpoint restoration
 
-Acceptance review found one evidence gap: the main interruption/resume audit above used the non-ternary reference, while quantization state had only been serialization-tested. M04 therefore added `test_ternary_resume_restores_quantization_state_and_continuation`.
+`eval/checkpoint_eval.py::load_research_trm_checkpoint` requires the current versioned M04 training-state format and rejects:
 
-That regression uses a four-step ternary CPU/FP32 run with `quant_warmup_steps=4`:
+- missing files
+- legacy weights-only checkpoints
+- non-resume-capable/incomplete checkpoint structures
+- `global_step <= 0` checkpoints
+- unsupported model family metadata
+- missing architecture fields
+- architecture/task shape or vocabulary disagreement
+- incompatible state dicts
+- invalid raw/EMA identity
+- missing EMA trainable parameters
+- missing or inconsistent ternary quantization provenance
 
-- uninterrupted reference trains through step 4;
-- a second run is interrupted at step 2, where every recorded per-layer quantization strength is `rho=0.5`;
-- a freshly constructed ternary model starts at its default `rho=1.0`;
-- `load_checkpoint` is required to restore the checkpointed `rho=0.5` **before another training step occurs**;
-- the original quantization warmup horizon remains 4 steps;
-- resumed training continues to step 4 and finishes at `rho=1.0`;
-- final raw model state and EMA state match the uninterrupted ternary reference within the same M04 tolerance;
-- final scheduler LR, sampler epoch/position/permutation, and per-layer quantization strengths also match the uninterrupted reference.
+The evaluator reconstructs the actual checkpoint model rather than accepting YAML guesses:
 
-This closes the acceptance requirement that quantization state be preserved by a **tested resume path**, not merely present in serialized metadata.
+- model family
+- dimension and exact parameter count
+- vocabulary / sequence length
+- layer count
+- `n`, `T`, `N_sup`
+- attention heads
+- residual scales
+- max grid size
+- ternary setting
+- A8 setting
+- raw versus recorded EMA evaluation identity
 
-### Bounded validation, finite checks, and metrics
+It then forces `model.eval()`; research evaluation itself runs under `torch.inference_mode()`.
 
-Validation now:
+#### EMA and non-persistent quantization state
 
-- has an explicit positive `eval_batches` bound
-- uses deterministic validation order
-- defaults to EMA weights and reports `weight_identity = ema`
-- runs under the isolated eval RNG stream without consuming the training RNG
-- reports evaluated batch/example counts
+For an EMA-labelled result, every trainable parameter must come from the checkpoint EMA mapping. Raw trainable substitution is forbidden. Persistent non-parameter model state can come from the matching raw state where required by PyTorch state reconstruction.
 
-Training now hard-fails on:
+`FakeBitLinear.quant_strength` is intentionally non-persistent and therefore is not carried by either raw `state_dict()` or EMA. M05 separately restores `training.quantization.strengths` through `load_quant_strength_state` and verifies the restored per-layer values. The ternary+A8 adversarial fixture checkpointed at training step 1 with rho `0.25`; the M05 loader test verifies the research model is restored at rho `0.25` rather than constructor default rho `1.0`.
 
-- non-finite loss before backward
-- non-finite gradients after backward/unscale
-- non-finite gradient clipping result (`error_if_nonfinite=True`)
-- non-finite parameters after the optimizer step
+### Checkpoint / evaluation-manifest compatibility
 
-Recorded training metrics include loss, raw/clipped gradient norms, LR, quantization strength, train cell accuracy, batch size/examples seen, bounded validation cell/board accuracy, per-step accuracy, collapse diagnostics, and explicit raw/EMA evaluation identity.
+Research evaluation requires the checkpoint and immutable snapshot to agree on:
 
-### Exact M04 evidence commands
+- task name
+- height and width
+- sequence length
+- vocabulary
+- exact resolved task configuration
+
+A modified manifest whose digest is deliberately recomputed still fails when its task configuration no longer matches the trained checkpoint. Distribution-shift evaluation therefore requires an explicitly different declared contract; it cannot occur accidentally through regeneration or a config override.
+
+### Learned-search auxiliary checkpoint contract
+
+Research-labelled learned Latent MCTS never creates fresh random auxiliaries.
+
+M05 defines versioned learned auxiliary metadata:
+
+```text
+format  = spectra.learned_auxiliary
+version = 1
+```
+
+The supported M05 auxiliary kinds are:
+
+- `latent_energy_verifier`
+- `latent_action_codebook`
+
+Each artifact must record `trained_steps > 0`, architecture metadata, state dict, and compatibility tied to:
+
+- the **exact core checkpoint SHA-256**
+- task
+- latent dimension
+- vocabulary
+- sequence length
+
+Learned search requires both a compatible verifier checkpoint and a compatible action-policy checkpoint. Missing either one, wrong auxiliary kind, incomplete architecture, malformed state, zero-step/untrained metadata, or a core-checkpoint hash mismatch fails before a research result is emitted.
+
+The M05 adversarial tests use one-step-optimized auxiliary fixtures only to verify this loader/search contract. They are **not** evidence that a scientifically trained verifier or action policy is good, calibrated, or beneficial.
+
+### Compute-knob contract
+
+M05 separates requested labels from computation actually consumed.
+
+#### Ordinary greedy forward
+
+`N_sup` is a real knob for the ordinary TRM forward pass. For a checkpoint with `T` outer cycles and inner recurrence parameter `n`:
+
+```text
+recursive_cycle calls / example = N_sup * T
+shared-operator applications / example = N_sup * T * (n + 1)
+```
+
+The reference checkpoint had `T=1`, `n=1`.
+
+Reference realized totals over the same four examples:
+
+| setting | forward calls | recursive-cycle calls | shared-operator applications | stopping reason |
+|---|---:|---:|---:|---|
+| `N_sup=1` | 4 | 4 | 8 | `greedy_forward_complete` ×4 |
+| `N_sup=2` | 4 | 8 | 16 | `greedy_forward_complete` ×4 |
+
+The tiny reference checkpoint happened to produce the same task metrics at those two settings. This is **not** evidence that the knob was ignored: realized cycle/operator counters doubled exactly as specified.
+
+#### Current native learned MCTS
+
+`LatentNativeMCTS._step()` consumes the checkpoint's `T` and `n` through `recursive_cycle`; it does **not** consume `N_sup`. M05 therefore:
+
+- rejects `ordinary_n_sup` / `N_sup` as an MCTS transition setting
+- keeps the checkpoint's original `N_sup` in provenance only
+- excludes it from the effective search-compute signature
+- records `N_sup_consumed_by_search_transition = false`
+
+Current `LatentNativeMCTS` is also deterministic: there is no random rollout sampling, random tie break, root noise, or stochastic policy sampling. A `search_seed` is therefore currently a decorative ignored setting and is rejected. M05 records:
+
+```text
+search_stochastic = false
+search_seed_consumed = null
+```
+
+If a future stochastic search implementation is introduced, it must define and consume an independent search RNG stream before exposing a research seed knob.
+
+`uncertainty_beta` is consumed only when the loaded verifier implements `value_with_uncertainty`. The strict M05 learned-verifier loader currently supports a single `LatentEnergyVerifier`, which does not implement that interface, so nonzero `uncertainty_beta` is rejected rather than silently ignored. A future ensemble/uncertainty verifier checkpoint must explicitly satisfy that interface before such a sweep is valid.
+
+The effective current MCTS settings therefore include only knobs/metadata actually used by the loaded implementation, such as rollout budget, loaded action count/codebook, checkpoint `T/n`, and PUCT coefficient; uncertainty is valid only with a compatible uncertainty-aware verifier.
+
+### Realized MCTS compute accounting
+
+`CountingLatentNativeMCTS` wraps the existing MCTS methods without changing search math and records per example:
+
+- child transition calls (`_step`)
+- node expansions (`_expand`)
+- verifier calls (`_value`)
+- rollouts requested
+- rollouts completed
+- stopping reason
+- corresponding recursive-cycle and shared-operator applications
+
+The adversarial contract fixture uses three learned actions and two rollouts. It verifies exactly:
+
+```text
+expansions             = 3
+transition calls       = 9
+verifier calls         = 2
+rollouts completed     = 2
+stopping reason        = rollout_budget_exhausted
+```
+
+These values establish accounting for that tested search topology; they are not a claim about learned-search quality.
+
+### Per-example research output
+
+Research evaluation emits a record for every frozen example containing at least:
+
+- checkpoint path and SHA-256
+- checkpoint format/version/global step
+- actual model family and parameter count
+- ternary/A8 settings
+- checkpoint `n/T/N_sup`
+- requested and realized raw/EMA identity
+- actual evaluation backend/device/dtype
+- training runtime metadata
+- evaluation-manifest canonical/file SHA-256
+- split/task/scope
+- data ID and group ID
+- inference setting
+- realized setting
+- verifier/action-policy checkpoint hashes when search is used
+- prediction tokens
+- exact-reference correctness boolean
+- task metrics
+- realized compute counters and stopping reason
+
+The result kind is `research_checkpoint`. Random initialization can never produce that label.
+
+### Random-initialization smoke boundary
+
+Historical parameter-budget random models remain only behind explicit smoke mode:
+
+```text
+--smoke-random-init
+```
+
+Smoke rows are permanently marked:
+
+```text
+result_kind     = smoke_random_init
+research_result = false
+```
+
+The old random-initialized dense-vs-SPECTRA null-hypothesis result path was disabled entirely rather than retaining an easy-to-misread pseudo-experiment. A scientific comparative/null-hypothesis result now requires separately trained compatible checkpoints and a fixed evaluation snapshot.
+
+### M05 reference checkpoint-backed run
+
+The accepted implementation CI trained the tiny eight-step M04 CPU teacher only to exercise the full checkpoint→snapshot→evaluation path.
+
+Reference teacher checkpoint file SHA-256:
+
+```text
+2bb51758b5d4bfcbf2f73cbbb7b17a77b24779e5bdf73eb1c2a66501259e59e4
+```
+
+Loaded evaluation provenance:
+
+```text
+model family       = TRM
+parameter count    = 4,488
+ternary            = false
+A8                 = false
+weight identity    = ema
+backend            = pytorch_eager
+device             = cpu
+manifest examples  = 4
+```
+
+Reference metrics for both `N_sup=1` and `N_sup=2` on the same frozen examples were:
+
+```text
+exact reference match = 0.0
+semantic validity      = 0.0
+cell accuracy          = 0.203125
+blank-cell accuracy    = 0.03125
+```
+
+These low values are expected from a tiny mechanics checkpoint and are not a task-capability or scaling-law claim. The single-run CI latency samples (~0.745 ms and ~1.290 ms) are retained only as execution smoke evidence and are **not target-hardware performance claims**. No physical energy reading was available.
+
+### Exact reproducible M05 commands
+
+Create a versioned trained checkpoint:
 
 ```bash
-python -m pytest \
-  tests/test_m04_repro_checkpoint.py \
-  tests/test_stability.py \
-  -m "not slow" -ra
-
-python scripts/m04_repro_audit.py \
-  --config config/m04_cpu_reference.yaml \
-  --train-size 24 --val-size 12 \
-  --out .m04/repro_audit.json
-
 python scripts/train_teacher.py \
   --config config/m04_cpu_reference.yaml \
   --train-size 24 --val-size 12 \
-  --out .m04/cli_teacher
-
-python -m pytest -m "not slow" -ra
+  --out outputs/m05_teacher
 ```
 
-The teacher CLI smoke created `teacher.pt`, and independent readback confirmed format `spectra.training`, version 1, CPU/FP32/eager runtime, `global_step=8`, raw training identity, EMA evaluation identity, and sampler state.
+Freeze the exact test examples:
 
-### M04 failures/iterations retained explicitly
+```bash
+python scripts/build_eval_manifest.py \
+  --config config/m04_cpu_reference.yaml \
+  --train-size 24 --val-size 12 --test-size 4 \
+  --split test --seed 20260907 \
+  --out outputs/m05_test_manifest.json
+```
 
-The final implementation gate is green. Two intermediate failures and one acceptance-evidence refinement were preserved without relaxing tests or tolerance:
+Checkpoint-backed scaling/inference sweep:
 
-1. The first standalone `scripts/m04_repro_audit.py` CI execution failed with `ModuleNotFoundError: common` because the direct script lacked the repository-root bootstrap used by the other scripts. The entry point was fixed; the focused reproducibility test had already passed, and no tolerance changed.
-2. After the standalone audit passed with zero weight differences, the teacher CLI exposed a duplicate `step` argument in metric logging: the evaluation row contained `step` while `MetricLogger.log` also used `step` as its positional parameter name. The logger now accepts an authoritative `global_step`, permits a row `step` only when equal, and emits exactly one consistent step value. No training mathematics changed.
-3. Acceptance review found that the general resume audit was non-ternary. A dedicated ternary interruption/resume regression was added rather than inferring quantization restoration from serialization alone.
+```bash
+python scripts/eval_scaling_laws.py \
+  --checkpoint outputs/m05_teacher/teacher.pt \
+  --manifest outputs/m05_test_manifest.json \
+  --weights recorded --device cpu \
+  --greedy-n-sup 1 2 \
+  --latency-runs 1 \
+  --out outputs/m05_scaling.csv \
+  --predictions-out outputs/m05_scaling_predictions.jsonl
+```
+
+Checkpoint-backed edge report:
+
+```bash
+python scripts/eval_edge.py \
+  --ckpt outputs/m05_teacher/teacher.pt \
+  --manifest outputs/m05_test_manifest.json \
+  --weights recorded --device cpu \
+  --n-sup 1 2 --latency-runs 1 \
+  --out outputs/m05_edge_report.json
+```
+
+A learned-search research invocation additionally requires one compatible `--verifier-checkpoint` and `--action-checkpoint` per core checkpoint. Current native MCTS is deterministic, so `--search-seed` is intentionally rejected; nonzero `--uncertainty-beta` is also rejected by the single-verifier path because it would not be consumed.
+
+### M05 failures / iterations retained explicitly
+
+No final M05 test was weakened. The following failures or hidden-contract problems were found and closed:
+
+1. **Legacy null-hypothesis expectation.** The first M05 CI run passed all new focused tests and both checkpoint-backed CLIs, but the full suite had one old test expecting random-init dense-vs-SPECTRA rows. The research path was not restored; the legacy test was changed to assert the new rejection boundary.
+2. **Non-persistent ternary rho.** A focused run exposed that `FakeBitLinear.quant_strength` is not in `state_dict`, so a reconstructed ternary evaluator started at rho `1.0` instead of checkpoint rho `0.25`. The loader now restores the explicit M04 quantization-strength snapshot and verifies it.
+3. **MCTS `N_sup` provenance trap.** An early effective-setting record included checkpoint `N_sup`, which could make otherwise identical MCTS settings appear different. It was removed from the effective signature; direct search `N_sup` input is rejected.
+4. **Decorative search seed.** A final search audit confirmed current `LatentNativeMCTS` is deterministic. `search_seed` is now rejected instead of pretending to alter the computation.
+5. **Ignored uncertainty beta.** A nonzero beta would be ignored by a single `LatentEnergyVerifier`. M05 now rejects it unless the loaded verifier implements the uncertainty interface.
+
+Earlier failed-run artifacts remain useful debugging provenance but are not acceptance evidence. The authoritative green implementation evidence is run `34082746876` above.
 
 ### Remaining limitations / unsupported claims
 
-- Deterministic interruption/resumption is explicitly proven only for bounded CPU FP32 eager references with `num_workers=0` and matching architecture/task/data/original schedule/backend/precision.
-- The acceptance-specific quantization test is a tiny four-step ternary warmup regression, not evidence of large-scale QAT convergence.
-- CUDA was unavailable in M04 CI. The real CUDA FP16-AMP path exists but was not exercised by this milestone.
-- M04 does **not** claim universal GPU bitwise determinism, reproducibility across GPU models/drivers/kernel libraries, distributed training determinism, or deterministic multi-worker data loading.
-- A legacy `{model, ema}` checkpoint can be migrated for explicit weight loading but cannot be used as a full deterministic training resume state.
-- The checkpoint cannot reconstruct a dataset from nothing; it fingerprints the train/validation datasets/config and requires the caller to reconstruct the matching experiment before resume.
-- The tiny 8-step 4×4 Sudoku reference exists to verify training-state mechanics. Its `0.15625` cell accuracy and zero board accuracy are not evidence of trained reasoning quality.
-- M04 does not establish scaling laws, search advantage, production training convergence, energy savings, or target-hardware performance.
+- The M05 CI research CLI exercised the **greedy checkpoint-backed path** using a tiny eight-step teacher; it did not establish useful reasoning quality.
+- Learned-search loading/accounting is adversarially unit-tested using one-step auxiliary fixtures. M05 did **not** evaluate a scientifically trained verifier/action-policy pair and therefore does not establish learned-search advantage.
+- The strict M05 auxiliary loader supports a single `LatentEnergyVerifier`; no strict ensemble-verifier checkpoint loader was added in this milestone. Nonzero uncertainty beta is therefore intentionally unavailable in research mode.
+- Current native MCTS is deterministic. The requested independent stochastic-search RNG rule is enforced prospectively: a future stochastic implementation must define/use a separate stream before a seed can be exposed. No stochastic search RNG exists to test today.
+- M05 does not prove a trained scaling law. The harness is now capable of comparing multiple real checkpoints on one frozen snapshot, but the reference evidence contains only one tiny checkpoint and two ordinary-forward compute settings.
+- M05 does not establish a scientific System-1 null-hypothesis comparison; the misleading random-init comparison was disabled and no trained baseline checkpoint experiment was supplied.
+- CUDA/GPU evaluation was unavailable in CI.
+- Physical RAPL energy measurement was unavailable in CI.
+- The small single-run latency values are not target-device benchmarks.
+- Research core loading is intentionally strict to the current `spectra.training` v1 TRM metadata contract. Legacy weights-only files are not research checkpoints.
+- An evaluation manifest is immutable by content hash, but intentional creation of a different rehashed manifest is a different experiment identity; compatibility rules still prevent silent task-config drift.
+- M05 does not establish official ARC/BabyAI results, external benchmark generalization, search-quality gains, scaling laws, energy savings, or production hardware performance.
 
-### M04 decision
+### M05 decision
 
-M04 closes the bounded **training-state reproducibility** layer for the tested CPU references: seeding precedes data/model construction, data/model/train/eval RNG streams are separated, actual precision is declared, checkpoints preserve the state needed for exact tested CPU resumption, quantization schedule/strength is restored on the tested ternary path, EMA identity cannot be silently changed, and failures are loud.
+M05 closes the **evaluation provenance and execution-contract** layer for the tested scope: research rows require a trained versioned core checkpoint and exact frozen examples; architecture/precision-family settings are restored from metadata; EMA and ternary quantization state are explicit; learned search cannot fabricate random auxiliaries; ignored knobs are rejected; realized compute is counted; and each prediction carries enough provenance to trace it back to checkpoint and data identity.
 
-**Next action:** stop here for M04. Do not broaden this milestone into GPU-determinism, trained-capability, scaling, energy, or hardware-performance claims. Merge only after the final documentation-inclusive branch-head CI is green and the user accepts the milestone.
+**Next action:** stop here for M05. Do not convert the tiny reference checkpoint into a capability/scaling claim, and do not claim learned-search benefit until genuinely trained compatible auxiliary checkpoints are evaluated. Merge only after the final documentation-inclusive branch-head CI is green and the user accepts the milestone.
