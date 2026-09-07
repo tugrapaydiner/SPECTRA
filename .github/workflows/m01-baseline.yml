@@ -1,0 +1,298 @@
+name: m01-baseline
+
+on:
+  push:
+    branches: ["research/m01-baseline"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Capture host and repository environment
+        shell: bash
+        run: |
+          set -uo pipefail
+          repo_status="$(git status --short)"
+          mkdir -p .m01
+          {
+            echo "timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "commit=$(git rev-parse HEAD)"
+            echo "branch=$(git branch --show-current)"
+            echo "git_status_begin"
+            printf '%s\n' "$repo_status"
+            echo "git_status_end"
+            echo "python=$(python --version 2>&1)"
+            echo "pip=$(python -m pip --version 2>&1)"
+            echo "uname=$(uname -a)"
+            echo "cpu_count=$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
+            echo "lscpu_begin"
+            lscpu 2>&1 || true
+            echo "lscpu_end"
+            echo "compiler_begin"
+            command -v g++ || true
+            g++ --version 2>&1 | head -n 1 || true
+            command -v clang++ || true
+            clang++ --version 2>&1 | head -n 1 || true
+            echo "compiler_end"
+            if grep -qm1 -w avx2 /proc/cpuinfo 2>/dev/null; then
+              echo "avx2_supported=yes"
+            else
+              echo "avx2_supported=no"
+            fi
+            if command -v nvidia-smi >/dev/null 2>&1; then
+              echo "nvidia_smi_begin"
+              nvidia-smi 2>&1 || true
+              echo "nvidia_smi_end"
+            else
+              echo "nvidia_smi=unavailable"
+            fi
+            echo "gpu_devices=$(ls /dev/nvidia* 2>/dev/null | tr '\n' ' ' || true)"
+            echo "rapl_root_present=$([ -d /sys/class/powercap/intel-rapl ] && echo yes || echo no)"
+            echo "rapl_counters_begin"
+            found=0
+            while IFS= read -r -d '' f; do
+              found=1
+              if [ -r "$f" ]; then
+                value=$(cat "$f" 2>&1) && echo "$f readable=yes value_uj=$value" || echo "$f readable=no read_error=$value"
+              else
+                echo "$f readable=no"
+              fi
+            done < <(find /sys/class/powercap -type f -name energy_uj -print0 2>/dev/null)
+            [ "$found" -eq 1 ] || echo "none"
+            echo "rapl_counters_end"
+          } | tee .m01/environment.txt
+
+      - name: Install baseline dependencies
+        id: deps
+        shell: bash
+        run: |
+          set -o pipefail
+          t0=$(date +%s)
+          set +e
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" 2>&1 | tee .m01/install_torch.txt
+          rc_torch=${PIPESTATUS[0]}
+          if [ "$rc_torch" -eq 0 ]; then
+            timeout 180s python -m pip install -r requirements.txt 2>&1 | tee .m01/install_requirements.txt
+            rc_req=${PIPESTATUS[0]}
+          else
+            rc_req=125
+            echo "requirements install not attempted because torch install failed" | tee .m01/install_requirements.txt
+          fi
+          set -e
+          elapsed=$(( $(date +%s) - t0 ))
+          if [ "$rc_torch" -eq 0 ] && [ "$rc_req" -eq 0 ]; then
+            dep_status=passed
+          elif [ "$rc_torch" -eq 124 ] || [ "$rc_req" -eq 124 ]; then
+            dep_status=timed_out
+          else
+            dep_status=failed
+          fi
+          printf "dependencies\t%s\trc_torch=%s rc_requirements=%s elapsed_s=%s\n" "$dep_status" "$rc_torch" "$rc_req" "$elapsed" | tee -a .m01/status.tsv
+          if [ "$rc_torch" -eq 0 ] && [ "$rc_req" -eq 0 ]; then
+            python - <<'PY' | tee .m01/python_environment.txt
+          import platform
+          import torch, numpy, yaml, einops, tqdm, pandas, psutil, pytest
+          print("platform=", platform.platform())
+          print("torch=", torch.__version__)
+          print("torch_cuda_version=", torch.version.cuda)
+          print("cuda_available=", torch.cuda.is_available())
+          print("cuda_device_count=", torch.cuda.device_count())
+          print("numpy=", numpy.__version__)
+          print("pyyaml=", yaml.__version__)
+          print("einops=", einops.__version__)
+          print("tqdm=", tqdm.__version__)
+          print("pandas=", pandas.__version__)
+          print("psutil=", psutil.__version__)
+          print("pytest=", pytest.__version__)
+          PY
+            python -m pip freeze | sort > .m01/pip_freeze.txt
+          fi
+          echo "rc_torch=$rc_torch" >> "$GITHUB_OUTPUT"
+          echo "rc_req=$rc_req" >> "$GITHUB_OUTPUT"
+
+      - name: Probe repository energy API
+        if: steps.deps.outputs.rc_torch == '0' && steps.deps.outputs.rc_req == '0'
+        shell: bash
+        run: |
+          set -o pipefail
+          set +e
+          python - <<'PY' 2>&1 | tee .m01/energy_probe.txt
+          from eval.edge_energy import rapl_available, measure_energy_joules
+          print("rapl_available=", rapl_available())
+          result = measure_energy_joules(lambda: sum(range(1000)), n_runs=1)
+          print("measurement=", result)
+          PY
+          rc=${PIPESTATUS[0]}
+          set -e
+          printf "energy_api_probe\t%s\trc=%s\n" "$([ "$rc" -eq 0 ] && echo passed || echo failed)" "$rc" | tee -a .m01/status.tsv
+
+      - name: Run existing fast test gate (6 minute budget)
+        id: fast
+        if: steps.deps.outputs.rc_torch == '0' && steps.deps.outputs.rc_req == '0'
+        shell: bash
+        run: |
+          set -o pipefail
+          t0=$(date +%s)
+          set +e
+          timeout 360s python -m pytest -m "not slow" -ra 2>&1 | tee .m01/pytest_fast.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+          elapsed=$(( $(date +%s) - t0 ))
+          if [ "$rc" -eq 0 ]; then status=passed; elif [ "$rc" -eq 124 ]; then status=timed_out; else status=failed; fi
+          printf "fast_tests\t%s\trc=%s elapsed_s=%s budget_s=360\n" "$status" "$rc" "$elapsed" | tee -a .m01/status.tsv
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: Run native kernel correctness checks (3 minute budget)
+        id: native
+        if: steps.deps.outputs.rc_torch == '0' && steps.deps.outputs.rc_req == '0'
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! grep -qm1 -w avx2 /proc/cpuinfo 2>/dev/null; then
+            echo "Host CPU does not advertise AVX2; native AVX2 tests not executed." | tee .m01/pytest_native.txt
+            printf "native_kernel_tests\tunavailable\treason=no_avx2\n" | tee -a .m01/status.tsv
+            echo "rc=125" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! command -v g++ >/dev/null 2>&1 && ! command -v clang++ >/dev/null 2>&1; then
+            echo "No supported C++ compiler; native tests not executed." | tee .m01/pytest_native.txt
+            printf "native_kernel_tests\tunavailable\treason=no_compiler\n" | tee -a .m01/status.tsv
+            echo "rc=125" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          t0=$(date +%s)
+          set +e
+          timeout 180s python -m pytest tests/test_kernel.py -ra 2>&1 | tee .m01/pytest_native.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+          elapsed=$(( $(date +%s) - t0 ))
+          if [ "$rc" -eq 0 ]; then status=passed; elif [ "$rc" -eq 124 ]; then status=timed_out; else status=failed; fi
+          printf "native_kernel_tests\t%s\trc=%s elapsed_s=%s budget_s=180\n" "$status" "$rc" "$elapsed" | tee -a .m01/status.tsv
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: Build optional PyTorch C++ extension (3 minute budget)
+        id: ext
+        if: steps.deps.outputs.rc_torch == '0' && steps.deps.outputs.rc_req == '0'
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! grep -qm1 -w avx2 /proc/cpuinfo 2>/dev/null; then
+            echo "Host CPU does not advertise AVX2; extension build not attempted." | tee .m01/native_extension_build.txt
+            printf "native_extension_build\tunavailable\treason=no_avx2\n" | tee -a .m01/status.tsv
+            echo "rc=125" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          t0=$(date +%s)
+          set +e
+          timeout 180s python setup.py build_ext --inplace 2>&1 | tee .m01/native_extension_build.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+          elapsed=$(( $(date +%s) - t0 ))
+          if [ "$rc" -eq 0 ]; then status=passed; elif [ "$rc" -eq 124 ]; then status=timed_out; else status=failed; fi
+          printf "native_extension_build\t%s\trc=%s elapsed_s=%s budget_s=180\n" "$status" "$rc" "$elapsed" | tee -a .m01/status.tsv
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: Tiny training smoke (30 second budget)
+        id: train_smoke
+        if: steps.deps.outputs.rc_torch == '0' && steps.deps.outputs.rc_req == '0'
+        shell: bash
+        run: |
+          set -o pipefail
+          t0=$(date +%s)
+          set +e
+          timeout 30s python - <<'PY' 2>&1 | tee .m01/training_smoke.txt
+          import time
+          import torch
+          from model.trm import TRM
+          from train.losses import deep_supervision_loss
+
+          torch.manual_seed(0)
+          t0 = time.perf_counter()
+          model = TRM(
+              dim=16, num_tokens=5, seq_len=4, n_layers=1, n=1, T=1,
+              N_sup=1, heads=1, max_grid_size=4,
+          )
+          opt = torch.optim.AdamW(model.parameters(), lr=1e-3)
+          x = torch.randint(0, 5, (2, 4))
+          y = torch.randint(0, 5, (2, 4))
+          before = next(model.parameters()).detach().clone()
+          losses = []
+          for _ in range(2):
+              _, steps = model(x, height=2, width=2)
+              loss = deep_supervision_loss(steps, y)
+              assert torch.isfinite(loss), loss
+              opt.zero_grad()
+              loss.backward()
+              grads = [p.grad for p in model.parameters() if p.grad is not None]
+              assert grads and all(torch.isfinite(g).all() for g in grads)
+              opt.step()
+              losses.append(float(loss.detach()))
+          after = next(model.parameters()).detach()
+          assert not torch.equal(before, after), "optimizer did not update parameters"
+          print("device=cpu")
+          print("steps=2")
+          print("losses=", losses)
+          print("parameter_update=yes")
+          print("elapsed_s=", round(time.perf_counter() - t0, 6))
+          PY
+          rc=${PIPESTATUS[0]}
+          set -e
+          elapsed=$(( $(date +%s) - t0 ))
+          if [ "$rc" -eq 0 ]; then status=passed; elif [ "$rc" -eq 124 ]; then status=timed_out; else status=failed; fi
+          printf "training_smoke\t%s\trc=%s elapsed_s=%s budget_s=30\n" "$status" "$rc" "$elapsed" | tee -a .m01/status.tsv
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: Record unexecuted dependency-gated checks
+        if: steps.deps.outputs.rc_torch != '0' || steps.deps.outputs.rc_req != '0'
+        shell: bash
+        run: |
+          printf "energy_api_probe\tunavailable\treason=dependency_install_failed\n" | tee -a .m01/status.tsv
+          printf "fast_tests\tunavailable\treason=dependency_install_failed\n" | tee -a .m01/status.tsv
+          printf "native_kernel_tests\tunavailable\treason=dependency_install_failed\n" | tee -a .m01/status.tsv
+          printf "native_extension_build\tunavailable\treason=dependency_install_failed\n" | tee -a .m01/status.tsv
+          printf "training_smoke\tunavailable\treason=dependency_install_failed\n" | tee -a .m01/status.tsv
+
+      - name: Print baseline status table
+        if: always()
+        shell: bash
+        run: |
+          echo "===== .m01/status.tsv ====="
+          cat .m01/status.tsv 2>/dev/null || true
+          echo "==========================="
+
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m01-baseline-evidence
+          path: .m01/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Reflect actual failures in CI status
+        if: always()
+        shell: bash
+        run: |
+          failed=0
+          if [ -f .m01/status.tsv ]; then
+            if awk -F '\t' '$2 == "failed" || $2 == "timed_out" {found=1} END {exit found ? 0 : 1}' .m01/status.tsv; then
+              failed=1
+            fi
+          else
+            failed=1
+          fi
+          exit "$failed"

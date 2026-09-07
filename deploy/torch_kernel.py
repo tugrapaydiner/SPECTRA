@@ -26,7 +26,7 @@ def load_extension() -> Any | None:
         return load(
             name="spectra_kernel_ext",
             sources=[str(_SRC)],
-            extra_cflags=["-O3", "-mavx2", "-std=c++17"],
+            extra_cflags=["-O3", "-mavx2", "-std=c++20"],
             verbose=False,
         )
     except Exception:  # toolchain / ABI mismatch -> caller falls back to ctypes

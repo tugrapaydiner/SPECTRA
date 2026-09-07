@@ -21,7 +21,7 @@ setup(
         CppExtension(
             name="spectra_kernel_ext",
             sources=[str(_HERE / "extension.cpp")],
-            extra_compile_args=["-O3", "-mavx2", "-std=c++17"],
+            extra_compile_args=["-O3", "-mavx2", "-std=c++20"],
         )
     ],
     cmdclass={"build_ext": BuildExtension},

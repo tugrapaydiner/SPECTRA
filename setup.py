@@ -25,11 +25,12 @@ from setuptools import setup
 
 _SRC = Path(__file__).parent / "deploy" / "cpp_sparse_kernel" / "extension.cpp"
 
-# MSVC and GCC/Clang spell the AVX2 + optimization flags differently.
+# Current PyTorch headers require C++20. MSVC and GCC/Clang spell the AVX2 +
+# optimization flags differently.
 if sys.platform == "win32":
-    _CXX_FLAGS = ["/O2", "/std:c++17", "/arch:AVX2"]
+    _CXX_FLAGS = ["/O2", "/std:c++20", "/arch:AVX2"]
 else:
-    _CXX_FLAGS = ["-O3", "-std=c++17", "-mavx2"]
+    _CXX_FLAGS = ["-O3", "-std=c++20", "-mavx2"]
 
 ext_modules: list = []
 cmdclass: dict = {}
