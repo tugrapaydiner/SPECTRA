@@ -1,301 +1,322 @@
 # SPECTRA Research State
 
-This is the live milestone register. Detailed historical state is preserved without rewriting prior evidence:
+This is the live milestone register. Historical cumulative state is preserved rather than rewritten:
 
 - M01–M04: [`RESEARCH_STATE_M01_M04.md`](RESEARCH_STATE_M01_M04.md)
-- complete pre-M06 live register, including M05 in full: [`RESEARCH_STATE_M05.md`](RESEARCH_STATE_M05.md), archived from blob `08ed850a4e9b58b9c4b58367c3c15d79a4c0decc`
+- complete M05-era register: [`RESEARCH_STATE_M05.md`](RESEARCH_STATE_M05.md)
+- complete pre-M07/M06-era live register: [`RESEARCH_STATE_M06.md`](RESEARCH_STATE_M06.md)
 
-Git history retains the original cumulative registers. The live register below records the accepted milestone index and M06 in full.
+The live register below records accepted milestone status and the latest experimental boundary.
 
 ## Accepted milestone index
 
-| Milestone | Scope | Accepted / merged state |
+| Milestone | Scope | Accepted state |
 |---|---|---|
-| M01 | trustworthy baseline | accepted and merged; `main` merge `40745dbe185c069aeee9eff3cf63dd411d9e17da` |
-| M02 | native-kernel correctness and input contracts | accepted and merged; `main` merge `e0781ec8b4e649ab4ccd48d4cd5f432a9b88d249` |
-| M03 | trustworthy task/data/evaluation contracts | accepted and merged; `main` merge `01638b10777029fb28bb35229e374f0865c6e5d4` |
-| M04 | reproducible training and checkpoint state | accepted and merged through PR #4; `main` merge `370caf708755e1c68c59d5696778597f0290ea68` |
-| M05 | checkpoint-backed evaluation | accepted and merged through PR #5; `main` merge `1003c59e17dc17e652438317b7480c9e898379af` |
-| M06 | controlled trained baseline experiment | **COMPLETE ON `research/m06-capability-gates`; accepted evidence run `34124798931`; not merged at the time of this entry** |
+| M01 | trustworthy baseline | merged; `40745dbe185c069aeee9eff3cf63dd411d9e17da` |
+| M02 | native-kernel correctness/input contracts | merged; `e0781ec8b4e649ab4ccd48d4cd5f432a9b88d249` |
+| M03 | task/data/evaluation contracts | merged; `01638b10777029fb28bb35229e374f0865c6e5d4` |
+| M04 | reproducible training/checkpoint state | merged through PR #4; `370caf708755e1c68c59d5696778597f0290ea68` |
+| M05 | checkpoint-backed evaluation | merged through PR #5; `1003c59e17dc17e652438317b7480c9e898379af` |
+| M06 | controlled trained baseline | merged through PR #6; `385da5ef822dcb001c8193a2b8802fa292b31428`; evidence gate clarified through PR #7 `dbec23dd2077fc9f23e6a031b1b2b82c7c731de6` |
+| M07 | grounded verifier training/evaluation | **COMPLETE ON `research/m07-grounded-verifier`; accepted run `34128295166`; not merged at the time of this entry** |
+
+M06 progress is evidence-based, not conditioned on beating a baseline. Its authoritative acceptance definition is [`M06_ACCEPTANCE_GATE.md`](M06_ACCEPTANCE_GATE.md).
 
 ---
 
-## Milestone 06 — controlled trained baseline experiment
+## Milestone 07 — grounded verifier training and evaluation
 
-**Stage status:** COMPLETE ON `research/m06-capability-gates`; accepted experiment/evidence gate is green; not merged at the time of this entry.
+**Stage status:** COMPLETE ON `research/m07-grounded-verifier`; accepted execution/evidence gate green; not merged at the time of this entry.
 
-M06 intentionally does one thing only: it establishes a controlled trained baseline experiment on a non-debug task. It does **not** add or evaluate MCTS, routing, halting-policy training, a process reward model, distillation, a self-improvement flywheel, energy optimization, scaling-law machinery, or target-hardware performance.
+Full preregistration: [`M07_PROTOCOL.md`](M07_PROTOCOL.md).  Accepted evidence and claims boundary: [`M07_ACCEPTANCE_GATE.md`](M07_ACCEPTANCE_GATE.md).
 
-The preregistered protocol is [`M06_PROTOCOL.md`](M06_PROTOCOL.md). The concise accepted evidence surface is [`M06_ACCEPTANCE_GATE.md`](M06_ACCEPTANCE_GATE.md).
+### M07 target
 
-### Research question and primary endpoint
+M07 does not train a verifier to predict eventual Sudoku solve probability.
 
-On one fixed validated 9×9 Sudoku distribution, does a small floating-point recursive TRM learn measurable held-out task structure, how much of that learning survives a matched W1.58A8 recursive model evaluated at full quantization strength, and how do both compare with a deliberately larger simple single-pass baseline under a fixed data/training protocol?
-
-The primary endpoint was fixed before training:
+The independently grounded target is:
 
 ```text
-strict Sudoku semantic solve rate (`semantic_validity`)
+sudoku_one_cycle_improvement_v1
 ```
 
-Exact-reference match, blank-cell accuracy, all-cell accuracy, loss curves, gradient norms, and training time were retained as secondary/diagnostic quantities. A zero exact-solve rate was explicitly allowed by the protocol.
-
-### Flagship task and frozen data
-
-The main pilot used the existing validated Sudoku pipeline at a harder-than-debug setting:
-
-- 9×9 Sudoku (`box=3`)
-- unique solutions required
-- 30–35 clues
-- existing validated generator/augmentation path
-- data seed `20260907`
-- train `384`
-- validation `96`
-- test `128`
-- zero cross-split group overlap required
-- zero cross-split exact overlap required
-
-The frozen split passed the duplicate audit. The test split was not used to select architecture, optimizer, step count, seed count, or checkpoint.
-
-4×4 Sudoku was reserved only for a preregistered learning-failure diagnostic. That branch was not triggered, so **4×4 was not used in the M06 main experiment or for post-hoc retuning**.
-
-### Models and declared differences
-
-#### A. Floating-point recursive reference
+For frozen search state `s=(x,y,z)`:
 
 ```text
-TRM
-FP32
-dim=48
-n_layers=1
-heads=4
-n=1
-T=1
-N_sup=2
-trainable parameters=30,829
+Q_before = sudoku_score(x, argmax(out_head(y)), box=3)
+(y',z')  = frozen_TRM.recursive_cycle(x,y,z)
+Q_after  = sudoku_score(x, argmax(out_head(y')), box=3)
+label     = 1[Q_after > Q_before + 1e-6]
 ```
 
-#### B. Matched W1.58A8 recursive model
+Continuation policy is exactly one deterministic frozen reasoner cycle with no search action, noise, router, MCTS backup, or test reference answer.
 
-Same recursive dimensions/schedule as A, with ternary projections and A8 recurrent-state fake quantization.
+The score therefore means: estimated probability that this declared continuation improves the validated symbolic Sudoku structural score on the declared state distribution.
+
+Grounding metadata records:
 
 ```text
-trainable parameters=30,397
-quantization warmup=50 of 200 steps
+oracle                = model.verifier.sudoku_score
+reference_target_used = false
+bootstrapped           = false
 ```
 
-The repository's FP and ternary attention/projection implementations use different existing bias conventions. An architecture-only preflight therefore found a `1.401278%` trainable-parameter difference. The original 1.0% preregistered match tolerance was amended to 1.5% **before any M06 timing probe, validation metric, test prediction, or accuracy result was produced**. The implementations themselves were not changed to force equality.
+Held-out reference solutions are not passed to label construction.
 
-#### C. Larger single-pass baseline
+### Search-state representation
+
+Version:
 
 ```text
-System1Student
-FP32
-dim=96
-n_layers=2
-heads=4
-trainable parameters=228,394
-single pass
+search_state_xyz_v1 = (x,y,z)
 ```
 
-The unused confidence head was frozen and excluded from the trainable parameter count because M06 did not train or test confidence routing.
-
-The larger single-pass baseline is deliberately not parameter matched. It asks whether a simple larger model is a stronger baseline than the small recursive systems. A future causal comparison still needs a size/compute-controlled single-pass comparator.
-
-### Optimization protocol
-
-Common settings were fixed before results:
+This replaces the unverified assumption that `(x,z)` alone is sufficient. The reasoner transition consumes both states:
 
 ```text
-optimizer        AdamW
-learning rate    1e-3
-weight decay     0.01
-batch size       32
-gradient clip    1.0
-main steps       target 200 / model / seed
+update_z = f(x_emb + y + z)
+update_y = f(y + z)
 ```
 
-There was no architecture-specific LR search, accuracy-based early stopping, best-checkpoint selection, or test-time search.
-
-The recursive models used the repository's existing deep-supervision objective, including the existing halting/improvement terms. The single-pass model used token cross-entropy because it has no recursive supervision or halting head. This objective difference is an architectural limitation and prevents interpreting M06 as a clean causal test of recursion alone.
-
-### Timed probe and recorded compute budget
-
-Before the main fits, exactly five optimizer steps per architecture were timed. Probe models were discarded; no probe accuracy was inspected.
-
-| Model | 5-step elapsed | seconds / step |
-|---|---:|---:|
-| FP recursive | `0.256232 s` | `0.0512465` |
-| W1.58A8 recursive | `0.231664 s` | `0.0463327` |
-| larger single-pass | `0.238884 s` | `0.0477768` |
-
-The slowest observed rate was `0.0512465 s/step`. Under the preregistered timing-only rule, the `1080 s` main-training budget allowed the full repeated-seed branch:
+A counterfactual state-sufficiency audit held `x,z` fixed and substituted another real `y` from the same puzzle trajectory. The independent continuation label changed in:
 
 ```text
-seeds             1101, 2202
-steps / model      200
-models / seed      3
-main fits          6
-estimated time     61.4958 s
-actual summed fit  52.9538 s
-budget             1080 s
+127 / 256 pairs = 0.49609375
 ```
 
-No accuracy-dependent budget adjustment occurred.
+This is not evidence of naturally occurring exact-z collisions; it is direct evidence that omitted `y` can change the target under fixed `x,z`.
 
-Training compute is retained separately from evaluation metrics. Each run sampled `6,400` training examples. Under the declared architectures:
+A separately typed z-only learned ablation was trained on the same rows/protocol. On shallow held-out states it was essentially tied/slightly better:
 
-- FP recursive: `25,600` shared-block applications sampled per run
-- W1.58A8 recursive: `25,600` per run
-- larger single-pass: `12,800` block applications per run
+```text
+full xyz ROC AUC = 0.88160735
+z-only ROC AUC   = 0.88585556
+delta            = -0.00424820
+```
 
-These are structural counters, not FLOP-equated or joule-equated costs. Physical joules were not available on the runner.
+Therefore M07 does **not** claim that `y` improves average shallow ranking. The full representation is retained because it matches the actual transition state and avoids a known state-sufficiency omission.
 
-### Observed primary result
+### Frozen reasoner
 
-**The primary endpoint was zero for every model at both seeds.**
+M07 trains one small FP reasoner only as a trajectory generator, saves it through the existing versioned SPECTRA training checkpoint path, reloads its recorded evaluation identity, and then freezes it before verifier data generation/training.
 
-Across the frozen 128-example test set:
+Reasoner checkpoint SHA-256:
 
-| Model | Seeds | Semantic solve rate | Exact match | Blank-cell accuracy | All-cell accuracy |
-|---|---:|---:|---:|---:|---:|
-| FP recursive | 2 | `0.0000` | `0.0000` | `0.15925 ± 0.00065` | `0.49894 ± 0.00039` |
-| W1.58A8 recursive | 2 | `0.0000` | `0.0000` | `0.11458 ± 0.00453` | `0.47232 ± 0.00270` |
-| larger single-pass | 2 | `0.0000` | `0.0000` | `0.32821 ± 0.01570` | `0.59963 ± 0.00936` |
+```text
+d23ac0c629658257c96d50b71b4da42243094768d2352fb9bffb5f01e3be1625
+```
 
-The `±` values are population standard deviations over the two fixed seeds, not confidence intervals.
+Tensor-state hash before/after verifier training:
 
-Per-seed strict solve and exact-reference rates were all exactly zero. M06 therefore does **not** establish useful exact 9×9 Sudoku reasoning capability for any of these small-budget fits.
+```text
+04d97ee472b983375a8450457d6820ab6154e073503ec1c1fc31efb1477aaec1
+```
 
-### Did training fail?
+The hashes were identical; all reasoner parameters were `requires_grad=false`; the reasoner stayed in eval mode.
 
-Not under the preregistered optimization-failure definition.
+The reasoner's own final validation board accuracy was 0.0 and cell accuracy about 0.19039. Reasoner task success is not an M07 acceptance condition.
 
-All six fits had finite/nonzero gradients and reduced final-window training loss by far more than the required 5%:
+### Data and independent labels
 
-| Model / seed | Initial-window loss | Final-window loss | Relative improvement |
+Validated generated 9×9 Sudoku, unique solutions, 30–35 clues.
+
+```text
+data seed   20260907
+train       256 puzzles
+validation   64 puzzles
+test         96 puzzles
+```
+
+Verifier trajectory subsets:
+
+```text
+train puzzles       192
+validation puzzles   48
+held-out puzzles     64
+training depths     0..3
+deep stress depths  4..7
+```
+
+Label counts:
+
+| State split | Positive | Negative | Total |
 |---|---:|---:|---:|
-| FP recursive / 1101 | `2.39634` | `1.29827` | `45.82%` |
-| FP recursive / 2202 | `2.59600` | `1.29393` | `50.16%` |
-| W1.58A8 recursive / 1101 | `2.48694` | `1.33376` | `46.37%` |
-| W1.58A8 recursive / 2202 | `2.38910` | `1.32407` | `44.58%` |
-| larger single-pass / 1101 | `2.08138` | `0.76017` | `63.48%` |
-| larger single-pass / 2202 | `1.98616` | `0.74136` | `62.67%` |
+| train | 245 | 523 | 768 |
+| validation | 55 | 137 | 192 |
+| held-out depths 0–3 | 83 | 173 | 256 |
+| held-out depths 4–7 | 38 | 218 | 256 |
 
-No fit met the preregistered learning-failure trigger. Consequently the gradient-inspection / 8-example overfit / minimal-4×4 diagnostic branch was not executed. `diagnostics.json` and `failures.json` are retained and empty for the accepted run.
+The target was non-degenerate on training and held-out states.
 
-This distinction matters: the pilot learned partial token/cell structure but did not reach the much stricter complete-board capability endpoint.
+### Trained grounded verifier checkpoint
 
-### Ternary inference verification
-
-The W1.58A8 result was evaluated only after each final checkpoint was reloaded. Evaluation was rejected unless every `FakeBitLinear.quant_strength` buffer was exactly `1.0`.
-
-Both seeds passed for all seven ternary modules:
+Architecture:
 
 ```text
-blocks.0.attn.q    = 1.0
-blocks.0.attn.k    = 1.0
-blocks.0.attn.v    = 1.0
-blocks.0.attn.proj = 1.0
-blocks.0.ff.0      = 1.0
-blocks.0.ff.2      = 1.0
-out_head           = 1.0
+EnsembleGroundedStateVerifier
+members      3
+member seeds 7101,7202,7303
+dim          48
+layers       1
+heads        4
+z boundary   A8 fake quantization
+training     300 AdamW steps/member
+lr           2e-3
+weight decay 0.01
+batch        64 states
 ```
 
-The accepted workflow printed `quantization_strength_check=pass`.
-
-Final ternary state was non-degenerate:
-
-- seed 1101: negative `0.36156`, positive `0.35904`, zero `0.27940`
-- seed 2202: negative `0.36032`, positive `0.36121`, zero `0.27848`
-
-This validates the declared M06 evaluation representation. It does not establish parity with FP accuracy.
-
-### Interpretation / claims boundary
-
-The M06 evidence supports only narrow conclusions:
-
-1. A repeated-seed trained baseline experiment now exists on a non-debug 9×9 task under a frozen data/resource/evaluation protocol.
-2. All three training paths learned partial token/cell structure under the preregistered optimization criterion.
-3. None solved a complete held-out Sudoku at this data/training budget.
-4. The deliberately larger single-pass baseline was materially stronger on the secondary cell metrics than either small recursive model.
-5. The full-strength W1.58A8 recursive model was weaker than the matched FP recursive model on the same secondary metrics in both seeds.
-
-Therefore M06 provides **no evidence that recursion substitutes for parameter count**, and **no evidence that W1.58A8 preserves FP recursive quality** at this pilot budget.
-
-It also does not prove the reverse universal claims. The single-pass comparator is much larger; recursive and single-pass training objectives differ; the FP and ternary implementations have the documented bias difference; only two model seeds were run; and the task distribution is generated rather than an external benchmark. M06 cannot establish that recursion is intrinsically worse or that ternary reasoning cannot work.
-
-No search/routing/PRM mechanism should be added to reinterpret this result inside M06.
-
-### Accepted environment and regression state
-
-Accepted experiment environment:
+Accepted checkpoint SHA-256:
 
 ```text
-Ubuntu 24.04.4 hosted runner
-AMD EPYC 7763
-x86_64
-4 logical CPUs exposed
-Python 3.11.16
-PyTorch 2.14.0+cpu
-NumPy 2.4.6
-CUDA false
-PyTorch threads 2
+ce68e1bc9b6d7dff52bdcdba41861c0ed676a00b861afbf5e3be822f2cb1e151
 ```
 
-This is controlled CI evidence, not target-edge-hardware benchmarking.
+The checkpoint reuses `spectra.learned_auxiliary` v1, has kind `grounded_state_verifier`, records target/representation/provenance, and is strictly compatible with the exact frozen reasoner checkpoint SHA/task/dim/vocabulary/sequence metadata.
 
-After the experiment/evidence verifier succeeded, the full fast regression passed:
+The z-only ablation is saved under a separate diagnostic format and cannot masquerade as the accepted grounded checkpoint.
+
+### Primary held-out evidence
+
+256 real states from 64 unseen puzzles, depths 0–3:
+
+| Metric | Result |
+|---|---:|
+| ROC AUC | **0.88160735** |
+| Average precision | **0.86070040** |
+| Brier score | **0.07669393** |
+| ECE (10 bins) | **0.05412407** |
+| Accuracy @ 0.5 | **0.91796875** |
+| False-acceptance rate @ 0.5 | **0.015625** |
+| False-positive rate | **0.00578035** |
+| TP / FP / TN / FN | `63 / 1 / 172 / 20` |
+
+This clears the preregistered useful-meaning floor (`ROC AUC >= 0.60`) without a one-class shortcut. The probability calibration metrics refer only to the declared one-cycle event.
+
+### Perturbation evidence
+
+Labels were independently recomputed after deterministic held-out perturbations:
+
+| Set | ROC AUC | AP | Brier | ECE | False acceptance |
+|---|---:|---:|---:|---:|---:|
+| real depth 0–3 | 0.88161 | 0.86070 | 0.07669 | 0.05412 | 0.015625 |
+| perturbed y | 0.90229 | 0.89236 | 0.06789 | 0.02380 | 0.015625 |
+| perturbed z | 0.90010 | 0.88049 | 0.05993 | 0.03535 | 0.015625 |
+
+The verifier remained useful under these small perturbations in this experiment.
+
+### Deeper-state failure
+
+On unseen depths 4–7, verifier meaning degraded sharply:
 
 ```text
-204 passed, 16 deselected in 59.98 s
+ROC AUC           0.53331721
+average precision 0.21949778
+Brier             0.13113642
+ECE(10)           0.07440630
+TP/FP/TN/FN       0/0/218/38
 ```
 
-The 16 slow legacy/capability tests were outside the user-defined M06 experiment scope; M06 does not convert them into acceptance evidence.
+At threshold 0.5 the verifier accepted no deeper states. The resulting high raw accuracy is driven by class imbalance and is not useful deep ranking evidence.
 
-### Repository / evidence state
+**M07 does not establish verifier generalization to deeper search states.** Any later search experiment using depths outside the validated regime must independently establish verifier meaning on that state distribution or explicitly report the extrapolation.
 
-Authoritative accepted experiment:
+### Ensemble disagreement
 
-- M06 base: M05-accepted `main`, `1003c59e17dc17e652438317b7480c9e898379af`
-- accepted experimental head: `9fd96e72b9542c33c4ae0639d44847f104a83df8`
-- Actions run: `34124798931`
-- job: `101750849574`
-- artifact: `m06-controlled-baseline-evidence`
-- artifact id: `10019726497`
-- artifact ZIP SHA-256: `63c533e96fba488baac7bb8a44052dd1408a342b21a6313cd8c3c7d1e6b5acb8`
-- artifact size: `6,697,316` bytes
-- retention: 14 days
-- experiment exit: `0`
-- evidence-check exit: `0`
-- fast-regression exit: `0`
+Disagreement was treated as a heuristic and tested against actual held-out error.
 
-Key retained evidence hashes:
+Shallow held-out states:
 
 ```text
-summary.json          1a3041d541aee77d50e65f9d4314ff70ba1fe81ccd418a15959adcc55db802aa
-data_manifest.json    bbe21422059fb901d9bb53503110c33250c910e780fade7a9511fc26634237f1
-timing_probe.json     f17a7c51e44fb506ab698fd51a08b740ebb01e74bfd13bb5987e55fb9f179194
-budget_decision.json  4508b46fc2397a69f02b9b974a2c8032eda2474a275fbb1afd6dfb844bb8ab39
-parameter_audit.json  edea84e4ad13f1b9b2d873bdb88fd46ee578d9af03250378d93da103e8d49e9a
-environment.json      6548bcd5c2abc219a941217ae8d45cb4a4433aee206f72ca476d3c36089370cf
+Spearman(disagreement, |prob-label|) = 0.863625
+mean |error| low-disagreement half   = 0.041644
+mean |error| high-disagreement half  = 0.214714
 ```
 
-The artifact retains all six final checkpoints, six per-step learning curves, six complete 128-example prediction JSONL files, raw timing/budget/parameter records, environment/install metadata, failures/diagnostics files, test output, raw run logs, and per-file SHA-256 records.
+Deeper states: Spearman about 0.69008, but ranking performance itself was near random.
 
-### Pre-acceptance iterations
+Thus disagreement is error-correlated in this run, but M07 does not promote it to calibrated epistemic uncertainty and does not enable a nonzero MCTS uncertainty penalty.
 
-Two pre-experimental failures are retained because they explain the final protocol provenance:
+### Circularity boundary
 
-1. Run `34124091722` stopped at architecture-only preflight when the original 1.0% parameter-match tolerance encountered the existing 1.401278% FP/ternary bias-related difference. No M06 timing probe, validation accuracy, test prediction, or performance result ran. The tolerance was amended to 1.5% before experiment execution.
-2. Run `34124576768` passed the amended architecture preflight but failed on a direct-script import-path bug before the timing probe or accuracy ran. The entry point was repaired without changing the experiment protocol.
+M07 independent labels did not use MCTS backups.
 
-Neither failed run exposed a model-performance result.
+Existing MCTS `q=W/N` process targets are now explicitly identified as:
 
-### M06 decision
+```text
+mcts_bootstrap_value_v1
+independent_ground_truth = false
+```
 
-M06 closes the **controlled trained baseline** layer for its declared pilot scope. The result is deliberately not upgraded into a central-hypothesis claim: every model's strict solve rate was zero.
+They remain available as later self-training targets, but cannot be cited as independent M07 verifier truth.
 
-**Evidence required before a later milestone can test additional reasoning mechanisms:** first establish an adequate trained baseline with nonzero strict solves under a separately preregistered, larger-but-bounded data/training budget, and add a size/compute-controlled single-pass comparator. Only after complete-task capability exists should search, routing, verifier, energy, or scaling mechanisms be evaluated as scientific improvements.
+`GroundedLatentNativeMCTS` passes both `node.y` and `node.latent()` to a grounded verifier. It refuses the legacy batched z-only path until batched leaves carry both components.
 
-**Next action: stop here for M06. Do not stack new mechanisms onto this pilot.**
+### Tests and reproducibility
+
+Focused M07 contracts:
+
+```text
+11 passed in 0.10 s
+```
+
+Full fast suite:
+
+```text
+215 passed, 16 deselected in 62.44 s
+```
+
+Exact commands:
+
+```bash
+python scripts/train_grounded_verifier.py --out outputs/m07_grounded_verifier
+python -m pytest tests/test_m07_grounded_verifier.py -q
+python -m pytest -m 'not slow' -ra
+```
+
+The focused tests enforce target provenance, absence of a reference-answer target argument, frozen reasoner state, exact core binding, binary grounded labels, full-state MCTS input, rejection of incomplete z-only grounded search, and explicit bootstrapped MCTS provenance.
+
+### Accepted evidence
+
+```text
+experimental head    b1b2d1cb53984ba2938e2156c4e8cf031fc67b6f
+Actions run          34128295166
+job                 101762049774
+artifact            m07-grounded-verifier-evidence
+artifact id         10021097338
+artifact ZIP SHA256 0a7a0888cf866fb89495791d80ce070dda8c0732bd181a281abf99e670d0633f
+artifact size       1,397,215 bytes
+retention           14 days
+```
+
+Key hashes:
+
+```text
+grounded_verifier.pt   ce68e1bc9b6d7dff52bdcdba41861c0ed676a00b861afbf5e3be822f2cb1e151
+reasoner.pt            d23ac0c629658257c96d50b71b4da42243094768d2352fb9bffb5f01e3be1625
+summary.json           25ac3123cf1366161c60495e61da1f28e589b4b6d619f0e3b6a5db7aeed05480
+metrics.json           3190c54be68b87201de2524188b0b86c7bdb727efb58752c407590e12e52dc63
+target_provenance.json c96e0feb52b4baf467e7782747dd68a80ca2995e428b208bbf267ff568ebb40d
+freeze_audit.json      1425590c51c4362c550440c87f7f1cd567c4ba0f8aae3dfe9cdf1f0f5564e426
+aliasing_audit.json    7e76b7f12a7a8a449ce497f72155e2f64e5ca92193969ebf7671ce80376285e9
+z_only_ablation.pt     626e0b7f5af1f15466271f4e25ca00550fb45a9a9e75d3083af2cf652c488bb4
+```
+
+The evidence artifact retains the reasoner/verifier checkpoints, six verifier learning curves, held-out/deep/perturbed per-state predictions, data manifest, depth metrics, aliasing/freeze audits, target provenance, exact commands, environment, test logs and per-file hashes.
+
+### M07 decision
+
+M07 passes its acceptance gate: **a trained verifier checkpoint exists, target construction is independently grounded and documented, and held-out shallow-state evidence shows useful score meaning without a circular success claim.**
+
+Claims that remain unsupported:
+
+- eventual solve probability,
+- MCTS improvement from this verifier,
+- deep-state verifier generalization,
+- superiority of full xyz over z-only on shallow natural trajectories,
+- calibrated epistemic uncertainty from ensemble disagreement,
+- search/energy/scaling gains.
+
+The deep-state failure and z-only tie are retained as constraints for future experiment design, not as reasons to rewrite the M07 target after seeing results.
+
+**Stop here for M07.**
