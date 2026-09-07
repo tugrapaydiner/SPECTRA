@@ -113,7 +113,7 @@ M01 established that Python plumbing, tested ternary/INT8 mechanics, AVX2 correc
 
 ## Milestone 02 — native-kernel correctness and input contracts
 
-**Stage status:** COMPLETE ON `research/m02-native-contract`; not merged at the time of this entry.
+**Stage status:** COMPLETE; accepted and merged to `main` before M03.
 
 M02 changes only native-kernel correctness, packing/backend/input contracts, native-facing benchmark callers, tests, and audit infrastructure. It does not change the reasoning/search/training algorithms.
 
@@ -318,3 +318,163 @@ No final M02 check failed, but several issues were found while establishing the 
 The M01 known AVX2 shape/numerical boundary is closed for the documented M02 contract: full INT8 values are supported, representative vector tails are tested, row padding is explicit, invalid inputs fail loudly, and a scalar backend is real and testable.
 
 **Next action:** stop here for M02. Do not treat this milestone as evidence for broader system-level performance, energy, reasoning-quality, or trained-scaling claims; those remain separate later milestones.
+
+---
+
+## Milestone 03 — trustworthy task/data/evaluation contracts
+
+**Stage status:** COMPLETE ON `research/m03-task-data-eval`; not merged at the time of this entry.
+
+M03 changes task/data construction, symbolic validation, task metrics, split/manifests, retained task configuration, tests, and audit infrastructure only. It does **not** change SPECTRA's reasoning/search/training algorithms.
+
+### Verified implementation / evidence
+
+- M03 base: accepted M02 merge on `main`, `e0781ec8b4e649ab4ccd48d4cd5f432a9b88d249`
+- First complete green implementation commit: `03c4a8070bd250f4c7ff17a5eb98073293ce8c67`
+- Green implementation workflow run: `34077748173`
+- Evidence artifact: `m03-task-data-evidence`, artifact id `10002690239`
+- Evidence ZIP SHA-256: `60ec3325d84c529c779f9ac32eafec053c61fbca7b2a053ded81b15b2cf74c20`
+- Evidence artifact size: 17,500 bytes; retention: 14 days
+- Focused M03/data/verifier gate at the recorded run: **42 passed, 3 deselected in 1.31 s**
+- Full fast suite at the recorded run: **182 passed, 16 deselected in 64.00 s**
+- Manifest reference seed: `314159`
+- Manifest reference sizes for each retained task: train 8 / validation 4 / test 4
+- Generator version: `spectra-m03-data-v1`
+- A subsequent parity refinement also made the tensor Sudoku validator reject non-integral tensor dtypes to match the NumPy contract and added `tests/test_m03_validator_parity.py`; final branch CI must remain green before merge.
+
+### Task-construction root cause and explicit retained contracts
+
+M03 removed the old `scripts/_common.py` shortcut that effectively behaved as **Sudoku vs. everything-else-is-maze**. The shortcut passed maze-shaped kwargs to every non-Sudoku task. This silently left ARC-style construction at generator defaults even though `config/arc.yaml` declared a different shape.
+
+Each retained task now resolves through `data/task_contracts.py` before construction. The executable task contract validates shape, vocabulary, spatial dimensions, sequence length, padding/mask policy, task-specific generator parameters, and benchmark scope.
+
+Retained local configurations are:
+
+| Task | Retained M03 contract | Benchmark scope |
+|---|---|---|
+| Sudoku | 9×9, seq 81, vocabulary 0..9, box 3, 30–50 requested clues, uniqueness on, randomized completion | generated local Sudoku |
+| Maze | 15×15, seq 225, tokens 0=wall/1=open/2=start/3=goal/4=path, shortest-path optimality required | synthetic perfect-maze path overlay |
+| ARC-style | 30×30 padded canvas, seq 900, pad 10, local `flip_h`, source max 6×6 | **synthetic local variant; NOT official ARC/ARC-AGI** |
+| BabyAI-style | 8×8, seq 64, exact local 8-token vocabulary, wall probability 0.2 | **synthetic local one-step variant; NOT official BabyAI** |
+| SmartHome | 1×16, seq 16, exact local 17-token vocabulary, pad 0 | synthetic deterministic policy snapshot |
+
+`GridDataset` now rejects generator/config disagreements in flattened length or declared vocabulary and carries input/target content masks. ARC-style masks exclude pad token 10. SmartHome input masks exclude PAD while the repeated action target remains fully evaluated.
+
+### Sudoku validation and generation contract
+
+The NumPy validator in `data/sudoku.py` now requires:
+
+- exact `(N,N)` shape implied by `box`
+- integral NumPy representation
+- partial-grid domain `0..N`
+- completed-grid domain `1..N`
+- no repeated nonzero digit in any row, column, or box
+
+Malformed or contradictory puzzles return invalid; `count_solutions` returns 0 and `solve` returns `None` rather than entering solver work with contradictory masks.
+
+`model/verifier.py` implements the corresponding tensor partial-grid semantics and now requires integer tensor dtypes as well. M03 adversarial/parity tests cross-check NumPy and tensor validity on valid puzzles and contradictory clues and include an explicit dtype-parity regression.
+
+Sudoku completed-board generation is no longer restricted to row/column/digit/transposition transformations of one canonical completed solution. The retained M03 config uses randomized MRV/backtracking **from an empty board**. The legacy canonical-symmetry construction remains available only through an explicit `solution_method: canonical_symmetry` experiment.
+
+This broadens the construction process but does **not** establish uniform sampling over all Sudoku solutions or equivalence classes, and does not make a real-world Sudoku distribution/generalization claim.
+
+### Maze semantic-success contract
+
+`data/maze.py::candidate_success` is independent of the stored reference target. A successful candidate must:
+
+- have the declared shape/token domain
+- preserve exactly one declared start and one goal
+- preserve walls exactly
+- place path cells only on originally open cells
+- form one connected simple 4-neighbour start-to-goal route
+- have endpoint degree 1 and interior route degree 2 (no branches/disconnected path components)
+- satisfy BFS shortest-path length when `require_optimal` is true
+
+The retained maze config requires optimality. Copying a non-trivial unsolved input does **not** count as success. Adversarial tests cover unsolved copies, wall crossings, branches, longer-but-valid routes when optimality is disabled, and rejection of those longer routes when optimality is required.
+
+### Primary task metrics
+
+`eval/metrics.py` separates:
+
+1. `exact_reference_match`: candidate equals the retained target cell-for-cell.
+2. `semantic_validity`: strict task success independent of target identity where a complete symbolic checker exists (currently Sudoku and maze).
+3. `blank_cell_accuracy`: Sudoku accuracy only on cells blank in the input.
+4. `content_cell_accuracy`: padding-aware content accuracy for the local ARC-style padded task.
+
+These metrics are intentionally not interchangeable. M03 includes a 4×4 Sudoku regression where a candidate can be semantically valid while differing from a separate valid reference solution, so semantic validity is 1 while exact reference match is 0.
+
+No official benchmark semantic metric is claimed for the synthetic local ARC-style or BabyAI-style generators.
+
+### Reproducible grouped split/manifests contract
+
+`data/splits.py` and `scripts/build_data_manifests.py` now provide reproducible train/validation/test manifests with:
+
+- one root integer seed
+- NumPy `SeedSequence.spawn(6)` with **separate generation and augmentation child streams for train, validation, and test**
+- stable example IDs
+- a base `group_id` computed from the **unaugmented** input/target pair before augmentation
+- augmentation applied only after split ownership is fixed
+- cross-split regenerated base-group rejection
+- cross-split exact-fingerprint audit
+- generator version, task scope, generator kwargs, RNG spawn keys, split counts, stable IDs, and per-example/task-specific difficulty metadata
+
+SmartHome is a special finite-universe case: all 64 exact binary states are deterministically partitioned into disjoint 52/6/6 train/validation/test state pools before sampling. Repeats may occur **within** a split when sampling from its assigned finite pool; that is reported rather than hidden. Cross-split state/group overlap remains forbidden.
+
+### M03 reference manifests and duplicate audit
+
+The retained evidence artifact contains `arc.json`, `babyai.json`, `maze.json`, `smarthome.json`, and `sudoku.json`, each generated at seed `314159`, sizes 8/4/4.
+
+For **all five** reference manifests:
+
+- train/validation group overlap: 0
+- train/test group overlap: 0
+- validation/test group overlap: 0
+- train/validation exact overlap: 0
+- train/test exact overlap: 0
+- validation/test exact overlap: 0
+
+Within-split exact/group duplicates in this small reference run:
+
+- Sudoku: 0 / 0 / 0 for train/validation/test
+- Maze: 0 / 0 / 0
+- ARC-style: 0 / 0 / 0
+- BabyAI-style: 0 / 0 / 0
+- SmartHome: 2 / 1 / 2 repeated examples/groups in train/validation/test, reflecting finite split-specific state sampling; this does not cross split boundaries
+
+### Recorded reference difficulty distributions
+
+The manifests persist full counts/min/max/mean. Selected ranges from the retained 8/4/4 reference run:
+
+- Sudoku clues: train 30–50, validation 31–45, test 30–48; corresponding blanks are recorded.
+- Maze shortest-path length: train 33–57, validation 37–49, test 49–77. Perfect-maze wall fraction was 0.568888… for all reference samples at 15×15.
+- ARC-style source grids: source height/width are recorded per split within the declared 2..6 generated range.
+- BabyAI-style: wall counts and whether the one-step agent moved are recorded; reference wall counts ranged 8–18 across splits.
+- SmartHome: action-token and non-pad sensor-token distributions are recorded; every encoded state contains six non-pad feature tokens.
+
+These are descriptive distributions of the small reference manifests, not claims that the splits are population-matched or IID.
+
+### M03 failures/iterations retained explicitly
+
+No final accepted M03 check may be described as passing until the final branch gate is green. During construction the following failures were exposed and fixed without weakening tests:
+
+1. Initial split augmentation passed `height/width` both positionally and through task kwargs, causing Python argument collisions for retained configs. The split/build layers now remove duplicate spatial kwargs before augmentation.
+2. The direct legacy ARC builder inherited the generator's default pad token 10, but the first M03 mask implementation required an explicit pad token. The builder now inherits the same historical default while config-driven construction remains explicit.
+3. The direct manifest CLI initially lacked the repository root on `sys.path`; it now mirrors the repository's other directly runnable script entry points.
+4. A final validator parity review found NumPy Sudoku rejected floating representations while the tensor validator could accept integral-valued floats. The tensor validator now requires an integer dtype and has a dedicated regression test.
+
+### Remaining limitations / unsupported claims
+
+- The local ARC-style generator is **not** ARC/ARC-AGI and has no official ARC dataset/evaluation integration.
+- The local BabyAI-style generator is **not** the official BabyAI environment/benchmark and evaluates only a local one-step next-state construction.
+- The split mechanism prevents observed base/augmentation leakage and audits exact/group duplicates; it does not prove IID sampling, matched population difficulty, absence of semantic near-duplicates, or external benchmark generalization.
+- Sudoku randomized backtracking is not proven uniform over completed solutions/equivalence classes.
+- Uniqueness is enforced for the retained Sudoku puzzle maker but the manifest difficulty field is clue/blanks, not a calibrated human difficulty rating.
+- Maze difficulty records path length/wall fraction; no human/navigation difficulty calibration is claimed.
+- SmartHome has only 64 exact binary states; large datasets necessarily reuse states within their split-specific pool unless the experiment explicitly caps examples to unique states.
+- M03 does not establish trained task accuracy, search advantage, scaling behavior, energy savings, or published hardware performance claims.
+
+### M03 decision
+
+M03 closes the task/data/evaluation **contract** layer for the retained local experiments: construction is explicit, malformed Sudoku and false maze successes are rejected, primary metrics have distinct meanings, and split/manifests are reproducible and leakage-audited.
+
+**Next action:** stop here for M03. Do not expand this milestone into training/scaling/performance claims. Merge only after the final branch CI including the dtype-parity regression is green and the user accepts the milestone.
