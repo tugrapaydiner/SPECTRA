@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python -m py_compile deploy/m10_native.py deploy/m10_artifact.py deploy/m10_runtime.py scripts/m10_cpu_deployment.py
+          python -m py_compile deploy/m10_native.py deploy/m10_artifact.py deploy/m10_runtime.py scripts/m10_cpu_deployment.py scripts/m10_cpu_deployment_isolated.py
           echo "$?" | tee .m10/compile_exit_code.txt
           exit 0
 
@@ -62,7 +62,7 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          timeout 1800s python scripts/m10_cpu_deployment.py --out .m10/experiment |& tee .m10/run.log
+          timeout 1800s python scripts/m10_cpu_deployment_isolated.py --out .m10/experiment |& tee .m10/run.log
           code=${PIPESTATUS[0]}
           echo "$code" | tee .m10/experiment_exit_code.txt
           exit 0
@@ -79,13 +79,17 @@ jobs:
               'spectra_cpu_v1.pt', 'artifact_manifest.json', 'backend_identity.json',
               'fidelity.json', 'timing.json', 'profiler_trace.json', 'profiler_table.txt',
               'profiler_record.json', 'summary.json', 'exact_commands.json', 'SUMMARY.md',
-              'data_manifest.json', 'environment.json',
+              'data_manifest.json', 'environment.json', 'native_build_isolation.json',
           ]
           missing = [p for p in required if not (root / p).is_file()]
           print('missing=', missing)
           if missing: sys.exit(2)
+          isolation = json.loads((root / 'native_build_isolation.json').read_text())
+          assert isolation['isolated'] is True
+          assert isolation['directory_empty_before_experiment_import'] is True
           s = json.loads((root / 'summary.json').read_text())
           print(json.dumps(s, indent=2, sort_keys=True))
+          print('native_build_isolation=', json.dumps(isolation, sort_keys=True))
           assert s['status'] == 'complete'
           assert s['acceptance_pass'] is True
           assert s['hard_ternary_verified'] is True
