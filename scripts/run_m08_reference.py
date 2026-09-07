@@ -5,6 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
+
+# Direct execution (`python scripts/run_m08_reference.py`) puts `scripts/` rather
+# than the repository root on sys.path. Bind the exact repo root explicitly so the
+# documented command works from a clean checkout.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from eval.mcts_reference import run_frozen_reference
 
