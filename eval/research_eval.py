@@ -7,7 +7,6 @@ from typing import Any
 import numpy as np
 import torch
 
-from common.seed import derive_seed, isolated_seed
 from eval.checkpoint_eval import (
     EvaluationContractError,
     LoadedAuxiliary,
@@ -28,7 +27,9 @@ class InferenceSetting:
     mcts_rollouts: int = 0
     c_puct: float = 1.5
     uncertainty_beta: float = 0.0
-    search_seed: int = 20260907
+    # Current LatentNativeMCTS is deterministic: no random tie break/noise/sampling.
+    # A non-None seed is therefore rejected rather than emitted as a fake knob.
+    search_seed: int | None = None
 
     def validate(self) -> None:
         if self.mode == "greedy":
@@ -36,9 +37,11 @@ class InferenceSetting:
                 raise EvaluationContractError("greedy evaluation requires ordinary_n_sup >= 1")
             if self.mcts_rollouts != 0:
                 raise EvaluationContractError("greedy evaluation cannot specify MCTS rollouts")
+            if self.search_seed is not None:
+                raise EvaluationContractError("greedy evaluation cannot specify a search seed")
         elif self.mode == "latent_mcts":
             # N_sup is not consumed by LatentNativeMCTS._step. Rejecting it avoids
-            # apparently different search depths that execute identical search transitions.
+            # apparently different search depths that execute identical transitions.
             if self.ordinary_n_sup is not None:
                 raise EvaluationContractError(
                     "ordinary_n_sup/N_sup is not a latent-MCTS transition knob; "
@@ -46,6 +49,11 @@ class InferenceSetting:
                 )
             if int(self.mcts_rollouts) <= 0:
                 raise EvaluationContractError("latent_mcts requires mcts_rollouts > 0")
+            if self.search_seed is not None:
+                raise EvaluationContractError(
+                    "current LatentNativeMCTS is deterministic and does not consume search_seed; "
+                    "a stochastic search implementation must define and use an independent RNG stream"
+                )
         else:
             raise EvaluationContractError(f"unsupported inference mode {self.mode!r}")
         if not np.isfinite(self.c_puct) or self.c_puct < 0:
@@ -126,8 +134,7 @@ def realized_setting(
         "mode": "latent_mcts",
         "ordinary_n_sup": None,
         # checkpoint N_sup remains in checkpoint provenance, but is deliberately
-        # absent from the effective search-compute signature because _step does
-        # not consume it.
+        # absent from the effective search-compute signature because _step does not consume it.
         "N_sup_consumed_by_search_transition": False,
         "transition_T_cycles": int(model.T),
         "transition_inner_n": int(model.n),
@@ -135,7 +142,8 @@ def realized_setting(
         "mcts_rollouts": int(setting.mcts_rollouts),
         "c_puct": float(setting.c_puct),
         "uncertainty_beta": float(setting.uncertainty_beta),
-        "search_seed": int(setting.search_seed),
+        "search_stochastic": False,
+        "search_seed_consumed": None,
     }
 
 
@@ -256,12 +264,10 @@ def evaluate_setting(
             x = torch.from_numpy(ds.inputs[i : i + 1]).to(core.device)
             y = torch.from_numpy(ds.targets[i : i + 1]).to(core.device)
             compute = _empty_compute(setting, core)
-            example_seed = None
             if setting.mode == "greedy":
                 logits, _ = core.model(x, height=ds.height, width=ds.width)
                 pred = logits.argmax(-1)
             else:
-                example_seed = derive_seed(int(setting.search_seed), f"m05-search:{ds.ids[i]}")
                 controller = CountingLatentNativeMCTS(
                     core.model,
                     verifier.module,
@@ -272,8 +278,7 @@ def evaluate_setting(
                     c_puct=float(setting.c_puct),
                     uncertainty_beta=float(setting.uncertainty_beta),
                 )
-                with isolated_seed(example_seed):
-                    pred = controller.search_and_decode(x)
+                pred = controller.search_and_decode(x)
                 search_stats = controller.compute_stats()
                 compute.update(search_stats)
                 compute["ordinary_recursive_cycle_calls"] = (
@@ -293,7 +298,7 @@ def evaluate_setting(
                 "data_id": str(ds.ids[i]),
                 "group_id": str(ds.group_ids[i]),
                 "example_index": i,
-                "search_example_seed": example_seed,
+                "search_example_seed": None,
                 "prediction": pred[0].detach().cpu().tolist(),
                 "correct": bool(torch.equal(pred[0].cpu(), y[0].cpu())),
                 "metrics": metrics,
