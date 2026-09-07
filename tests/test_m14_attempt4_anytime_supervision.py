@@ -1,3 +1,5 @@
+import math
+
 import torch
 
 import scripts.m14_attempt2_single_stream as a2
@@ -18,7 +20,7 @@ class DummyFourStep:
 
 def test_attempt4_weights_are_fixed_exact_reverse_of_historical_schedule():
     assert FRONT_LOADED_WEIGHTS == [0.4, 0.3, 0.2, 0.1]
-    assert sum(FRONT_LOADED_WEIGHTS) == 1.0
+    assert math.isclose(sum(FRONT_LOADED_WEIGHTS), 1.0, rel_tol=0.0, abs_tol=1e-15)
     assert list(reversed(FRONT_LOADED_WEIGHTS)) == [0.1, 0.2, 0.3, 0.4]
 
 
