@@ -8,9 +8,9 @@
 //   * multiplier: non-negative int32 fixed-point multiplier
 //   * hidden/inter dimensions: <= floor(INT32_MAX / 128), so int32 dot sums cannot overflow
 //
-// Public C entry points are checked and return a SpectraStatus. The vector dot
-// widens activations before applying the ternary sign, so INT8_MIN * -1 is +128
-// in int16 rather than overflowing in an 8-bit negate.
+// Public C entry points are checked and return a SpectraStatus. The AVX2 dot
+// keeps the fast byte-sign path, detects the one overflowing case INT8_MIN * -1,
+// and adds the exact +256 correction needed to recover the mathematical +128.
 
 #include <cstddef>
 #include <cstdint>
@@ -107,14 +107,23 @@ static inline int8_t requantize_i32(int32_t acc, int32_t mult, int32_t shift) {
   return static_cast<int8_t>(v);
 }
 
+#if defined(__AVX2__)
+static inline uint32_t popcount32_portable(uint32_t x) {
+  x = x - ((x >> 1) & 0x55555555u);
+  x = (x & 0x33333333u) + ((x >> 2) & 0x33333333u);
+  x = (x + (x >> 4)) & 0x0F0F0F0Fu;
+  return (x * 0x01010101u) >> 24;
+}
+#endif
+
 static int32_t ternary_dot(const int8_t* x, const uint8_t* w_packed, int hidden_dim) {
   int32_t acc = 0;
   int d = 0;
 
 #if defined(__AVX2__)
   const __m256i lut = _mm256_setr_epi8(
-      0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-      0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
   const __m256i rep = _mm256_setr_epi8(
       0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
       4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7);
@@ -124,6 +133,9 @@ static int32_t ternary_dot(const int8_t* x, const uint8_t* w_packed, int hidden_
   const __m256i m3 = _mm256_set1_epi32(static_cast<int>(0xFF000000u));
   const __m256i lo2 = _mm256_set1_epi8(0x03);
   const __m256i ones16 = _mm256_set1_epi16(1);
+  const __m256i min8 = _mm256_set1_epi8(static_cast<char>(0x80));
+  const __m256i neg1_8 = _mm256_set1_epi8(-1);
+  uint64_t correction = 0;
   __m256i vacc = _mm256_setzero_si256();
 
   for (; d + 32 <= hidden_dim; d += 32) {
@@ -141,18 +153,16 @@ static int32_t ternary_dot(const int8_t* x, const uint8_t* w_packed, int hidden_
     const __m256i w8 = _mm256_shuffle_epi8(lut, codes);
     const __m256i x8 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(x + d));
 
-    // Do NOT use _mm256_sign_epi8 here: negating INT8_MIN in 8 bits yields
-    // INT8_MIN again. Widen x and w first so -128 * -1 becomes +128 exactly.
-    const __m128i x_lo8 = _mm256_castsi256_si128(x8);
-    const __m128i x_hi8 = _mm256_extracti128_si256(x8, 1);
-    const __m128i w_lo8 = _mm256_castsi256_si128(w8);
-    const __m128i w_hi8 = _mm256_extracti128_si256(w8, 1);
-    const __m256i x_lo16 = _mm256_cvtepi8_epi16(x_lo8);
-    const __m256i x_hi16 = _mm256_cvtepi8_epi16(x_hi8);
-    const __m256i w_lo16 = _mm256_cvtepi8_epi16(w_lo8);
-    const __m256i w_hi16 = _mm256_cvtepi8_epi16(w_hi8);
-    const __m256i p_lo16 = _mm256_mullo_epi16(x_lo16, w_lo16);
-    const __m256i p_hi16 = _mm256_mullo_epi16(x_hi16, w_hi16);
+    // VPSIGNB is correct for every ternary product except INT8_MIN * -1:
+    // the 8-bit negate wraps to INT8_MIN, exactly 256 below the true +128.
+    // Keep the fast byte-sign path and add a +256 correction for those lanes.
+    const __m256i prod8 = _mm256_sign_epi8(x8, w8);
+    const __m256i special = _mm256_and_si256(
+        _mm256_cmpeq_epi8(x8, min8), _mm256_cmpeq_epi8(w8, neg1_8));
+    correction += static_cast<uint64_t>(popcount32_portable(
+        static_cast<uint32_t>(_mm256_movemask_epi8(special)))) * 256u;
+    const __m256i p_lo16 = _mm256_cvtepi8_epi16(_mm256_castsi256_si128(prod8));
+    const __m256i p_hi16 = _mm256_cvtepi8_epi16(_mm256_extracti128_si256(prod8, 1));
     vacc = _mm256_add_epi32(vacc, _mm256_madd_epi16(p_lo16, ones16));
     vacc = _mm256_add_epi32(vacc, _mm256_madd_epi16(p_hi16, ones16));
   }
@@ -160,6 +170,8 @@ static int32_t ternary_dot(const int8_t* x, const uint8_t* w_packed, int hidden_
   alignas(32) int32_t tmp[8];
   _mm256_store_si256(reinterpret_cast<__m256i*>(tmp), vacc);
   for (int k = 0; k < 8; ++k) acc += tmp[k];
+  const int64_t vector_corrected = static_cast<int64_t>(acc) + static_cast<int64_t>(correction);
+  acc = static_cast<int32_t>(vector_corrected);
 #endif
 
   for (; d < hidden_dim; ++d) {
@@ -174,22 +186,28 @@ static int32_t ternary_dot_decoded(const int8_t* x, const int8_t* w, int hidden_
   int d = 0;
 #if defined(__AVX2__)
   const __m256i ones16 = _mm256_set1_epi16(1);
+  const __m256i min8 = _mm256_set1_epi8(static_cast<char>(0x80));
+  const __m256i neg1_8 = _mm256_set1_epi8(-1);
+  uint64_t correction = 0;
   __m256i vacc = _mm256_setzero_si256();
   for (; d + 32 <= hidden_dim; d += 32) {
     const __m256i x8 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(x + d));
     const __m256i w8 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(w + d));
-    const __m256i x_lo16 = _mm256_cvtepi8_epi16(_mm256_castsi256_si128(x8));
-    const __m256i x_hi16 = _mm256_cvtepi8_epi16(_mm256_extracti128_si256(x8, 1));
-    const __m256i w_lo16 = _mm256_cvtepi8_epi16(_mm256_castsi256_si128(w8));
-    const __m256i w_hi16 = _mm256_cvtepi8_epi16(_mm256_extracti128_si256(w8, 1));
-    const __m256i p_lo16 = _mm256_mullo_epi16(x_lo16, w_lo16);
-    const __m256i p_hi16 = _mm256_mullo_epi16(x_hi16, w_hi16);
+    const __m256i prod8 = _mm256_sign_epi8(x8, w8);
+    const __m256i special = _mm256_and_si256(
+        _mm256_cmpeq_epi8(x8, min8), _mm256_cmpeq_epi8(w8, neg1_8));
+    correction += static_cast<uint64_t>(popcount32_portable(
+        static_cast<uint32_t>(_mm256_movemask_epi8(special)))) * 256u;
+    const __m256i p_lo16 = _mm256_cvtepi8_epi16(_mm256_castsi256_si128(prod8));
+    const __m256i p_hi16 = _mm256_cvtepi8_epi16(_mm256_extracti128_si256(prod8, 1));
     vacc = _mm256_add_epi32(vacc, _mm256_madd_epi16(p_lo16, ones16));
     vacc = _mm256_add_epi32(vacc, _mm256_madd_epi16(p_hi16, ones16));
   }
   alignas(32) int32_t tmp[8];
   _mm256_store_si256(reinterpret_cast<__m256i*>(tmp), vacc);
   for (int k = 0; k < 8; ++k) acc += tmp[k];
+  const int64_t vector_corrected = static_cast<int64_t>(acc) + static_cast<int64_t>(correction);
+  acc = static_cast<int32_t>(vector_corrected);
 #endif
   for (; d < hidden_dim; ++d) {
     acc += static_cast<int32_t>(w[d]) * static_cast<int32_t>(x[d]);
