@@ -1,9 +1,4 @@
-"""Shared helpers for entry-point scripts.
-
-Milestone 03 removes the old "Sudoku else Maze" dataset shortcut. Every retained
-task is now resolved through one executable task contract before any data is
-constructed.
-"""
+"""Shared helpers for task construction and reproducible training entry points."""
 from __future__ import annotations
 
 import sys
@@ -12,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common import DotDict  # noqa: E402
+from common.seed import SeedStreams, make_seed_streams, set_seed  # noqa: E402
 from data.datasets import GridDataset  # noqa: E402
 from data.splits import build_reproducible_splits, write_manifest  # noqa: E402
 from data.task_contracts import TaskContract, contract_from_config  # noqa: E402
@@ -39,7 +35,7 @@ def build_trm(cfg: DotDict, ternary: bool = False, act8: bool = False) -> TRM:
 
 
 def task_contract_from(cfg: DotDict) -> TaskContract:
-    """Validate the YAML task/data block and return its normalized contract."""
+    """Validate YAML task/data and return its normalized executable contract."""
     return contract_from_config(str(cfg.task), cfg.data)
 
 
@@ -51,7 +47,7 @@ def build_data_splits(
     seed: int | None = None,
     manifest_path: str | Path | None = None,
 ) -> tuple[dict[str, GridDataset], dict]:
-    """Build reproducible grouped train/validation/test data and its manifest."""
+    """Build reproducible grouped train/validation/test data and manifest."""
     contract = task_contract_from(cfg)
     datasets, manifest = build_reproducible_splits(
         contract.task,
@@ -69,27 +65,53 @@ def build_data_splits(
 def build_datasets(
     cfg: DotDict, n_train: int, n_val: int, seed: int | None = None
 ) -> tuple[GridDataset, GridDataset]:
-    """Backward-compatible train/validation wrapper using separate RNG streams."""
+    """Train/validation wrapper using independent split RNG streams."""
     datasets, _ = build_data_splits(cfg, n_train, n_val, 0, seed=seed)
     return datasets["train"], datasets["validation"]
 
 
-def train_config_from(cfg: DotDict, max_steps: int | None = None) -> TrainConfig:
-    t = cfg.train
-    return TrainConfig(
-        lr=float(t.lr),
-        weight_decay=float(t.weight_decay),
-        batch_size=int(t.batch_size),
-        max_steps=int(max_steps if max_steps is not None else t.max_steps),
-        lr_warmup_steps=int(t.get("warmup_steps", 100)),
-        quant_warmup_steps=int(t.get("quant_warmup_steps", 500)),
-        clip_grad_norm=float(t.clip_grad_norm),
-        ema_decay=float(t.ema_decay),
-        lambda_h=float(t.lambda_h),
-        lambda_improve=float(t.lambda_improve),
-        margin=float(t.margin),
-        log_every=int(t.get("log_every", 50)),
-        eval_every=int(t.get("eval_every", 500)),
-        seed=int(cfg.seed),
-        device=str(cfg.device),
-    )
+def train_config_from(
+    cfg: DotDict,
+    max_steps: int | None = None,
+    *,
+    precision: str | None = None,
+) -> TrainConfig:
+    tcfg = TrainConfig.from_config(cfg)
+    if max_steps is not None:
+        tcfg.max_steps = int(max_steps)
+    if precision is not None:
+        tcfg.precision = str(precision)
+    return tcfg
+
+
+def build_seeded_training_components(
+    cfg: DotDict,
+    n_train: int,
+    n_val: int,
+    *,
+    ternary: bool,
+    act8: bool,
+    max_steps: int | None = None,
+    precision: str | None = None,
+) -> tuple[TRM, GridDataset, GridDataset, TrainConfig, SeedStreams]:
+    """Construct data/model under independent streams in a fixed order.
+
+    Data gets its own seed and never advances model-initialization randomness.
+    Model initialization is reseeded explicitly after data construction. Trainer
+    then starts the separate training stream; validation uses the eval stream.
+    """
+    streams = make_seed_streams(int(cfg.seed))
+    deterministic = bool(cfg.get("train", {}).get("deterministic", False))
+
+    # Seed before data construction.
+    set_seed(streams.data, deterministic=deterministic)
+    train_ds, val_ds = build_datasets(cfg, n_train, n_val, seed=streams.data)
+
+    # Independently seed before model initialization.
+    set_seed(streams.model, deterministic=deterministic)
+    model = build_trm(cfg, ternary=ternary, act8=act8)
+
+    tcfg = train_config_from(cfg, max_steps=max_steps, precision=precision)
+    tcfg.train_seed = streams.train
+    tcfg.eval_seed = streams.eval
+    return model, train_ds, val_ds, tcfg, streams

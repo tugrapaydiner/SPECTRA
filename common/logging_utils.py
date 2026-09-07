@@ -48,8 +48,18 @@ class MetricLogger:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._handle = self.path.open("w", encoding="utf-8")
 
-    def log(self, step: int, **metrics: Any) -> None:
-        record = {"step": step, **metrics}
+    def log(self, global_step: int, **metrics: Any) -> None:
+        """Write one metric row with exactly one authoritative step value.
+
+        ``metrics`` may already carry a ``step`` field (evaluation history does).
+        That is accepted only when it agrees with ``global_step``; this avoids
+        both duplicate-argument failures and silently inconsistent JSONL rows.
+        """
+        if "step" in metrics and int(metrics["step"]) != int(global_step):
+            raise ValueError(
+                f"metric step mismatch: positional={global_step}, row={metrics['step']}"
+            )
+        record = {"step": int(global_step), **metrics}
         self._handle.write(json.dumps(record) + "\n")
         self._handle.flush()
 
