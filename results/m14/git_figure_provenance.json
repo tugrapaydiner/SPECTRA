@@ -1,7 +1,7 @@
 {
   "generated_from_raw": true,
-  "note": "Git-retained deterministic regeneration; accepted CI renderer PNG hash remains in the Actions artifact provenance.",
-  "pareto_svg_sha256": "97d23f766ee80e31fea8c933eebb92e5719acf2cdf824fb50bc21a5344be5885",
+  "note": "Git-retained deterministic regeneration; accepted CI renderer PNG hash remains in the Actions artifact provenance. The SVG identity below is the Git blob SHA-1 rather than a mismatched local serialization SHA-256.",
+  "pareto_svg_git_blob_sha1": "67acb509bef5ed5d40c1850cc4d4827229ae22d8",
   "points": [
     {"config_id": "symbolic_exact", "median_latency_ms": 0.56065375, "semantic_validity": 1.0},
     {"config_id": "dual_stream_exit_k4", "median_latency_ms": 1.21508525, "semantic_validity": 0.9845703125},
