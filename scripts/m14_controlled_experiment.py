@@ -23,7 +23,7 @@ from deploy.m10_runtime import CPURecursiveRuntime
 from eval.controlled_comparison import (
     answer_loss, append_json, assert_hard_quantized, budget_label, convert_int8,
     digest, full_solve, load_partition, make_model, object_digest, outcome,
-    paired_bounds, read_jsonl, set_quant_strength, write_json,
+    paired_bounds, read_jsonl, set_quant_strength, verify_confirmation_freeze, write_json,
 )
 
 FAMILIES = ["fp_recursive", "ternary_recursive", "single_pass"]
@@ -337,6 +337,8 @@ def native_lanes(root: Path, cfg: dict, phase: str, lanes: list[dict], warm_x: n
 
 
 def evaluate(root: Path, cfg: dict, phase: str, split: str) -> None:
+    if split == "confirmation":
+        verify_confirmation_freeze(root, phase)
     directory = root / phase
     rows_path = directory / f"{split}_rows.jsonl"
     if rows_path.exists():
@@ -461,12 +463,28 @@ def main() -> None:
     provenance = json.loads((root / "provenance.json").read_text())
     if digest(root / "config.json") != provenance["config_sha256"]:
         raise RuntimeError("frozen experiment configuration changed")
-    if args.stage == "train":
-        train(root, cfg, args.phase)
-    elif args.stage == "tune":
-        tune(root, cfg, args.phase)
-    else:
-        evaluate(root, cfg, args.phase, args.split)
+    execution = {"stage": args.stage, "phase": args.phase, "split": args.split,
+        "start_time_ns": time.time_ns(),
+        "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        "source_hashes": {p: digest(Path(p)) for p in ["scripts/m14_controlled_experiment.py", "eval/controlled_comparison.py"]},
+        "config_sha256": digest(root / "config.json"), "completed": False}
+    execution_path = root / "stage_executions" / f"{execution['start_time_ns']}_{args.stage}_{args.phase}.json"
+    write_json(execution_path, execution)
+    start = time.perf_counter()
+    try:
+        if args.stage == "train":
+            train(root, cfg, args.phase)
+        elif args.stage == "tune":
+            tune(root, cfg, args.phase)
+        else:
+            evaluate(root, cfg, args.phase, args.split)
+        execution["completed"] = True
+    except Exception as exc:
+        execution["error"] = f"{type(exc).__name__}: {exc}"
+        raise
+    finally:
+        execution["elapsed_seconds"] = time.perf_counter() - start
+        write_json(execution_path, execution)
 
 
 if __name__ == "__main__":

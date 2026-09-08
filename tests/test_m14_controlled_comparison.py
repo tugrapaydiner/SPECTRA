@@ -118,3 +118,41 @@ def test_blank_only_objective_has_real_gradients():
     loss = answer_loss(model, x, y, blank_only=True); loss.backward()
     assert torch.isfinite(loss) and model.out_head.weight.grad.abs().sum() > 0
     assert model.halt_head.weight.grad is None
+
+
+def test_independent_report_checker_rejects_valid_grid_that_changes_clues():
+    from scripts.render_m14_comparison import independently_check
+    solved = [(r * 3 + r // 3 + c) % 9 + 1 for r in range(9) for c in range(9)]
+    puzzle = solved.copy(); puzzle[0] = 0
+    relabelled = [v % 9 + 1 for v in solved]
+    result = independently_check(puzzle, solved, relabelled)
+    assert result["success"] == 0 and result["clue_errors"] == 80
+    assert independently_check(puzzle, solved, solved)["success"] == 1
+
+
+def test_paired_bootstrap_preserves_identical_system_pairings():
+    rng = np.random.default_rng(3)
+    outcomes = rng.integers(2, size=(3, 80)); costs = rng.uniform(.2, 2, size=(3, 80))
+    result = paired_bounds(outcomes, outcomes, costs, costs * 3, alpha=.025, draws=1000, seed=5)
+    assert result["accuracy_lower_bound"] == 0
+    assert result["latency_ratio_upper_bound"] == pytest.approx(1 / 3)
+
+
+def test_confirmation_authorization_is_bound_to_phase_and_selection(tmp_path):
+    from eval.controlled_comparison import verify_confirmation_freeze
+    phase = tmp_path / "initial"; phase.mkdir()
+    write_json(phase / "selection.json", {"selected": "candidate_A"})
+    write_json(phase / "native_selection.json", {"native": False})
+    write_json(phase / "development_freeze.json", {
+        "selection_sha256": digest(phase / "selection.json"),
+        "native_selection_sha256": digest(phase / "native_selection.json")})
+    write_json(phase / "development_gate.json", {"passed": True, "freeze_sha256": digest(phase / "development_freeze.json")})
+    write_json(tmp_path / "confirmation_authorization.json", {"phase": "initial",
+        "development_gate_path": "initial/development_gate.json",
+        "development_gate_sha256": digest(phase / "development_gate.json")})
+    verify_confirmation_freeze(tmp_path, "initial")
+    with pytest.raises(RuntimeError, match="phase"):
+        verify_confirmation_freeze(tmp_path, "blank_only")
+    write_json(phase / "selection.json", {"selected": "candidate_B"})
+    with pytest.raises(RuntimeError, match="configuration changed"):
+        verify_confirmation_freeze(tmp_path, "initial")

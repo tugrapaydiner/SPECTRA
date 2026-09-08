@@ -6,8 +6,8 @@ einops==0.8.1
 tqdm==4.67.1
 psutil==7.1.0
 ninja==1.13.0
-# Exact numerical/plot versions are retained in results/m14/.../environment.lock.txt.
-numpy>=1.24
-scipy>=1.11
-matplotlib>=3.7
-pyyaml>=6
+# Exact tested numerical/plot dependencies (the evidence includes the full lock).
+numpy==2.3.5
+scipy==1.17.0
+matplotlib==3.10.8
+pyyaml==6.0.3

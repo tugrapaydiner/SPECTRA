@@ -231,3 +231,23 @@ def load_partition(root: Path, name: str, purpose: str) -> tuple[np.ndarray, np.
     append_json(root / "split_access.jsonl", {"split": name, "purpose": purpose,
                                               "array_sha256": digest(path), "time_ns": time.time_ns()})
     return x, y, manifest["partitions"][name]["examples"]
+
+
+def verify_confirmation_freeze(root: Path, phase: str) -> None:
+    """A passing gate authorizes only its exact selected phase and configuration."""
+    auth_path = root / "confirmation_authorization.json"
+    if not auth_path.exists():
+        raise RuntimeError("confirmation has no passing development authorization")
+    auth = json.loads(auth_path.read_text())
+    if auth["phase"] != phase:
+        raise RuntimeError("confirmation phase differs from the authorized candidate")
+    gate_path = root / auth["development_gate_path"]
+    gate = json.loads(gate_path.read_text())
+    freeze_path = root / phase / "development_freeze.json"
+    if not gate["passed"] or digest(gate_path) != auth["development_gate_sha256"] or digest(freeze_path) != gate["freeze_sha256"]:
+        raise RuntimeError("development gate or freeze changed")
+    frozen = json.loads(freeze_path.read_text())
+    if digest(root / phase / "selection.json") != frozen["selection_sha256"]:
+        raise RuntimeError("selected configuration changed after development")
+    if digest(root / phase / "native_selection.json") != frozen["native_selection_sha256"]:
+        raise RuntimeError("selected native backend changed after development")
