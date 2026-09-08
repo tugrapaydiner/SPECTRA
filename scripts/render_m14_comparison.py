@@ -162,9 +162,11 @@ def render(root: Path) -> dict:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    matplotlib.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10, "svg.fonttype": "none"})
+    matplotlib.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10,
+                               "svg.fonttype": "none", "svg.hashsalt": "spectra-m14-v1"})
     phases = [p for p in ["initial", "blank_only"] if any(s["phase"] == p for s in summaries)]
-    fig, axes = plt.subplots(1, 2, figsize=(11.8, 4.7), layout="constrained")
+    fig, axes = plt.subplots(1, 2, figsize=(11.8, 5.7))
+    fig.subplots_adjust(left=.07, right=.98, top=.85, bottom=.31, wspace=.22)
     frontiers = []
     for ax, metric, title in zip(axes, ["mean_solve_rate", "mean_blank_accuracy"],
                                 ["Complete Sudoku solves", "Blank-cell accuracy (secondary)"]):
@@ -190,17 +192,22 @@ def render(root: Path) -> dict:
                 ys = [ps[per_metric] * 100 for ps in s["per_seed"]]
                 ax.vlines(s["mean_latency_ms"], min(ys), max(ys), colors=COLORS[s["lane"]], linewidth=1.3)
         ax.set_xscale("log"); ax.set_xlabel("Mean complete-solve latency (ms, log scale)")
+        from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter
+        ax.xaxis.set_major_locator(FixedLocator([.25, .5, 1, 2, 4, 8, 16, 32]))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda x, pos: f"{x:g}"))
+        ax.xaxis.set_minor_formatter(NullFormatter())
         ax.set_ylabel("Accuracy (%)"); ax.set_ylim(-4, 104); ax.set_title(title, loc="left", fontweight="bold")
         ax.grid(axis="y", color="#DFE3E6", linewidth=.6); ax.spines[["top", "right"]].set_visible(False)
     from matplotlib.lines import Line2D
     handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor=COLORS[l], markeredgecolor=COLORS[l], label=LABELS[l])
                for l in LABELS if any(s["lane"] == l for s in summaries)]
-    fig.legend(handles=handles, loc="outside lower center", ncol=3, frameon=False, fontsize=9)
-    fig.suptitle("SPECTRA M14 · measured development comparison", x=.02, ha="left", fontsize=14, fontweight="bold")
-    fig.text(.02, -.005, "Filled circles: initial. Open squares: blank-only training + clue-preserving decode. Bars: training-seed range.\n"
+    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(.52, .115), ncol=3, frameon=False, fontsize=9)
+    fig.suptitle("SPECTRA M14 · measured development comparison", x=.07, y=.965, ha="left", fontsize=14, fontweight="bold")
+    fig.text(.07, .02, "Circles: initial. Squares: blank-only training + clue-preserving decode. Bars: observed training-seed range.\n"
+             "Lines connect empirical neural Pareto points; they do not imply statistically significant dominance.\n"
              "Generated 9×9 Sudoku · 192 paired development examples · 3 training seeds · CPU only · no measured joules", fontsize=8)
     fig.savefig(report / "accuracy_latency.png", dpi=180, bbox_inches="tight")
-    fig.savefig(report / "accuracy_latency.svg", bbox_inches="tight")
+    fig.savefig(report / "accuracy_latency.svg", bbox_inches="tight", metadata={"Date": None})
     plt.close(fig)
     write_json(report / "pareto_frontiers.json", frontiers)
     gate_files = list(root.glob("*/development_gate.json")) + list(root.glob("*/confirmation_gate.json"))
