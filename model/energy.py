@@ -1,11 +1,9 @@
-"""Neural energy verifier (BLUEPRINT section 9.5).
+"""Neural energy-verifier components.
 
-A small network ``E_psi(x, y) -> R`` that scores a candidate answer; *lower energy
-is better*. Trained contrastively to put correct answers below wrong ones, using
-**hard negatives** (near-miss boards) rather than only random wrong answers.
-
-The energy verifier doubles as the per-step value network for dense RL and Latent
-MCTS (sections 5.5, 9.6): ``V_k = -E_psi(x, z^(k))``.
+These modules implement decoded and latent learned scoring functions used by the
+experimental search/RL paths.  A learned score is a proxy whose meaning is limited
+to its declared training target and evaluated state distribution; it is not an
+oracle for task success merely because search can optimize it.
 """
 
 from __future__ import annotations
@@ -56,19 +54,21 @@ class EnergyVerifier(nn.Module):
 
 
 class LatentEnergyVerifier(nn.Module):
-    """Energy verifier over the **INT8 latent** ``E_psi(x, z)`` (BLUEPRINT 9.6).
+    """Energy verifier over an INT8-fake-quantized latent ``E_psi(x, z)``.
 
     Unlike :class:`EnergyVerifier` (which scores decoded token answers), this scores
-    the continuous reasoning latent ``z`` *without decoding* -- the value network
-    Cache-Resident Latent MCTS needs. The latent is INT8 fake-quantized internally,
-    so the verifier operates in the same INT8 latent space the search runs in.
+    the continuous reasoning latent ``z`` without decoding.  The latent is
+    fake-quantized internally so the learned scorer sees the same nominal A8
+    boundary used by the corresponding search experiments.  Its score is still a
+    learned proxy and requires target/distribution validation before being treated
+    as a useful search value.
 
     Args:
-        num_tokens: Vocabulary size (for the frozen input-context embedding).
+        num_tokens: Vocabulary size (for the input-context embedding).
         dim: Hidden dimension (matches the recursive core's latent dim).
         n_layers / heads: Verifier transformer depth/width.
         max_grid_size: For positional embeddings.
-        act_bits: Latent quantization bits (8 for the A8 target).
+        act_bits: Latent quantization bits.
     """
 
     def __init__(
@@ -83,7 +83,7 @@ class LatentEnergyVerifier(nn.Module):
         super().__init__()
         self.x_embed = nn.Embedding(num_tokens, dim)
         self.pos_encoder = SpatialEncoder(dim, max_grid_size)
-        self.z_proj = nn.Linear(dim, dim)  # project the latent into verifier space
+        self.z_proj = nn.Linear(dim, dim)
         self.act_quant = FakeActQuant(bits=act_bits)
         self.blocks = nn.ModuleList([SwapBlock(dim, heads=heads) for _ in range(n_layers)])
         self.norm = nn.RMSNorm(dim)
@@ -91,26 +91,27 @@ class LatentEnergyVerifier(nn.Module):
 
     def forward(self, x: torch.Tensor, z: torch.Tensor, width: int = 9) -> torch.Tensor:
         """Energy ``[B]`` of latent ``z`` ``[B, L, D]`` given problem ``x`` ``[B, L]``."""
-        z_q = self.act_quant(z)  # INT8 latent -- scored without ever decoding
+        z_q = self.act_quant(z)
         h = self.x_embed(x) + self.pos_encoder(x.shape[1], width, x.device) + self.z_proj(z_q)
         for block in self.blocks:
             h = block(h)
         return self.head(self.norm(h).mean(dim=1)).squeeze(-1)
 
     def value(self, x: torch.Tensor, z: torch.Tensor, width: int = 9) -> torch.Tensor:
-        """Latent value ``V^psi = -E_psi(x, z)`` (higher = better)."""
+        """Latent value ``V^psi = -E_psi(x, z)`` (higher = better proxy value)."""
         return -self.forward(x, z, width)
 
 
 class EnsembleLatentEnergyVerifier(nn.Module):
-    """Deep ensemble of latent energy verifiers for epistemic uncertainty (GT #3).
+    """Deep ensemble of latent energy verifiers.
 
-    A single ``E_psi`` treated as an oracle lets Latent MCTS infinitely expand OOD
-    latent branches it falsely scores high. An ensemble exposes *epistemic*
-    uncertainty as member disagreement: in-distribution latents -> low variance;
-    OOD latents (reachable via codebook actions) -> high variance. The MCTS then
-    uses a pessimistic lower-confidence-bound value (``value - beta * std``), so it
-    will not chase latents whose high value is statistically ungrounded.
+    Member standard deviation is exposed as an empirical disagreement statistic.
+    Ensemble disagreement is often useful as an uncertainty heuristic, but finite
+    ensemble variance does **not** by itself identify out-of-distribution states,
+    calibrate epistemic uncertainty, or guarantee that an LCB search objective
+    avoids proxy overoptimization.  Those properties require validation on the
+    actual state distribution.  M15 therefore treats ``mean - beta * std`` only as
+    an ablation whose relationship to independent task quality is measured.
     """
 
     def __init__(
@@ -138,19 +139,19 @@ class EnsembleLatentEnergyVerifier(nn.Module):
     def value_with_uncertainty(
         self, x: torch.Tensor, z: torch.Tensor, width: int = 9
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return ``(mean value = -mean energy [B], epistemic std [B])``."""
-        energies = self.forward(x, z, width)  # [M, B]
+        """Return ``(mean value = -mean energy [B], member disagreement std [B])``."""
+        energies = self.forward(x, z, width)
         return -energies.mean(dim=0), energies.std(dim=0)
 
     def value(self, x: torch.Tensor, z: torch.Tensor, width: int = 9) -> torch.Tensor:
-        """Mean latent value (uncertainty-agnostic; LCB applied in the searcher)."""
+        """Mean latent proxy value (LCB, if any, is applied by the searcher)."""
         return -self.forward(x, z, width).mean(dim=0)
 
 
 def contrastive_energy_loss(
     e_pos: torch.Tensor, e_neg: torch.Tensor, margin: float = 1.0
 ) -> torch.Tensor:
-    """Margin ranking loss: push ``E(x, y+)`` below ``E(x, y-)`` (section 9.5)."""
+    """Margin ranking loss: push ``E(x, y+)`` below wrong-answer energy."""
     return F.relu(margin + e_pos - e_neg).mean()
 
 
@@ -172,12 +173,11 @@ def mine_hard_negatives(
     """
     neg = answers.clone()
     b, length = neg.shape
-    m = num_tokens - 1  # number of usable non-blank values (1..m)
+    m = num_tokens - 1
     for _ in range(n_changes):
         pos = torch.randint(0, length, (b, 1), device=neg.device)
         cur = neg.gather(1, pos)
         delta = torch.randint(1, max(2, m), (b, 1), device=neg.device)
-        # New value in 1..m, guaranteed different from cur.
         new_val = ((cur - 1 + delta) % m) + 1
         neg.scatter_(1, pos, new_val)
     return neg
