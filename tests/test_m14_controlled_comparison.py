@@ -174,3 +174,10 @@ def test_missing_sampled_memory_stays_null_in_edge_report(energy):
     assert report["peak_ram_mb"] is None and report["accuracy_per_mb"] is None
     assert report.get("edge_reasoning_score") is None
     assert "unavailable" in report["memory_note"]
+
+
+def test_matching_a_drifted_baseline_does_not_bypass_frozen_validation_budget():
+    from eval.controlled_comparison import cost_gate
+    assert not cost_gate(10., .99, 8., .05)["cost_pass"]
+    assert cost_gate(7., .99, 8., .05)["cost_pass"]
+    assert not cost_gate(7., 1.2, 8., .05)["cost_pass"]

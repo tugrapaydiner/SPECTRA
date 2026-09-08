@@ -21,7 +21,7 @@ from data.splits import build_reproducible_splits
 from deploy.m10_artifact import export_cpu_artifact, load_cpu_artifact, module_tensor_state_sha256
 from deploy.m10_runtime import CPURecursiveRuntime
 from eval.controlled_comparison import (
-    answer_loss, append_json, assert_hard_quantized, budget_label, convert_int8,
+    answer_loss, append_json, assert_hard_quantized, budget_label, convert_int8, cost_gate,
     digest, full_solve, load_partition, make_model, object_digest, outcome,
     paired_bounds, read_jsonl, set_quant_strength, verify_confirmation_freeze, write_json,
 )
@@ -394,7 +394,7 @@ def evaluate(root: Path, cfg: dict, phase: str, split: str) -> None:
     analyze_gate(root, cfg, phase, split)
 
 
-def analyze_gate(root: Path, cfg: dict, phase: str, split: str) -> dict:
+def analyze_gate(root: Path, cfg: dict, phase: str, split: str, *, record_attempt: bool = True) -> dict:
     directory = root / phase
     rows_path = directory / f"{split}_rows.jsonl"
     rows = read_jsonl(rows_path)
@@ -422,13 +422,14 @@ def analyze_gate(root: Path, cfg: dict, phase: str, split: str) -> dict:
         arrays[lane] = (correct, cost)
     candidate = frozen["primary_candidate"]
     comparisons = {}
+    budget_caps = json.loads((directory / "selection.json").read_text())["baseline_budget_caps_ms"]
     for baseline in ["single_pass", "single_int8"]:
         a, ca = arrays[candidate]; b, cb = arrays[baseline]
         result = paired_bounds(a, b, ca, cb, alpha=cfg["one_sided_alpha_per_baseline"],
                                draws=cfg["bootstrap_draws"], seed=cfg["bootstrap_seed"])
         result["budget_label"] = budget_label(result["latency_ratio"], cfg["cost_tolerance"])
         result["accuracy_pass"] = result["accuracy_lower_bound"] > cfg["minimum_accuracy_gain"]
-        result["cost_pass"] = result["latency_ratio_upper_bound"] <= 1 + cfg["cost_tolerance"]
+        result.update(cost_gate(float(ca.mean()), result["latency_ratio_upper_bound"], budget_caps[baseline], cfg["cost_tolerance"]))
         comparisons[baseline] = result
     passed = all(r["accuracy_pass"] and r["cost_pass"] for r in comparisons.values())
     gate = {"schema_version": 1, "phase": phase, "split": split, "passed": passed,
@@ -439,9 +440,10 @@ def analyze_gate(root: Path, cfg: dict, phase: str, split: str) -> dict:
             "confirmation_evaluated": split == "confirmation"}
     gate_path = directory / f"{split}_gate.json"
     write_json(gate_path, gate)
-    append_json(root / "attempts.jsonl", {"phase": phase, "split": split, "passed": passed,
-                "gate_sha256": digest(gate_path), "raw_rows_sha256": digest(rows_path)})
-    if passed and split == "development":
+    if record_attempt:
+        append_json(root / "attempts.jsonl", {"phase": phase, "split": split, "passed": passed,
+                    "gate_sha256": digest(gate_path), "raw_rows_sha256": digest(rows_path)})
+    if passed and split == "development" and record_attempt:
         if (root / "confirmation_authorization.json").exists():
             raise RuntimeError("a confirmation attempt has already been authorized")
         write_json(root / "confirmation_authorization.json", {

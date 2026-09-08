@@ -40,3 +40,20 @@ code; later stage records identify the executed revision separately.
 The numerical dependencies were pinned to the versions actually installed:
 PyTorch 2.8.0+cpu, NumPy 2.3.5, SciPy 1.17.0 and Matplotlib 3.10.8. The complete
 tested dependency list is retained with the experiment evidence.
+
+## Final evidence audit
+
+The final audit found that the gate had recorded validation-derived absolute
+latency caps but initially enforced only the uncertainty bound on actual paired
+latency ratios. The implementation now requires BOTH the frozen absolute cap
+and the paired ratio bound. This tightens the implementation of the declared
+budget; it does not relax a target. Both original failed gates are preserved
+as `development_gate_before_cap_audit.json`, and a separately recorded analysis
+revision recomputes the gates from the identical raw rows. Neither verdict
+changes. No new model evaluation or confirmation attempt occurred.
+
+The remaining telemetry failure after dependency setup came from psutil raising
+FileNotFoundError for absent power-supply sysfs. The reader now uses its existing
+compatibility defaults for that unavailable sensor. The edge reporter also
+propagates unavailable sampled memory as null instead of dividing by None.
+These defaults are not used as physical-energy observations in M14.

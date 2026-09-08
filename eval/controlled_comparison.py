@@ -157,6 +157,17 @@ def budget_label(ratio: float, tolerance: float) -> str:
     return "lower_cost_unmatched" if ratio < 1 else "higher_cost_unmatched"
 
 
+def cost_gate(candidate_mean_ms: float, ratio_upper: float, frozen_cap_ms: float, tolerance: float) -> dict:
+    values = [candidate_mean_ms, ratio_upper, frozen_cap_ms]
+    if any(not math.isfinite(v) or v <= 0 for v in values):
+        raise ValueError("finite positive measured costs and frozen cap required")
+    cap_pass = candidate_mean_ms <= frozen_cap_ms
+    ratio_pass = ratio_upper <= 1 + tolerance
+    return {"candidate_mean_latency_ms": candidate_mean_ms, "frozen_budget_cap_ms": frozen_cap_ms,
+            "frozen_cap_pass": cap_pass, "latency_ratio_pass": ratio_pass,
+            "cost_pass": cap_pass and ratio_pass}
+
+
 def wilson(successes: int, n: int, alpha: float = .05) -> list[float]:
     if n <= 0 or not 0 <= successes <= n:
         raise ValueError("invalid binomial counts")
