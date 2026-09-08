@@ -352,13 +352,15 @@ def evaluate(root: Path, cfg: dict, phase: str, split: str) -> None:
         lanes += native
     else:
         backend = json.loads((directory / "native_selection.json").read_text())
-        for report in backend["reports"]:
-            if report["eligible"]:
+        eligible_reports = [r for r in backend["reports"] if r["eligible"]]
+        for report in eligible_reports if len(eligible_reports) == len(cfg["seeds"]) else []:
                 parent = next(l for l in lanes if l["lane"] == "ternary_recursive" and l["seed"] == report["seed"])
                 path = directory / f"native_seed{report['seed']}.pt"
                 if digest(path) != report["artifact_sha256"]:
                     raise ValueError("frozen native artifact changed")
-                lanes.append({**parent, "lane": "ternary_native", "model": CPURecursiveRuntime(load_cpu_artifact(path)), "native": True})
+                lanes.append({**parent, "lane": "ternary_native", "model": CPURecursiveRuntime(load_cpu_artifact(path)),
+                              "native": True, "metadata": report["backend"],
+                              "checkpoint": {"path": str(path.relative_to(root)), "sha256": digest(path), "step": parent["checkpoint"]["step"]}})
     for seed in cfg["seeds"]:
         lanes.append({"lane": "symbolic", "seed": seed, "model": None, "metadata": {"backend": "python_MRV_backtracking", "training_seeds": 0},
                       "run_id": "symbolic_untrained_reference", "checkpoint": None, "depth": 0,

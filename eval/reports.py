@@ -23,8 +23,8 @@ def accuracy_per_joule(accuracy: float, joules_per_problem: float) -> float:
     return accuracy / (joules_per_problem + _EPS)
 
 
-def accuracy_per_mb(accuracy: float, peak_ram_mb: float) -> float:
-    return accuracy / (peak_ram_mb + _EPS)
+def accuracy_per_mb(accuracy: float, peak_ram_mb: float | None) -> float | None:
+    return None if peak_ram_mb is None else accuracy / (peak_ram_mb + _EPS)
 
 
 def accuracy_per_ms(accuracy: float, latency_ms: float) -> float:
@@ -75,7 +75,7 @@ def compute_optimal_frontier(
 def edge_report(
     accuracy: float,
     latency_ms: float,
-    peak_ram_mb: float,
+    peak_ram_mb: float | None,
     model_size_mb: float,
     joules_per_problem: float | None = None,
     **extra: Any,
@@ -93,12 +93,15 @@ def edge_report(
     if joules_per_problem is not None:
         report["joules_per_problem"] = joules_per_problem
         report["accuracy_per_joule"] = accuracy_per_joule(accuracy, joules_per_problem)
-        report["edge_reasoning_score"] = edge_reasoning_score(
-            accuracy, joules_per_problem, latency_ms, peak_ram_mb
+        report["edge_reasoning_score"] = (
+            edge_reasoning_score(accuracy, joules_per_problem, latency_ms, peak_ram_mb)
+            if peak_ram_mb is not None else None
         )
     else:
         report["joules_per_problem"] = None
         report["energy_note"] = "RAPL unavailable on this host; joules not measured"
+    if peak_ram_mb is None:
+        report["memory_note"] = "sampled process RSS unavailable; memory efficiency not computed"
     return report
 
 

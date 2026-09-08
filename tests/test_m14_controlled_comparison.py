@@ -156,3 +156,21 @@ def test_confirmation_authorization_is_bound_to_phase_and_selection(tmp_path):
     write_json(phase / "selection.json", {"selected": "candidate_B"})
     with pytest.raises(RuntimeError, match="configuration changed"):
         verify_confirmation_freeze(tmp_path, "initial")
+
+
+def test_missing_container_battery_sysfs_is_unavailable_instead_of_crash(monkeypatch):
+    from types import SimpleNamespace
+    from eval import telemetry
+    def missing_sensor():
+        raise FileNotFoundError("/sys/class/power_supply is not mounted")
+    monkeypatch.setattr(telemetry, "psutil", SimpleNamespace(sensors_battery=missing_sensor))
+    assert telemetry._read_battery() == (1.0, 1.0)  # documented compatibility defaults
+
+
+@pytest.mark.parametrize("energy", [None, .1])
+def test_missing_sampled_memory_stays_null_in_edge_report(energy):
+    from eval.reports import edge_report
+    report = edge_report(accuracy=.5, latency_ms=2., peak_ram_mb=None, model_size_mb=.2, joules_per_problem=energy)
+    assert report["peak_ram_mb"] is None and report["accuracy_per_mb"] is None
+    assert report.get("edge_reasoning_score") is None
+    assert "unavailable" in report["memory_note"]
