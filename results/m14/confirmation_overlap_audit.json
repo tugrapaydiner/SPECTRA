@@ -1,0 +1,8 @@
+{
+  "confirmation_fingerprints": 1024,
+  "confirmation_seed": 2026091402,
+  "overlap_count": 0,
+  "overlap_examples": [],
+  "prior_fingerprints": 5120,
+  "reserve_confirmation_seed_named_but_unopened": 2026091403
+}

@@ -1,0 +1,5 @@
+surface,config_id,family,n,n_training_seeds,semantic_validity,exact_reference_match,blank_cell_accuracy,latency_median_ms,latency_p95_ms,executed_steps_mean,block_applications_mean,semantic_early_exit_fraction,selected_candidate,primary_baseline
+confirmation,symbolic_exact,symbolic_exact,1024,0,1.0,1.0,1.0,0.56065375,0.5915865,,,,False,False
+confirmation,dual_stream_exit_k4,dual_stream_fp64_semantic_early_exit,5120,5,0.9845703125,0.9845703125,0.9974007160984911,1.21508525,3.2062384,1.2484375,2.496875,0.9845703125,True,False
+confirmation,single_pass_fp,single_pass_fp,5120,5,0.833203125,0.833203125,0.9732955104729626,1.2345902500000001,1.2766316,,2.0,,False,True
+confirmation,single_pass_int8,single_pass_int8,5120,5,0.83359375,0.83359375,0.973266756121302,1.403155,1.4532384500000002,,2.0,,False,False

@@ -1,0 +1,35 @@
+{
+  "baseline": {
+    "config_id": "single_pass_fp",
+    "latency_max_ms": 1.45875,
+    "latency_mean_ms": 1.2386045019531249,
+    "latency_median_ms": 1.2345902500000001,
+    "latency_min_ms": 1.203657,
+    "latency_p95_ms": 1.2766316,
+    "latency_rows": 1280,
+    "rows": 5120,
+    "semantic_validity": 0.833203125
+  },
+  "candidate": {
+    "config_id": "dual_stream_exit_k4",
+    "fraction_more_than_one_step": 0.16796875,
+    "latency_max_ms": 4.332998,
+    "latency_mean_ms": 1.466297356640625,
+    "latency_median_ms": 1.21508525,
+    "latency_min_ms": 1.1852274999999999,
+    "latency_p95_ms": 3.2062384,
+    "latency_rows": 1280,
+    "mean_block_applications": 2.496875,
+    "mean_executed_steps": 1.2484375,
+    "rows": 5120,
+    "semantic_validity": 0.9845703125,
+    "step_distribution": {"1": 4260, "2": 569, "3": 170, "4": 121}
+  },
+  "claim_boundary": "M14 passes the preregistered median-latency Path A; this audit shows mean and tail cost are higher for the adaptive candidate and must be disclosed.",
+  "decompressed_confirmation_rows_sha256": "52c8e8e8ecfb632c4858634f98e40c51f03b17d7ba3dccff4d6ccbb1cb3f80ea",
+  "mean_latency_ratio_candidate_over_baseline": 1.1838301526665347,
+  "p95_latency_ratio_candidate_over_baseline": 2.511482874151008,
+  "preregistered_acceptance_latency_statistic": "paired median complete-solve latency ratio",
+  "source": "accepted Actions artifact 10035946017 / confirmation_rows.jsonl",
+  "status": "post_hoc_descriptive_tail_cost_audit_not_acceptance_metric"
+}
