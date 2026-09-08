@@ -9,10 +9,14 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import zipfile
 from pathlib import Path
 
-import torch
+# Executing ``python scripts/...py`` places ``scripts/`` rather than the repository
+# root at sys.path[0]. Restore the same import contract used by the main M15 entry
+# point before importing repository packages.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import scripts.m15_mechanism_ablations as m15
 import scripts.m14_primary_experiment as m14
