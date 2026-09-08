@@ -1,0 +1,13 @@
+# Tested M14 CPU experiment additions; install torch from the CPU index first.
+# python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+torch==2.8.0
+pytest==8.4.2
+einops==0.8.1
+tqdm==4.67.1
+psutil==7.1.0
+ninja==1.13.0
+# Exact numerical/plot versions are retained in results/m14/.../environment.lock.txt.
+numpy>=1.24
+scipy>=1.11
+matplotlib>=3.7
+pyyaml>=6
