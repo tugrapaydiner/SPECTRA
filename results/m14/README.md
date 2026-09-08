@@ -36,3 +36,5 @@ The exact raw JSONL rows remain in the accepted Actions artifact (`10035946017`,
 Physical CPU-package energy was unavailable on the accepted host (`no_package_domain`) and remains null. No GPU or whole-system energy claim is made.
 
 The task-specific semantic stop uses only the predicted board, puzzle givens, and independent Sudoku validity; it never sees the reference solution. This is a hybrid inductive bias specific to Sudoku and does not establish generic learned halting or cross-task transfer.
+
+This Git-retained evidence surface is part of the final M14 docs-inclusive validation head; it does not alter the preregistered experiment or accepted result.
