@@ -1,0 +1,6 @@
+{
+  "baseline_trainable_params": 225893,
+  "candidate_kind": "fp_recursive_dim64",
+  "candidate_smaller": true,
+  "candidate_trainable_params": 51720
+}

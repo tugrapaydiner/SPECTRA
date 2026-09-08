@@ -1,0 +1,256 @@
+name: m14-attempt2-single-stream
+
+on:
+  push:
+    branches: [research/m14-attempt2-single-stream]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  attempt2-controlled-experiment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CPU experiment dependencies
+        run: |
+          set -euxo pipefail
+          mkdir -p .m14a2
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m14a2/install_torch.txt
+          timeout 240s python -m pip install -r requirements.txt matplotlib |& tee .m14a2/install_requirements.txt
+
+      - name: Verify Attempt 2 preregistration ancestry and compile
+        shell: bash
+        run: |
+          set +e
+          git merge-base --is-ancestor 1282d026c89a6af696a225947aa67bd00e970917 HEAD
+          prereg=$?
+          python -m py_compile \
+            model/single_stream_trm.py \
+            scripts/m14_attempt2_single_stream.py \
+            scripts/render_m14_attempt2.py \
+            tests/test_m14_attempt2_single_stream.py
+          compile=$?
+          echo "$prereg" | tee .m14a2/prereg_exit_code.txt
+          echo "$compile" | tee .m14a2/compile_exit_code.txt
+          exit 0
+
+      - name: Focused Attempt 2 contracts
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 600s python -m pytest \
+            tests/test_m14_attempt2_single_stream.py \
+            tests/test_m14_primary_experiment.py \
+            tests/test_energy_measurement.py \
+            -m "not slow" -q |& tee .m14a2/pytest_focused.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m14a2/focused_exit_code.txt
+          exit 0
+
+      - name: Run preregistered Attempt 2 experiment
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          rm -rf .m14a2/experiment
+          timeout 2700s python scripts/m14_attempt2_single_stream.py --out .m14a2/experiment \
+            |& tee .m14a2/experiment.log
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m14a2/experiment_exit_code.txt
+          exit 0
+
+      - name: Render Attempt 2 table and Pareto plot from raw evidence
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          if [ -f .m14a2/experiment/summary.json ]; then
+            python scripts/render_m14_attempt2.py \
+              --experiment .m14a2/experiment --out .m14a2/rendered \
+              |& tee .m14a2/render.log
+            code=${PIPESTATUS[0]}
+          else
+            echo "summary missing; renderer not run" | tee .m14a2/render.log
+            code=3
+          fi
+          echo "$code" | tee .m14a2/render_exit_code.txt
+          exit 0
+
+      - name: Verify Attempt 2 evidence hierarchy
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY' |& tee .m14a2/evidence_check.txt
+          import csv, hashlib, json, pathlib, sys
+          root=pathlib.Path('.m14a2/experiment'); rendered=pathlib.Path('.m14a2/rendered')
+          required=[
+              root/'summary.json', root/'prior_attempt.json', root/'environment.json',
+              root/'energy_inventory.json', root/'parameter_audit.json',
+              root/'manifests/train_validation_development.json', root/'training_runs.jsonl',
+              root/'validation_rows.jsonl', root/'validation_operating_points.json',
+              root/'candidate_selection.json', root/'development_rows.jsonl',
+              root/'development_effect.json', root/'development_decision.json',
+              root/'development_energy.json', rendered/'result_table.csv',
+              rendered/'result_table.md', rendered/'pareto.png', rendered/'provenance.json',
+          ]
+          missing=[str(p) for p in required if not p.is_file()]
+          print('missing=',missing)
+          if missing: sys.exit(2)
+          summary=json.loads((root/'summary.json').read_text())
+          prior=json.loads((root/'prior_attempt.json').read_text())
+          audit=json.loads((root/'parameter_audit.json').read_text())
+          selection=json.loads((root/'candidate_selection.json').read_text())
+          print(json.dumps(summary,indent=2,sort_keys=True))
+          assert summary['milestone']==14 and summary['attempt']==2
+          assert summary['protocol_committed_before_attempt2_results'] is True
+          assert summary['protocol_commit']=='1282d026c89a6af696a225947aa67bd00e970917'
+          assert summary['prior_attempt_count']==1 and summary['prior_attempt_adaptive_development_accounted'] is True
+          assert prior['status']=='INCOMPLETE' and prior['run']==34159474745 and prior['confirmation_opened'] is False
+          assert summary['primary_baseline']=='single_pass_fp'
+          assert summary['candidate_family']=='input_conditioned_single_stream'
+          assert summary['n_training_seeds']==5 and summary['training_seeds']==[1401,2402,3403,4404,5405]
+          assert summary['thresholds_changed_after_attempt1'] is False
+          assert summary['baseline_weakened'] is False and summary['favorable_seed_filtering'] is False
+          assert summary['hidden_width_sweep'] is False and summary['learning_rate_sweep'] is False and summary['loss_weight_sweep'] is False
+          assert summary['scaling_law_claim'] is False
+          assert audit['candidate_smaller'] is True and audit['candidate_trainable_params'] < audit['baseline_trainable_params']
+          runs=[json.loads(x) for x in (root/'training_runs.jsonl').read_text().splitlines() if x.strip()]
+          assert len(runs)==10
+          assert {r['seed'] for r in runs}=={1401,2402,3403,4404,5405}
+          assert len([r for r in runs if r['kind']=='input_conditioned_single_stream'])==5
+          assert len([r for r in runs if r['kind']=='single_pass'])==5
+          assert selection['selection_used_development'] is False and selection['selection_used_confirmation'] is False
+          assert selection['thresholds_changed'] is False
+          selected=selection['selected_config_id']
+          assert selected.startswith('single_stream_n') and summary['selected_candidate']==selected
+          budget=int(selected.rsplit('n',1)[1])
+          vrows=[json.loads(x) for x in (root/'validation_rows.jsonl').read_text().splitlines() if x.strip()]
+          # Candidate work accounting is observed from the execution state, not inferred from latency.
+          for r in vrows:
+              if str(r['config_id']).startswith('single_stream_n'):
+                  b=int(str(r['config_id']).rsplit('n',1)[1])
+                  assert int(r['work_block_applications'])==b
+                  assert int(r['work_supervision_steps'])==b
+              if r['config_id']=='single_pass_fp':
+                  assert int(r['work_block_applications'])==2
+          drows=[json.loads(x) for x in (root/'development_rows.jsonl').read_text().splitlines() if x.strip()]
+          cand=[r for r in drows if r['config_id']==selected]
+          base=[r for r in drows if r['config_id']=='single_pass_fp']
+          assert len(cand)==len(base)==5*512
+          assert all(int(r['work_block_applications'])==budget for r in cand)
+          dev=json.loads((root/'development_decision.json').read_text())
+          assert dev==summary['development_gate']
+          # Original numerical gate remains unchanged.
+          assert dev['path_a']['min_quality_diff']==0.03 and dev['path_a']['max_latency_ratio']==1.15
+          assert dev['path_b']['min_quality_diff']==-0.02 and dev['path_b']['min_quality_ci_lower']==-0.03
+          assert dev['path_b']['max_latency_ratio']==0.65 and dev['path_b']['max_latency_ci_upper']==0.75
+          if summary['confirmation_opened']:
+              for p in [root/'confirmation_freeze_manifest.json',root/'manifests/confirmation_1.json',root/'manifests/confirmation_overlap_audit.json',root/'confirmation_rows.jsonl',root/'confirmation_effect.json',root/'confirmation_decision.json']:
+                  assert p.is_file(), p
+              freeze=json.loads((root/'confirmation_freeze_manifest.json').read_text())
+              oa=json.loads((root/'manifests/confirmation_overlap_audit.json').read_text())
+              conf=json.loads((root/'confirmation_decision.json').read_text())
+              assert freeze['frozen_before_confirmation'] is True
+              assert oa['overlap_count']==0
+              assert dev['pass'] is True
+              assert summary['confirmation_seed']==2026091402
+              if summary['status']=='COMPLETE':
+                  assert conf['pass'] is True and summary['claim_confirmed'] is True
+              else:
+                  assert summary['claim_confirmed'] is False
+          else:
+              assert dev['pass'] is False
+              assert summary['status']=='INCOMPLETE'
+              assert not (root/'manifests/confirmation_1.json').exists()
+              assert summary['reserve_confirmation_seed_unopened']==2026091403
+          prov=json.loads((rendered/'provenance.json').read_text())
+          sha=lambda p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+          surface='confirmation' if summary['confirmation_opened'] else 'development'
+          raw=root/f'{surface}_rows.jsonl'
+          assert prov['raw_rows_sha256']==sha(raw)
+          assert prov['summary_sha256']==sha(root/'summary.json')
+          assert prov['result_table_sha256']==sha(rendered/'result_table.csv')
+          assert prov['pareto_plot_sha256']==sha(rendered/'pareto.png')
+          assert prov['adaptive_development_attempts_before_confirmation']==2
+          print('M14_ATTEMPT2_EVIDENCE_HIERARCHY=VALID')
+          print('M14_ATTEMPT2_STATUS='+summary['status'])
+          PY
+          echo "$?" | tee .m14a2/evidence_check_exit_code.txt
+          exit 0
+
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 900s python -m pytest -m "not slow" -ra |& tee .m14a2/pytest_fast.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m14a2/fast_exit_code.txt
+          exit 0
+
+      - name: Record provenance and hashes
+        if: always()
+        run: |
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "attempt1_head=66acbc62f48b3e5b1e81080897b89562edfd8bd8"
+            echo "attempt2_protocol_prereg_commit=1282d026c89a6af696a225947aa67bd00e970917"
+            echo "main_base=b9e2decf19dcc772bfcef3a78615c2f4c8b350c0"
+            echo
+            git diff --stat 66acbc62f48b3e5b1e81080897b89562edfd8bd8...HEAD
+          } | tee .m14a2/diff_stat.txt
+          python - <<'PY' | tee .m14a2/evidence_sha256.txt
+          import hashlib,pathlib
+          root=pathlib.Path('.m14a2')
+          for p in sorted(q for q in root.rglob('*') if q.is_file() and q.name!='evidence_sha256.txt'):
+              print(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.as_posix()}")
+          PY
+
+      - name: Upload Attempt 2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m14-attempt2-single-stream-evidence
+          path: .m14a2/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce positive M14 acceptance
+        if: always()
+        run: |
+          prereg=$(cat .m14a2/prereg_exit_code.txt 2>/dev/null || echo 99)
+          compile=$(cat .m14a2/compile_exit_code.txt 2>/dev/null || echo 99)
+          focused=$(cat .m14a2/focused_exit_code.txt 2>/dev/null || echo 99)
+          experiment=$(cat .m14a2/experiment_exit_code.txt 2>/dev/null || echo 99)
+          render=$(cat .m14a2/render_exit_code.txt 2>/dev/null || echo 99)
+          evidence=$(cat .m14a2/evidence_check_exit_code.txt 2>/dev/null || echo 99)
+          fast=$(cat .m14a2/fast_exit_code.txt 2>/dev/null || echo 99)
+          status=$(python - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('.m14a2/experiment/summary.json')
+          print(json.loads(p.read_text()).get('status','MISSING') if p.is_file() else 'MISSING')
+          PY
+          )
+          echo "prereg=$prereg compile=$compile focused=$focused experiment=$experiment render=$render evidence=$evidence fast=$fast status=$status"
+          if [ "$prereg" -ne 0 ] || [ "$compile" -ne 0 ] || [ "$focused" -ne 0 ] || [ "$render" -ne 0 ] || [ "$evidence" -ne 0 ] || [ "$fast" -ne 0 ]; then
+            echo "M14 Attempt 2 experiment/evidence integrity failure."
+            exit 1
+          fi
+          if [ "$experiment" -ne 0 ] || [ "$status" != "COMPLETE" ]; then
+            echo "M14 Attempt 2 is valid evidence but the unchanged practical-improvement claim is not independently confirmed. Milestone remains INCOMPLETE."
+            exit 1
+          fi
+          echo "M14 primary controlled experiment acceptance passed on Attempt 2."

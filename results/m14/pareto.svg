@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="500" viewBox="0 0 760 500">
+<rect width="100%" height="100%" fill="white"/>
+<text x="380" y="28" text-anchor="middle" font-family="sans-serif" font-size="18">M14 confirmation: quality vs complete-solve median latency</text>
+<line x1="90" y1="430" x2="730" y2="430" stroke="black"/>
+<line x1="90" y1="50" x2="90" y2="430" stroke="black"/>
+<line x1="90.0" y1="430" x2="90.0" y2="436" stroke="black"/><text x="90.0" y="454" text-anchor="middle" font-family="sans-serif" font-size="12">0.50</text>
+<line x1="218.0" y1="430" x2="218.0" y2="436" stroke="black"/><text x="218.0" y="454" text-anchor="middle" font-family="sans-serif" font-size="12">0.71</text>
+<line x1="346.0" y1="430" x2="346.0" y2="436" stroke="black"/><text x="346.0" y="454" text-anchor="middle" font-family="sans-serif" font-size="12">0.91</text>
+<line x1="474.0" y1="430" x2="474.0" y2="436" stroke="black"/><text x="474.0" y="454" text-anchor="middle" font-family="sans-serif" font-size="12">1.11</text>
+<line x1="602.0" y1="430" x2="602.0" y2="436" stroke="black"/><text x="602.0" y="454" text-anchor="middle" font-family="sans-serif" font-size="12">1.31</text>
+<line x1="730.0" y1="430" x2="730.0" y2="436" stroke="black"/><text x="730.0" y="454" text-anchor="middle" font-family="sans-serif" font-size="12">1.52</text>
+<line x1="84" y1="397.7" x2="90" y2="397.7" stroke="black"/><text x="80" y="401.7" text-anchor="end" font-family="sans-serif" font-size="12">0.80</text>
+<line x1="84" y1="316.8" x2="90" y2="316.8" stroke="black"/><text x="80" y="320.8" text-anchor="end" font-family="sans-serif" font-size="12">0.85</text>
+<line x1="84" y1="236.0" x2="90" y2="236.0" stroke="black"/><text x="80" y="240.0" text-anchor="end" font-family="sans-serif" font-size="12">0.90</text>
+<line x1="84" y1="155.1" x2="90" y2="155.1" stroke="black"/><text x="80" y="159.1" text-anchor="end" font-family="sans-serif" font-size="12">0.95</text>
+<line x1="84" y1="74.3" x2="90" y2="74.3" stroke="black"/><text x="80" y="78.3" text-anchor="end" font-family="sans-serif" font-size="12">1.00</text>
+<text x="410.0" y="485" text-anchor="middle" font-family="sans-serif" font-size="13">Median complete-solve latency (ms)</text>
+<text x="20" y="240.0" transform="rotate(-90 20 240.0)" text-anchor="middle" font-family="sans-serif" font-size="13">Strict semantic validity</text>
+<circle cx="125.5" cy="74.3" r="6" fill="none" stroke="black" stroke-width="2"/><text x="135.5" y="62.3" font-family="sans-serif" font-size="12">symbolic exact</text>
+<rect x="533.9" y="93.2" width="12" height="12" fill="none" stroke="black" stroke-width="2"/><text x="549.9" y="119.2" font-family="sans-serif" font-size="12">SPECTRA dual-stream exit K=4</text>
+<circle cx="552.2" cy="344.0" r="6" fill="none" stroke="black" stroke-width="2"/><text x="562.2" y="332.0" font-family="sans-serif" font-size="12">single-pass FP baseline</text>
+<circle cx="658.9" cy="343.3" r="6" fill="none" stroke="black" stroke-width="2"/><text x="668.9" y="363.3" font-family="sans-serif" font-size="12">single-pass INT8 context</text>
+<text x="90" y="458" font-family="sans-serif" font-size="10">Source raw SHA-256: 52c8e8e8ecfb632c4858634f98e40c51f03b17d7ba3dccff4d6ccbb1cb3f80ea</text>
+</svg>

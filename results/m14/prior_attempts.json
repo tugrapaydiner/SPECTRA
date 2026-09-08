@@ -1,0 +1,44 @@
+{
+  "adaptive_development_attempts_before_attempt5": 4,
+  "attempt1": {
+    "artifact_id": 10032762057,
+    "artifact_zip_sha256": "04a5b810d697227c4ccf88a365cf529647734ea0d95deec363f84fcaae885522",
+    "confirmation_opened": false,
+    "development_latency_ratio": 1.0943352911334046,
+    "development_quality_difference": -0.005078125,
+    "head": "66acbc62f48b3e5b1e81080897b89562edfd8bd8",
+    "run": 34159474745,
+    "status": "INCOMPLETE"
+  },
+  "attempt2": {
+    "artifact_id": 10035110496,
+    "artifact_zip_sha256": "ec21fc7f107bde497f0f1f7980bdaaa6cd3203173c050abee467ca8b4961b94b",
+    "confirmation_opened": false,
+    "development_latency_ratio": 0.8557505964071943,
+    "development_quality_difference": -0.640625,
+    "head": "0ed43b00fdba28678ced5fb144ec375276c995cd",
+    "run": 34168430915,
+    "status": "INCOMPLETE"
+  },
+  "attempt3": {
+    "artifact_id": 10035348365,
+    "artifact_zip_sha256": "fb653a307d918f8e010d6648694ef2bdeb08654bee9faaf093f1f71ff07eaaac",
+    "confirmation_opened": false,
+    "development_latency_ratio": 0.8127430466852386,
+    "development_quality_difference": -0.637890625,
+    "head": "d1e491f412494c0756753bfa4b78b8002133d39c",
+    "run": 34169488811,
+    "status": "INCOMPLETE"
+  },
+  "attempt4": {
+    "artifact_id": 10035628899,
+    "artifact_zip_sha256": "1d7a346a47f82b360d25d97b6650a555216385b8ce523a0867302a98002438ee",
+    "confirmation_opened": false,
+    "development_latency_ratio": 0.7752021795958917,
+    "development_quality_difference": -0.680078125,
+    "head": "d8480dccd089a235ee8823161e1ed87745c28c22",
+    "non_scientific_test_bug": "exact float equality for 0.4+0.3+0.2+0.1; fixed before Attempt 5 preregistration",
+    "run": 34170096945,
+    "status": "INCOMPLETE"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "configs": {
+    "dual_stream_exit_k4": {
+      "available": false,
+      "avg_package_power_watts": null,
+      "domain_deltas": [],
+      "energy_joules": null,
+      "energy_microjoules": null,
+      "failure_reason": "no_package_domain",
+      "joules_per_complete_solve": null,
+      "joules_per_run": null,
+      "n_runs": 1,
+      "package_domain_ids": [],
+      "problems_per_window": 32,
+      "scope": "cpu_package_rapl_not_gpu_not_whole_system",
+      "scope_note": "RAPL package energy is attributed by the host package counter and can include CPU cores plus other on-package components. It is not a discrete-GPU or whole-system/wall-energy measurement.",
+      "wall_seconds": 0.04223688599995512
+    },
+    "single_pass_fp": {
+      "available": false,
+      "avg_package_power_watts": null,
+      "domain_deltas": [],
+      "energy_joules": null,
+      "energy_microjoules": null,
+      "failure_reason": "no_package_domain",
+      "joules_per_complete_solve": null,
+      "joules_per_run": null,
+      "n_runs": 1,
+      "package_domain_ids": [],
+      "problems_per_window": 32,
+      "scope": "cpu_package_rapl_not_gpu_not_whole_system",
+      "scope_note": "RAPL package energy is attributed by the host package counter and can include CPU cores plus other on-package components. It is not a discrete-GPU or whole-system/wall-energy measurement.",
+      "wall_seconds": 0.03951739700005419
+    }
+  },
+  "scope": "cpu_package_rapl_not_gpu_not_whole_system",
+  "split": "confirmation"
+}

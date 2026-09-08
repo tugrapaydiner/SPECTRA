@@ -1,0 +1,25 @@
+{
+  "baseline_checkpoints": [
+    {"path": ".m14a5/experiment/checkpoints/single_pass_seed1401.pt", "seed": 1401, "sha256": "0c4a3a31c9fa78417af2652cc3996e7efdd02913605bca13e17133c41d990667"},
+    {"path": ".m14a5/experiment/checkpoints/single_pass_seed2402.pt", "seed": 2402, "sha256": "bbe73b8b02e7592d488c878250ac4a0add6dd2f1310783a9d550ba93c5dabf4f"},
+    {"path": ".m14a5/experiment/checkpoints/single_pass_seed3403.pt", "seed": 3403, "sha256": "fafa537e8c0616b02c53ddc12be85658c78ab73d925c6c1e8e318fc1173e1799"},
+    {"path": ".m14a5/experiment/checkpoints/single_pass_seed4404.pt", "seed": 4404, "sha256": "84a5679fb8e7dce45e6e4b533906068724875c679d82047ab57d4c60b9d014e6"},
+    {"path": ".m14a5/experiment/checkpoints/single_pass_seed5405.pt", "seed": 5405, "sha256": "d8597b75e2a55c059fe6bc7c9df7fe6268284c04b530540f88b3b609ff4c3924"}
+  ],
+  "baseline_objective": "blank_cell_cross_entropy",
+  "batch_size": 64,
+  "candidate_architecture": "original_dual_stream_fp64_trm",
+  "candidate_checkpoints": [
+    {"path": ".m14a5/experiment/checkpoints/fp_recursive_dim64_seed1401.pt", "seed": 1401, "sha256": "c78fe23338de8d40ae665c419d56f0b444c133cbe39a70fe960ea05ccf105813"},
+    {"path": ".m14a5/experiment/checkpoints/fp_recursive_dim64_seed2402.pt", "seed": 2402, "sha256": "5f97178c0661523bf4f5f19007412762a7a590f63c611b79f04f879ea1e60ebb"},
+    {"path": ".m14a5/experiment/checkpoints/fp_recursive_dim64_seed3403.pt", "seed": 3403, "sha256": "2485e5a07d3484ad3b0903b8938e6546eefaec2027515a7f27f70576aaf9964d"},
+    {"path": ".m14a5/experiment/checkpoints/fp_recursive_dim64_seed4404.pt", "seed": 4404, "sha256": "849146beb156bdfc6e234b3511aa7c830cbdd6dbbbd69141a1f5321a861aa7e0"},
+    {"path": ".m14a5/experiment/checkpoints/fp_recursive_dim64_seed5405.pt", "seed": 5405, "sha256": "9d673b582d7b30f45a5e89917c524fb40919b1b2463f16188a3a96cb3205b77a"}
+  ],
+  "candidate_kind": "fp_recursive_dim64",
+  "candidate_objective": "four_step_weighted_blank_cell_cross_entropy",
+  "candidate_weights": [0.1, 0.2, 0.3, 0.4],
+  "lr": 0.001,
+  "training_steps": 1800,
+  "weight_decay": 0.01
+}
