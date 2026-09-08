@@ -87,3 +87,8 @@ The live milestone register is [`docs/RESEARCH_STATE.md`](RESEARCH_STATE.md). Th
 ## Current evidence boundary
 
 After M05, it is defensible to state that SPECTRA's tested research-evaluation path requires a trained versioned core checkpoint and a content-addressed immutable evaluation snapshot; reconstructs the actual TRM/parameter/ternary/A8/recursion/raw-or-EMA identity from metadata; explicitly restores non-persistent ternary quantization strength; refuses missing/incompatible learned auxiliaries; keeps the same frozen data IDs across inference settings; rejects compute knobs the loaded implementation does not consume; records realized greedy/MCTS compute; and emits per-example prediction/provenance records. The reference checkpoint-backed run used one tiny 4,488-parameter CPU FP32 teacher, recorded EMA weights, four frozen Sudoku examples, and ordinary `N_sup=1/2` settings. It is **not** defensible to treat that mechanics run as a trained scaling law, useful reasoning result, learned-search advantage, System-1 superiority, uncertainty-aware search result, physical-energy result, or target-hardware performance result. Current native MCTS is deterministic, so no stochastic search seed is claimed; if stochastic search is added later, it must define and consume its own independent RNG stream before that becomes a research knob.
+
+
+## M14 trained comparison boundary
+
+The M14 improvement gate failed in both declared attempts. No neural complete-solve, ternary speed, energy, native 9×9 fidelity, or useful learned-control advantage is established. See [M14 acceptance record](M14_ACCEPTANCE_GATE.md) for exact results and limits.

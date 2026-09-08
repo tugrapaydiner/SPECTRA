@@ -109,3 +109,15 @@ INT8 execution, paired seed/example inference, the complete symbolic solve,
 clue-aware decoding, quantization strength and live training gradients. The
 full fast suite includes existing native and measurement contracts. These
 correctness tests are separate from evidence of research improvement.
+
+## Retained evidence replay
+
+The Git-backed `results/m14/development_reproduction.zip` is sufficient to regenerate all public development tables and the figure using the commands in its README. It excludes checkpoint weights.
+
+For the separate full `SPECTRA_M14_evidence.zip`, extract it and run:
+
+```bash
+python scripts/verify_m14_evidence.py --out /absolute/path/to/latency_v1
+```
+
+This checks the evidence inventory, all data and checkpoint hashes, and 96 selected development predictions. Confirmation bytes are hashed only, never loaded for inference. Use the immutable reproduction code commit recorded in the evidence README. This is an artifact replay, not an independent rerun of training or a cross-platform deployment certification.

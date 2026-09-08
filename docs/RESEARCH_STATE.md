@@ -10,6 +10,10 @@ This is the live milestone register. Detailed completed history is preserved rat
 - complete M09-era live register: [`RESEARCH_STATE_M09.md`](RESEARCH_STATE_M09.md)
 - M10–M12 accepted live register snapshot: [`RESEARCH_STATE_M10_M12.md`](RESEARCH_STATE_M10_M12.md)
 
+## Current work: M14
+
+**INCOMPLETE_TARGET_MISSED.** The comparison and corrective experiment are finished, but both improvement gates failed. [M14 acceptance record](M14_ACCEPTANCE_GATE.md) and [retained evidence](../results/m14/README.md) contain the results. M15–M20 are not started. The M13 stopping instruction below is historical; the user authorized this M14 continuation.
+
 ## Milestone index
 
 | Milestone | Scope | State |
@@ -27,6 +31,8 @@ This is the live milestone register. Detailed completed history is preserved rat
 | M11 | real adaptive execution | accepted / merged through PR #12 |
 | M12 | grounded router/halter RL training path | accepted / merged through PR #13; **learned-control quality NEGATIVE / COLLAPSED** |
 | M13 | defensible measurement protocol | **COMPLETE on `research/m13-measurement-protocol`; accepted measurement run `34155993914` at `4a700938cece1b041205d8ad16a48d280cfc9a99`** |
+
+| M14 | controlled trained-model cost comparison | **INCOMPLETE_TARGET_MISSED**; experiments finished, negative results retained |
 
 M09 remains scientifically incomplete, and M12 did not establish useful learned adaptive control. M13 changes the measurement contract and public evidence boundary; it does not retroactively turn earlier kernel curves into cache-residency/bandwidth evidence or produce physical joules where the host exposes no valid package counter.
 

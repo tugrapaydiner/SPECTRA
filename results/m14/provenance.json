@@ -1,0 +1,18 @@
+{
+  "audited_raw_rows": 24192,
+  "confirmation_evaluated": false,
+  "figure_sha256": "d8d1c1052493d6c5d9db1677a606d16d890a5fb0068664c2b84f630e46a18a3f",
+  "gates": {
+    "blank_only/development_gate.json": "7b9f7c2f4937caf6505b95218beee8dab3d6cca6f984585fe99fcd6b35181ea0",
+    "initial/development_gate.json": "8e226c118a1a82f5b2ec28e9ed710f16ccf211a2095ca859cfc0d87e21a83795"
+  },
+  "independent_checker": "standard_python_row_column_box_and_clue_checks",
+  "raw_files": {
+    "blank_only/development_rows.jsonl": "d809c3e27a2ccd4890373a42d6c91d81e919926f07ee49a87073e6e5ea6f2c74",
+    "decode_control/rows.jsonl": "ce8a29a2762e0cb2f336f0d28abe4bba9ed89f907380722b612e70716c75b4da",
+    "initial/development_rows.jsonl": "dbfb05f7b1a0faa5c5795842dd52b1e12463325263b46dd9b5bdf9d37306ea17"
+  },
+  "renderer_sha256": "763e9199d714e8e611aa914179cf6aa67faef61e2580f47eab847dc2b7f5e6f9",
+  "statistical_unit": "training_seed_and_paired_example; timing rounds collapsed",
+  "table_sha256": "94de0ffc8b0c283713e5d4ae46932ff58a7edfe98a0c48ef5097d00a39f24702"
+}

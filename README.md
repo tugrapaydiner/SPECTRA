@@ -12,6 +12,8 @@
 
 ---
 
+**M14 update:** The controlled 9×9 comparison and correction missed the improvement gate: every selected neural system had zero complete development solves, and ternary was about 2.7× slower than the larger FP32 baseline. [Evidence and acceptance status](docs/M14_ACCEPTANCE_GATE.md).
+
 ## Abstract
 
 SPECTRA is a **scientific instrument** for testing whether compact recursive reasoning plus learned test-time control can improve the quality/compute frontier on constrained CPUs. The reasoning core uses ternary weights in `{-1, 0, +1}` with quantized recurrent state boundaries, explicit recursive execution, latent search, learned routing/halting, and independent symbolic task validation.
@@ -22,7 +24,7 @@ M13 tightened the measurement boundary substantially. Hardware timings and count
 
 | Quantity | Retained result | Scope |
 |---|---:|---|
-| Native correctness | scalar/native fidelity contracts pass | correctness evidence |
+| Native correctness | prior scalar/native fidelity contracts pass | tested M10 configuration; M14 9×9 numerical fidelity failed |
 | Complete sequential B=1 solve | **7.586 ms median / 7.819 ms p95** | 24 distinct held-out instances × 3 warm rounds; decode + semantic validation included |
 | Cold first solve | **16.417 s** | includes artifact load and native extension build/load |
 | Precomputed K-input reuse | **0.36 → 31.13 GOP/s** (`K=1→256`, AVX2) | microbenchmark with all `K` inputs already materialized; **not** sequential recurrence evidence |

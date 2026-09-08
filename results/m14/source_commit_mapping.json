@@ -1,0 +1,21 @@
+{
+  "local_preregistration_commit": "b115fc520df2f0663dc3357b0a9a9341f88bd0fc",
+  "github_preregistration_commit": "52c1dee301d0d313e42d941cda33d46b81fdcb65",
+  "verified_identical_git_tree": "8eb9940ac38170adb12114ebe09ab7e9e8e0c821",
+  "reason": "GitHub connector creates commit metadata; source file bytes and tree are identical.",
+  "execution_mapping": {
+    "local_commit": "7e548c5",
+    "github_commit": "9eb4d793955f11315942e02c2d7df636bbe392d5",
+    "verified_identical_git_tree": "13fe9448ae97c32477b5a8455f60607a0ea8bace"
+  },
+  "final_execution_mapping": {
+    "local_commit": "de031bc",
+    "github_commit": "071c42a363177594ac50ed8aeb86fc208ddb6f34",
+    "verified_identical_git_tree": "50105420cd8fcc7f33541b3de8d43ff4c005aaae"
+  },
+  "reproduction_code": {
+    "local_commit": "fc13be0",
+    "github_commit": "896cce26334dc7f1d5505cff32a20ab072a843eb",
+    "verified_identical_git_tree": "fc196ae6d27536b82352e50e58c6ad72dff9b53d"
+  }
+}

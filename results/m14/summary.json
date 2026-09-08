@@ -1,0 +1,814 @@
+[
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 2,
+    "label": "Small FP32 recursive",
+    "lane": "fp_recursive",
+    "mean_blank_accuracy": 0.39609153285195964,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 1.8956686006944443,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 1.92005,
+    "p95_latency_ms": 2.145196,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.39422351546502854,
+        "examples": 192,
+        "mean_latency_ms": 1.9027673125,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.4070481732945361,
+        "examples": 192,
+        "mean_latency_ms": 1.8988367604166665,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.38700290979631424,
+        "examples": 192,
+        "mean_latency_ms": 1.8854017291666665,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "initial",
+    "selected_lr": 0.001,
+    "split": "development",
+    "trainable_params": 30780,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 0,
+    "label": "Larger mixed INT8 single-pass",
+    "lane": "single_int8",
+    "mean_blank_accuracy": 0.5648597190789237,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 1.4767096857638888,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 1.52501,
+    "p95_latency_ms": 1.7106795,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.5606207565470417,
+        "examples": 192,
+        "mean_latency_ms": 1.4707762760416667,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.5655781873046665,
+        "examples": 192,
+        "mean_latency_ms": 1.467886119791667,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.5683802133850631,
+        "examples": 192,
+        "mean_latency_ms": 1.4914666614583332,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "initial",
+    "selected_lr": 0.003,
+    "split": "development",
+    "trainable_params": 228394,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 0,
+    "label": "Larger FP32 single-pass",
+    "lane": "single_pass",
+    "mean_blank_accuracy": 0.5647519488450623,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 1.3630644652777777,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 1.4044889999999999,
+    "p95_latency_ms": 1.58280975,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.561482918417933,
+        "examples": 192,
+        "mean_latency_ms": 1.3702063020833333,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.5653626468369436,
+        "examples": 192,
+        "mean_latency_ms": 1.3636111927083334,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.5674102812803103,
+        "examples": 192,
+        "mean_latency_ms": 1.3553759010416666,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "initial",
+    "selected_lr": 0.003,
+    "split": "development",
+    "trainable_params": 228394,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 0,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 0,
+    "label": "Symbolic MRV reference",
+    "lane": "symbolic",
+    "mean_blank_accuracy": 1.0,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 0.4282115694444445,
+    "mean_solve_rate": 1.0,
+    "median_latency_ms": 0.403933,
+    "p95_latency_ms": 0.5700735,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 1.0,
+        "examples": 192,
+        "mean_latency_ms": 0.4256964270833333,
+        "seed": 1401,
+        "solve_rate": 1.0,
+        "solve_rate_wilson95": [
+          0.980384853933246,
+          1.0
+        ],
+        "successes": 192
+      },
+      {
+        "blank_accuracy": 1.0,
+        "examples": 192,
+        "mean_latency_ms": 0.4278949739583333,
+        "seed": 1402,
+        "solve_rate": 1.0,
+        "solve_rate_wilson95": [
+          0.980384853933246,
+          1.0
+        ],
+        "successes": 192
+      },
+      {
+        "blank_accuracy": 1.0,
+        "examples": 192,
+        "mean_latency_ms": 0.4310433072916667,
+        "seed": 1403,
+        "solve_rate": 1.0,
+        "solve_rate_wilson95": [
+          0.980384853933246,
+          1.0
+        ],
+        "successes": 192
+      }
+    ],
+    "phase": "initial",
+    "selected_lr": null,
+    "split": "development",
+    "trainable_params": 0,
+    "training_seeds": 0
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 2,
+    "label": "Small ternary \u00b7 PyTorch",
+    "lane": "ternary_recursive",
+    "mean_blank_accuracy": 0.3276574343499659,
+    "mean_clue_errors_per_board": 0.008680555555555556,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 3.6414307239583334,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 3.7393685,
+    "p95_latency_ms": 4.223933000000001,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.16941480763013256,
+        "examples": 192,
+        "mean_latency_ms": 3.631264927083333,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.36781980816898374,
+        "examples": 192,
+        "mean_latency_ms": 3.662159390625,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.44573768725078133,
+        "examples": 192,
+        "mean_latency_ms": 3.6308678541666666,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "initial",
+    "selected_lr": 0.003,
+    "split": "development",
+    "trainable_params": 30348,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 1,
+    "label": "Small FP32 recursive",
+    "lane": "fp_recursive",
+    "mean_blank_accuracy": 0.34472105471135545,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 1.050239421875,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 1.0237705,
+    "p95_latency_ms": 1.23537625,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.33484211660739305,
+        "examples": 192,
+        "mean_latency_ms": 1.0594329166666667,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.3283759025757086,
+        "examples": 192,
+        "mean_latency_ms": 1.050815265625,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.37094514495096453,
+        "examples": 192,
+        "mean_latency_ms": 1.0404700833333334,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "blank_only",
+    "selected_lr": 0.001,
+    "split": "development",
+    "trainable_params": 30780,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 0,
+    "label": "Larger mixed INT8 single-pass",
+    "lane": "single_int8",
+    "mean_blank_accuracy": 0.5503107375076337,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 1.3391418750000001,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 1.3018239999999999,
+    "p95_latency_ms": 1.63016775,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.5254876603082229,
+        "examples": 192,
+        "mean_latency_ms": 1.3372606197916668,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.6041599310270503,
+        "examples": 192,
+        "mean_latency_ms": 1.3371496458333334,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.521284621187628,
+        "examples": 192,
+        "mean_latency_ms": 1.343015359375,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "blank_only",
+    "selected_lr": 0.003,
+    "split": "development",
+    "trainable_params": 228394,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 0,
+    "label": "Larger FP32 single-pass",
+    "lane": "single_pass",
+    "mean_blank_accuracy": 0.5504544311527823,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 1.2234291284722223,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 1.1622240000000001,
+    "p95_latency_ms": 1.493279,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.5258109710098071,
+        "examples": 192,
+        "mean_latency_ms": 1.2202873072916667,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.6037288500916047,
+        "examples": 192,
+        "mean_latency_ms": 1.229402796875,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.521823472356935,
+        "examples": 192,
+        "mean_latency_ms": 1.22059728125,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "blank_only",
+    "selected_lr": 0.003,
+    "split": "development",
+    "trainable_params": 228394,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 0,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 0,
+    "label": "Symbolic MRV reference",
+    "lane": "symbolic",
+    "mean_blank_accuracy": 1.0,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 0.4419202743055556,
+    "mean_solve_rate": 1.0,
+    "median_latency_ms": 0.4135275,
+    "p95_latency_ms": 0.60421475,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 1.0,
+        "examples": 192,
+        "mean_latency_ms": 0.43828065624999996,
+        "seed": 1401,
+        "solve_rate": 1.0,
+        "solve_rate_wilson95": [
+          0.980384853933246,
+          1.0
+        ],
+        "successes": 192
+      },
+      {
+        "blank_accuracy": 1.0,
+        "examples": 192,
+        "mean_latency_ms": 0.442281203125,
+        "seed": 1402,
+        "solve_rate": 1.0,
+        "solve_rate_wilson95": [
+          0.980384853933246,
+          1.0
+        ],
+        "successes": 192
+      },
+      {
+        "blank_accuracy": 1.0,
+        "examples": 192,
+        "mean_latency_ms": 0.4451989635416667,
+        "seed": 1403,
+        "solve_rate": 1.0,
+        "solve_rate_wilson95": [
+          0.980384853933246,
+          1.0
+        ],
+        "successes": 192
+      }
+    ],
+    "phase": "blank_only",
+    "selected_lr": null,
+    "split": "development",
+    "trainable_params": 0,
+    "training_seeds": 0
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 2,
+    "label": "Small ternary \u00b7 PyTorch",
+    "lane": "ternary_recursive",
+    "mean_blank_accuracy": 0.31328806983511154,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 3.310693373263889,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 3.1987885,
+    "p95_latency_ms": 4.0125405,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.32492725509214354,
+        "examples": 192,
+        "mean_latency_ms": 3.3086518593749994,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.2934583468046126,
+        "examples": 192,
+        "mean_latency_ms": 3.3188519531250003,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.3214786076085785,
+        "examples": 192,
+        "mean_latency_ms": 3.3045763072916663,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "blank_only",
+    "selected_lr": 0.003,
+    "split": "development",
+    "trainable_params": 30348,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 2,
+    "label": "Small FP32 recursive",
+    "lane": "fp_recursive",
+    "mean_blank_accuracy": 0.39609153285195964,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 1.7635091631944444,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 1.749758,
+    "p95_latency_ms": 2.0288285,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.39422351546502854,
+        "examples": 192,
+        "mean_latency_ms": 1.75678034375,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.4070481732945361,
+        "examples": 192,
+        "mean_latency_ms": 1.769408796875,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.38700290979631424,
+        "examples": 192,
+        "mean_latency_ms": 1.7643383489583335,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "decode_only",
+    "selected_lr": 0.001,
+    "split": "development",
+    "trainable_params": 30780,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 0,
+    "label": "Larger mixed INT8 single-pass",
+    "lane": "single_int8",
+    "mean_blank_accuracy": 0.5648597190789237,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 1.3644920416666666,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 1.3201015,
+    "p95_latency_ms": 1.6852765,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.5606207565470417,
+        "examples": 192,
+        "mean_latency_ms": 1.3708638906250001,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.5655781873046665,
+        "examples": 192,
+        "mean_latency_ms": 1.3514901145833331,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.5683802133850631,
+        "examples": 192,
+        "mean_latency_ms": 1.3711221197916668,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "decode_only",
+    "selected_lr": 0.003,
+    "split": "development",
+    "trainable_params": 228394,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 0,
+    "label": "Larger FP32 single-pass",
+    "lane": "single_pass",
+    "mean_blank_accuracy": 0.5647519488450623,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 1.244621935763889,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 1.1860855,
+    "p95_latency_ms": 1.5065472500000001,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.561482918417933,
+        "examples": 192,
+        "mean_latency_ms": 1.2381866927083334,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.5653626468369436,
+        "examples": 192,
+        "mean_latency_ms": 1.2517350729166667,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.5674102812803103,
+        "examples": 192,
+        "mean_latency_ms": 1.2439440416666667,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "decode_only",
+    "selected_lr": 0.003,
+    "split": "development",
+    "trainable_params": 228394,
+    "training_seeds": 3
+  },
+  {
+    "checkpoint_step": 600,
+    "energy_joules_per_solve": null,
+    "inference_recursion_steps": 2,
+    "label": "Small ternary \u00b7 PyTorch",
+    "lane": "ternary_recursive",
+    "mean_blank_accuracy": 0.3276574343499659,
+    "mean_clue_errors_per_board": 0.0,
+    "mean_invalid_digits_per_board": 0.0,
+    "mean_latency_ms": 3.2900708506944443,
+    "mean_solve_rate": 0.0,
+    "median_latency_ms": 3.1991199999999997,
+    "p95_latency_ms": 3.99608925,
+    "paired_examples": 192,
+    "per_seed": [
+      {
+        "blank_accuracy": 0.16941480763013256,
+        "examples": 192,
+        "mean_latency_ms": 3.279262854166667,
+        "seed": 1401,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.36781980816898374,
+        "examples": 192,
+        "mean_latency_ms": 3.315763046875,
+        "seed": 1402,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      },
+      {
+        "blank_accuracy": 0.44573768725078133,
+        "examples": 192,
+        "mean_latency_ms": 3.2751866510416665,
+        "seed": 1403,
+        "solve_rate": 0.0,
+        "solve_rate_wilson95": [
+          1.734723475976807e-18,
+          0.01961514606675411
+        ],
+        "successes": 0
+      }
+    ],
+    "phase": "decode_only",
+    "selected_lr": 0.003,
+    "split": "development",
+    "trainable_params": 30348,
+    "training_seeds": 3
+  }
+]

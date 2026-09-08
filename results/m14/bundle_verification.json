@@ -1,0 +1,588 @@
+{
+  "passed": true,
+  "fits": 27,
+  "checkpoint_hashes_verified": 54,
+  "inventory_files_verified": 189,
+  "checkpoint_prediction_replays": 96,
+  "replayed_split": "development",
+  "confirmation_model_evaluations": 0,
+  "native_scope": "native fidelity reports are separate; this replay covers all selected PyTorch/INT8 lanes",
+  "replays": [
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1402,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1402,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1402,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1402,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1401,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1401,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1401,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1401,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1403,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1403,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1403,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "fp_recursive",
+      "seed": 1403,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1401,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1401,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1401,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1401,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1403,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1403,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1403,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1403,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1402,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1402,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1402,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_int8",
+      "seed": 1402,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1401,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1401,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1401,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1401,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1403,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1403,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1403,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1403,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1402,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1402,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1402,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "single_pass",
+      "seed": 1402,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1402,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1402,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1402,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1402,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1403,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1403,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1403,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1403,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1401,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1401,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1401,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "initial",
+      "lane": "ternary_recursive",
+      "seed": 1401,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1401,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1401,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1401,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1401,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1402,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1402,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1402,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1402,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1403,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1403,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1403,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "fp_recursive",
+      "seed": 1403,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1402,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1402,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1402,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1402,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1403,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1403,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1403,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1403,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1401,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1401,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1401,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_int8",
+      "seed": 1401,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1402,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1402,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1402,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1402,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1403,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1403,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1403,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1403,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1401,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1401,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1401,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "single_pass",
+      "seed": 1401,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1402,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1402,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1402,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1402,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1403,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1403,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1403,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1403,
+      "example_id": "a34d27df244cd81b0cba7151"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1401,
+      "example_id": "1ed9f9db9c2041c6d1d2e6a6"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1401,
+      "example_id": "3cb0c8ff476c7288da949e04"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1401,
+      "example_id": "c5a9e61472af0f2765bbc105"
+    },
+    {
+      "phase": "blank_only",
+      "lane": "ternary_recursive",
+      "seed": 1401,
+      "example_id": "a34d27df244cd81b0cba7151"
+    }
+  ]
+}

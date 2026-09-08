@@ -1,0 +1,70 @@
+{
+  "comparisons": {
+    "single_int8": {
+      "accuracy_bootstrap_lower": 0.0,
+      "accuracy_difference": 0.0,
+      "accuracy_lower_bound": 0.0,
+      "accuracy_pass": false,
+      "accuracy_seed_differences": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "accuracy_t_lower": 0.0,
+      "bootstrap_draws": 10000,
+      "budget_label": "higher_cost_unmatched",
+      "candidate_mean_latency_ms": 3.6414307239583334,
+      "cost_pass": false,
+      "empirical_accuracy_interval_degenerate": true,
+      "frozen_budget_cap_ms": 1.4184311385416668,
+      "frozen_cap_pass": false,
+      "latency_bootstrap_upper": 2.5046658854546293,
+      "latency_ratio": 2.465908335987282,
+      "latency_ratio_pass": false,
+      "latency_ratio_upper_bound": 2.542484960950118,
+      "latency_t_upper": 2.542484960950118,
+      "one_sided_alpha": 0.025,
+      "paired_examples": 192,
+      "seeds": 3,
+      "uncertainty_scope": "paired_training_seeds_and_examples_not_timing_repetitions"
+    },
+    "single_pass": {
+      "accuracy_bootstrap_lower": 0.0,
+      "accuracy_difference": 0.0,
+      "accuracy_lower_bound": 0.0,
+      "accuracy_pass": false,
+      "accuracy_seed_differences": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "accuracy_t_lower": 0.0,
+      "bootstrap_draws": 10000,
+      "budget_label": "higher_cost_unmatched",
+      "candidate_mean_latency_ms": 3.6414307239583334,
+      "cost_pass": false,
+      "empirical_accuracy_interval_degenerate": true,
+      "frozen_budget_cap_ms": 1.08266235,
+      "frozen_cap_pass": false,
+      "latency_bootstrap_upper": 2.7104100399145064,
+      "latency_ratio": 2.6715029382093456,
+      "latency_ratio_pass": false,
+      "latency_ratio_upper_bound": 2.7187876633113084,
+      "latency_t_upper": 2.7187876633113084,
+      "one_sided_alpha": 0.025,
+      "paired_examples": 192,
+      "seeds": 3,
+      "uncertainty_scope": "paired_training_seeds_and_examples_not_timing_repetitions"
+    }
+  },
+  "confirmation_evaluated": false,
+  "freeze_sha256": "6759b70dad1ec456af1e8e7fedf0299c25fe71fec1a2253ab61b818e3d2f3b6d",
+  "milestone_complete": false,
+  "passed": false,
+  "phase": "initial",
+  "primary_candidate": "ternary_recursive",
+  "raw_rows_sha256": "dbfb05f7b1a0faa5c5795842dd52b1e12463325263b46dd9b5bdf9d37306ea17",
+  "schema_version": 1,
+  "split": "development",
+  "status": "INCOMPLETE_TARGET_MISSED"
+}

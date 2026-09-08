@@ -1,0 +1,15 @@
+phase,split,lane,label,training_seeds,paired_examples,mean_solve_rate,mean_blank_accuracy,mean_latency_ms,median_latency_ms,p95_latency_ms,mean_clue_errors_per_board,mean_invalid_digits_per_board,energy_joules_per_solve,selected_lr,checkpoint_step,inference_recursion_steps,trainable_params
+initial,development,fp_recursive,Small FP32 recursive,3,192,0.0,0.39609153285195964,1.8956686006944443,1.92005,2.145196,0.0,0.0,,0.001,600,2,30780
+initial,development,single_int8,Larger mixed INT8 single-pass,3,192,0.0,0.5648597190789237,1.4767096857638888,1.52501,1.7106795,0.0,0.0,,0.003,600,0,228394
+initial,development,single_pass,Larger FP32 single-pass,3,192,0.0,0.5647519488450623,1.3630644652777777,1.4044889999999999,1.58280975,0.0,0.0,,0.003,600,0,228394
+initial,development,symbolic,Symbolic MRV reference,0,192,1.0,1.0,0.4282115694444445,0.403933,0.5700735,0.0,0.0,,,0,0,0
+initial,development,ternary_recursive,Small ternary · PyTorch,3,192,0.0,0.3276574343499659,3.6414307239583334,3.7393685,4.223933000000001,0.008680555555555556,0.0,,0.003,600,2,30348
+blank_only,development,fp_recursive,Small FP32 recursive,3,192,0.0,0.34472105471135545,1.050239421875,1.0237705,1.23537625,0.0,0.0,,0.001,600,1,30780
+blank_only,development,single_int8,Larger mixed INT8 single-pass,3,192,0.0,0.5503107375076337,1.3391418750000001,1.3018239999999999,1.63016775,0.0,0.0,,0.003,600,0,228394
+blank_only,development,single_pass,Larger FP32 single-pass,3,192,0.0,0.5504544311527823,1.2234291284722223,1.1622240000000001,1.493279,0.0,0.0,,0.003,600,0,228394
+blank_only,development,symbolic,Symbolic MRV reference,0,192,1.0,1.0,0.4419202743055556,0.4135275,0.60421475,0.0,0.0,,,0,0,0
+blank_only,development,ternary_recursive,Small ternary · PyTorch,3,192,0.0,0.31328806983511154,3.310693373263889,3.1987885,4.0125405,0.0,0.0,,0.003,600,2,30348
+decode_only,development,fp_recursive,Small FP32 recursive,3,192,0.0,0.39609153285195964,1.7635091631944444,1.749758,2.0288285,0.0,0.0,,0.001,600,2,30780
+decode_only,development,single_int8,Larger mixed INT8 single-pass,3,192,0.0,0.5648597190789237,1.3644920416666666,1.3201015,1.6852765,0.0,0.0,,0.003,600,0,228394
+decode_only,development,single_pass,Larger FP32 single-pass,3,192,0.0,0.5647519488450623,1.244621935763889,1.1860855,1.5065472500000001,0.0,0.0,,0.003,600,0,228394
+decode_only,development,ternary_recursive,Small ternary · PyTorch,3,192,0.0,0.3276574343499659,3.2900708506944443,3.1991199999999997,3.99608925,0.0,0.0,,0.003,600,2,30348

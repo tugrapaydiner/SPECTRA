@@ -44,3 +44,5 @@ Thumbs.db
 
 # Regenerated benchmark + telemetry data (reproduce via scripts/bench_*.py)
 assets/data/
+
+/results/m14/latency_v1/

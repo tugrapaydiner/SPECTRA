@@ -1,0 +1,36 @@
+[
+  {
+    "lanes": [
+      "single_pass"
+    ],
+    "metric": "mean_solve_rate",
+    "phase": "initial",
+    "scope": "empirical_neural_means_not_significance"
+  },
+  {
+    "lanes": [
+      "fp_recursive"
+    ],
+    "metric": "mean_solve_rate",
+    "phase": "blank_only",
+    "scope": "empirical_neural_means_not_significance"
+  },
+  {
+    "lanes": [
+      "single_pass",
+      "single_int8"
+    ],
+    "metric": "mean_blank_accuracy",
+    "phase": "initial",
+    "scope": "empirical_neural_means_not_significance"
+  },
+  {
+    "lanes": [
+      "fp_recursive",
+      "single_pass"
+    ],
+    "metric": "mean_blank_accuracy",
+    "phase": "blank_only",
+    "scope": "empirical_neural_means_not_significance"
+  }
+]
