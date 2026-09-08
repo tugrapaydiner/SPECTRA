@@ -137,7 +137,7 @@ def test_ensemble_uncertainty_is_not_claimed_as_ood_guarantee():
     import model.energy as energy
     doc = energy.EnsembleLatentEnergyVerifier.__doc__.lower()
     assert "does **not** by itself identify out-of-distribution states" in doc
-    assert "requires validation" in doc
+    assert "require validation" in doc
 
 
 def test_overall_acceptance_needs_confirmed_mechanism():
