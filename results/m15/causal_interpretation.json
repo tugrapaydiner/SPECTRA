@@ -1,0 +1,22 @@
+{
+  "preferred_explanation": "target_value_mismatch",
+  "confirmation": {
+    "unguarded_regressions": 146,
+    "paired_examples": 1024,
+    "oracle_regression_reduction_fraction": 0.9863013698630136,
+    "terminal_guard_prevention_fraction": 0.8493150684931506,
+    "fp32_search_state_prevention_fraction": 0.0
+  },
+  "counterevidence": {
+    "int8_primary_mechanism": "disfavored: FP32 state storage reproduced all 146 regressions",
+    "action_prior_primary_mechanism": "disfavored: equal-action unguided and learned-prior search matched task outcome",
+    "pure_depth_randomization": "disfavored as primary: verifier retained useful ROC AUC for its declared one-cycle target while proxy was negatively associated with absolute symbolic quality"
+  },
+  "limitations": [
+    "two accepted M14 core seeds",
+    "generated 4x4 Sudoku",
+    "terminal guard is task-specific symbolic verification",
+    "oracle scorer is diagnostic and has different evaluator cost",
+    "learned search remains a negative capability result"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "surface": "independent_confirmation",
+  "paired_rows": 1024,
+  "configs": {
+    "semantic_exit_k4": {"semantic_success": 0.9912109375, "median_latency_ms": 1.238183},
+    "fixed_depth4": {"semantic_success": 0.98828125},
+    "learned_strong_d1_int8": {"semantic_success": 0.8505859375, "regressions": 144, "proxy_exploitation_rate": 0.0673828125, "median_latency_ms": 25.0393915},
+    "learned_strong_d2_int8": {"semantic_success": 0.8486328125, "regressions": 146, "proxy_exploitation_rate": 0.1318359375, "median_latency_ms": 36.958078},
+    "learned_strong_d4_int8": {"semantic_success": 0.8486328125, "regressions": 146, "proxy_exploitation_rate": 0.1328125, "median_latency_ms": 61.093163},
+    "unguided_strong_d4_int8": {"semantic_success": 0.8486328125, "regressions": 146, "proxy_exploitation_rate": 0.1318359375, "median_latency_ms": 59.240231},
+    "learned_weak_d4_int8": {"semantic_success": 0.861328125, "regressions": 133, "proxy_exploitation_rate": 0.0927734375, "median_latency_ms": 47.1081895},
+    "learned_lcb_beta2_d4_int8": {"semantic_success": 0.87109375, "regressions": 123, "proxy_exploitation_rate": 0.0634765625, "median_latency_ms": 61.335539},
+    "learned_strong_guard_d4_int8": {"semantic_success": 0.9697265625, "regressions": 22, "proxy_exploitation_rate": 0.01171875, "median_latency_ms": 5.30039},
+    "learned_oracle_d4_int8": {"semantic_success": 0.9912109375, "regressions": 2, "rescues": 2, "proxy_exploitation_rate": 0.0, "median_latency_ms": 28.2926795},
+    "learned_strong_d4_fp32": {"semantic_success": 0.8486328125, "regressions": 146, "proxy_exploitation_rate": 0.1318359375, "median_latency_ms": 59.130526}
+  },
+  "interpretation": "Learned-proxy search is a negative capability result. Oracle value and the task-specific guard isolate the value-target mismatch; FP32 state storage does not rescue it."
+}

@@ -1,0 +1,53 @@
+{
+  "acceptance": {
+    "confirmed_h1_target_value_mismatch": true,
+    "confirmed_h2_depth_ranking_collapse": false,
+    "pass": true
+  },
+  "clarification_commit": "4218e863acd55a6c461c11df15f66a0ef57f96ca",
+  "confirmation_h1": {
+    "conditions": {
+      "fp32_not_prevent_75pct": true,
+      "guard_prevents_half_regressions": true,
+      "guard_success_not_down_gt_1pp": true,
+      "material_regression_or_exploitation": true,
+      "oracle_fewer_regressions_by_half": true
+    },
+    "fp32_prevention_fraction": 0.0,
+    "guard_prevention_fraction": 0.8493150684931506,
+    "h1_supported": true,
+    "oracle_regression_reduction_fraction": 0.9863013698630136,
+    "unguarded_regressions": 146
+  },
+  "confirmation_opened_after_freeze": true,
+  "confirmation_overlap_count": 0,
+  "confirmation_seed": 2026091502,
+  "core_seeds": [
+    1401,
+    2402
+  ],
+  "development_h1": {
+    "conditions": {
+      "fp32_not_prevent_75pct": true,
+      "guard_prevents_half_regressions": true,
+      "guard_success_not_down_gt_1pp": true,
+      "material_regression_or_exploitation": true,
+      "oracle_fewer_regressions_by_half": true
+    },
+    "fp32_prevention_fraction": 0.0,
+    "guard_prevention_fraction": 0.9176470588235294,
+    "h1_supported": true,
+    "oracle_regression_reduction_fraction": 1.0,
+    "unguarded_regressions": 85
+  },
+  "milestone": 15,
+  "precision_context_status": "omitted_exact_context_state_not_reconstructed",
+  "preferred_explanation": "target_value_mismatch",
+  "protocol_commit": "8caea3844a1eb9f855c4a06afe58b8853d4316a7",
+  "selected_beta": 2.0,
+  "shift_overlap_count": 0,
+  "shift_seed": 2026091503,
+  "source_tensor_identity_exact": true,
+  "status": "COMPLETE",
+  "unsupported_theory_cleanup_required": true
+}

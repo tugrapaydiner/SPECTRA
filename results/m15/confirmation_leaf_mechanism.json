@@ -1,0 +1,35 @@
+{
+  "1": {
+    "improvement_ap": 0.5926742893233939,
+    "improvement_auc": 0.7536299052928871,
+    "invalid_states": 559,
+    "mean_proxy_invalid": 0.5085597631916378,
+    "mean_proxy_valid": 0.3437017597213855,
+    "n": 4096,
+    "spearman_proxy_absolute_score": -0.25237602540645243,
+    "valid_minus_invalid_proxy": -0.16485800347025226,
+    "valid_states": 3537
+  },
+  "2": {
+    "improvement_ap": 0.19631268215087183,
+    "improvement_auc": 0.8054155397098598,
+    "invalid_states": 340,
+    "mean_proxy_invalid": 0.0850862675017732,
+    "mean_proxy_valid": 0.03604431015813193,
+    "n": 8172,
+    "spearman_proxy_absolute_score": -0.20039366191011784,
+    "valid_minus_invalid_proxy": -0.04904195734364127,
+    "valid_states": 7832
+  },
+  "3": {
+    "improvement_ap": 0.3269230769230769,
+    "improvement_auc": 0.6133333333333333,
+    "invalid_states": 4,
+    "mean_proxy_invalid": 0.11937202326953411,
+    "mean_proxy_valid": 0.12003829097375274,
+    "n": 20,
+    "spearman_proxy_absolute_score": -0.108388746190515,
+    "valid_minus_invalid_proxy": 0.000666267704218626,
+    "valid_states": 16
+  }
+}
