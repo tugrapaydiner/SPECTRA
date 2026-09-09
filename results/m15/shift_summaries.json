@@ -1,0 +1,15 @@
+{
+  "surface": "lower_clue_shift_4_to_5",
+  "paired_rows": 512,
+  "configs": {
+    "semantic_exit_k4": {"semantic_success": 0.859375},
+    "fixed_depth4": {"semantic_success": 0.853515625, "regressions": 3},
+    "learned_strong_d4_int8": {"semantic_success": 0.3203125, "regressions": 276, "proxy_exploitation_rate": 0.5859375},
+    "unguided_strong_d4_int8": {"semantic_success": 0.3203125, "regressions": 276, "proxy_exploitation_rate": 0.583984375},
+    "learned_lcb_beta2_d4_int8": {"semantic_success": 0.34375, "regressions": 264, "proxy_exploitation_rate": 0.380859375},
+    "learned_strong_guard_d4_int8": {"semantic_success": 0.705078125, "regressions": 82, "rescues": 3, "proxy_exploitation_rate": 0.201171875},
+    "learned_oracle_d4_int8": {"semantic_success": 0.87109375, "regressions": 8, "rescues": 14},
+    "learned_strong_d4_fp32": {"semantic_success": 0.3203125, "regressions": 276, "proxy_exploitation_rate": 0.5859375}
+  },
+  "interpretation": "The lower-clue shift amplifies the same target/value mismatch. The task-specific guard helps substantially but does not restore the accepted no-search quality; FP32 state storage again provides no rescue."
+}

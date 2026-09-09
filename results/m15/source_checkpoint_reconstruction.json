@@ -1,0 +1,26 @@
+{
+  "materialization": "byte_identical_accepted_m14_actions_artifact",
+  "artifact_id": 10077794916,
+  "artifact_run_id": 34280670349,
+  "artifact_zip_sha256": "5729932600743b2cef19d9e0b9baf112ec75b627552af4d30a089266994a2f37",
+  "failed_retrain_attempt_run": 34286178758,
+  "failed_retrain_attempt_consumed_m15_scientific_result": false,
+  "primary": [
+    {
+      "seed": 1401,
+      "kind": "fp_recursive_dim64",
+      "checkpoint_file_sha256": "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4",
+      "tensor_state_sha256": "4cf4c93ec9d3bd688850394685924cb23d0762a8716eb3e2f42e42befd249f08",
+      "checkpoint_file_identity_exact": true,
+      "tensor_identity_exact": true
+    },
+    {
+      "seed": 2402,
+      "kind": "fp_recursive_dim64",
+      "checkpoint_file_sha256": "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff",
+      "tensor_state_sha256": "00a84312a4fba02e31b1954bddffe10b5933e01eaaae4226eb068490a3f97c0d",
+      "checkpoint_file_identity_exact": true,
+      "tensor_identity_exact": true
+    }
+  ]
+}

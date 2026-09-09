@@ -1,0 +1,14 @@
+{
+  "selected_beta": 2.0,
+  "selection_surface": "validation_only",
+  "grid": [0.0, 0.5, 1.0, 2.0],
+  "selection_rule": "lowest regression count, then higher semantic success, then lower median latency, then lower beta",
+  "validation_selected": {
+    "semantic_success": 0.87109375,
+    "search_induced_regressions": 61,
+    "search_induced_regression_rate": 0.119140625,
+    "proxy_exploitation_rate": 0.0625,
+    "median_latency_ms": 62.1240495
+  },
+  "interpretation": "LCB was a partial mitigation, not an OOD certificate or successful search result."
+}

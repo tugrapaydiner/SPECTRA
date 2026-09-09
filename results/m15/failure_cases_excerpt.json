@@ -1,0 +1,30 @@
+[
+  {
+    "surface": "confirmation",
+    "example_id": "0487754f0f884fc6961cb994",
+    "clues": 6,
+    "core_seed": 1401,
+    "baseline_symbolic_score": 1.0,
+    "max_evaluated_absolute_score": 1.0,
+    "selected_symbolic_score": 0.8125,
+    "selected_proxy": 0.7288243174552917,
+    "selected_path": [3],
+    "proxy_exploitation": true,
+    "search_regression": true,
+    "interpretation": "learned proxy selected a lower absolute-quality state despite a solved/equally high-quality evaluated alternative"
+  },
+  {
+    "surface": "lower_clue_shift",
+    "example_id": "02d66a047abc93dba3c3bd21",
+    "clues": 4,
+    "core_seed": 1401,
+    "baseline_symbolic_score": 1.0,
+    "max_evaluated_absolute_score": 1.0,
+    "selected_symbolic_score": 0.8125,
+    "selected_proxy": 0.6359402537345886,
+    "selected_path": [3],
+    "proxy_exploitation": true,
+    "search_regression": true,
+    "interpretation": "same target/value inversion under the preregistered lower-clue stress distribution"
+  }
+]

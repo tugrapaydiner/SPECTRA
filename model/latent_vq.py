@@ -1,31 +1,29 @@
-"""Latent Vector Quantization -- bounds compounding recursion/INT8 error (DT #1).
+"""Latent vector quantization helpers.
 
-THE CHAOS-THEORY ARGUMENT, AND WHY VQ DEFEATS IT
-------------------------------------------------
-A recursive map with per-step perturbation ``epsilon`` and Lipschitz constant
-``L`` accumulates error ``~ epsilon * (L^d - 1)/(L - 1)`` over depth ``d``. If
-``L > 1`` (the generic case for an unconstrained transition) this is exponential
-and a depth-20 MCTS rollout turns the INT8 latent into noise the verifier can no
-longer score.
+The quantizer projects each per-token latent onto a finite learned codebook.  Two
+facts are mechanical:
 
-Vector Quantization removes the exponent. After each step we *project* the latent
-onto a finite learned codebook ``C = {c_1, ..., c_K}``:
+* ``snap(z)`` is a nearest-code projection and is idempotent on exact codebook
+  points;
+* for any observed pre-projection state, ``||z - snap(z)||`` is a measurable local
+  projection error.
 
-    z_q = argmin_{c in C} || z - c ||.
+Those facts do **not** imply a depth-independent error bound relative to an
+unquantized recursive trajectory.  After projection, the next transition is
+applied to a different state, so the projected and unprojected trajectories can
+separate over time.  A bound on that trajectory divergence would require extra
+assumptions (for example contraction/stability of the transition, codebook
+coverage of the reference trajectory, and stable nearest-neighbour assignments)
+and evidence that those assumptions hold.
 
-Two consequences make the error bounded by a CONSTANT, independent of depth:
+Likewise, finite codebook membership does not by itself guarantee preserved
+reasoning, topology, rank, isometry, calibration, or OOD detection.  Milestone 15
+therefore measures local projection error, trajectory divergence, code usage,
+decoded-answer agreement, and task success across depth instead of inferring those
+properties from bounded codebook states.
 
-  1. **Bounded per-step error.** ``|| z - z_q || <= r``, the covering radius of the
-     codebook. The map's output always lands exactly on a codebook point.
-  2. **No compounding.** Because every state is a codebook point, the trajectory
-     lives on a finite set; ``snap(snap(z)) = snap(z)`` (idempotent), so noise that
-     does not change the nearest-neighbour assignment is annihilated rather than
-     accumulated. The reachable error is ``<= r`` for ANY depth ``d``.
-
-So VQ converts ``O(epsilon * L^d)`` compounding into ``O(r)`` constant error -- the
-latent topology survives arbitrarily deep search. The codebook is trained with the
-standard VQ-VAE straight-through estimator + commitment loss; MCTS inference uses
-the pure projection ``snap``.
+The codebook uses the standard VQ-VAE straight-through/commitment construction;
+MCTS inference may use the pure ``snap`` projection.
 """
 
 from __future__ import annotations
@@ -72,14 +70,14 @@ class LatentVQ(nn.Module):
 
     @torch.no_grad()
     def snap(self, z: torch.Tensor) -> torch.Tensor:
-        """Project ``z`` onto the codebook (no grad) -- the MCTS inference path."""
+        """Project ``z`` onto the codebook (no grad) -- the optional MCTS path."""
         b, n, d = z.shape
         idx = self._nearest(z.reshape(-1, d))
         return self.codebook[idx].reshape(b, n, d)
 
     @torch.no_grad()
     def covering_radius(self, z: torch.Tensor) -> float:
-        """Max per-token projection error ``max ||z - snap(z)||`` (the error bound)."""
+        """Observed max local projection error on ``z``; not a trajectory bound."""
         return (z - self.snap(z)).reshape(-1, z.shape[-1]).norm(dim=1).max().item()
 
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

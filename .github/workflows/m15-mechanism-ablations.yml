@@ -1,0 +1,272 @@
+name: m15-mechanism-ablations
+
+on:
+  push:
+    branches: [research/m15-mechanism-ablations]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/M15_**'
+      - 'model/latent_vq.py'
+      - 'model/energy.py'
+      - 'docs/ARCHITECTURE.md'
+      - 'docs/CLAIMS.md'
+      - 'scripts/m15_mechanism_ablations.py'
+      - 'scripts/m15_run_exact_sources.py'
+      - 'tests/test_m15_mechanism_ablations.py'
+      - '.github/workflows/m15-mechanism-ablations.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  mechanism-ablation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CPU dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p .m15
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m15/install_torch.txt
+          timeout 240s python -m pip install -r requirements.txt |& tee .m15/install_requirements.txt
+
+      - name: Verify preregistration ancestry and compile
+        shell: bash
+        run: |
+          set +e
+          git merge-base --is-ancestor 8caea3844a1eb9f855c4a06afe58b8853d4316a7 HEAD
+          prereg=$?
+          git merge-base --is-ancestor 4218e863acd55a6c461c11df15f66a0ef57f96ca HEAD
+          clarify=$?
+          git merge-base --is-ancestor 06b62a46fdd7fdc736146e2ad4ce04bd7fbd7615 HEAD
+          source_amend=$?
+          python -m py_compile scripts/m15_mechanism_ablations.py scripts/m15_run_exact_sources.py tests/test_m15_mechanism_ablations.py
+          compile=$?
+          echo "$prereg" | tee .m15/prereg_exit_code.txt
+          echo "$clarify" | tee .m15/clarification_exit_code.txt
+          echo "$source_amend" | tee .m15/source_amendment_exit_code.txt
+          echo "$compile" | tee .m15/compile_exit_code.txt
+          exit 0
+
+      - name: Focused M15 contracts
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 600s python -m pytest \
+            tests/test_m15_mechanism_ablations.py \
+            tests/test_m14_attempt5_dual_stream_semantic_exit.py \
+            tests/test_m09_trained_actions.py \
+            tests/test_m07_grounded_verifier.py \
+            tests/test_energy_measurement.py \
+            -m "not slow" -q |& tee .m15/pytest_focused.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m15/focused_exit_code.txt
+          exit 0
+
+      - name: Fetch exact accepted M14 source artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          set -o pipefail
+          rm -f .m15/m14-final-evidence.zip
+          curl -L --fail --retry 3 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/tugrapaydiner/SPECTRA/actions/artifacts/10077794916/zip \
+            -o .m15/m14-final-evidence.zip |& tee .m15/source_artifact_download.txt
+          download=${PIPESTATUS[0]}
+          if [ "$download" -eq 0 ]; then
+            echo "5729932600743b2cef19d9e0b9baf112ec75b627552af4d30a089266994a2f37  .m15/m14-final-evidence.zip" | sha256sum -c - |& tee .m15/source_artifact_hash.txt
+            hash=$?
+          else
+            hash=99
+          fi
+          echo "$download" | tee .m15/source_download_exit_code.txt
+          echo "$hash" | tee .m15/source_hash_exit_code.txt
+          exit 0
+
+      - name: Run preregistered M15 mechanism experiment
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          rm -rf .m15/experiment
+          M15_M14_ARTIFACT_ZIP=.m15/m14-final-evidence.zip \
+            timeout 3900s python scripts/m15_run_exact_sources.py --out .m15/experiment \
+            |& tee .m15/experiment.log
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m15/experiment_exit_code.txt
+          exit 0
+
+      - name: Verify M15 evidence hierarchy
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY' |& tee .m15/evidence_check.txt
+          import json, pathlib, sys
+          root=pathlib.Path('.m15/experiment')
+          required=[
+            root/'summary.json', root/'environment.json', root/'source_checkpoint_reconstruction.json',
+            root/'manifests/train_validation_development.json', root/'validation_beta_selection.json',
+            root/'auxiliary_training.json', root/'development_summaries.json',
+            root/'development_leaf_mechanism.json', root/'development_hypothesis_test.json',
+            root/'development_failure_cases.json', root/'development_trajectory_summary.json',
+            root/'precision_context.json', root/'confirmation_freeze_manifest.json',
+            root/'manifests/confirmation.json', root/'manifests/confirmation_overlap_audit.json',
+            root/'confirmation_summaries.json', root/'confirmation_leaf_mechanism.json',
+            root/'confirmation_hypothesis_test.json', root/'confirmation_failure_cases.json',
+            root/'confirmation_trajectory_summary.json', root/'manifests/shift_low_clue.json',
+            root/'manifests/shift_low_clue_overlap_audit.json', root/'shift_summaries.json',
+            root/'shift_failure_cases.json', root/'causal_interpretation.json', root/'result_table.csv',
+          ]
+          missing=[str(p) for p in required if not p.is_file()]
+          print('missing=',missing)
+          if missing: sys.exit(2)
+          s=json.loads((root/'summary.json').read_text())
+          src=json.loads((root/'source_checkpoint_reconstruction.json').read_text())
+          freeze=json.loads((root/'confirmation_freeze_manifest.json').read_text())
+          ca=json.loads((root/'manifests/confirmation_overlap_audit.json').read_text())
+          sa=json.loads((root/'manifests/shift_low_clue_overlap_audit.json').read_text())
+          print(json.dumps(s,indent=2,sort_keys=True))
+          assert s['milestone']==15
+          assert s['protocol_commit']=='8caea3844a1eb9f855c4a06afe58b8853d4316a7'
+          assert s['clarification_commit']=='4218e863acd55a6c461c11df15f66a0ef57f96ca'
+          assert s['core_seeds']==[1401,2402]
+          assert src['materialization']=='byte_identical_accepted_m14_actions_artifact'
+          assert src['artifact_id']==10077794916
+          assert src['artifact_zip_sha256']=='5729932600743b2cef19d9e0b9baf112ec75b627552af4d30a089266994a2f37'
+          assert all(r['checkpoint_file_identity_exact'] and r['tensor_identity_exact'] for r in src['primary'])
+          assert freeze['frozen_before_confirmation'] is True
+          assert freeze['no_post_confirmation_selection'] is True
+          assert s['confirmation_opened_after_freeze'] is True
+          assert ca['overlap_count']==0 and sa['overlap_count']==0
+          assert s['confirmation_overlap_count']==0 and s['shift_overlap_count']==0
+          assert s['selected_beta'] in [0.0,0.5,1.0,2.0]
+          assert freeze['selected_beta']==s['selected_beta']
+          assert freeze['search_rollouts']==12 and freeze['search_depths']==[1,2,4]
+          traj=json.loads((root/'confirmation_trajectory_summary.json').read_text())
+          for seed in [1401,2402]:
+            for d in range(1,9):
+              for variant in ['fp32_reference','int8_requant','vq32']:
+                assert any(r['core_seed']==seed and r['depth']==d and r['variant']==variant for r in traj),(seed,d,variant)
+          cs=json.loads((root/'confirmation_summaries.json').read_text())
+          for key in ['semantic_exit_k4','fixed_depth4','learned_strong_d1_int8','learned_strong_d2_int8',
+                      'learned_strong_d4_int8','unguided_strong_d4_int8','learned_weak_d4_int8',
+                      'learned_strong_guard_d4_int8','learned_oracle_d4_int8','learned_strong_d4_fp32']:
+              assert key in cs,key
+          assert any(k.startswith('learned_lcb_beta') for k in cs)
+          dev_fail=json.loads((root/'development_failure_cases.json').read_text())
+          conf_fail=json.loads((root/'confirmation_failure_cases.json').read_text())
+          assert len(dev_fail)+len(conf_fail) > 0
+          interp=json.loads((root/'causal_interpretation.json').read_text())
+          assert interp['preferred_explanation'] in ['target_value_mismatch','depth_verifier_ranking_collapse','inconclusive']
+          print('M15_EVIDENCE_HIERARCHY=VALID')
+          print('M15_STATUS='+s['status'])
+          PY
+          echo "$?" | tee .m15/evidence_check_exit_code.txt
+          exit 0
+
+      - name: Verify unsupported theory cleanup
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY' |& tee .m15/theory_cleanup.txt
+          from pathlib import Path
+          vq=Path('model/latent_vq.py').read_text().lower()
+          en=Path('model/energy.py').read_text().lower()
+          assert 'topology survives arbitrarily deep search' not in vq
+          assert 'o(epsilon * l^d)' not in vq
+          assert 'do **not** imply' in vq
+          assert 'does **not** by itself identify out-of-distribution states' in en
+          print('M15_MODEL_THEORY_CLEANUP=VALID')
+          PY
+          echo "$?" | tee .m15/theory_cleanup_exit_code.txt
+          exit 0
+
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          timeout 1000s python -m pytest -m "not slow" -ra |& tee .m15/pytest_fast.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" | tee .m15/fast_exit_code.txt
+          exit 0
+
+      - name: Record provenance and hashes
+        shell: bash
+        run: |
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "protocol=8caea3844a1eb9f855c4a06afe58b8853d4316a7"
+            echo "clarification=4218e863acd55a6c461c11df15f66a0ef57f96ca"
+            echo "source_amendment=06b62a46fdd7fdc736146e2ad4ce04bd7fbd7615"
+            echo "accepted_m14_artifact=10077794916"
+            echo "accepted_m14_artifact_sha256=5729932600743b2cef19d9e0b9baf112ec75b627552af4d30a089266994a2f37"
+            echo "main_base=0c35fa48192b81fcf4d6720356a7741c0a3c6144"
+            git diff --stat 0c35fa48192b81fcf4d6720356a7741c0a3c6144...HEAD
+          } | tee .m15/diff_stat.txt
+          python - <<'PY' > .m15/evidence_sha256.txt
+          import hashlib,pathlib
+          root=pathlib.Path('.m15')
+          for p in sorted(q for q in root.rglob('*') if q.is_file() and q.name not in {'evidence_sha256.txt','m14-final-evidence.zip'}):
+              print(hashlib.sha256(p.read_bytes()).hexdigest(), p.as_posix())
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m15-mechanism-ablation-evidence
+          path: |
+            .m15/
+            !.m15/m14-final-evidence.zip
+            !.m15/experiment/accepted_m14_artifact/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce M15 acceptance
+        shell: bash
+        run: |
+          prereg=$(cat .m15/prereg_exit_code.txt 2>/dev/null || echo 99)
+          clarify=$(cat .m15/clarification_exit_code.txt 2>/dev/null || echo 99)
+          source_amend=$(cat .m15/source_amendment_exit_code.txt 2>/dev/null || echo 99)
+          compile=$(cat .m15/compile_exit_code.txt 2>/dev/null || echo 99)
+          focused=$(cat .m15/focused_exit_code.txt 2>/dev/null || echo 99)
+          source_download=$(cat .m15/source_download_exit_code.txt 2>/dev/null || echo 99)
+          source_hash=$(cat .m15/source_hash_exit_code.txt 2>/dev/null || echo 99)
+          experiment=$(cat .m15/experiment_exit_code.txt 2>/dev/null || echo 99)
+          evidence=$(cat .m15/evidence_check_exit_code.txt 2>/dev/null || echo 99)
+          theory=$(cat .m15/theory_cleanup_exit_code.txt 2>/dev/null || echo 99)
+          fast=$(cat .m15/fast_exit_code.txt 2>/dev/null || echo 99)
+          status=$(python - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('.m15/experiment/summary.json')
+          print(json.loads(p.read_text()).get('status','MISSING') if p.is_file() else 'MISSING')
+          PY
+          )
+          echo "prereg=$prereg clarify=$clarify source_amend=$source_amend compile=$compile focused=$focused source_download=$source_download source_hash=$source_hash experiment=$experiment evidence=$evidence theory=$theory fast=$fast status=$status"
+          if [ "$prereg" -ne 0 ] || [ "$clarify" -ne 0 ] || [ "$source_amend" -ne 0 ] || [ "$compile" -ne 0 ] || [ "$focused" -ne 0 ] || [ "$source_download" -ne 0 ] || [ "$source_hash" -ne 0 ] || [ "$evidence" -ne 0 ] || [ "$theory" -ne 0 ] || [ "$fast" -ne 0 ]; then
+            echo "M15 experiment/evidence integrity failure."
+            exit 1
+          fi
+          if [ "$experiment" -ne 0 ] || [ "$status" != "COMPLETE" ]; then
+            echo "M15 is valid evidence but no controlled mechanism cleared the frozen acceptance interpretation."
+            exit 1
+          fi
+          echo "M15 mechanism-focused ablation acceptance passed."

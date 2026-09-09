@@ -1,21 +1,25 @@
-"""Spectral / dimensional-collapse guards for the recursive latent (GT audit #2).
+"""Spectral / dimensional-collapse diagnostics and regularizers.
 
-RMSNorm + residual scaling bound the *magnitude* of the latent but do nothing to
-stop **dimensional collapse** (all token vectors converging to one direction) or
-guarantee the per-step map's spectrum stays near isometry. This module adds the
-explicit regularizers that do:
+RMSNorm + residual scaling bound the *magnitude* of the latent but do not prove
+that a recurrent representation remains full-rank or that a per-step Jacobian is
+isometric.  This module provides training heuristics inspired by established
+anti-collapse and dynamical-isometry ideas:
 
-  * ``orthogonal_init_`` -- semi-orthogonal weight init (preserves norm/rank early,
-    the dynamical-isometry starting point of Pennington et al.).
-  * ``dimensional_collapse_penalty`` -- a VICReg-style variance + covariance term
-    that keeps every feature dimension informative (per-dim variance >= 1) and
-    decorrelated (off-diagonal covariance -> 0), so ``z`` cannot collapse to a
-    degenerate low-rank state.
-  * ``jacobian_isometry_penalty`` -- a Hutchinson estimate that pushes the step
-    Jacobian's singular values toward 1 (dynamical isometry). NOTE: the target is
-    isometry, NOT strict contraction (||J|| < 1) -- a strict contraction would make
-    the recursion converge to a single fixed point and destroy expressivity. We
-    want norm/rank preservation, not collapse-to-a-point.
+* ``orthogonal_init_`` applies semi-orthogonal initialization to eligible 2-D
+  weights.  Orthogonal initialization can improve conditioning in appropriate
+  architectures, but it does not guarantee dynamical isometry for an arbitrary
+  nonlinear recurrent SPECTRA block.
+* ``dimensional_collapse_penalty`` is a VICReg-style variance + covariance
+  objective.  It penalizes low per-feature variance and off-diagonal covariance on
+  the sampled latent batch; a low loss does not prove global rank preservation,
+  independence, or preserved reasoning.
+* ``jacobian_isometry_penalty`` is a stochastic norm-preservation penalty using
+  vector-Jacobian products.  With finitely many random probes it is a training
+  signal/diagnostic, not a certificate that all Jacobian singular values equal 1.
+
+Milestone 15 makes these boundaries explicit: any rank/isometry claim requires
+separate assumptions and direct spectral/rank evidence on the relevant trajectory
+and state distribution.
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ import torch.nn as nn
 
 
 def orthogonal_init_(module: nn.Module, gain: float = 1.0) -> None:
-    """Apply (semi-)orthogonal init to all 2D Linear/FakeBitLinear master weights."""
+    """Apply (semi-)orthogonal initialization to eligible 2-D master weights."""
     for m in module.modules():
         w = getattr(m, "weight", None)
         if isinstance(w, nn.Parameter) and w.dim() == 2 and not isinstance(m, nn.Embedding):
@@ -38,11 +42,12 @@ def orthogonal_init_(module: nn.Module, gain: float = 1.0) -> None:
 def dimensional_collapse_penalty(
     z: torch.Tensor, gamma: float = 1.0, lambda_var: float = 1.0, lambda_cov: float = 0.04
 ) -> torch.Tensor:
-    """VICReg variance + covariance anti-collapse penalty on a latent ``[B, L, D]``.
+    """VICReg-style variance + covariance penalty on latent ``[B, L, D]``.
 
-    Variance term hinges each feature's std up to ``gamma`` (prevents per-dim
-    collapse); covariance term drives off-diagonal feature covariances to zero
-    (prevents redundant / rank-deficient representations).
+    The variance term penalizes sampled feature standard deviations below
+    ``gamma``.  The covariance term penalizes sampled off-diagonal feature
+    covariance.  These are finite-sample objectives: they can discourage observed
+    collapse/redundancy but do not certify the representation's global rank.
     """
     feats = z.reshape(-1, z.shape[-1])                 # [N, D]
     n, d = feats.shape
@@ -63,16 +68,18 @@ def jacobian_isometry_penalty(
     z: torch.Tensor,
     n_samples: int = 1,
 ) -> torch.Tensor:
-    """Push the per-step Jacobian toward isometry (singular values ~ 1).
+    """Penalize sampled Jacobian norm distortion using random VJP probes.
 
-    Hutchinson estimate: for random ``u``, ``J^T u`` (a vjp) should have the same
-    norm as ``u`` if ``J`` is isometric. Differentiable (``create_graph``), so it
-    can be added directly to the training loss.
+    For a truly isometric Jacobian, ``||J^T u|| == ||u||`` for every probe ``u``.
+    Here only finitely many random probes are evaluated, so a small empirical
+    penalty is not a proof of dynamical isometry or of every singular value being
+    near one.  The term is differentiable (``create_graph=True``) and may be used
+    as a training regularizer.
 
     Args:
-        step_fn: A function ``z -> z'`` (one recursion step's latent update).
-        z: The input latent ``[B, L, D]``.
-        n_samples: Number of random probes (variance reduction).
+        step_fn: A function ``z -> z'`` for one recurrent latent update.
+        z: Input latent ``[B, L, D]``.
+        n_samples: Number of random probes used by this stochastic estimate.
     """
     z = z.detach().requires_grad_(True)
     out = step_fn(z)
@@ -94,11 +101,12 @@ def latent_stability_loss(
     lambda_jacobian: float = 0.0,
     step_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
 ) -> torch.Tensor:
-    """Aggregate anti-collapse penalty over the recursion's latent states.
+    """Aggregate sampled anti-collapse/isometry penalties over latent states.
 
-    Add to the deep-supervision loss to guarantee the latent trajectory stays
-    high-rank. The Jacobian term is optional (it needs a ``step_fn`` closure and a
-    second backward) and is off by default for speed.
+    This helper can discourage the measured failure modes represented by the
+    component losses.  It does not guarantee that the full recurrent trajectory is
+    high-rank, isometric, stable, or task-correct.  The optional Jacobian term
+    requires a ``step_fn`` closure and an additional higher-order gradient path.
     """
     device = steps[-1]["z"].device
     total = torch.zeros((), device=device)

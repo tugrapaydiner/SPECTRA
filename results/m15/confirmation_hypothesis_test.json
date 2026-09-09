@@ -1,0 +1,14 @@
+{
+  "conditions": {
+    "fp32_not_prevent_75pct": true,
+    "guard_prevents_half_regressions": true,
+    "guard_success_not_down_gt_1pp": true,
+    "material_regression_or_exploitation": true,
+    "oracle_fewer_regressions_by_half": true
+  },
+  "fp32_prevention_fraction": 0.0,
+  "guard_prevention_fraction": 0.8493150684931506,
+  "h1_supported": true,
+  "oracle_regression_reduction_fraction": 0.9863013698630136,
+  "unguarded_regressions": 146
+}

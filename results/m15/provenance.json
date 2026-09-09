@@ -1,0 +1,19 @@
+{
+  "scientific_head": "18f3693dd022aa3a83e1d6d2e39a1cc209790a4a",
+  "run": 34287134895,
+  "job": 102265201074,
+  "artifact_id": 10080887785,
+  "artifact_zip_sha256": "c49e5c06e0f2822088cb9ce807fcc6bc37da6236962953ccc8c594be01c55b2e",
+  "protocol_commit": "8caea3844a1eb9f855c4a06afe58b8853d4316a7",
+  "clarification_commit": "4218e863acd55a6c461c11df15f66a0ef57f96ca",
+  "source_amendment_commit": "06b62a46fdd7fdc736146e2ad4ce04bd7fbd7615",
+  "raw_artifact_hashes": {
+    "summary.json": "dfec1f2cd11e41457fec6ef672f6cab7c27df1416d9341dd044f92f8980bb5f9",
+    "confirmation_rows.jsonl": "4d126e7b1b29f34df69403c3343bfbef70b257537b9b40c36c9c3514c50fc5bf",
+    "confirmation_leaf_rows.jsonl": "63e3050c257a7d16c898674959be040dd13df9be0660bc8c60a1dca723aa775c",
+    "confirmation_trajectory_rows.jsonl": "a7635ab29086e1d9f7e4ef53caf675b09341a0042bd518f13ec577d9fb62335e",
+    "shift_low_clue_rows.jsonl": "a99726028cc1d3c2ab66fa872e9125f8f482ccab05e7c057789165874c212182",
+    "result_table.csv": "1ed1fbf2a6e82dcb24c62ddf19dc6f659667fb51457548b88f507c12dabfe51c"
+  },
+  "note": "Git-retained result files are compact derivatives/selected summaries. The full raw rows and checkpoints remain in the accepted Actions artifact above."
+}
