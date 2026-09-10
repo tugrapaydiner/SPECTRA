@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <vector>
 #include <cmath>
+#include <algorithm>
 
 namespace {
 
@@ -261,7 +262,145 @@ class SudokuProblem {
   std::vector<int64_t> givens_;
 };
 
+
+// Owning exact maze contract. BFS preprocessing is part of construction and
+// therefore charged inside each complete solve. No stored reference is accepted.
+// The selected cells must form a single simple four-neighbour path; checking
+// just connectivity would incorrectly accept branches or detached cycles.
+class MazeProblem {
+ public:
+  MazeProblem(torch::Tensor input, int64_t height, int64_t width, bool optimal)
+      : h_(height), w_(width), optimal_(optimal) {
+    TORCH_CHECK(h_ > 0 && w_ > 0 && h_ <= 512 && w_ <= 512,
+                "maze dimensions must be in [1,512]");
+    cells_ = h_ * w_;
+    check_cpu_contiguous(input, "input");
+    TORCH_CHECK(input.scalar_type() == torch::kInt64 && input.dim() == 2 &&
+                input.size(0) == 1 && input.size(1) == cells_,
+                "maze input must be int64 [1,H*W]");
+    const int64_t* src = input.data_ptr<int64_t>();
+    input_.assign(src, src + cells_);
+    int starts = 0, goals = 0;
+    valid_ = true;
+    for (int64_t i = 0; i < cells_; ++i) {
+      if (input_[i] < 0 || input_[i] > 3) valid_ = false;
+      if (input_[i] == 2) { start_ = i; ++starts; }
+      if (input_[i] == 3) { goal_ = i; ++goals; }
+    }
+    valid_ = valid_ && starts == 1 && goals == 1 && start_ != goal_;
+    if (!valid_) return;
+    previous_.assign(cells_, -2);
+    previous_[start_] = -1;
+    std::vector<int64_t> queue{start_};
+    std::vector<int64_t> distance(cells_, -1);
+    distance[start_] = 0;
+    for (size_t head = 0; head < queue.size(); ++head) {
+      const int64_t cell = queue[head];
+      if (cell == goal_) { distance_ = distance[cell]; break; }
+      neighbours(cell, [&](int64_t next) {
+        if (input_[next] != 0 && previous_[next] == -2) {
+          previous_[next] = cell;
+          distance[next] = distance[cell] + 1;
+          queue.push_back(next);
+        }
+      });
+    }
+  }
+
+  bool check(torch::Tensor answer) const {
+    check_cpu_contiguous(answer, "answer");
+    TORCH_CHECK(answer.scalar_type() == torch::kInt64 && answer.dim() == 2 &&
+                answer.size(0) == 1 && answer.size(1) == cells_,
+                "maze answer must be int64 [1,H*W]");
+    if (!valid_ || distance_ < 0) return false;
+    const int64_t* a = answer.data_ptr<int64_t>();
+    std::vector<uint8_t> selected(cells_, 0);
+    int64_t count = 0;
+    for (int64_t i = 0; i < cells_; ++i) {
+      if (input_[i] == 1) {
+        if (a[i] != 1 && a[i] != 4) return false;
+      } else if (a[i] != input_[i]) {
+        return false;
+      }
+      selected[i] = a[i] == 2 || a[i] == 3 || a[i] == 4;
+      count += selected[i];
+    }
+    if (count < 2 || (optimal_ && count != distance_ + 1)) return false;
+    for (int64_t i = 0; i < cells_; ++i) {
+      if (!selected[i]) continue;
+      int degree = 0;
+      neighbours(i, [&](int64_t next) { degree += selected[next]; });
+      if (degree != ((i == start_ || i == goal_) ? 1 : 2)) return false;
+    }
+    std::vector<uint8_t> seen(cells_, 0);
+    std::vector<int64_t> queue{start_};
+    seen[start_] = 1;
+    for (size_t head = 0; head < queue.size(); ++head) {
+      neighbours(queue[head], [&](int64_t next) {
+        if (selected[next] && !seen[next]) {
+          seen[next] = 1;
+          queue.push_back(next);
+        }
+      });
+    }
+    return seen[goal_] && static_cast<int64_t>(queue.size()) == count;
+  }
+
+  std::tuple<torch::Tensor, bool> decode(torch::Tensor logits) const {
+    check_cpu_contiguous(logits, "logits");
+    TORCH_CHECK(logits.scalar_type() == torch::kFloat32 && logits.dim() == 3 &&
+                logits.size(0) == 1 && logits.size(1) == cells_ && logits.size(2) == 5,
+                "maze logits must be float32 [1,H*W,5]");
+    auto answer = torch::empty({1, cells_}, logits.options().dtype(torch::kInt64));
+    const float* lp = logits.data_ptr<float>();
+    int64_t* ap = answer.data_ptr<int64_t>();
+    for (int64_t i = 0; i < cells_; ++i) {
+      int64_t best = 0;
+      for (int64_t v = 0; v < 5; ++v) {
+        TORCH_CHECK(std::isfinite(lp[i*5+v]), "logits must be finite");
+        if (lp[i*5+v] > lp[i*5+best]) best = v;
+      }
+      ap[i] = input_[i] == 1 ? (best == 4 ? 4 : 1) : input_[i];
+    }
+    return {answer, check(answer)};
+  }
+
+  // Additional strong classical context. The constructor already performed BFS;
+  // it must not be constructed outside the timed window for a solve benchmark.
+  // On malformed/unreachable inputs this returns the input, which check rejects.
+  torch::Tensor shortest_solution() const {
+    auto answer = torch::empty({1, cells_}, torch::TensorOptions().dtype(torch::kInt64).device(torch::kCPU));
+    int64_t* a = answer.data_ptr<int64_t>();
+    std::copy(input_.begin(), input_.end(), a);
+    if (valid_ && distance_ >= 0) {
+      for (int64_t cell = goal_; cell != -1; cell = previous_[cell]) {
+        if (cell != start_ && cell != goal_) a[cell] = 4;
+      }
+    }
+    return answer;
+  }
+
+ private:
+  template <typename Function>
+  void neighbours(int64_t cell, Function&& visit) const {
+    const int64_t row = cell / w_, col = cell % w_;
+    // Same deterministic order as data.maze.shortest_path.
+    if (row > 0) visit(cell - w_);
+    if (row + 1 < h_) visit(cell + w_);
+    if (col > 0) visit(cell - 1);
+    if (col + 1 < w_) visit(cell + 1);
+  }
+  int64_t h_, w_, cells_, start_ = -1, goal_ = -1, distance_ = -1;
+  bool optimal_, valid_ = false;
+  std::vector<int64_t> input_, previous_;
+};
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+  pybind11::class_<MazeProblem>(m, "MazeProblem")
+      .def(pybind11::init<torch::Tensor, int64_t, int64_t, bool>())
+      .def("check", &MazeProblem::check)
+      .def("decode", &MazeProblem::decode)
+      .def("shortest_solution", &MazeProblem::shortest_solution);
   pybind11::class_<SudokuProblem>(m, "SudokuProblem")
       .def(pybind11::init<torch::Tensor, int64_t>())
       .def("check", &SudokuProblem::check)
