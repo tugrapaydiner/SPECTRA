@@ -1,0 +1,25 @@
+name: m16-source-snapshot
+on:
+  push:
+    branches: [research/m16-verifier-aligned-cpu]
+    paths: ['.github/workflows/m16-source-snapshot.yml']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive tracked source only
+        run: |
+          mkdir -p /tmp/spectra-snapshot
+          git archive --format=tar HEAD > /tmp/spectra-snapshot/source.tar
+          git rev-parse HEAD > /tmp/spectra-snapshot/commit.txt
+          sha256sum /tmp/spectra-snapshot/source.tar > /tmp/spectra-snapshot/source.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m16-source-snapshot
+          path: /tmp/spectra-snapshot/
+          retention-days: 30
+          if-no-files-found: error
