@@ -46,6 +46,9 @@ def build_data_splits(
     n_test: int,
     seed: int | None = None,
     manifest_path: str | Path | None = None,
+    *,
+    forbidden_fingerprints: frozenset[str] | None = None,
+    require_unique_examples: bool = False,
 ) -> tuple[dict[str, GridDataset], dict]:
     """Build reproducible grouped train/validation/test data and manifest."""
     contract = task_contract_from(cfg)
@@ -56,6 +59,8 @@ def build_data_splits(
         generator_kwargs=dict(contract.generator_kwargs),
         task_scope=contract.scope,
         official_benchmark=contract.official_benchmark,
+        forbidden_fingerprints=forbidden_fingerprints,
+        require_unique_examples=require_unique_examples,
     )
     if manifest_path is not None:
         write_manifest(manifest_path, manifest)

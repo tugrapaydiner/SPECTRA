@@ -1,0 +1,12 @@
+# Tested M16 core package versions. First install torch from the CPU wheel index:
+# python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+# python -m pip install -r requirements-cpu-research.txt
+# Full transitive pip freeze is retained per run; this is not a universal lockfile.
+torch==2.10.0
+numpy==2.3.5
+pyyaml==6.0.3
+einops==0.8.2
+tqdm==4.67.3
+pandas==2.2.3
+psutil==7.2.2
+pytest==9.0.2

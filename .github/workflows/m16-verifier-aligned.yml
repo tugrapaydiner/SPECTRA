@@ -2,6 +2,7 @@ name: m16-verifier-aligned
 on:
   push:
     branches: [research/verifier-aligned-cpu-search]
+    paths-ignore: ['results/m16/**']
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,10 +14,14 @@ jobs:
   cpu-contracts:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
     env:
       CUDA_VISIBLE_DEVICES: ''
-      OMP_NUM_THREADS: '2'
-      MKL_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
       MAX_JOBS: '2'
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +31,8 @@ jobs:
         run: |
           mkdir -p .m16
           git rev-parse HEAD > .m16/source_commit.txt
-          git archive --format=tar HEAD > .m16/source.tar
+          git archive --format=tar HEAD -- . ':!results/m16/runs' ':!results/m16/sources' > .m16/source.tar
+          echo 'Excludes separately retained results/m16/runs and results/m16/sources only.' > .m16/source_scope.txt
           sha256sum .m16/source.tar > .m16/source_sha256.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -35,6 +41,7 @@ jobs:
             .m16/source.tar
             .m16/source_commit.txt
             .m16/source_sha256.txt
+            .m16/source_scope.txt
           retention-days: 90
           if-no-files-found: error
       - uses: actions/setup-python@v5
@@ -44,17 +51,53 @@ jobs:
       - name: Install CPU dependencies
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
-          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-cpu-research.txt
           python -m pip freeze > .m16/environment.lock.txt
       - name: CPU fast regression
         run: |
           set -o pipefail
           timeout 1800s python -m pytest -m 'not slow' -ra | tee .m16/pytest_fast.txt
-      - name: Run retained-evidence audit when available
+      - name: Retrieve hash-pinned historical source evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if test -f scripts/m16_validate_retained.py; then
-            python scripts/m16_validate_retained.py --out .m16/retained_validation.json
-          fi
+          set -euo pipefail
+          mkdir -p .m16/inputs
+          while read -r id name; do
+            if test -f "results/m16/sources/$name"; then
+              cp "results/m16/sources/$name" ".m16/inputs/$name"
+            else
+              curl -L --fail --retry 3 \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H 'Accept: application/vnd.github+json' \
+                "https://api.github.com/repos/tugrapaydiner/SPECTRA/actions/artifacts/$id/zip" \
+                -o ".m16/inputs/$name"
+            fi
+          done <<'SOURCES'
+          10035946017 spectra_m14_evidence.zip
+          10077794916 spectra_m14_source_evidence.zip
+          10080887785 spectra_m15_evidence.zip
+          SOURCES
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.m16_evidence import Evidence
+          Evidence(Path('.m16/inputs'))
+          print('All three archive SHA256/CRC checks passed.')
+          PY
+      - name: Frozen CPU experiment and matched-target development
+        run: |
+          set -o pipefail
+          git merge-base --is-ancestor a879107cf5e5fbf3a07003d254a32b0c71835aa6 HEAD
+          timeout 1500s python scripts/m16_cpu_experiment.py \
+            --evidence-dir .m16/inputs --out .m16/experiment --targets | tee .m16/experiment.log
+          python - <<'PY'
+          import hashlib, pathlib
+          root = pathlib.Path('.m16')
+          with (root/'evidence_sha256.txt').open('w') as f:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file() and p.name != 'evidence_sha256.txt':
+                      f.write(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(root))+'\n')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -63,3 +106,28 @@ jobs:
           include-hidden-files: true
           retention-days: 90
           if-no-files-found: error
+      - name: Persist raw evidence on the research branch, never main
+        if: success()
+        env:
+          BRANCH: research/verifier-aligned-cpu-search
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/$BRANCH"
+          tar --exclude='./inputs' -czf "$RUNNER_TEMP/m16-evidence.tar.gz" -C .m16 .
+          git fetch origin "$BRANCH"
+          git worktree add "$RUNNER_TEMP/m16-publish" FETCH_HEAD
+          dest="$RUNNER_TEMP/m16-publish/results/m16"
+          mkdir -p "$dest/sources" "$dest/runs"
+          for file in .m16/inputs/*.zip; do
+            name=$(basename "$file")
+            if test -f "$dest/sources/$name"; then cmp "$file" "$dest/sources/$name"; else cp "$file" "$dest/sources/$name"; fi
+          done
+          name="${GITHUB_RUN_ID}-${GITHUB_SHA}.tar.gz"
+          test ! -e "$dest/runs/$name"
+          cp "$RUNNER_TEMP/m16-evidence.tar.gz" "$dest/runs/$name"
+          cd "$RUNNER_TEMP/m16-publish"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/m16/sources results/m16/runs
+          git commit -m "[skip ci] M16: retain raw source and run evidence ${GITHUB_RUN_ID}"
+          git push origin "HEAD:refs/heads/$BRANCH"

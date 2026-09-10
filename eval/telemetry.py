@@ -28,7 +28,12 @@ def _read_battery() -> tuple[float, float]:
     """Return ``(battery_level 0..1, power_mode 0/1)`` using psutil if available."""
     if psutil is None:
         return 1.0, 1.0
-    batt = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    try:
+        batt = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    except (OSError, NotImplementedError):
+        # Containers may hide power_supply even when psutil supports the API.
+        # These are policy defaults, not measurements or physical-energy data.
+        batt = None
     if batt is None:
         return 1.0, 1.0  # desktop / no battery -> treat as plugged in, full
     level = max(0.0, min(1.0, batt.percent / 100.0))

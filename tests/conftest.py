@@ -7,6 +7,8 @@ once per session and reuse the trained model for both the MVP accuracy gate
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pytest
 import torch
@@ -15,6 +17,7 @@ from common.seed import resolve_device, set_seed
 from data.datasets import build_sudoku_arrays
 from model.trm import TRM
 from train.losses import deep_supervision_loss
+from train.accumulation import backward_mean_loss
 
 
 @pytest.fixture(scope="session")
@@ -45,10 +48,13 @@ def trained_sudoku_4x4():
     model.train()
     for _ in range(500):
         idx = torch.randint(0, tx.shape[0], (128,), device=device)
-        _, steps = model(tx[idx], height=h, width=w)
-        loss = deep_supervision_loss(steps, ty[idx])
         opt.zero_grad()
-        loss.backward()
+        microbatch = int(os.environ.get("SPECTRA_TEST_MICROBATCH", "128"))
+        # Same 128 sampled examples and one optimizer update; only backward
+        # partitioning changes. Opt-in for memory-constrained CPU environments.
+        backward_mean_loss(
+            lambda xx, yy: deep_supervision_loss(model(xx, height=h, width=w)[1], yy),
+            tx[idx], ty[idx], microbatch)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
     model.eval()
