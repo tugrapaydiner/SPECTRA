@@ -1,0 +1,101 @@
+{
+  "confirmation": {
+    "arms": {
+      "native": {
+        "mean_ms": 0.6147537897135417,
+        "median_ms": 0.562387,
+        "p95_ms": 0.9319625,
+        "timing_rows": 1536,
+        "valid_fraction": 0.994140625
+      },
+      "reference": {
+        "mean_ms": 0.916630748046875,
+        "median_ms": 0.8208979999999999,
+        "p95_ms": 1.48680175,
+        "timing_rows": 1536,
+        "valid_fraction": 0.994140625
+      },
+      "single_pass_native_checker": {
+        "mean_ms": 0.5505299401041667,
+        "median_ms": 0.5480705,
+        "p95_ms": 0.5782499999999999,
+        "timing_rows": 1536,
+        "valid_fraction": 0.861328125
+      },
+      "symbolic_native_checker": {
+        "mean_ms": 0.08632233463541666,
+        "median_ms": 0.084485,
+        "p95_ms": 0.10047824999999999,
+        "timing_rows": 1536,
+        "valid_fraction": 1.0
+      }
+    },
+    "ci95": [
+      0.6634250415696161,
+      0.6745700009588603
+    ],
+    "claim_boundary": "faithful speedup over old implementation, not solver or learned-search superiority",
+    "crossed_bootstrap_replicates": 2000,
+    "exact_answer_step_fidelity": true,
+    "gate_pass": true,
+    "model_seeds": [
+      1401,
+      2402
+    ],
+    "paired_mean_ratio_after_round_medians": 0.6691776597268816,
+    "raw_rows_sha256": "bb20728ece16da13160306443d9a846e82a2d7165425a41a2cfb37a1f75725a3",
+    "unique_examples": 256
+  },
+  "confirmation_opened": true,
+  "development": {
+    "arms": {
+      "native": {
+        "mean_ms": 0.6428083541666667,
+        "median_ms": 0.562967,
+        "p95_ms": 0.9384034499999999,
+        "timing_rows": 768,
+        "valid_fraction": 0.984375
+      },
+      "reference": {
+        "mean_ms": 0.9697350143229168,
+        "median_ms": 0.8214245,
+        "p95_ms": 1.5094793,
+        "timing_rows": 768,
+        "valid_fraction": 0.984375
+      },
+      "single_pass_native_checker": {
+        "mean_ms": 0.5528545208333333,
+        "median_ms": 0.5492175,
+        "p95_ms": 0.6020945999999999,
+        "timing_rows": 768,
+        "valid_fraction": 0.8125
+      },
+      "symbolic_native_checker": {
+        "mean_ms": 0.08607497135416668,
+        "median_ms": 0.0844,
+        "p95_ms": 0.10014899999999999,
+        "timing_rows": 768,
+        "valid_fraction": 1.0
+      }
+    },
+    "ci95": [
+      0.6547851456655862,
+      0.6702238734128632
+    ],
+    "claim_boundary": "faithful speedup over old implementation, not solver or learned-search superiority",
+    "crossed_bootstrap_replicates": 2000,
+    "exact_answer_step_fidelity": true,
+    "gate_pass": true,
+    "model_seeds": [
+      1401,
+      2402
+    ],
+    "paired_mean_ratio_after_round_medians": 0.6626614346360233,
+    "raw_rows_sha256": "097cf62c71f566974cb6a6597a951f9ac5c16db42e92ae45206559f62d59f35b",
+    "unique_examples": 128
+  },
+  "freeze_sha256": "c5f529f42fcc5ad5689f9b63209563a478aa16c16097711af8741c5ab1a64a8c",
+  "protocol_commit": "a879107cf5e5fbf3a07003d254a32b0c71835aa6",
+  "scope": "bounded faithful CPU optimization",
+  "status": "FIDELITY_SPEED_GATE_PASS"
+}
