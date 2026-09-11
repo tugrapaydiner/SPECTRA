@@ -60,7 +60,8 @@ def _inventory(values, *, integer: bool):
 def paired_frontier(rows: list[dict], *, family: str, candidate: str, comparator: str,
                     model_seeds: tuple[int, ...], example_ids: tuple[str, ...],
                     rounds: int = 3, replicates: int = 2000, seed: int = 2026091110,
-                    gate: FrontierGate = FrontierGate()) -> dict:
+                    gate: FrontierGate = FrontierGate(),
+                    example_groups: tuple[str, ...] | None = None) -> dict:
     """Analyze exactly the supplied two-arm inventory, refusing silent omissions.
 
     All rows must belong to this family and pair of arms. Each model must have
@@ -71,6 +72,15 @@ def paired_frontier(rows: list[dict], *, family: str, candidate: str, comparator
     """
     models = _inventory(model_seeds, integer=True)
     examples = _inventory(example_ids, integer=False)
+    group_members = None
+    if example_groups is not None:
+        if (not isinstance(example_groups, (tuple, list)) or len(example_groups) != len(examples)
+                or any(not isinstance(g, str) or not g for g in example_groups)):
+            raise ValueError('one nonempty group key is required for each example')
+        group_keys = sorted(set(example_groups))
+        if len(group_keys) < 2:
+            raise ValueError('grouped resampling requires at least two groups')
+        group_members = [np.array([i for i, g in enumerate(example_groups) if g == group]) for group in group_keys]
     if len(models) < 2 or len(examples) < 2:
         raise ValueError('crossed inference needs at least two models and examples')
     if (any(not isinstance(v, str) or not v for v in (family, candidate, comparator))
@@ -129,7 +139,8 @@ def paired_frontier(rows: list[dict], *, family: str, candidate: str, comparator
     sampled = np.empty((replicates, 3))
     for k in range(replicates):
         mm = rng.integers(len(models), size=len(models))
-        ee = rng.integers(len(examples), size=len(examples))
+        ee = (rng.integers(len(examples), size=len(examples)) if group_members is None else
+              np.concatenate([group_members[g] for g in rng.integers(len(group_keys), size=len(group_keys))]))
         sampled[k] = endpoints(delta[mm[:, None], ee], times[:, mm[:, None], ee])
     intervals = np.quantile(sampled, [.025, .975], axis=0).T
     headroom = quality_headroom(int(valid[1].sum()), int(delta.size), gate.min_success_gain)
@@ -154,7 +165,10 @@ def paired_frontier(rows: list[dict], *, family: str, candidate: str, comparator
             'headroom': headroom, 'descriptive_gate_conditions': conditions,
             'descriptive_gate_pass': all(conditions.values()),
             'bootstrap': {'replicates': replicates, 'seed': seed,
-                'units': 'independently resampled model seeds and shared example IDs',
+                'units': ('independently resampled model seeds and shared example IDs' if group_members is None
+                          else 'independently resampled model seeds and shared complete example groups'),
+                **({} if group_members is None else {'unique_example_groups': len(group_keys),
+                    'conditional_on_fitted_policies': True, 'policies_refitted_inside_bootstrap': False}),
                 'timing_rounds_resampled_as_examples': False,
                 'multiple_comparison_adjustment': False},
             'scope': 'Descriptive paired analysis; not independent confirmation, a selection-adjusted interval, '

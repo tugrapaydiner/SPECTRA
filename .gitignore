@@ -24,6 +24,7 @@ logs/
 data/cache/
 data/raw/
 *.npz
+!results/failure_information/fit/policies.npz
 *.npy
 
 # Test / tooling

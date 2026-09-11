@@ -1,5 +1,13 @@
 # SPECTRA: harsh research review, September 11, 2026
 
+**Scoring correction after clarification of the user's standard:** the original
+55/100 below overweights engineering and auditability for a goal of exceptional
+research impact that attracts aggressive recruitment. On that stricter subjective
+scale, the current artifact is approximately **35/100**. This is neither a hiring
+probability nor a compensation/level prediction. The original rubric remains
+below as a record of the earlier assessment; more tests alone do not raise the
+recalibrated score.
+
 ## Assessment: 55/100 against the requested frontier-impact standard
 
 This is an explicit subjective artifact rubric, not an OpenAI hiring rubric or

@@ -1,0 +1,82 @@
+sudoku_shift model=1401 complete=32/128
+sudoku_shift model=1401 complete=64/128
+sudoku_shift model=1401 complete=96/128
+sudoku_shift model=1401 complete=128/128
+sudoku_shift model=2402 complete=32/128
+sudoku_shift model=2402 complete=64/128
+sudoku_shift model=2402 complete=96/128
+sudoku_shift model=2402 complete=128/128
+maze model=1701 complete=32/128
+maze model=1701 complete=64/128
+maze model=1701 complete=96/128
+maze model=1701 complete=128/128
+maze model=2702 complete=32/128
+maze model=2702 complete=64/128
+maze model=2702 complete=96/128
+maze model=2702 complete=128/128
+{
+  "sudoku_shift": {
+    "pairs": 256,
+    "identity8_valid": 237,
+    "identity32_valid": 241,
+    "original_order_valid": 255,
+    "prefix_plus_all_views_oracle_valid": 255,
+    "all_trajectories_union_valid": 255,
+    "oracle_new_vs_original": 0,
+    "oracle_new_vs_identity32": 14,
+    "oracle_regressions_vs_identity32": 0,
+    "unsolved_by_every_trajectory": 1,
+    "valid_views_among_prefix_failures_histogram": [
+      1,
+      0,
+      4,
+      2,
+      2,
+      3,
+      2,
+      5
+    ],
+    "view_additional_solves_after_prefix": [
+      14,
+      13,
+      11,
+      11,
+      12,
+      11,
+      12
+    ],
+    "scope": "Oracle knows untried outcomes for free; upper bound for this fixed inventory, not a deployable policy."
+  },
+  "maze": {
+    "pairs": 256,
+    "identity8_valid": 36,
+    "identity32_valid": 37,
+    "original_order_valid": 53,
+    "prefix_plus_all_views_oracle_valid": 53,
+    "all_trajectories_union_valid": 53,
+    "oracle_new_vs_original": 0,
+    "oracle_new_vs_identity32": 16,
+    "oracle_regressions_vs_identity32": 0,
+    "unsolved_by_every_trajectory": 203,
+    "valid_views_among_prefix_failures_histogram": [
+      203,
+      17,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "view_additional_solves_after_prefix": [
+      17,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "scope": "Oracle knows untried outcomes for free; upper bound for this fixed inventory, not a deployable policy."
+  }
+}

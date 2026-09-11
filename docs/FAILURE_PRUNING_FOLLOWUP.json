@@ -1,0 +1,15 @@
+{
+  "schema": "spectra.failure_pruning_followup.v1",
+  "status": "ADAPTIVELY_SELECTED_CONSUMED_DEVELOPMENT",
+  "selection_basis": "Complete candidate collection at local commit 90402a8 found that all 17 additional maze solves occur in transpose; the other six views add no solves after the common eight-cycle prefix.",
+  "family": "maze",
+  "source": "same 128 consumed M17 development inputs and frozen core seeds 1701,2702",
+  "candidate": "identity prefix eight cycles followed by transpose for four cycles; at most twelve cycles total",
+  "comparators": ["original twenty-cycle fixed restart schedule", "identity twenty cycles", "identity thirty-two cycles", "classical solver"],
+  "timing_rounds": 3,
+  "timing_order_seed": 2026091123,
+  "declared_success": "Identical per-case validity to the original restart policy, lower mean and p95 complete-solve latency in this development rerun",
+  "new_confirmation": false,
+  "core_training_updates": 0,
+  "claims": "A selected static pruning configuration measured on the same development cases that motivated it. No learned-feedback, new-accuracy, general dominance, independent confirmation, or classical-superiority claim. The original failure-information protocol and failed gate remain unchanged."
+}

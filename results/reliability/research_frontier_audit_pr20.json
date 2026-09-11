@@ -1,6 +1,6 @@
 {
   "analysis_source_sha256": {
-    "eval/paired_frontier.py": "47b030978564ca53bb347fad0990781731851c23014efbc85185e57f9dd11f8f",
+    "eval/paired_frontier.py": "f1feabf72e5c0acfa98c16f02fc5a199dc821eedbc25b4bd7dc0024c95f5a7fa",
     "scripts/audit_research_frontier.py": "dfbfb3d56f105be6b52585b6f99826f76c521071f71351efee30e85967dc42e4"
   },
   "families": {

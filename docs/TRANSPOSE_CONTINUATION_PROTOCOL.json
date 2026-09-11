@@ -1,0 +1,16 @@
+{
+  "schema": "spectra.transpose_continuation_development.v1",
+  "status": "ADAPTIVE_DEVELOPMENT_FOLLOWUP",
+  "selection_basis": "The complete four-cycle-view inventory exhausted current schedule coverage, and transpose supplies every additional maze solve. Extending that productive trajectory changes the candidate inventory and tests whether four-cycle truncation hides useful later answers.",
+  "families": ["sudoku_shift", "maze"],
+  "source": "same 128 consumed examples per family and two frozen model seeds per family",
+  "new_trajectory": "transpose from zero state for 32 cycles, retaining every answer and checking original-input validity independently",
+  "arms": ["original_20", "prefix_transpose_12", "prefix_transpose_20", "transpose_20", "identity_20", "identity_32", "symbolic"],
+  "timing_rounds": 3,
+  "timing_order_seed": 2026091124,
+  "new_confirmation": false,
+  "core_training_updates": 0,
+  "costs": "Full online input transform, native checker construction, embedding/reset, recursion, decoding and original-input verification are timed. All seven arms are paired; all outcomes and failed comparisons retained.",
+  "decision": "Report quality and complete cost against every comparator. A faster same-quality configuration on consumed data remains a selected development result. The original failure-information quality gate is unchanged.",
+  "claims": "This tests static depth allocation and candidate-generation headroom, not learned failure feedback or a novel algorithm. No independent confirmation, classical superiority, energy, hiring or level claim."
+}
