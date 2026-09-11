@@ -1,72 +1,79 @@
 name: cpu-regression-contracts
 on:
   push:
-    branches: [research/verifier-aligned-cpu-search]
-    paths-ignore: ['results/**', 'docs/**', 'README.md']
+    branches: [main, research/verifier-aligned-cpu-search]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
-  actions: read
 concurrency:
-  group: cpu-contracts-${{ github.ref }}
+  group: cpu-contracts-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   cpu-contracts:
+    name: CPU contracts (Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 35
     env:
       CUDA_VISIBLE_DEVICES: ''
       OMP_NUM_THREADS: '1'
       MKL_NUM_THREADS: '1'
       OPENBLAS_NUM_THREADS: '1'
-      MAX_JOBS: '2'
+      MAX_JOBS: '1'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Export immutable source before testing
+      - name: Export complete immutable source before testing
         run: |
           mkdir -p .cpu-contracts
           git rev-parse HEAD > .cpu-contracts/source_commit.txt
-          git archive --format=tar HEAD -- . ':!results/m16/runs' ':!results/m16/sources' ':!results/m17/runs' > .cpu-contracts/source.tar
-          echo 'Excludes retained binary source/run archives only; see archive command in this workflow.' > .cpu-contracts/source_scope.txt
-          sha256sum .cpu-contracts/source.tar > .cpu-contracts/source_sha256.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: spectra-source-${{ github.sha }}
-          path: .cpu-contracts/source*
-          include-hidden-files: true
-          retention-days: 90
-          if-no-files-found: error
+          git archive --format=tar.gz HEAD > .cpu-contracts/source.tar.gz
+          sha256sum .cpu-contracts/source.tar.gz > .cpu-contracts/source_sha256.txt
+          echo 'All tracked files, including retained experiment archives; no .git directory.' > .cpu-contracts/source_scope.txt
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python }}
           cache: pip
       - name: Install declared CPU environment
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
           python -m pip install -r requirements-cpu-research.txt
           python -m pip freeze > .cpu-contracts/environment.lock.txt
-      - name: Full CPU fast regression, including native builds
+          python - <<'PYCPU'
+          import torch
+          assert torch.version.cuda is None and not torch.cuda.is_available()
+          print('CPU-only torch:', torch.__version__)
+          PYCPU
+      - name: Full fast regression including native builds
         run: |
           set -o pipefail
-          timeout 1800s python -m pytest -m 'not slow' -ra | tee .cpu-contracts/pytest_fast.txt
-      - name: Check accepted evidence without regenerating confirmation
+          timeout 1200s python -m pytest -m 'not slow' -ra --junitxml=.cpu-contracts/pytest_fast.xml | tee .cpu-contracts/pytest_fast.txt
+      - name: Independently verify retained evidence without reopening confirmation
         run: |
-          python - <<'PY'
+          set -o pipefail
+          python scripts/verify_retained_results.py --out .cpu-contracts/retained_results_verified.json | tee .cpu-contracts/evidence_verification.txt
+      - name: Hash verification artifacts
+        if: always()
+        run: |
+          python - <<'PYHASH'
           from pathlib import Path
-          from scripts.m16_evidence import Evidence, write_json
-          from scripts.m17_sources import AcceptedM16
-          evidence = Evidence(Path('results/m16/sources'))
-          accepted = AcceptedM16(Path('results/m16/runs/accepted-34522192590.tar.gz'), evidence)
-          write_json(Path('.cpu-contracts/accepted_source_check.json'), accepted.identity())
-          write_json(Path('.cpu-contracts/retrospective_audit.json'), evidence.retrospective())
-          print('Pinned source bytes and historical audit verified; no new scientific data generated.')
-          PY
+          import hashlib
+          root=Path('.cpu-contracts'); root.mkdir(exist_ok=True)
+          with (root/'sha256.txt').open('w') as out:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file() and p.name!='sha256.txt':
+                      out.write(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(root))+'\n')
+          PYHASH
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: spectra-cpu-contracts-${{ github.sha }}
+          name: spectra-cpu-contracts-${{ matrix.python }}-${{ github.run_id }}-${{ github.sha }}
           path: .cpu-contracts/
           include-hidden-files: true
           retention-days: 90

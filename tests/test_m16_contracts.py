@@ -203,7 +203,7 @@ def test_paired_cost_statistic_uses_common_seed_and_example_indices():
             for arm, latency in [("reference", 2.0+i), ("native", (2.0+i)/2)]:
                 for r in range(3):
                     rows.append({"seed": seed, "example_index": i, "arm": arm,
-                                 "latency_ms": latency, "valid": True})
+                                 "latency_ms": latency, "valid": True, "round": r})
     result = effect(rows)
     assert result["paired_mean_ratio_after_round_medians"] == .5
     assert result["ci95"] == [.5, .5] and result["gate_pass"]

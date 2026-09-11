@@ -11,6 +11,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <limits>
 
 namespace {
 
@@ -23,7 +24,11 @@ inline int ternary_value(uint8_t code) {
   }
 }
 
-inline int64_t row_bytes(int64_t hidden) { return (hidden + 3) / 4; }
+inline int64_t row_bytes(int64_t hidden) {
+  TORCH_CHECK(hidden > 0, "hidden dimension must be positive");
+  // Avoid signed overflow in hidden+3 for malformed external geometry.
+  return hidden / 4 + (hidden % 4 != 0);
+}
 
 void check_cpu_contiguous(const torch::Tensor& t, const char* name) {
   TORCH_CHECK(t.device().is_cpu(), name, " must be CPU, got ", t.device());
@@ -32,6 +37,8 @@ void check_cpu_contiguous(const torch::Tensor& t, const char* name) {
 
 void validate_packed(const torch::Tensor& packed, int64_t out_dim, int64_t hidden) {
   const int64_t rb = row_bytes(hidden);
+  TORCH_CHECK(out_dim > 0 && out_dim <= std::numeric_limits<int64_t>::max() / rb,
+              "packed weight geometry overflows int64");
   TORCH_CHECK(packed.numel() == out_dim * rb,
               "packed_weight must contain exactly ", out_dim * rb,
               " bytes, got ", packed.numel());

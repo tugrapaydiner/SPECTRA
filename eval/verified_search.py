@@ -39,7 +39,7 @@ class ValueContract:
             raise TypeError("target must be an explicit ValueTarget")
         require_sha(self.model_sha256)
         require_sha(self.evaluator_sha256)
-        if not self.transition_id or not self.state_schema:
+        if any(not isinstance(v, str) or not v for v in (self.transition_id, self.state_schema)):
             raise ValueError("transition and state identities are required")
         if self.target is ValueTarget.BUDGET:
             if not self.continuation_policy or type(self.maximum_horizon) is not int or self.maximum_horizon < 0:
@@ -95,7 +95,8 @@ class CheckedIncumbent:
         if not math.isfinite(float(score)):
             raise ValueError("candidate score must be finite")
         owned = deepcopy(answer)
-        valid = self._checker(owned)
+        # The checker receives no alias to the retained answer.
+        valid = self._checker(deepcopy(owned))
         self.checks += 1
         if type(valid) is not bool:
             raise TypeError("checker must return a bool, not a proxy score or tensor")
@@ -132,6 +133,12 @@ class BudgetedVerifiedSearch:
     identity prefix is part of this same budget, not a free baseline.
     Wall deadlines are soft: an in-flight atomic call may finish after its deadline.
     They are not hard real-time guarantees. No batched API silently changes this.
+
+    Nodes own defensive deep snapshots. In-place transitions and reused scratch
+    outputs cannot corrupt siblings. Decoder/value callbacks also receive private
+    snapshots. Copy overhead is inside solve timing and counted explicitly. The
+    checker must truthfully check its argument without changing its meaning;
+    arbitrary Python callbacks are not a security or purity boundary.
     """
 
     def __init__(self, *, initial: Callable[[], Any], actions: Sequence[int],
@@ -160,9 +167,13 @@ class BudgetedVerifiedSearch:
             raise ValueError("deadline_ms must be positive and finite")
         start = time.perf_counter_ns()
         work = {"transitions": 0, "decodes": 0, "checks": 0, "value_calls": 0,
-                "initializations": 1, "max_transitions": max_transitions,
+                "initializations": 1, "state_snapshots": 0, "max_transitions": max_transitions,
                 "deadline_ms": deadline_ms, "reference_target_used": False}
-        root = _Node(self.initial(), (), 0.0)
+        def snapshot(state):
+            work["state_snapshots"] += 1
+            return deepcopy(state)
+
+        root = _Node(snapshot(self.initial()), (), 0.0)
         queue: list[tuple[float, tuple[int, ...], _Node]] = [(0.0, (), root)]
         generated: dict[tuple[int, ...], _Node] = {}
         rows: list[dict] = []
@@ -178,11 +189,11 @@ class BudgetedVerifiedSearch:
         def step(parent: _Node, action: int) -> _Node:
             nonlocal best
             path = parent.path + (action,)
-            state = self.transition(parent.state, action)
+            state = snapshot(self.transition(snapshot(parent.state), action))
             work["transitions"] += 1
-            answer = self.decode(state)
+            answer = deepcopy(self.decode(snapshot(state)))
             work["decodes"] += 1
-            valid = self.checker(answer)
+            valid = self.checker(deepcopy(answer))
             work["checks"] += 1
             if type(valid) is not bool:
                 raise TypeError("checker must return bool")
@@ -190,7 +201,7 @@ class BudgetedVerifiedSearch:
             if valid:
                 score = 1.0
             else:
-                score = self.contract.check_value(self.value(state))
+                score = self.contract.check_value(self.value(snapshot(state)))
                 work["value_calls"] += 1
             node = _Node(state, path, score)
             generated[path] = node
@@ -217,10 +228,11 @@ class BudgetedVerifiedSearch:
                 if parent.path + (action,) not in generated:
                     step(parent, action)
         reason = "valid_answer" if best is not None and best.valid else (stop() or "tree_exhausted")
+        result_answer = None if best is None else deepcopy(best.answer)
         elapsed = (time.perf_counter_ns() - start) / 1e6
-        work.update(stop_reason=reason, elapsed_ms=elapsed, candidate_count=len(rows),
+        work.update(state_ownership="defensive_snapshots_v1", stop_reason=reason, elapsed_ms=elapsed, candidate_count=len(rows),
                     deadline_overrun_ms=0.0 if deadline_ms is None else max(0.0, elapsed-deadline_ms))
-        return SearchResult(None if best is None else deepcopy(best.answer),
+        return SearchResult(result_answer,
                             False if best is None else best.valid,
                             () if best is None else best.path, work, tuple(rows))
 

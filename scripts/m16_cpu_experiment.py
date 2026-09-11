@@ -18,6 +18,7 @@ import numpy as np
 import torch
 
 from common.measurement_env import measurement_environment
+from eval.measurement_contracts import validate_timing_rows
 from data.ancestry import ManifestSource, digest
 from data import sudoku
 from deploy.m10_native import load_extension
@@ -76,6 +77,8 @@ def fresh_data(evidence, out, *, seed, train, validation, test, additional=froze
 
 
 def effect(rows):
+    validate_timing_rows(rows, seed_key="seed", example_key="example_index",
+                         required_arms=("reference", "native"))
     by = defaultdict(list)
     for r in rows:
         by[(r["seed"], r["example_index"], r["arm"])].append(r["latency_ms"])

@@ -10,7 +10,31 @@
 | M12 | training path accepted; learned control **NEGATIVE / COLLAPSED** |
 | M13 | accepted / merged |
 | M14 | **COMPLETE**; independently confirmed task-specific quality-superiority gate |
-| M15 | **COMPLETE**; bounded mechanism explanation for learned-verifier search regressions |
+| M15 | **COMPLETE** bounded mechanism result; ancestral-overlap correction retained in M16 |
+| M16 | Implemented and evidence retained; native-checker speedup and evaluator-target controls |
+| M17 | Execution complete; **TWO_FAMILY_CLAIM_NOT_ESTABLISHED** |
+
+## Current integration boundary
+
+M16/M17 implementation is consolidated on `research/verifier-aligned-cpu-search`.
+The native-checker path improves the historical complete-solve implementation on
+its retained small Sudoku comparison, not the performance of an arbitrary solver.
+M17 confirms a fixed-pool evaluator-target effect on harder Sudoku but fails its
+maze development gate; maze confirmation remains unopened. No generic learned
+search, cross-task superiority, physical-energy, or frontier-engineer-level claim
+is made. See [integration review](INTEGRATION_REVIEW.md).
+
+The M15 within-stage overlap statement below is historical: M16's ancestor-wide
+retrospective audit found one M15 confirmation puzzle present in M14 training.
+The sensitivity analysis excluding that puzzle preserves the broad mismatch
+conclusion, but the original cross-stage independence claim must not be reused.
+The accepted M14/M15 records have not been rewritten to hide this correction.
+
+`python scripts/verify_retained_results.py --out outputs/retained-audit.json`
+verifies pinned M16/M17 archives, 1,728 manifest rows and 11,520 stored
+complete-solve answer records, then reproduces retained summaries without opening
+new confirmation data. Timing repetitions are not independent examples. Fixed-pool
+labels are reaggregated rather than independently inferred by this audit.
 
 # Milestone 15 — mechanism-focused ablations
 
@@ -36,4 +60,4 @@ Ensemble disagreement is an empirical heuristic, not an OOD certificate. VICReg-
 
 Accepted scientific run: `34287134895`, job `102265201074`, artifact `10080887785`, ZIP SHA256 `c49e5c06e0f2822088cb9ce807fcc6bc37da6236962953ccc8c594be01c55b2e`; 47 focused tests and 326 fast tests passed (16 deselected, one pre-existing M10 warning).
 
-**M15 passes as a bounded mechanism contribution, not as learned-search superiority. Stop here; do not begin M16 automatically.**
+**Historical M15 acceptance: a bounded mechanism contribution, not learned-search superiority. Later M16/M17 work and its limitations are summarized above.**

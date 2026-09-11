@@ -25,6 +25,7 @@ from data.ancestry import ArtifactAncestry, ManifestSource, digest
 from deploy.m10_native import load_extension
 from eval.checkable_tasks import MAZE11, SUDOKU_SHIFT, TaskSpec, action_directions, require_core, semantic_exit
 from eval.fixed_pool import GATE
+from eval.measurement_contracts import validate_timing_rows
 from eval.verified_search import BudgetedVerifiedSearch, ValueContract, ValueTarget
 from scripts._common import build_data_splits
 from scripts.m16_cpu_experiment import setup_cpu, source_identity
@@ -126,6 +127,8 @@ def symbolic_solve(x, spec, native=False):
 
 
 def closed_summary(rows):
+    validate_timing_rows(rows, seed_key="core_seed", example_key="example_id",
+                         required_arms=("native_k4",))
     groups = defaultdict(list)
     for row in rows:
         groups[(row["core_seed"], row["example_id"], row["arm"])].append(row)

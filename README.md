@@ -12,6 +12,52 @@
 
 ---
 
+## Current evidence: M16 integration and M17 outcome
+
+**CPU-only research instrument; not a demonstrated general-purpose reasoning or energy breakthrough.**
+
+The latest implemented paths add ancestor-wide data exclusions, typed evaluator targets,
+verified-answer retention, immutable native weight handles, and native Sudoku/maze
+checking. Historical model and scalar deployment interfaces remain available and
+unchanged by default. See [current research state](docs/RESEARCH_STATE.md) and
+[consolidation review](docs/INTEGRATION_REVIEW.md).
+
+M16's retained complete-solve comparison improved the **native-checker execution
+path**: the paired mean latency ratio was **0.669** (95% crossed-bootstrap interval
+**0.663–0.675**) against the reference path, with identical outcomes on **512
+model–example cases**. This is an implementation comparison, not evidence that
+learned search beats an optimized external solver. The exact symbolic comparator
+remains faster and perfect on these small puzzles. Raw sources, checkpoints and
+results are retained under [`results/m16/`](results/m16/).
+
+**M17 completed but failed its two-family scientific gate.** On the harder Sudoku
+fixed pools, quality-target selection improved over improvement-target selection
+by **0.58594** on confirmation (95% interval **0.52734–0.64453**, 512 model–example
+pools). Maze failed the development gate, so its confirmation was **not opened**.
+These are fixed-pool selection effects, not automatically closed-loop speedups.
+The negative result and trained checkpoints remain in [`results/m17/`](results/m17/).
+
+The integration audit checks retained source bytes, ancestral exclusions and
+manifest/array fingerprints, independently validates stored complete-solve answers,
+and reproduces fixed-pool/closed-loop summaries. It does not train models or reopen
+confirmation. A valid negative experiment passes the integrity audit while its
+scientific status stays negative:
+
+```bash
+python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+python -m pip install -r requirements-cpu-research.txt
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MAX_JOBS=1 \
+  python -m pytest -m "not slow" -ra
+python scripts/verify_retained_results.py --out outputs/retained-audit.json
+```
+
+The audit refuses an existing output file. Both Python 3.11 and 3.13 run the CPU
+regression and evidence checks in CI. Long training tests are separately marked
+`slow`; passing the fast suite is not represented as passing those training gates.
+Physical energy remains unavailable where no valid counter is exposed.
+
+---
+
 ## Abstract
 
 SPECTRA is a **scientific instrument** for testing whether compact recursive reasoning plus learned test-time control can improve the quality/compute frontier on constrained CPUs. The reasoning core uses ternary weights in `{-1, 0, +1}` with quantized recurrent state boundaries, explicit recursive execution, latent search, learned routing/halting, and independent symbolic task validation.
