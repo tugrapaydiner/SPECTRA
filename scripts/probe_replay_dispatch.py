@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Capture a bounded CPU numerical trace; diagnostic completion is not replay PASS.
 
-Only the first already-consumed M17 Sudoku pool/core is inspected. The historical
+Only the first already-consumed M17 development pool/core is inspected. The historical
 hash is reported, never rewritten or waived. The strict full replay is separate.
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 import torch
 from scripts.verify_fixed_pool_replay import (Evidence, AcceptedM16, M17_INVENTORY_SHA,
-    M17_ZIP_SHA, SUDOKU_SHIFT, frozen_inputs, load_sources, read_bound_archive,
+    M17_ZIP_SHA, FAMILY_SPECS, frozen_inputs, load_sources, read_bound_archive,
     reconstruct_pool, source_identity, tensor_digest, write_json)
 from scripts.m17_models import candidate_pool
 
@@ -64,6 +64,7 @@ def capture_first_cycle(core, inputs, spec) -> dict[str, torch.Tensor]:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--family', choices=tuple(FAMILY_SPECS), default='sudoku_shift')
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(1)
@@ -74,18 +75,22 @@ def main():
     a = AcceptedM16(Path('results/m16/runs/accepted-34522192590.tar.gz'), h)
     m = read_bound_archive(Path('results/m17/runs/34534009702-33e548d3e0f52d0664c00929316b2198d5fcffe4.tar.gz'),
                           inventory_sha=M17_INVENTORY_SHA, zip_sha=M17_ZIP_SHA)
+    spec, seed, _ = FAMILY_SPECS[args.family]
+    prefix = f'experiment/{args.family}/'
     with tempfile.TemporaryDirectory() as td:
-        core, _ = load_sources('sudoku_shift', m, h, a, Path(td))[1401]
-        x, ids, manifest_sha = frozen_inputs(m, 'experiment/sudoku_shift/', 2026091703, SUDOKU_SHIFT)
-        p, _ = reconstruct_pool(core, x, SUDOKU_SHIFT)
-        q = candidate_pool(core, x, SUDOKU_SHIFT)
+        sources = load_sources(args.family, m, h, a, Path(td))
+        core_seed = min(sources)
+        core, _ = sources[core_seed]
+        x, ids, manifest_sha = frozen_inputs(m, prefix, seed, spec)
+        p, _ = reconstruct_pool(core, x, spec)
+        q = candidate_pool(core, x, spec)
         if tensor_digest(p) != tensor_digest(q):
             raise ValueError('independent and production pools differ on this host')
-        trace = capture_first_cycle(core, x, SUDOKU_SHIFT)
+        trace = capture_first_cycle(core, x, spec)
     observed = tensor_digest(p)
-    expected = json.loads(m['experiment/sudoku_shift/summary.json'])['development_fixed_pool']['pool_tensor_sha256_by_core']['1401']
+    expected = json.loads(m[prefix+'summary.json'])['development_fixed_pool']['pool_tensor_sha256_by_core'][str(core_seed)]
     report = {'status': 'DIAGNOSTIC_COMPLETE_NOT_ACCEPTANCE', 'source': source_identity(),
-        'pool': 'sudoku_shift/development/1401', 'manifest_sha256': manifest_sha,
+        'pool': f'{args.family}/development/{core_seed}', 'manifest_sha256': manifest_sha,
         'expected_pool_hash': expected, 'observed_pool_hash': observed,
         'historical_hash_match': observed == expected, 'independent_production_equal': True,
         'trace_no_hook_equal': True, 'trace_sha256': tensor_digest(trace),

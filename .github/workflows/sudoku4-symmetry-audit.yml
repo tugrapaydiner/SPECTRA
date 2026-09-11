@@ -60,6 +60,7 @@ jobs:
         run: |
           set -o pipefail
           python scripts/probe_replay_dispatch.py --out .symmetry-checks/dispatch_probe | tee .symmetry-checks/dispatch_probe.txt
+          python scripts/probe_replay_dispatch.py --family maze --out .symmetry-checks/dispatch_probe_maze | tee .symmetry-checks/dispatch_probe_maze.txt
       - name: Hash artifacts
         if: always()
         run: |
