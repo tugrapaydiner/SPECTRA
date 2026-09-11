@@ -59,8 +59,11 @@ jobs:
       - name: Capture numerical dispatch diagnosis without waiving strict replay
         run: |
           set -o pipefail
-          python scripts/probe_replay_dispatch.py --out .symmetry-checks/dispatch_probe | tee .symmetry-checks/dispatch_probe.txt
-          python scripts/probe_replay_dispatch.py --family maze --out .symmetry-checks/dispatch_probe_maze | tee .symmetry-checks/dispatch_probe_maze.txt
+          for dispatch in original sse42 compatible; do
+            for family in sudoku_shift maze; do
+              python scripts/probe_replay_dispatch.py --family "$family" --mkl-dispatch "$dispatch" --out ".symmetry-checks/${dispatch}_${family}" | tee ".symmetry-checks/${dispatch}_${family}.txt"
+            done
+          done
       - name: Hash artifacts
         if: always()
         run: |

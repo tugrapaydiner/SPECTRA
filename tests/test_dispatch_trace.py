@@ -46,3 +46,23 @@ def test_trace_preserves_preexisting_hooks():
         assert handle.id in core.token_embed._forward_hooks
     finally:
         handle.remove()
+
+
+@pytest.mark.parametrize("spec_name", ["sudoku_shift", "maze"])
+def test_decomposed_attention_equals_native_without_changing_trace(spec_name):
+    from scripts.probe_replay_dispatch import capture_attention_stages, FAMILY_SPECS
+    spec = FAMILY_SPECS[spec_name][0]
+    core = freeze(TRM(**core_architecture(spec)))
+    trace = capture_first_cycle(core, torch.zeros(2, spec.height*spec.width, dtype=torch.long), spec)
+    before = {k:v.clone() for k,v in trace.items()}
+    stages = capture_attention_stages(core, trace)
+    assert torch.equal(stages['mha_output'], trace['blocks.0.attn_0'])
+    assert all(torch.equal(before[k],v) for k,v in trace.items())
+
+
+def test_late_dispatch_selection_fails_closed():
+    from scripts.probe_replay_dispatch import configure_dispatch
+    with pytest.raises(RuntimeError, match="before importing"):
+        configure_dispatch("original")
+    with pytest.raises(ValueError, match="unknown"):
+        configure_dispatch("typo")
