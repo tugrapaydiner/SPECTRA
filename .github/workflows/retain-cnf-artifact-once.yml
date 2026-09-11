@@ -1,0 +1,61 @@
+name: retain-cnf-artifact-once
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  retain-original-blob:
+    if: github.event.pull_request.number == 22 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'research/cnf-workload-admission'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnf-workload-admission-evidence
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: tugrapaydiner/SPECTRA
+          run-id: 34635415241
+          path: retained-input
+      - name: Verify exact original archive and create only its immutable Git blob
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, os, pathlib, urllib.request, zipfile
+          path = pathlib.Path('retained-input/pilot.zip')
+          raw = path.read_bytes()
+          expected_sha256 = '8446d6ce013f14c8b767cae8ce042412cd5061fbcfd6478df75c793cfa3778bd'
+          expected_blob = 'fe6986a461064c80a1251f697562f52f18a72f07'
+          assert hashlib.sha256(raw).hexdigest() == expected_sha256
+          assert hashlib.sha1(f'blob {len(raw)}\0'.encode() + raw).hexdigest() == expected_blob
+          names = {'protocol.json', 'cases.json', 'rows.jsonl', 'summary.json', 'environment.json', 'source.json', 'sha256.json'}
+          with zipfile.ZipFile(path) as archive:
+              assert archive.testzip() is None
+              assert len(archive.infolist()) == len(names)
+              assert set(archive.namelist()) == names
+              hashes = json.loads(archive.read('sha256.json'))
+              assert set(hashes) == names - {'sha256.json'}
+              for name, digest in hashes.items():
+                  assert hashlib.sha256(archive.read(name)).hexdigest() == digest
+              source = json.loads(archive.read('source.json'))
+              assert source['git_commit'] == '383410688b348f32b956933d21318e4d8c32c812'
+              assert source['git_tree'] == '8d8cac4f041ecfab041d0846857764640edc264f'
+          body = json.dumps({'encoding': 'base64', 'content': base64.b64encode(raw).decode('ascii')}).encode()
+          request = urllib.request.Request('https://api.github.com/repos/tugrapaydiner/SPECTRA/git/blobs', data=body, method='POST', headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json', 'X-GitHub-Api-Version': '2022-11-28'})
+          with urllib.request.urlopen(request, timeout=60) as response:
+              result = json.load(response)
+          assert result['sha'] == expected_blob
+          receipt = {'blob_sha': result['sha'], 'sha256': expected_sha256, 'bytes': len(raw), 'scope': 'immutable blob creation only; no refs, branches or commits changed by this job'}
+          pathlib.Path('retention-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnf-original-blob-receipt
+          path: retention-receipt.json
+          retention-days: 90
+          if-no-files-found: error
