@@ -16,7 +16,6 @@ import platform
 import types
 
 import torch
-import torch.nn.functional as F
 
 from eval.checkable_tasks import require_core
 
@@ -46,7 +45,8 @@ def identity():
             'scope': 'frozen M17 B=32 CPU core replay only; no latency or universal portability claim',
             'expected_outputs_used': False,
             'sudoku_ff2': 'k=256, two increasing-k FMA blocks of 128; bias added between blocks',
-            'maze_attention': 'increasing-k FP32 FMA for both attention matrix contractions'}
+            'maze_attention': 'increasing-k FP32 FMA for both attention contractions',
+            'maze_linears': 'increasing-k FP32 FMA; one full-K block then bias for core projections/FFN'}
 
 
 def _replay_input(x, shape):
@@ -63,6 +63,19 @@ def _linear_forward(self,x):
         self.weight.T.contiguous(),self.bias,128).reshape(32,16,64)
 
 
+def _full_linear(x, weight, bias=None):
+    k=x.shape[-1];n=weight.shape[0]
+    if bias is None:
+        bias=torch.zeros(n,dtype=torch.float32,device='cpu')
+    return extension().blocked_linear(x.reshape(-1,k).contiguous(),
+            weight.T.contiguous(),bias,k).reshape(*x.shape[:-1],n)
+
+
+def _maze_ff_forward(self,x):
+    _replay_input(x,(32,121,self.in_features))
+    return _full_linear(x,self.weight,self.bias)
+
+
 def _attention_forward(self, query, key, value, key_padding_mask=None, need_weights=True,
                        attn_mask=None, average_attn_weights=True, is_causal=False):
     _replay_input(query,(32,121,48))
@@ -70,14 +83,14 @@ def _attention_forward(self, query, key, value, key_padding_mask=None, need_weig
         attn_mask is not None or need_weights is not False or is_causal is not False):
         raise ValueError('ordered replay supports only unmasked, weight-free self attention')
     b,n,d=query.shape;h=self.num_heads
-    qkv=F.linear(query,self.in_proj_weight)
+    qkv=_full_linear(query,self.in_proj_weight)
     q,k,v=torch._transform_bias_rescale_qkv(qkv,self.in_proj_bias,h)
     qk=extension().ordered_bmm(q.reshape(-1,n,d//h).contiguous(),
             k.reshape(-1,n,d//h).transpose(-2,-1).contiguous()).view(b,h,n,n)
     probability=torch.softmax(qk,dim=-1)
     context=extension().ordered_bmm(probability.reshape(-1,n,n).contiguous(),
             v.reshape(-1,n,d//h).contiguous()).view(b,h,n,d//h)
-    return F.linear(context.transpose(1,2).reshape(b,n,d),self.out_proj.weight,self.out_proj.bias),None
+    return _full_linear(context.transpose(1,2).reshape(b,n,d),self.out_proj.weight,self.out_proj.bias),None
 
 
 @contextmanager
@@ -97,15 +110,25 @@ def ordered_core(core,spec):
         or block.attn.in_proj_bias is None or block.attn.bias_k is not None
         or block.attn.bias_v is not None or block.attn.add_zero_attn):
         raise ValueError('unsupported historical attention contract')
-    module,forward=(block.ff[2],_linear_forward) if core.dim==64 else (block.attn,_attention_forward)
-    if core.dim==64 and (not isinstance(module,torch.nn.Linear) or module.in_features!=256
-                         or module.out_features!=64 or module.bias is None):
-        raise ValueError('unsupported historical FF2 contract')
-    if 'forward' in module.__dict__:
-        raise ValueError('refusing to replace an already-customized replay module')
+    overrides=([(block.ff[2],_linear_forward)] if core.dim==64 else
+               [(block.attn,_attention_forward),(block.ff[0],_maze_ff_forward),
+                (block.ff[2],_maze_ff_forward)])
+    for module,forward in overrides:
+        if forward is _linear_forward and (not isinstance(module,torch.nn.Linear) or module.in_features!=256
+                             or module.out_features!=64 or module.bias is None):
+            raise ValueError('unsupported historical FF2 contract')
+        if forward is _maze_ff_forward and (not isinstance(module,torch.nn.Linear) or module.bias is None
+                            or (module.in_features,module.out_features) not in {(48,192),(192,48)}):
+            raise ValueError('unsupported historical maze FF contract')
+        if 'forward' in module.__dict__:
+            raise ValueError('refusing to replace an already-customized replay module')
     extension()
-    module.forward=types.MethodType(forward,module)
+    installed=[]
     try:
+        for module,forward in overrides:
+            module.forward=types.MethodType(forward,module)
+            installed.append(module)
         yield identity()
     finally:
-        del module.forward
+        for module in installed:
+            del module.forward
