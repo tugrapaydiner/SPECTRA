@@ -1,0 +1,70 @@
+name: cnf-workload-admission
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bounded-classical-pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      CUDA_VISIBLE_DEVICES: ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Preserve exact execution source
+        run: |
+          mkdir -p .sat-validation
+          git rev-parse HEAD > .sat-validation/source_commit.txt
+          git rev-parse HEAD^{tree} > .sat-validation/source_tree.txt
+          git archive --format=tar.gz HEAD > .sat-validation/source.tar.gz
+      - name: Install optional pinned solver wrapper
+        run: python -m pip install -r requirements-sat-research.txt
+      - name: Check actual native solver API and known witnesses
+        run: |
+          set -o pipefail
+          python scripts/sat_workload_gate.py smoke | tee .sat-validation/smoke.json
+      - name: Run all declared cases and retain every observation
+        run: |
+          set -o pipefail
+          python scripts/sat_workload_gate.py run --out .sat-validation/pilot | tee .sat-validation/run.log
+      - name: Independently check the retained evidence
+        run: |
+          set -o pipefail
+          python scripts/sat_workload_gate.py verify --out .sat-validation/pilot | tee .sat-validation/verification.json
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root = Path('.sat-validation')
+          with zipfile.ZipFile(root/'pilot.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for p in sorted((root/'pilot').iterdir()):
+                  z.write(p, p.name)
+          PY
+          python scripts/sat_workload_gate.py verify --out .sat-validation/pilot.zip
+      - name: Verify previously retained pilot when present
+        run: |
+          if [ -f results/sat_workload/pilot.zip ]; then
+            python scripts/sat_workload_gate.py verify --out results/sat_workload/pilot.zip > .sat-validation/retained-verification.json
+          fi
+      - name: Hash evidence including failed attempts
+        if: always()
+        run: |
+          cd .sat-validation
+          find . -type f ! -name sha256.txt -print0 | sort -z | xargs -0 sha256sum > sha256.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cnf-workload-admission-evidence
+          path: .sat-validation/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error

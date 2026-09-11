@@ -1,0 +1,3 @@
+# Optional workload gate only. Core SPECTRA inference has no SAT dependency.
+# Pin the wrapper version; its embedded solver implementations are fixed by it.
+python-sat==1.9.dev15
