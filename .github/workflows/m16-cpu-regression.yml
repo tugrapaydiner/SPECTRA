@@ -1,0 +1,80 @@
+name: m16-cpu-regression
+
+on:
+  push:
+    branches: [research/m16-verifier-aligned-cpu]
+    paths-ignore:
+      - 'results/**'
+      - 'assets/**'
+      - '*.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'common/**'
+      - 'data/**'
+      - 'deploy/**'
+      - 'eval/**'
+      - 'model/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'requirements*.txt'
+      - '.github/workflows/m16-cpu-regression.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m16-cpu-regression-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cpu-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CUDA_VISIBLE_DEVICES: ''
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      NUMEXPR_NUM_THREADS: '1'
+      MAX_JOBS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install declared CPU environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .m16-ci
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.5.1+cpu'
+          python -m pip install -r requirements.txt
+          python -m pip freeze > .m16-ci/installed.txt
+          python - <<'PY' | tee .m16-ci/environment.json
+          import json, platform, sys, torch
+          assert not torch.cuda.is_available(), 'This workflow is CPU only'
+          torch.set_num_threads(1)
+          print(json.dumps({'python':sys.version,'platform':platform.platform(),'torch':torch.__version__,'cuda_available':torch.cuda.is_available(),'threads':torch.get_num_threads()},indent=2))
+          PY
+      - name: Compile Python sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q common data deploy eval model scripts tests
+      - name: Full fast regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -m 'not slow' -ra --junitxml=.m16-ci/fast.xml | tee .m16-ci/fast.log
+      - name: Archive actual outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m16-cpu-regression-${{ github.sha }}
+          path: .m16-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
