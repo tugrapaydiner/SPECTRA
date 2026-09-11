@@ -44,3 +44,9 @@ Thumbs.db
 
 # Regenerated benchmark + telemetry data (reproduce via scripts/bench_*.py)
 assets/data/
+
+# Explicitly retained, hash-bound scientific archives are durable evidence.
+!results/m16/runs/
+!results/m16/runs/*
+!results/m17/runs/
+!results/m17/runs/*

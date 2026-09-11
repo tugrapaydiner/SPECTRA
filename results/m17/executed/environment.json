@@ -1,0 +1,44 @@
+{
+  "affinity": [
+    0
+  ],
+  "device": "cpu",
+  "energy_unavailable_reason": "not_measured_in_this_experiment",
+  "host_provenance": {
+    "backend": "pytorch_fp32_plus_native_exact_checker",
+    "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "compiler_flags": [
+      "-O3",
+      "-std=c++20"
+    ],
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "cuda_available": false,
+    "energy_scope_note": "RAPL package energy can include CPU cores and other on-package components; it is not discrete-GPU energy and not whole-system/wall energy.",
+    "frequency_policies": [],
+    "frequency_policy_note": "observed policy/frequency metadata; M13 does not claim a locked frequency",
+    "logical_cpu_count": 4,
+    "machine": "x86_64",
+    "numpy": "2.3.5",
+    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "power_context": {
+      "available": false,
+      "summary": "observed_from_sysfs_not_a_power_meter",
+      "supplies": []
+    },
+    "process_affinity_cpus": [
+      0
+    ],
+    "python": "3.11.16 (main, Aug 13 2026, 02:46:14) [GCC 13.3.0]",
+    "release": "6.17.0-1022-azure",
+    "system": "Linux",
+    "torch": "2.10.0+cpu",
+    "torch_num_interop_threads": 1,
+    "torch_num_threads": 1
+  },
+  "numpy": "2.3.5",
+  "package_energy_joules": null,
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "python": "3.11.16 (main, Aug 13 2026, 02:46:14) [GCC 13.3.0]",
+  "threads": 1,
+  "torch": "2.10.0+cpu"
+}

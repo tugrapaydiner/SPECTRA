@@ -33,6 +33,8 @@ def generate_maze(
 ) -> tuple[np.ndarray, tuple[int, int], tuple[int, int]]:
     if h < 3 or w < 3 or h % 2 == 0 or w % 2 == 0:
         raise ValueError(f"Maze dims must be odd and >=3, got {h}x{w}")
+    if h == 3 and w == 3:
+        raise ValueError("Maze needs distinct start and goal cells; 3x3 has only one interior room")
     grid = np.zeros((h, w), dtype=np.int64)
     start_cell = (1, 1)
     grid[start_cell] = OPEN

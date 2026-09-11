@@ -1,0 +1,535 @@
+{
+  "cores": {
+    "1401": {
+      "closed_loop": {
+        "current_structural_quality": {
+          "examples": 128,
+          "mean_ms": 0.7824381093749999,
+          "mean_transitions": 1.1953125,
+          "valid": 128
+        },
+        "current_terminal_probability": {
+          "examples": 128,
+          "mean_ms": 0.780899,
+          "mean_transitions": 1.1953125,
+          "valid": 128
+        },
+        "identity": {
+          "examples": 128,
+          "mean_ms": 0.62489453125,
+          "mean_transitions": 1.1953125,
+          "valid": 128
+        }
+      },
+      "fixed_pool": {
+        "current_structural_quality": {
+          "conditional_selection_reliability": 1.0,
+          "coverage": 1.0,
+          "covered": 128,
+          "pools": 128,
+          "returned_valid": 128,
+          "selection_failures": 0,
+          "success": 1.0
+        },
+        "current_terminal_probability": {
+          "conditional_selection_reliability": 0.9921875,
+          "coverage": 1.0,
+          "covered": 128,
+          "pools": 128,
+          "returned_valid": 127,
+          "selection_failures": 1,
+          "success": 0.9921875
+        },
+        "exact_first_valid": {
+          "conditional_selection_reliability": 1.0,
+          "coverage": 1.0,
+          "covered": 128,
+          "pools": 128,
+          "returned_valid": 128,
+          "selection_failures": 0,
+          "success": 1.0
+        },
+        "one_cycle_improvement": {
+          "conditional_selection_reliability": 0.859375,
+          "coverage": 1.0,
+          "covered": 128,
+          "pools": 128,
+          "returned_valid": 110,
+          "selection_failures": 18,
+          "success": 0.859375
+        }
+      },
+      "search_regressions": 0,
+      "train_state_label_sha256": "83d34007de03220ab6080f8850a93d256eb22134b72889e66b1c99c50f0adbe9",
+      "training": [
+        {
+          "batch": 64,
+          "contract": {
+            "continuation_policy": null,
+            "evaluator_sha256": "9d4cb14895b6ae00e799abbabba9fbf057f4314ac17172bc48a90dd407e84cfa",
+            "maximum_horizon": null,
+            "model_sha256": "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4",
+            "state_schema": "search_state_xyz_v1",
+            "target": "one_cycle_improvement",
+            "transition_id": "fp64_cycle_action_v1"
+          },
+          "curve": [
+            {
+              "grad_norm": 1.4237171411514282,
+              "loss": 0.4935271739959717,
+              "step": 1
+            },
+            {
+              "grad_norm": 0.45113226771354675,
+              "loss": 0.06758448481559753,
+              "step": 30
+            },
+            {
+              "grad_norm": 0.1293543130159378,
+              "loss": 0.15026332437992096,
+              "step": 60
+            },
+            {
+              "grad_norm": 0.1558922380208969,
+              "loss": 0.18121877312660217,
+              "step": 90
+            },
+            {
+              "grad_norm": 0.19173352420330048,
+              "loss": 0.24347956478595734,
+              "step": 120
+            },
+            {
+              "grad_norm": 0.30867087841033936,
+              "loss": 0.06595302373170853,
+              "step": 150
+            },
+            {
+              "grad_norm": 0.19076810777187347,
+              "loss": 0.0518621951341629,
+              "step": 180
+            }
+          ],
+          "data_ancestry": {
+            "consumed_manifests": [
+              {
+                "role": "training",
+                "sha256": "98be7c01927ac2d18484767955d7a8e00d05964975fb12ce9c9e58758be74418",
+                "splits": [
+                  "train"
+                ]
+              }
+            ],
+            "parent_checkpoints": [
+              "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4"
+            ]
+          },
+          "seed": 17401,
+          "steps": 180,
+          "target": "one_cycle_improvement",
+          "train_ms": 1450.547417
+        },
+        {
+          "batch": 64,
+          "contract": {
+            "continuation_policy": null,
+            "evaluator_sha256": "d9fea134ab81b0f5b0b7fcb9ea645f81c76c15fe64fddb8ce9ebdb9523c4db5d",
+            "maximum_horizon": null,
+            "model_sha256": "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4",
+            "state_schema": "search_state_xyz_v1",
+            "target": "current_terminal_probability",
+            "transition_id": "fp64_cycle_action_v1"
+          },
+          "curve": [
+            {
+              "grad_norm": 2.2637875080108643,
+              "loss": 0.9377434253692627,
+              "step": 1
+            },
+            {
+              "grad_norm": 0.2741592228412628,
+              "loss": 0.1004210114479065,
+              "step": 30
+            },
+            {
+              "grad_norm": 0.13207128643989563,
+              "loss": 0.16713380813598633,
+              "step": 60
+            },
+            {
+              "grad_norm": 0.31136059761047363,
+              "loss": 0.22744062542915344,
+              "step": 90
+            },
+            {
+              "grad_norm": 0.27233749628067017,
+              "loss": 0.24941085278987885,
+              "step": 120
+            },
+            {
+              "grad_norm": 0.16428713500499725,
+              "loss": 0.043624408543109894,
+              "step": 150
+            },
+            {
+              "grad_norm": 0.351156085729599,
+              "loss": 0.06907977163791656,
+              "step": 180
+            }
+          ],
+          "data_ancestry": {
+            "consumed_manifests": [
+              {
+                "role": "training",
+                "sha256": "98be7c01927ac2d18484767955d7a8e00d05964975fb12ce9c9e58758be74418",
+                "splits": [
+                  "train"
+                ]
+              }
+            ],
+            "parent_checkpoints": [
+              "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4"
+            ]
+          },
+          "seed": 17401,
+          "steps": 180,
+          "target": "current_terminal_probability",
+          "train_ms": 1482.351116
+        },
+        {
+          "batch": 64,
+          "contract": {
+            "continuation_policy": null,
+            "evaluator_sha256": "98a02ce8a1f0f0b4db68293cb25c9896163474c023d42fcf90a2ebb4808925a5",
+            "maximum_horizon": null,
+            "model_sha256": "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4",
+            "state_schema": "search_state_xyz_v1",
+            "target": "current_structural_quality",
+            "transition_id": "fp64_cycle_action_v1"
+          },
+          "curve": [
+            {
+              "grad_norm": 2.4709293842315674,
+              "loss": 0.9605023264884949,
+              "step": 1
+            },
+            {
+              "grad_norm": 0.023655088618397713,
+              "loss": 0.0209833774715662,
+              "step": 30
+            },
+            {
+              "grad_norm": 0.017320312559604645,
+              "loss": 0.05948593467473984,
+              "step": 60
+            },
+            {
+              "grad_norm": 0.030842149630188942,
+              "loss": 0.07685685157775879,
+              "step": 90
+            },
+            {
+              "grad_norm": 0.1716894507408142,
+              "loss": 0.1580095887184143,
+              "step": 120
+            },
+            {
+              "grad_norm": 0.08697640150785446,
+              "loss": 0.05081934481859207,
+              "step": 150
+            },
+            {
+              "grad_norm": 0.08643018454313278,
+              "loss": 0.02120950259268284,
+              "step": 180
+            }
+          ],
+          "data_ancestry": {
+            "consumed_manifests": [
+              {
+                "role": "training",
+                "sha256": "98be7c01927ac2d18484767955d7a8e00d05964975fb12ce9c9e58758be74418",
+                "splits": [
+                  "train"
+                ]
+              }
+            ],
+            "parent_checkpoints": [
+              "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4"
+            ]
+          },
+          "seed": 17401,
+          "steps": 180,
+          "target": "current_structural_quality",
+          "train_ms": 1573.104917
+        }
+      ]
+    },
+    "2402": {
+      "closed_loop": {
+        "current_structural_quality": {
+          "examples": 128,
+          "mean_ms": 1.3321784765625,
+          "mean_transitions": 1.8828125,
+          "valid": 124
+        },
+        "current_terminal_probability": {
+          "examples": 128,
+          "mean_ms": 1.329526765625,
+          "mean_transitions": 1.8828125,
+          "valid": 124
+        },
+        "identity": {
+          "examples": 128,
+          "mean_ms": 0.6471723984375,
+          "mean_transitions": 1.2578125,
+          "valid": 124
+        }
+      },
+      "fixed_pool": {
+        "current_structural_quality": {
+          "conditional_selection_reliability": 1.0,
+          "coverage": 0.96875,
+          "covered": 124,
+          "pools": 128,
+          "returned_valid": 124,
+          "selection_failures": 0,
+          "success": 0.96875
+        },
+        "current_terminal_probability": {
+          "conditional_selection_reliability": 1.0,
+          "coverage": 0.96875,
+          "covered": 124,
+          "pools": 128,
+          "returned_valid": 124,
+          "selection_failures": 0,
+          "success": 0.96875
+        },
+        "exact_first_valid": {
+          "conditional_selection_reliability": 1.0,
+          "coverage": 0.96875,
+          "covered": 124,
+          "pools": 128,
+          "returned_valid": 124,
+          "selection_failures": 0,
+          "success": 0.96875
+        },
+        "one_cycle_improvement": {
+          "conditional_selection_reliability": 0.8870967741935484,
+          "coverage": 0.96875,
+          "covered": 124,
+          "pools": 128,
+          "returned_valid": 110,
+          "selection_failures": 14,
+          "success": 0.859375
+        }
+      },
+      "search_regressions": 0,
+      "train_state_label_sha256": "ebd256b5de0ff996a314c3e3977707b67ae24c07960f19e422f8922cb649a939",
+      "training": [
+        {
+          "batch": 64,
+          "contract": {
+            "continuation_policy": null,
+            "evaluator_sha256": "275f16b568639452ee78fbe0c11777dfe19aaf3a3cf347c185775203b269aacd",
+            "maximum_horizon": null,
+            "model_sha256": "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff",
+            "state_schema": "search_state_xyz_v1",
+            "target": "one_cycle_improvement",
+            "transition_id": "fp64_cycle_action_v1"
+          },
+          "curve": [
+            {
+              "grad_norm": 1.9115394353866577,
+              "loss": 0.7095349431037903,
+              "step": 1
+            },
+            {
+              "grad_norm": 0.14415980875492096,
+              "loss": 0.22868712246418,
+              "step": 30
+            },
+            {
+              "grad_norm": 0.6205295920372009,
+              "loss": 0.10903279483318329,
+              "step": 60
+            },
+            {
+              "grad_norm": 0.350630521774292,
+              "loss": 0.13175976276397705,
+              "step": 90
+            },
+            {
+              "grad_norm": 0.1709039807319641,
+              "loss": 0.08831211924552917,
+              "step": 120
+            },
+            {
+              "grad_norm": 0.21725152432918549,
+              "loss": 0.03769758716225624,
+              "step": 150
+            },
+            {
+              "grad_norm": 0.09026578813791275,
+              "loss": 0.026935460045933723,
+              "step": 180
+            }
+          ],
+          "data_ancestry": {
+            "consumed_manifests": [
+              {
+                "role": "training",
+                "sha256": "98be7c01927ac2d18484767955d7a8e00d05964975fb12ce9c9e58758be74418",
+                "splits": [
+                  "train"
+                ]
+              }
+            ],
+            "parent_checkpoints": [
+              "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff"
+            ]
+          },
+          "seed": 18402,
+          "steps": 180,
+          "target": "one_cycle_improvement",
+          "train_ms": 1546.467854
+        },
+        {
+          "batch": 64,
+          "contract": {
+            "continuation_policy": null,
+            "evaluator_sha256": "b9187e43bd97c9e27b8c64f31b75330668718a2b38ced282e68a0b3e1b56016f",
+            "maximum_horizon": null,
+            "model_sha256": "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff",
+            "state_schema": "search_state_xyz_v1",
+            "target": "current_terminal_probability",
+            "transition_id": "fp64_cycle_action_v1"
+          },
+          "curve": [
+            {
+              "grad_norm": 1.6908286809921265,
+              "loss": 0.6763474345207214,
+              "step": 1
+            },
+            {
+              "grad_norm": 0.37618914246559143,
+              "loss": 0.34322628378868103,
+              "step": 30
+            },
+            {
+              "grad_norm": 0.6830859780311584,
+              "loss": 0.14545777440071106,
+              "step": 60
+            },
+            {
+              "grad_norm": 0.40247249603271484,
+              "loss": 0.13380743563175201,
+              "step": 90
+            },
+            {
+              "grad_norm": 0.2393205761909485,
+              "loss": 0.09422140568494797,
+              "step": 120
+            },
+            {
+              "grad_norm": 0.3967052698135376,
+              "loss": 0.05808649957180023,
+              "step": 150
+            },
+            {
+              "grad_norm": 0.19201894104480743,
+              "loss": 0.05153577774763107,
+              "step": 180
+            }
+          ],
+          "data_ancestry": {
+            "consumed_manifests": [
+              {
+                "role": "training",
+                "sha256": "98be7c01927ac2d18484767955d7a8e00d05964975fb12ce9c9e58758be74418",
+                "splits": [
+                  "train"
+                ]
+              }
+            ],
+            "parent_checkpoints": [
+              "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff"
+            ]
+          },
+          "seed": 18402,
+          "steps": 180,
+          "target": "current_terminal_probability",
+          "train_ms": 1559.40864
+        },
+        {
+          "batch": 64,
+          "contract": {
+            "continuation_policy": null,
+            "evaluator_sha256": "fe21398a3e45ecde3e9e7521e4c8be7d6cbde2d42ca11579882baaa3f4873d06",
+            "maximum_horizon": null,
+            "model_sha256": "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff",
+            "state_schema": "search_state_xyz_v1",
+            "target": "current_structural_quality",
+            "transition_id": "fp64_cycle_action_v1"
+          },
+          "curve": [
+            {
+              "grad_norm": 2.0098116397857666,
+              "loss": 0.6751692891120911,
+              "step": 1
+            },
+            {
+              "grad_norm": 0.13350100815296173,
+              "loss": 0.12399054318666458,
+              "step": 30
+            },
+            {
+              "grad_norm": 0.08485279977321625,
+              "loss": 0.01075116079300642,
+              "step": 60
+            },
+            {
+              "grad_norm": 0.009729744866490364,
+              "loss": 0.06254039704799652,
+              "step": 90
+            },
+            {
+              "grad_norm": 0.0642905905842781,
+              "loss": 0.05079692229628563,
+              "step": 120
+            },
+            {
+              "grad_norm": 0.08103975653648376,
+              "loss": 0.009363315999507904,
+              "step": 150
+            },
+            {
+              "grad_norm": 0.08541750907897949,
+              "loss": 0.024222759529948235,
+              "step": 180
+            }
+          ],
+          "data_ancestry": {
+            "consumed_manifests": [
+              {
+                "role": "training",
+                "sha256": "98be7c01927ac2d18484767955d7a8e00d05964975fb12ce9c9e58758be74418",
+                "splits": [
+                  "train"
+                ]
+              }
+            ],
+            "parent_checkpoints": [
+              "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff"
+            ]
+          },
+          "seed": 18402,
+          "steps": 180,
+          "target": "current_structural_quality",
+          "train_ms": 1560.493484
+        }
+      ]
+    }
+  },
+  "scope": "development only; same-state matched-target intervention"
+}

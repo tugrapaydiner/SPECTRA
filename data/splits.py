@@ -124,6 +124,8 @@ def build_reproducible_splits(
     task_scope: str,
     official_benchmark: bool,
     max_duplicate_retries: int = 1024,
+    forbidden_fingerprints: frozenset[str] | None = None,
+    require_unique_examples: bool = False,
 ) -> tuple[dict[str, GridDataset], dict[str, Any]]:
     """Build grouped splits with independent RNG streams and a reproducible manifest.
 
@@ -132,6 +134,10 @@ def build_reproducible_splits(
     augmentations therefore remain with their base group. The finite smart-home
     state universe is pre-partitioned explicitly instead of relying on rejection.
     """
+    forbidden = frozenset(forbidden_fingerprints or ())
+    if any(not isinstance(fp, str) or len(fp) != 64 or any(c not in "0123456789abcdef" for c in fp) for fp in forbidden):
+        raise ValueError("forbidden fingerprints must be SHA-256 content hashes")
+    seen_final: set[str] = set()
     requested = {name: int(sizes.get(name, 0)) for name in _SPLITS}
     if any(v < 0 for v in requested.values()):
         raise ValueError("split sizes must be non-negative")
@@ -167,7 +173,7 @@ def build_reproducible_splits(
             )
             group_id = example_fingerprint(task, x0, y0, h, w)
             owner = group_owner.get(group_id)
-            if owner is not None and owner != split:
+            if group_id in forbidden or (owner is not None and owner != split):
                 retries += 1
                 if retries > max_duplicate_retries:
                     raise RuntimeError(
@@ -182,6 +188,12 @@ def build_reproducible_splits(
             }
             x, y = augment_example(task, x0, y0, h, w, aug_rng, **aug_kwargs)
             final_fp = example_fingerprint(task, x, y, h, w)
+            if final_fp in forbidden or (require_unique_examples and final_fp in seen_final):
+                retries += 1
+                if retries > max_duplicate_retries:
+                    raise RuntimeError("could not obtain ancestor-disjoint unique examples")
+                continue
+            seen_final.add(final_fp)
             ordinal = len(xs)
             stable_id = _digest(
                 GENERATOR_VERSION, task, str(seed), split, str(ordinal), group_id, final_fp
@@ -278,6 +290,13 @@ def build_reproducible_splits(
             },
         },
     }
+    if forbidden_fingerprints is not None or require_unique_examples:
+        manifest["external_exclusion"] = {
+            "fingerprint_count": len(forbidden),
+            "sorted_fingerprints_sha256": hashlib.sha256("\n".join(sorted(forbidden)).encode()).hexdigest(),
+            "require_unique_examples": bool(require_unique_examples),
+            "scope": "exact final fingerprints and pre-augmentation groups",
+        }
     return datasets, manifest
 
 

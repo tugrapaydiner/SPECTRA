@@ -11,6 +11,7 @@ Windows dev box and the Linux eval box.
 from __future__ import annotations
 
 from pathlib import Path
+import math
 
 from model.halting import DeviceState
 
@@ -24,16 +25,35 @@ _THERMAL_ROOT = Path("/sys/class/thermal")
 _RAPL_ROOT = Path("/sys/class/powercap/intel-rapl")
 
 
+def battery_observation() -> dict[str, object]:
+    """Observed battery fields or explicit unavailability, never policy defaults.
+
+    A controller may still need numeric defaults on a desktop/container. Those
+    defaults are not measurements and must not enter physical-energy evidence.
+    """
+    if psutil is None or not callable(getattr(psutil, "sensors_battery", None)):
+        return {"level": None, "plugged": None, "status": "provider_unavailable"}
+    try:
+        batt = psutil.sensors_battery()
+        if batt is None:
+            return {"level": None, "plugged": None, "status": "no_battery"}
+        percent = float(batt.percent)
+        if not math.isfinite(percent) or not 0.0 <= percent <= 100.0:
+            return {"level": None, "plugged": None, "status": "invalid_reading"}
+        if type(batt.power_plugged) is not bool:
+            return {"level": None, "plugged": None, "status": "invalid_reading"}
+        return {"level": percent / 100.0, "plugged": batt.power_plugged, "status": "observed"}
+    except (OSError, NotImplementedError, AttributeError, TypeError, ValueError) as exc:
+        return {"level": None, "plugged": None, "status": "read_unavailable",
+                "error_type": type(exc).__name__}
+
+
 def _read_battery() -> tuple[float, float]:
-    """Return ``(battery_level 0..1, power_mode 0/1)`` using psutil if available."""
-    if psutil is None:
+    """Numeric control inputs; unobserved battery uses the historical AC default."""
+    observed = battery_observation()
+    if observed["status"] != "observed":
         return 1.0, 1.0
-    batt = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
-    if batt is None:
-        return 1.0, 1.0  # desktop / no battery -> treat as plugged in, full
-    level = max(0.0, min(1.0, batt.percent / 100.0))
-    power_mode = 1.0 if batt.power_plugged else 0.0
-    return level, power_mode
+    return float(observed["level"]), 1.0 if observed["plugged"] else 0.0
 
 
 def _read_thermal() -> float:

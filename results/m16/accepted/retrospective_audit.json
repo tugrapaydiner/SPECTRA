@@ -1,0 +1,186 @@
+{
+  "ancestry_overlap": {
+    "ancestor_artifacts": [
+      "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff",
+      "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4"
+    ],
+    "candidate": {
+      "name": "m15/experiment/manifests/confirmation.json",
+      "role": "previous_confirmation",
+      "row_count": 512,
+      "sha256": "10ebbcaaba0b46c9d7eb9507c92cdff2607fbe4a09a3f6b60a76733092fa5865",
+      "splits": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "unique_fingerprints": 512,
+      "unique_groups": 512
+    },
+    "consumed_sources": [
+      {
+        "name": "m14_source/experiment/manifests/train_validation_development.json",
+        "role": "training",
+        "row_count": 4096,
+        "sha256": "8eadb4c8602c80ef2bfb59f9a11865e31347993701be1becc24bec79ccdf5301",
+        "splits": [
+          "train"
+        ],
+        "unique_fingerprints": 4096,
+        "unique_groups": 4096
+      }
+    ],
+    "disjoint": false,
+    "exact_overlap_count": 1,
+    "group_overlap_count": 1,
+    "overlapping_fingerprints": [
+      "6a5582210441c5b0ba3b0a3cebd6eda5626fb9473807733cab84d8fb54e2030e"
+    ],
+    "overlapping_groups": [
+      "6a5582210441c5b0ba3b0a3cebd6eda5626fb9473807733cab84d8fb54e2030e"
+    ],
+    "schema": "spectra.ancestry_audit.v1",
+    "scope": "declared content/group ancestry; not symmetry-family independence"
+  },
+  "excluded_example_ids": [
+    "3af40aa7ece687190c612a87"
+  ],
+  "fixed_pool_original": {
+    "conditional_selection_reliability": 0.8751258811681772,
+    "coverage": 0.9697265625,
+    "covered": 993,
+    "pools": 1024,
+    "returned_valid": 869,
+    "selection_failures": 124,
+    "success": 0.8486328125
+  },
+  "fixed_pool_sensitivity": {
+    "conditional_selection_reliability": 0.875882946518668,
+    "coverage": 0.9696673189823874,
+    "covered": 991,
+    "pools": 1022,
+    "returned_valid": 868,
+    "selection_failures": 123,
+    "success": 0.8493150684931506
+  },
+  "original": {
+    "fixed_depth4": {
+      "regressions": 3,
+      "rows": 1024,
+      "valid": 1012
+    },
+    "learned_lcb_beta2_d4_int8": {
+      "regressions": 123,
+      "rows": 1024,
+      "valid": 892
+    },
+    "learned_oracle_d4_int8": {
+      "regressions": 2,
+      "rows": 1024,
+      "valid": 1015
+    },
+    "learned_strong_d1_int8": {
+      "regressions": 144,
+      "rows": 1024,
+      "valid": 871
+    },
+    "learned_strong_d2_int8": {
+      "regressions": 146,
+      "rows": 1024,
+      "valid": 869
+    },
+    "learned_strong_d4_fp32": {
+      "regressions": 146,
+      "rows": 1024,
+      "valid": 869
+    },
+    "learned_strong_d4_int8": {
+      "regressions": 146,
+      "rows": 1024,
+      "valid": 869
+    },
+    "learned_strong_guard_d4_int8": {
+      "regressions": 22,
+      "rows": 1024,
+      "valid": 993
+    },
+    "learned_weak_d4_int8": {
+      "regressions": 133,
+      "rows": 1024,
+      "valid": 882
+    },
+    "semantic_exit_k4": {
+      "regressions": 0,
+      "rows": 1024,
+      "valid": 1015
+    },
+    "unguided_strong_d4_int8": {
+      "regressions": 146,
+      "rows": 1024,
+      "valid": 869
+    }
+  },
+  "scope": "retrospective replay of recorded labels; not fresh inference or confirmation",
+  "sensitivity": {
+    "fixed_depth4": {
+      "regressions": 3,
+      "rows": 1022,
+      "valid": 1010
+    },
+    "learned_lcb_beta2_d4_int8": {
+      "regressions": 123,
+      "rows": 1022,
+      "valid": 890
+    },
+    "learned_oracle_d4_int8": {
+      "regressions": 2,
+      "rows": 1022,
+      "valid": 1013
+    },
+    "learned_strong_d1_int8": {
+      "regressions": 143,
+      "rows": 1022,
+      "valid": 870
+    },
+    "learned_strong_d2_int8": {
+      "regressions": 145,
+      "rows": 1022,
+      "valid": 868
+    },
+    "learned_strong_d4_fp32": {
+      "regressions": 145,
+      "rows": 1022,
+      "valid": 868
+    },
+    "learned_strong_d4_int8": {
+      "regressions": 145,
+      "rows": 1022,
+      "valid": 868
+    },
+    "learned_strong_guard_d4_int8": {
+      "regressions": 22,
+      "rows": 1022,
+      "valid": 991
+    },
+    "learned_weak_d4_int8": {
+      "regressions": 132,
+      "rows": 1022,
+      "valid": 881
+    },
+    "semantic_exit_k4": {
+      "regressions": 0,
+      "rows": 1022,
+      "valid": 1013
+    },
+    "unguided_strong_d4_int8": {
+      "regressions": 145,
+      "rows": 1022,
+      "valid": 868
+    }
+  },
+  "source_archive_hashes": {
+    "m14_original": "0306f64efb48c264aa7b387ff6b449def011fb64ad02aa74eb03ee3b4e58e314",
+    "m14_source": "5729932600743b2cef19d9e0b9baf112ec75b627552af4d30a089266994a2f37",
+    "m15": "c49e5c06e0f2822088cb9ce807fcc6bc37da6236962953ccc8c594be01c55b2e"
+  }
+}

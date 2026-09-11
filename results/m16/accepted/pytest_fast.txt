@@ -1,0 +1,76 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/runner/work/SPECTRA/SPECTRA
+configfile: pyproject.toml
+testpaths: tests
+collected 388 items / 16 deselected / 372 selected
+
+tests/test_arc.py .....                                                  [  1%]
+tests/test_augment.py ...                                                [  2%]
+tests/test_data_maze.py .....                                            [  3%]
+tests/test_data_sudoku.py .......                                        [  5%]
+tests/test_data_tasks.py .........                                       [  7%]
+tests/test_death_traps.py ......                                         [  9%]
+tests/test_distillation.py ....                                          [ 10%]
+tests/test_edge_benchmark.py ...                                         [ 11%]
+tests/test_energy_measurement.py ........                                [ 13%]
+tests/test_export.py ............                                        [ 16%]
+tests/test_fake_bitlinear.py .....                                       [ 18%]
+tests/test_fidelity.py ....                                              [ 19%]
+tests/test_flywheel.py .....                                             [ 20%]
+tests/test_halting.py ......                                             [ 22%]
+tests/test_int8_activation.py ...                                        [ 22%]
+tests/test_kernel.py ....                                                [ 23%]
+tests/test_kernel_contract.py ............                               [ 27%]
+tests/test_latent_mcts_native.py .......                                 [ 29%]
+tests/test_lazy_router.py ...                                            [ 29%]
+tests/test_m02_acceptance_gate.py ......                                 [ 31%]
+tests/test_m03_task_data_contract.py .............                       [ 34%]
+tests/test_m03_validator_parity.py .                                     [ 35%]
+tests/test_m04_repro_checkpoint.py ........                              [ 37%]
+tests/test_m05_checkpoint_eval.py .............                          [ 40%]
+tests/test_m07_grounded_verifier.py ...........                          [ 43%]
+tests/test_m08_mcts_reference.py .................                       [ 48%]
+tests/test_m08_virtual_loss_exception.py .                               [ 48%]
+tests/test_m09_challenger.py ...                                         [ 49%]
+tests/test_m09_trained_actions.py ............                           [ 52%]
+tests/test_m10_cpu_deployment.py ........                                [ 54%]
+tests/test_m11_adaptive_execution.py .......                             [ 56%]
+tests/test_m12_router_halter_rl.py .........                             [ 59%]
+tests/test_m13_measurement_protocol.py ..........                        [ 61%]
+tests/test_m14_attempt2_single_stream.py ........                        [ 63%]
+tests/test_m14_attempt3_semantic_early_exit.py ......                    [ 65%]
+tests/test_m14_attempt3_timing_contract.py .                             [ 65%]
+tests/test_m14_attempt4_anytime_supervision.py ....                      [ 66%]
+tests/test_m14_attempt5_dual_stream_semantic_exit.py ......              [ 68%]
+tests/test_m14_primary_experiment.py .........                           [ 70%]
+tests/test_m15_mechanism_ablations.py ..........                         [ 73%]
+tests/test_m15_theory_claims.py .                                        [ 73%]
+tests/test_m16_contracts.py .........................                    [ 80%]
+tests/test_m16_native.py ............                                    [ 83%]
+tests/test_m16_value_loading.py ........                                 [ 86%]
+tests/test_null_hypothesis.py ...                                        [ 86%]
+tests/test_prm.py ..                                                     [ 87%]
+tests/test_recursion.py .....                                            [ 88%]
+tests/test_rl_gae.py .......                                             [ 90%]
+tests/test_roofline.py ....                                              [ 91%]
+tests/test_scaling_laws.py ...                                           [ 92%]
+tests/test_smoke.py ....                                                 [ 93%]
+tests/test_spectral.py .....                                             [ 94%]
+tests/test_stability.py ...                                              [ 95%]
+tests/test_telemetry.py .......                                          [ 97%]
+tests/test_ternary_trm.py .                                              [ 97%]
+tests/test_verifier.py ........                                          [100%]
+
+=============================== warnings summary ===============================
+tests/test_m10_cpu_deployment.py::test_runtime_block_cycle_and_full_forward_match_reference
+  /home/runner/work/SPECTRA/SPECTRA/tests/test_m10_cpu_deployment.py:114: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+  Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+    assert float(block_err.max()) <= 2e-4
+
+tests/test_telemetry.py::test_torch_profiler_exports_chrome_trace
+  /opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+    _warn_once(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========== 372 passed, 16 deselected, 2 warnings in 81.21s (0:01:21) ===========

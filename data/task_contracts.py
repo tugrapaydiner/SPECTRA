@@ -98,6 +98,8 @@ def contract_from_config(task: str, data: Mapping[str, Any]) -> TaskContract:
             raise ValueError("Maze vocabulary is exactly 0=wall,1=open,2=start,3=goal,4=path")
         if height < 3 or width < 3 or height % 2 == 0 or width % 2 == 0:
             raise ValueError("Maze height and width must be odd integers >= 3")
+        if height == 3 and width == 3:
+            raise ValueError("Maze needs distinct start and goal cells; 3x3 is degenerate")
         min_path_len = int(data.get("min_path_len", 2))
         max_path_len = data.get("max_path_len", None)
         max_path_len = None if max_path_len is None else int(max_path_len)
