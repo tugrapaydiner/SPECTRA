@@ -62,6 +62,10 @@ jobs:
         run: |
           set -o pipefail
           timeout 600s python scripts/verify_checkpoint_replay.py --out .cpu-contracts/checkpoint_replay | tee .cpu-contracts/checkpoint_replay.txt
+      - name: Reconstruct all published fixed pools and evaluator predictions
+        run: |
+          set -o pipefail
+          timeout 600s python scripts/verify_fixed_pool_replay.py --cpu-profile historical-avx2 --out .cpu-contracts/fixed_pool_replay | tee .cpu-contracts/fixed_pool_replay.txt
       - name: Hash verification artifacts
         if: always()
         run: |

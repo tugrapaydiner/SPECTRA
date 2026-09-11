@@ -49,7 +49,16 @@ python -m pip install -r requirements-cpu-research.txt
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MAX_JOBS=1 \
   python -m pytest -m "not slow" -ra
 python scripts/verify_retained_results.py --out outputs/retained-audit.json
+python scripts/verify_fixed_pool_replay.py --cpu-profile historical-avx2 --out outputs/fixed-pool-replay
 ```
+
+The [fixed-pool inference replay](docs/FIXED_POOL_REPLAY.md) additionally
+reconstructs all 16,384 published M17 candidate states and 49,152 evaluator scores
+from the frozen checkpoints, with independently constructed labels and exact
+pool-tensor hashes. Its explicit AVX2 reproduction profile matters: host-default
+CPU dispatch is not assumed bitwise identical. Maze confirmation remains unopened.
+The maze diagnostic also shows that every nonempty invalid restored path receives
+the same structural score, 0.75; the failed two-family gate is not promoted.
 
 The audit refuses an existing output file. Both Python 3.11 and 3.13 run the CPU
 regression and evidence checks in CI. Long training tests are separately marked

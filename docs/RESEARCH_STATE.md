@@ -36,6 +36,22 @@ complete-solve answer records, then reproduces retained summaries without openin
 new confirmation data. Timing repetitions are not independent examples. Fixed-pool
 labels are reaggregated rather than independently inferred by this audit.
 
+## Independent fixed-pool inference replay
+
+`python scripts/verify_fixed_pool_replay.py --out outputs/fixed-pool-replay`
+reconstructs all previously published M17 pools from frozen checkpoints rather
+than only reaggregating their stored labels. The CLI uses an explicit historical
+AVX2 CPU profile, records dispatch settings, and requires the six exact pool-tensor
+hashes. It checks 16,384 candidates, their 16,384 continuations and 49,152 head
+scores. Already-published Sudoku confirmation is replayed without generation or
+selection; the unused maze confirmation remains unopened.
+
+On these maze pools, all 3,707 nonempty invalid candidates have structural score
+0.75. For restored maze answers the score equals
+`0.5 + 0.25 * nonempty_path + 0.25 * exact_validity`; it does not grade progress
+among nonempty invalid paths. This narrows interpretation of the failed maze
+experiment, without changing its result. See [replay details](FIXED_POOL_REPLAY.md).
+
 # Milestone 15 — mechanism-focused ablations
 
 **Status: COMPLETE on `research/m15-mechanism-ablations`.**

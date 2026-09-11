@@ -1,0 +1,86 @@
+{
+  "base_commit": "eddfb98f50f02e3c8ae5c0516c997178e87da8a4",
+  "checkpoint_replay": {
+    "comparisons": 3840,
+    "failure_count": 0
+  },
+  "dispatch_protocol": {
+    "environment": {
+      "ATEN_CPU_CAPABILITY": "avx2",
+      "DNNL_MAX_CPU_ISA": "AVX2",
+      "MKL_ENABLE_INSTRUCTIONS": "AVX2",
+      "ONEDNN_MAX_CPU_ISA": "AVX2"
+    },
+    "historical_cpu": "AMD EPYC 7763",
+    "native_dispatch_observed": "AVX512",
+    "profiles": [
+      "host_default",
+      "historical_avx2"
+    ],
+    "purpose": "Replay historical AVX2 CPU numerics without changing weights/data/labels/tolerances",
+    "strict_pool_tensor_identity_retained": true,
+    "tolerance_before_dispatch_diagnostic": 2e-06
+  },
+  "environment": {
+    "cpu_capability": "AVX2",
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "device": "cpu",
+    "dispatch_environment": {
+      "ATEN_CPU_CAPABILITY": "avx2",
+      "DNNL_MAX_CPU_ISA": "AVX2",
+      "MKL_ENABLE_INSTRUCTIONS": "AVX2",
+      "ONEDNN_MAX_CPU_ISA": "AVX2"
+    },
+    "numpy": "2.3.5",
+    "platform": "Linux-6.18.35-x86_64-with-glibc2.41",
+    "python": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
+    "torch": "2.10.0+cpu",
+    "torch_threads": 1
+  },
+  "fast_tests": {
+    "errors": 0,
+    "failures": 0,
+    "legacy_slow_tests_deselected": 16,
+    "passed": 514,
+    "skipped": 0
+  },
+  "fixed_pool_replay": {
+    "candidate_states": 16384,
+    "head_scores_compared": 49152,
+    "head_scores_exact": 49152,
+    "independent_continuation_decodes": 16384,
+    "max_score_absolute_error": 0.0,
+    "model_example_pools": 1024,
+    "new_confirmation_generated": false,
+    "pool_tensor_hashes_checked": 6,
+    "scientific_status": "TWO_FAMILY_CLAIM_NOT_ESTABLISHED",
+    "status": "PASS",
+    "training_updates": 0
+  },
+  "host_default_probe_scope": "First Sudoku development core 1401 only; unchanged labels and choices do not satisfy the strict numerical replay contract.",
+  "host_default_probe_score_errors": {
+    "current_structural_quality": {
+      "max_abs": 3.784894943237305e-05
+    },
+    "current_terminal_probability": {
+      "max_abs": 9.85264778137207e-05
+    },
+    "one_cycle_improvement": {
+      "max_abs": 0.00013339519500732422
+    }
+  },
+  "record_sha256": {
+    "dispatch_diagnostic_protocol.json": "6c9c02cb6f0d14b951f37e44796f9c7bc8200ae53c139e8da2a5d0340e1fc09f",
+    "final_checkpoint_replay/summary.json": "32f942d3c8d9d862f2dcf24424ec41bd6309a48c430c9565a07df85732995c43",
+    "final_fast.xml": "cc943eb3a294939621c39178ea46ccfa01aae22d30b37992384fe718066c41b5",
+    "final_fixed_pool_replay/summary.json": "3cfb1569579c8753754df1be0d2d6eb7881f7db344799ce81b4155f5bb60a1e6",
+    "fixed_pool_replay/failure.json": "842df1ef7a66699c23e49142588a175e515e6104374e903b7b3c4e2031b953be",
+    "pool_numeric_probe.json": "27195266bb8c0570e0cb4ace54a8d54dd7ac7d77d2c5244ebed833c38e5607fe"
+  },
+  "retained_host_default_failure": {
+    "error": "fixed-pool tensor hash mismatch: sudoku_shift/development/1401; observed=20b5bb4b11792ab09d490f041eed60a339700d8e7577f048f9d90afe45116a14 expected=0cc5c79c3352b4b17270f8ce98f4aad80d4d7d2d578f1a37a1b6de483e204975",
+    "error_type": "ValueError",
+    "status": "FAIL"
+  },
+  "scope": "Local CPU pre-publication audit; remote CI and merge are not asserted by this record. Existing scientific gates are unchanged."
+}
