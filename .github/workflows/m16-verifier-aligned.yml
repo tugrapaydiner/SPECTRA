@@ -66,6 +66,17 @@ jobs:
         run: |
           set -o pipefail
           timeout 600s python scripts/verify_fixed_pool_replay.py --cpu-profile historical-avx2 --out .cpu-contracts/fixed_pool_replay | tee .cpu-contracts/fixed_pool_replay.txt
+      - name: Diagnose a failed strict replay on the same host
+        if: failure()
+        run: |
+          set -o pipefail
+          for dispatch in original sse42 compatible; do
+            for family in sudoku_shift maze; do
+              python scripts/probe_replay_dispatch.py --family "$family" --mkl-dispatch "$dispatch" --out ".cpu-contracts/${dispatch}_${family}" | tee ".cpu-contracts/${dispatch}_${family}.txt"
+            done
+          done
+          ATEN_CPU_CAPABILITY=avx2 MKL_ENABLE_INSTRUCTIONS=SSE4_2 ONEDNN_MAX_CPU_ISA=AVX2 DNNL_MAX_CPU_ISA=AVX2 \
+            python scripts/verify_fixed_pool_replay.py --cpu-profile host --out .cpu-contracts/sse42_strict_replay | tee .cpu-contracts/sse42_strict_replay.txt
       - name: Hash verification artifacts
         if: always()
         run: |
