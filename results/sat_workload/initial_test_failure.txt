@@ -1,0 +1,32 @@
+........................................................................ [ 88%]
+......F..                                                                [100%]
+=================================== FAILURES ===================================
+_____ test_supervisor_excludes_planted_witness_and_retains_startup_failure _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f0142d02e50>
+
+    def test_supervisor_excludes_planted_witness_and_retains_startup_failure(monkeypatch):
+        import eval.sat_workload as module
+        p = protocol(); case = generate_cases(p)[-1]
+        captured = {}
+        class Pipe:
+            def close(self): pass
+        class Process:
+            pid = None
+            def __init__(self, *, target, args): captured["args"] = args
+            def start(self): raise OSError("synthetic spawn failure")
+>       class Context:
+
+tests/test_cnf_workload.py:288: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    class Context:
+        def Pipe(self, **kwargs): return Pipe(), Pipe()
+>       Process = Process
+                  ^^^^^^^
+E       NameError: name 'Process' is not defined
+
+tests/test_cnf_workload.py:290: NameError
+=========================== short test summary info ============================
+FAILED tests/test_cnf_workload.py::test_supervisor_excludes_planted_witness_and_retains_startup_failure - NameError: name 'Process' is not defined
+1 failed, 80 passed in 0.19s
