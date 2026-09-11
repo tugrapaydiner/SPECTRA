@@ -1,0 +1,78 @@
+replayed sudoku_shift/development/core1401: 128 pools
+replayed sudoku_shift/development/core2402: 128 pools
+replayed sudoku_shift/confirmation/core1401: 256 pools
+replayed sudoku_shift/confirmation/core2402: 256 pools
+replayed maze/development/core1701: 128 pools
+replayed maze/development/core2702: 128 pools
+{
+  "status": "PASS",
+  "model_example_pools": 1024,
+  "candidate_states": 16384,
+  "head_scores_compared": 49152,
+  "head_scores_exact": 49152,
+  "max_score_absolute_error": 0.0,
+  "pool_tensor_hashes_checked": 6,
+  "all_pool_tensor_hashes_exact": true,
+  "independent_candidate_decodes": 16384,
+  "independent_continuation_decodes": 16384,
+  "new_confirmation_generated": false,
+  "training_updates": 0,
+  "m17_container_sha256": "8b3504af50c29ac443a5c7cd113933b710076a5d72be1b2ef00e003bb5013bbf",
+  "m17_inventory_sha256": "d64ab237453799ce93d340b0544cc2e07e0232def4f2164b3badbe19e71109c5",
+  "m16_identity": {
+    "materialization": "canonical_tar_exact_inventory_and_member_identity",
+    "container_sha256": "0c1b66885e2649850e6cd33bc1e470cad743cc9f4af64b2bbddcaa4599a2c47b",
+    "accepted_zip_sha256": "4e002847e476f5f30226395329ca4f28ed9d61467a079c4e58aae4694fff0adc",
+    "inventory_sha256": "5145184804ac7eecfc4eaa142d7584de9d7d54d184a39231429cc3648047611c",
+    "source_commit": "39dd7b7b8b5491c38862a2c40f566cad1cd45301",
+    "verified_members": 41,
+    "ancestry_roots": [
+      "275f16b568639452ee78fbe0c11777dfe19aaf3a3cf347c185775203b269aacd",
+      "98a02ce8a1f0f0b4db68293cb25c9896163474c023d42fcf90a2ebb4808925a5",
+      "9d4cb14895b6ae00e799abbabba9fbf057f4314ac17172bc48a90dd407e84cfa",
+      "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff",
+      "b9187e43bd97c9e27b8c64f31b75330668718a2b38ced282e68a0b3e1b56016f",
+      "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4",
+      "d9fea134ab81b0f5b0b7fcb9ea645f81c76c15fe64fddb8ce9ebdb9523c4db5d",
+      "fe21398a3e45ecde3e9e7521e4c8be7d6cbde2d42ca11579882baaa3f4873d06"
+    ]
+  },
+  "environment": {
+    "python": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
+    "platform": "Linux-6.18.35-x86_64-with-glibc2.41",
+    "torch": "2.10.0+cpu",
+    "numpy": "2.3.5",
+    "device": "cpu",
+    "torch_threads": 1,
+    "cpu_capability": "AVX2",
+    "dispatch_environment": {
+      "ATEN_CPU_CAPABILITY": "avx2",
+      "MKL_ENABLE_INSTRUCTIONS": "AVX2",
+      "ONEDNN_MAX_CPU_ISA": "AVX2",
+      "DNNL_MAX_CPU_ISA": "AVX2"
+    },
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor"
+  },
+  "scientific_status": "TWO_FAMILY_CLAIM_NOT_ESTABLISHED",
+  "cpu_profile": "historical-ordered",
+  "explicit_arithmetic": {
+    "profile": "m17-fp32-ordered-v1",
+    "source_sha256": "bb5343749f273219794231de8ab297b541d20b3c7f07db6028ed50db658f98a1",
+    "compile_flags": [
+      "-O3",
+      "-std=c++17",
+      "-mavx2",
+      "-mfma",
+      "-ffp-contract=off",
+      "-fno-fast-math"
+    ],
+    "torch": "2.10.0+cpu",
+    "scope": "frozen M17 B=32 CPU core replay only; no latency or universal portability claim",
+    "expected_outputs_used": false,
+    "sudoku_ff2": "k=256, two increasing-k FMA blocks of 128; bias added between blocks",
+    "maze_attention": "increasing-k FP32 FMA for both attention contractions",
+    "maze_linears": "increasing-k FP32 FMA; one full-K block then bias for core projections/FFN"
+  },
+  "scope": "Frozen input/core/value inference, independent NumPy restoration and targets, exact pool tensor hashes, exact choices and gates; no training, new data, confirmation selection or timing claim",
+  "elapsed_seconds": 32.300036510000155
+}

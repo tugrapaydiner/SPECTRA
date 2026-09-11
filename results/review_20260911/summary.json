@@ -1,0 +1,37 @@
+{
+  "base_commit": "9939e1b0ac9977216541050a221a78f80a2979e3",
+  "checkpoint_comparisons": 3840,
+  "executable_source_sha256": "193ea1f14a7d311eb458ab53074a92a0eeccd2e08e6aa3fc1c1e4190dd816b2d",
+  "fast_tests": {
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0,
+    "tests": 680
+  },
+  "files": {
+    "checkpoint_replay.json": "6c6bfff69bc68ced3d1332fcdc14ae06d42bb815cd39ec784511137887dde1de",
+    "fast_tests.log.gz": "b8e9da5ab00e16f70b816ab2da3d56e76ae0801e334dddb68e7a9e13c73cdfe5",
+    "fast_tests.xml": "c47275935975c854e22ecf800db19255339b1040d1a182705e02fbddd4bb5eee",
+    "fixed_pool_replay.json": "af9a6a1526a3d6a62e55363a845e2bf5a060eb0c983a27d11257ade7538230cf",
+    "initial_setup_failure.log.gz": "43ab6698a3c50432cbff299648d8ec54d7ec2cb7470300c49fa4beecd83fa020",
+    "restart_evidence.json": "ab456c77e2b05dd33fc4dbb38fe5c375698d277366759cd40b90e031a1e8abd1",
+    "restart_replay.json": "7606f77507a152f6909bbed90a3915459f9cf93e8b9f9beb335487a2d1f10a9d",
+    "retained_evidence.json": "c00b1058304780b2b063a5bb25ee54e0a8f6149f7be20c9f651892bc4fc8b7e2",
+    "symmetry_audit.json": "e1ca923bdfe8407582000d26c9859268835c4945753ad5b748f88bf321c6c9a9"
+  },
+  "historical_pool_contract": {
+    "all_six_tensor_hashes_exact": true,
+    "head_scores_compared": 49152,
+    "head_scores_exact": 38377,
+    "labels_selections_and_gates_exact": true,
+    "max_score_absolute_error": 1.1920928955078125e-07,
+    "original_score_allowance_unchanged": 2e-06
+  },
+  "initial_setup_failure": "Ninja installed in an unactivated venv was absent from PATH. Activated venv and reran all selected tests without modifying them. The research requirements now explicitly install Ninja. Failed run retained separately.",
+  "new_confirmation_generated": false,
+  "new_training_updates": 0,
+  "remote_merge": "Pending exact-head CI; local pass is not a merge claim.",
+  "restart_comparisons": 2560,
+  "slow_retraining_tests_deselected": 16,
+  "status": "LOCAL_VALIDATION_PASS"
+}

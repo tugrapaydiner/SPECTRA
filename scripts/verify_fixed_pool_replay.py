@@ -8,6 +8,7 @@ update, new dataset, inference-speed claim, or promotion of a failed gate occurs
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import io
 import json
 import os
@@ -27,12 +28,15 @@ HISTORICAL_AVX2_ENV = {
 }
 if __name__ == "__main__":
     early = argparse.ArgumentParser(add_help=False)
-    early.add_argument("--cpu-profile", choices=("historical-avx2", "host"), default="historical-avx2")
+    early.add_argument("--cpu-profile", choices=("historical-avx2", "historical-ordered", "host"), default="historical-avx2")
     profile, _ = early.parse_known_args()
-    if profile.cpu_profile == "historical-avx2":
+    if profile.cpu_profile in {"historical-avx2", "historical-ordered"}:
         if platform.machine().lower() not in {"x86_64", "amd64"}:
             early.error("the historical AVX2 profile requires an x86-64 CPU")
+        if "torch" in sys.modules or "numpy" in sys.modules:
+            early.error("replay dispatch must be selected before numerical imports")
         os.environ.update(HISTORICAL_AVX2_ENV)
+        os.environ.pop("MKL_CBWR", None)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT))
@@ -46,6 +50,7 @@ from eval.checkable_tasks import MAZE11, SUDOKU_SHIFT
 from eval.fixed_pool import summarize_pools
 from eval.fixed_pool_replay import compare_records, reconstruct_pool, replay_rows
 from eval.verified_search import ValueTarget
+from eval.historical_numerics import ordered_core, identity as ordered_identity
 from model.task_value import load_task_value
 from scripts.m16_cpu_experiment import source_identity
 from scripts.m16_evidence import Evidence, write_json
@@ -130,6 +135,9 @@ def verify(args) -> dict:
     torch.set_num_interop_threads(1)
     if torch.version.cuda is not None or torch.cuda.is_available():
         raise RuntimeError("fixed-pool replay requires CPU-only PyTorch")
+    cpu_profile = getattr(args, "cpu_profile", "historical-avx2")
+    if cpu_profile not in {"historical-avx2", "historical-ordered", "host"}:
+        raise ValueError("unknown CPU replay profile")
     historical = Evidence(args.historical_dir)
     accepted = AcceptedM16(args.m16, historical)
     members = read_bound_archive(args.m17, inventory_sha=M17_INVENTORY_SHA, zip_sha=M17_ZIP_SHA)
@@ -151,7 +159,9 @@ def verify(args) -> dict:
                               "cpu_model": next((line.split(":", 1)[1].strip() for line in
                                   Path("/proc/cpuinfo").read_text().splitlines() if line.startswith("model name")), "unknown")
                                   if Path("/proc/cpuinfo").exists() else platform.processor()},
-              "scientific_status": existing["scientific_status"]}
+              "scientific_status": existing["scientific_status"],
+              "cpu_profile": cpu_profile,
+              "explicit_arithmetic": ordered_identity() if cpu_profile=="historical-ordered" else None}
     with tempfile.TemporaryDirectory(prefix="spectra-pool-replay-") as temp:
         for family, (spec, development_seed, confirmation_seed) in FAMILY_SPECS.items():
             prefix = f"experiment/{family}/"
@@ -171,7 +181,9 @@ def verify(args) -> dict:
                 actual = []
                 diagnostics = {}
                 for core_seed, (core, values) in sources.items():
-                    pool, diagnostic = reconstruct_pool(core, x, spec)
+                    scope = ordered_core(core,spec) if cpu_profile=="historical-ordered" else nullcontext()
+                    with scope:
+                        pool, diagnostic = reconstruct_pool(core, x, spec)
                     observed_hash = tensor_digest(pool)
                     expected_hash = declared["pool_tensor_sha256_by_core"][str(core_seed)]
                     if observed_hash != expected_hash:
@@ -200,6 +212,8 @@ def verify(args) -> dict:
                     "coverage": recomputed["coverage"], "quality_minus_improvement": recomputed["quality_minus_improvement"],
                     "gate_pass": recomputed["gate_pass"]}
             report["families"][family] = family_out
+    if source_identity() != report["source"]:
+        raise RuntimeError("executable source changed during fixed-pool replay")
     report["status"] = "PASS"
     report["scope"] = ("Frozen input/core/value inference, independent NumPy restoration and targets, exact pool tensor hashes, "
                        "exact choices and gates; no training, new data, confirmation selection or timing claim")
@@ -208,8 +222,8 @@ def verify(args) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cpu-profile", choices=("historical-avx2", "host"), default="historical-avx2",
-                        help="historical-avx2 pins CPU dispatch before imports; host exposes default numerical drift")
+    parser.add_argument("--cpu-profile", choices=("historical-avx2", "historical-ordered", "host"), default="historical-avx2",
+                        help="historical-ordered also fixes the frozen B=32 core reduction orders; host leaves dispatch untouched")
     parser.add_argument("--historical-dir", type=Path, default=Path("results/m16/sources"))
     parser.add_argument("--m16", type=Path, default=Path("results/m16/runs/accepted-34522192590.tar.gz"))
     parser.add_argument("--m17", type=Path, default=Path("results/m17/runs/34534009702-33e548d3e0f52d0664c00929316b2198d5fcffe4.tar.gz"))

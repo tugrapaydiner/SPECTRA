@@ -1,0 +1,5 @@
+{"family": "sudoku_shift", "core_seed": 1401, "valid": {"identity_4": 112, "identity_20": 120, "identity_32": 120, "support4_prefix8": 128, "symbolic": 128}}
+{"family": "sudoku_shift", "core_seed": 2402, "valid": {"identity_4": 114, "identity_20": 120, "identity_32": 121, "support4_prefix8": 127, "symbolic": 128}}
+{"family": "maze", "core_seed": 1701, "valid": {"identity_4": 16, "identity_20": 21, "identity_32": 21, "support4_prefix8": 26, "symbolic": 128}}
+{"family": "maze", "core_seed": 2702, "valid": {"identity_4": 15, "identity_20": 15, "identity_32": 16, "support4_prefix8": 27, "symbolic": 128}}
+{"status": "PASS", "comparisons": 2560}

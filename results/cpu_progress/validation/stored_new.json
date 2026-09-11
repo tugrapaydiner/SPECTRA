@@ -1,0 +1,28 @@
+{
+  "complete_run_scope": "attempt1 is a separately retained exact-source replay, not the original incomplete timing log; attempt2 is the original complete refinement",
+  "counterfactual_prediction_file_sha256": "550ca1ed4be49c1a60043cf87cab6bc012314205cae547b43c0893d3e0aed0e7",
+  "m17_inventory_sha256": "d64ab237453799ce93d340b0544cc2e07e0232def4f2164b3badbe19e71109c5",
+  "missing_original_timing_rows_not_recreated": 37,
+  "new_confirmation_generated": false,
+  "original_partial_rows_compared": 7643,
+  "original_retention_failure_preserved": true,
+  "runs": {
+    "attempt1": {
+      "distinct_model_example_arm_comparisons": 2560,
+      "executable_source_sha256": "a180d429fa0c7147a31809b49d0f355dd6f90bd1031b610582d637807b7b8e5e",
+      "rows_sha256": "18835b6ae54ea48bfb2dadbc3ab771c99d5d8132dec3a3504a177462aa73df74",
+      "timing_rows": 7680
+    },
+    "attempt2": {
+      "distinct_model_example_arm_comparisons": 2560,
+      "executable_source_sha256": "c10c8226a6aa1e2e67e2d2de9df91415f2c345adf1a79e3b1901b9f9075ac23b",
+      "rows_sha256": "123bbc137d7ea92a429853ca963c464a25f37652b32727f5dc4187207c975e68",
+      "timing_rows": 7680
+    }
+  },
+  "scope": "Stored source bytes, exact inventory, independent answer semantics, summary and counterfactual replay; not fresh model inference or confirmation",
+  "status": "PASS",
+  "stored_answer_rows_checked": 15360,
+  "training_updates": 0,
+  "unique_counterfactuals_checked": 512
+}

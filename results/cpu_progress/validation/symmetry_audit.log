@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "replayed_examples": 5120,
+  "splits": {
+    "train": {
+      "examples": 4096,
+      "unique_orbits": 2410,
+      "rows_in_training_orbits": 4096,
+      "training_orbit_fraction": 1.0,
+      "lookup_valid": 4096,
+      "lookup_success": 1.0,
+      "reference_solution_used_at_lookup": false
+    },
+    "validation": {
+      "examples": 512,
+      "unique_orbits": 477,
+      "rows_in_training_orbits": 331,
+      "training_orbit_fraction": 0.646484375,
+      "lookup_valid": 331,
+      "lookup_success": 0.646484375,
+      "reference_solution_used_at_lookup": false
+    },
+    "test": {
+      "examples": 512,
+      "unique_orbits": 481,
+      "rows_in_training_orbits": 351,
+      "training_orbit_fraction": 0.685546875,
+      "lookup_valid": 351,
+      "lookup_success": 0.685546875,
+      "reference_solution_used_at_lookup": false
+    }
+  }
+}

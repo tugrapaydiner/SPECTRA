@@ -1,0 +1,60 @@
+{
+  "schema": "spectra.final_cpu_confirmation.v1",
+  "status": "LOCKED_BEFORE_NEW_MODEL_OUTCOMES",
+  "decision_policy": "support4_prefix8",
+  "policy_parameters": {"policy": "dihedral", "transition_budget": 20, "identity_cycles": 8, "cycles_per_view": 4, "view_limit": 4},
+  "policy_source_sha256": "0f0eb174826c2c566414dee2f3b3545d25ed2d2898850c3a22d8c603afef4636",
+  "arms": ["identity_4", "identity_20", "identity_32", "support4_prefix8", "symbolic"],
+  "families": ["sudoku_remaining_orbits", "maze_fresh"],
+  "sudoku": {
+    "scope": "Complete remaining puzzle-orbit census with exactly 4 through 10 clues and one solution; one seeded random spatial/digit presentation per orbit. Not uniform over physical puzzles, not all presentations.",
+    "census_method": "Enumerate all complete Sudoku4 grids, reduce complete grids under the declared group, enumerate every clue subset of each representative and retain unique-completion puzzles.",
+    "group": "128 legal spatial maps times 24 digit permutations; input-only keys",
+    "exclusions": "Union of every split in retained M14 original/source, M15, accepted M16 and executed M17 manifests, including previously consumed confirmation; reconstruct and verify exact input/target records before computing input-only keys.",
+    "pre_inference_capacity": {"4": 0, "5": 3, "6": 7, "7": 51, "8": 181, "9": 141, "10": 67},
+    "examples": 450,
+    "presentation_seed": 2026091107,
+    "model_seeds": [1401, 2402, 3403, 4404, 5405],
+    "core_sha256": {
+      "1401": "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4",
+      "2402": "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff",
+      "3403": "5c8c4e9b348289b0b89bae55b96ac36eb4ca064f29b39fe15496138ac28df67d",
+      "4404": "00336df0f77d0e41f89ca62625992706f715ba24443478156c8aecf7111fbff8",
+      "5405": "0166c09aa26bb0c61ea6fb875b9711313791cd26011bdcf0b7d202af84e08c54"
+    }
+  },
+  "maze": {
+    "examples": 512,
+    "seed": 2026091108,
+    "height": 11, "width": 11, "min_path_len": 8,
+    "generator": "Existing generate_pair with its unchanged DFS generator and no augmentation",
+    "exclusions": "Every split of the frozen M17 maze manifest; reject duplicate input orbits both against that ancestry and within this new sample.",
+    "group": "square D4 times endpoint exchange; geometric equivalence only, not arbitrary graph isomorphism",
+    "model_seeds": [1701, 2702],
+    "core_binding": "Exact frozen M17 archive, original core hashes and training manifest; no retraining"
+  },
+  "measurement": {
+    "device": "cpu", "threads": 1, "timing_rounds": 3,
+    "timing_order_seed": 2026091109,
+    "warmup_examples": 4,
+    "complete_solve_window": "Include transformations, embedding, resets, all recursive cycles, decoding, native problem construction, validity checks, inversion and return. Independent cross-check is outside timing. Native build/load is separate.",
+    "aggregation": "Median across rounds per model-example-arm; then mean and p95 of those medians",
+    "energy": "Not measured; null. No transfer of earlier timing results.",
+    "hardware_scope": "One recorded host; no cross-host latency claim"
+  },
+  "primary_gate_per_family": {
+    "comparator": "identity_32",
+    "min_success_gain": 0.05,
+    "quality_ci_lower_strict": 0.0,
+    "max_mean_latency_ratio": 1.0,
+    "max_p95_latency_ratio": 1.0,
+    "bootstrap": "Crossed model-seed and unique-example resampling; 2000 replicates, seed 2026091110, percentile 95% intervals. Two maze seeds are a limited training-variation estimate.",
+    "joint_gate": "Both families must meet all four requirements. Report each failure without changing thresholds. All results, including low-clue and per-seed strata, are retained."
+  },
+  "secondary_controls": "Report identity_20 equal-cap tradeoff, identity_4, exact symbolic comparators, regressions and per-clue results. No equal-cycle/equal-wall-clock substitution and no novelty claim.",
+  "training_updates": 0,
+  "gpu_permitted": false,
+  "old_unopened_maze_confirmation_permitted": false,
+  "adaptation_after_outcomes_permitted": false,
+  "failure_policy": "Preserve failures and original partial logs. Source fixes must be identified and must not relabel an already inspected outcome as untouched confirmation."
+}

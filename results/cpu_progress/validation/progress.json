@@ -1,0 +1,100 @@
+[
+  {
+    "name": "pytest_fast",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "-S",
+      "/mnt/data/research_work/clean_python.py",
+      "-m",
+      "pytest",
+      "-m",
+      "not slow",
+      "-ra",
+      "--junitxml=/mnt/data/integrated_validation_a55/pytest_fast.xml"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 41.2810520019998
+  },
+  {
+    "name": "stored_original",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "-S",
+      "/mnt/data/research_work/clean_python.py",
+      "scripts/verify_retained_results.py",
+      "--out",
+      "/mnt/data/integrated_validation_a55/stored_original.json"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 3.6784273630000826
+  },
+  {
+    "name": "checkpoint_original",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "-S",
+      "/mnt/data/research_work/clean_python.py",
+      "scripts/verify_checkpoint_replay.py",
+      "--out",
+      "/mnt/data/integrated_validation_a55/checkpoint_original"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 42.87772045699967
+  },
+  {
+    "name": "ordered_fixed_pool",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "-S",
+      "/mnt/data/research_work/clean_python.py",
+      "scripts/verify_fixed_pool_replay.py",
+      "--cpu-profile",
+      "historical-ordered",
+      "--out",
+      "/mnt/data/integrated_validation_a55/ordered_fixed_pool"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 33.87609386599979
+  },
+  {
+    "name": "symmetry_audit",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "-S",
+      "/mnt/data/research_work/clean_python.py",
+      "scripts/audit_sudoku_symmetry.py",
+      "--out",
+      "/mnt/data/integrated_validation_a55/symmetry_audit",
+      "--verify-report",
+      "results/reliability/sudoku4_symmetry_audit.json"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 7.995202136999978
+  },
+  {
+    "name": "stored_new",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "-S",
+      "/mnt/data/research_work/clean_python.py",
+      "scripts/verify_cpu_progress.py",
+      "--out",
+      "/mnt/data/integrated_validation_a55/stored_new.json"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 3.422997884999859
+  },
+  {
+    "name": "checkpoint_new",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "-S",
+      "/mnt/data/research_work/clean_python.py",
+      "scripts/verify_symmetry_checkpoint_replay.py",
+      "--out",
+      "/mnt/data/integrated_validation_a55/checkpoint_new"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 21.779783124000005
+  }
+]

@@ -1,0 +1,74 @@
+{
+  "families": {
+    "maze": {
+      "confirmation_gate_pass": false,
+      "confirmation_opened": false,
+      "fixed_pool": {
+        "development": {
+          "ci95": [
+            0.0234375,
+            0.11328125
+          ],
+          "coverage": 0.1484375,
+          "gate_pass": false,
+          "pools": 256,
+          "quality_minus_improvement": 0.06640625
+        }
+      },
+      "status": "DEVELOPMENT_GATE_NOT_MET"
+    },
+    "sudoku_shift": {
+      "confirmation_gate_pass": true,
+      "confirmation_opened": true,
+      "fixed_pool": {
+        "confirmation": {
+          "ci95": [
+            0.52734375,
+            0.64453125
+          ],
+          "coverage": 0.845703125,
+          "gate_pass": true,
+          "pools": 512,
+          "quality_minus_improvement": 0.5859375
+        },
+        "development": {
+          "ci95": [
+            0.4765625,
+            0.6796875
+          ],
+          "coverage": 0.88671875,
+          "gate_pass": true,
+          "pools": 256,
+          "quality_minus_improvement": 0.578125
+        }
+      },
+      "status": "CONFIRMED_FIXED_POOL_EFFECT"
+    }
+  },
+  "integrity_status": "PASS",
+  "inventory_sha256": "d64ab237453799ce93d340b0544cc2e07e0232def4f2164b3badbe19e71109c5",
+  "m16_identity": {
+    "accepted_zip_sha256": "4e002847e476f5f30226395329ca4f28ed9d61467a079c4e58aae4694fff0adc",
+    "ancestry_roots": [
+      "275f16b568639452ee78fbe0c11777dfe19aaf3a3cf347c185775203b269aacd",
+      "98a02ce8a1f0f0b4db68293cb25c9896163474c023d42fcf90a2ebb4808925a5",
+      "9d4cb14895b6ae00e799abbabba9fbf057f4314ac17172bc48a90dd407e84cfa",
+      "b43f111af13bc8f7b667c9b7e97558b2b9743f522945193a7a625db77ea194ff",
+      "b9187e43bd97c9e27b8c64f31b75330668718a2b38ced282e68a0b3e1b56016f",
+      "d5d4769726e3e45822e84a947dd4e8cb007a35374a8a40ae61a786c4c2ba55a4",
+      "d9fea134ab81b0f5b0b7fcb9ea645f81c76c15fe64fddb8ce9ebdb9523c4db5d",
+      "fe21398a3e45ecde3e9e7521e4c8be7d6cbde2d42ca11579882baaa3f4873d06"
+    ],
+    "container_sha256": "0c1b66885e2649850e6cd33bc1e470cad743cc9f4af64b2bbddcaa4599a2c47b",
+    "inventory_sha256": "5145184804ac7eecfc4eaa142d7584de9d7d54d184a39231429cc3648047611c",
+    "materialization": "canonical_tar_exact_inventory_and_member_identity",
+    "source_commit": "39dd7b7b8b5491c38862a2c40f566cad1cd45301",
+    "verified_members": 41
+  },
+  "m17_container_sha256": "8b3504af50c29ac443a5c7cd113933b710076a5d72be1b2ef00e003bb5013bbf",
+  "manifest_rows_verified": 1728,
+  "scientific_status": "TWO_FAMILY_CLAIM_NOT_ESTABLISHED",
+  "scope": "Retained bytes, ancestry, arrays, stored-answer semantics and summary replay; no retraining or new confirmation",
+  "stored_answers_checked": 11520,
+  "two_family_gate_pass": false
+}

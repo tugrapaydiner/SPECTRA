@@ -1,0 +1,12 @@
+{
+  "status": "RAW_RETENTION_INTEGRITY_FAILURE",
+  "declared_rows": 7680,
+  "retained_rows": 7643,
+  "missing_rows": 37,
+  "declared_rows_sha256": "b09b17c2eae9434321102153fcb7c18c64134c574fb31a4734ca205f05085d9a",
+  "retained_rows_sha256": "40b5ecaa8a87ac3c45488e7142cabbd597cb6ef204e32a121445867432fdea7a",
+  "original_summary_preserved": true,
+  "cause": "NOT_ESTABLISHED",
+  "recovery_attempt": "The separate original-upload copy has the same incomplete bytes; no missing timings were reconstructed or invented.",
+  "action": "Replay the exact archived source and fixed protocol on the same frozen consumed examples, retain that as a separate complete run, and compare all original available outcomes/work. Original timing summary is not used as fully retained evidence."
+}

@@ -1,0 +1,162 @@
+{
+  "audit_source_sha256": {
+    "data/splits.py": "7fc40aeefc8095fa9a03e7b500543f72cfc6872edf5699a71dd64370774a422f",
+    "data/sudoku_symmetry.py": "f0b79f53861e77bb177750a45a1dbe7097959c7f522255e1515df8625e56de7f",
+    "scripts/_common.py": "590c2e925acf736e0299429ec8746f15cac8a77889ab4df5563e057bdb7d5a86",
+    "scripts/audit_sudoku_symmetry.py": "ecbe989b182f9ac8f5908bb852fe9c8220eff8b8f4332ec37e72bb8225e59f22"
+  },
+  "digit_permutation_count": 24,
+  "existing_development_results_by_orbit_stratum": {
+    "dual_stream_exit_k4": {
+      "training_orbit_seen": {
+        "model_example_rows": 1755,
+        "model_seeds": [
+          1401,
+          2402,
+          3403,
+          4404,
+          5405
+        ],
+        "success": 0.9794871794871794,
+        "unique_examples": 351,
+        "valid": 1719
+      },
+      "training_orbit_unseen": {
+        "model_example_rows": 805,
+        "model_seeds": [
+          1401,
+          2402,
+          3403,
+          4404,
+          5405
+        ],
+        "success": 0.9925465838509316,
+        "unique_examples": 161,
+        "valid": 799
+      }
+    },
+    "single_pass_fp": {
+      "training_orbit_seen": {
+        "model_example_rows": 1755,
+        "model_seeds": [
+          1401,
+          2402,
+          3403,
+          4404,
+          5405
+        ],
+        "success": 0.8153846153846154,
+        "unique_examples": 351,
+        "valid": 1431
+      },
+      "training_orbit_unseen": {
+        "model_example_rows": 805,
+        "model_seeds": [
+          1401,
+          2402,
+          3403,
+          4404,
+          5405
+        ],
+        "success": 0.8782608695652174,
+        "unique_examples": 161,
+        "valid": 707
+      }
+    },
+    "single_pass_int8": {
+      "training_orbit_seen": {
+        "model_example_rows": 1755,
+        "model_seeds": [
+          1401,
+          2402,
+          3403,
+          4404,
+          5405
+        ],
+        "success": 0.8136752136752137,
+        "unique_examples": 351,
+        "valid": 1428
+      },
+      "training_orbit_unseen": {
+        "model_example_rows": 805,
+        "model_seeds": [
+          1401,
+          2402,
+          3403,
+          4404,
+          5405
+        ],
+        "success": 0.8795031055900621,
+        "unique_examples": 161,
+        "valid": 708
+      }
+    },
+    "symbolic_exact": {
+      "training_orbit_seen": {
+        "model_example_rows": 351,
+        "model_seeds": [
+          "symbolic"
+        ],
+        "success": 1.0,
+        "unique_examples": 351,
+        "valid": 351
+      },
+      "training_orbit_unseen": {
+        "model_example_rows": 161,
+        "model_seeds": [
+          "symbolic"
+        ],
+        "success": 1.0,
+        "unique_examples": 161,
+        "valid": 161
+      }
+    }
+  },
+  "existing_result_rows_reaggregated": 8192,
+  "interpretation": "Exact-disjoint generated examples need not be isomorphism-disjoint. This limits structural-generalization claims; it neither proves neural memorization nor invalidates the historical in-distribution comparison. Strata are descriptive, not a new independent confirmation or latency benchmark.",
+  "manifest_sha256": "8eadb4c8602c80ef2bfb59f9a11865e31347993701be1becc24bec79ccdf5301",
+  "orbit_lookup_train_examples": 4096,
+  "original_source_development_manifest_identical": true,
+  "policy": "sudoku4_isomorphism_v1",
+  "reference_answer_used_for_orbit_key": false,
+  "replayed_example_records_match": true,
+  "replayed_examples": 5120,
+  "schema": "spectra.sudoku4_symmetry_audit.v1",
+  "scope": "retrospective consumed M14 training/validation/development; no confirmation opened",
+  "source_archive_sha256": {
+    "m14_original": "0306f64efb48c264aa7b387ff6b449def011fb64ad02aa74eb03ee3b4e58e314",
+    "m14_source": "5729932600743b2cef19d9e0b9baf112ec75b627552af4d30a089266994a2f37",
+    "m15": "c49e5c06e0f2822088cb9ce807fcc6bc37da6236962953ccc8c594be01c55b2e"
+  },
+  "spatial_transform_count": 128,
+  "splits": {
+    "test": {
+      "examples": 512,
+      "lookup_success": 0.685546875,
+      "lookup_valid": 351,
+      "reference_solution_used_at_lookup": false,
+      "rows_in_training_orbits": 351,
+      "training_orbit_fraction": 0.685546875,
+      "unique_orbits": 481
+    },
+    "train": {
+      "examples": 4096,
+      "lookup_success": 1.0,
+      "lookup_valid": 4096,
+      "reference_solution_used_at_lookup": false,
+      "rows_in_training_orbits": 4096,
+      "training_orbit_fraction": 1.0,
+      "unique_orbits": 2410
+    },
+    "validation": {
+      "examples": 512,
+      "lookup_success": 0.646484375,
+      "lookup_valid": 331,
+      "reference_solution_used_at_lookup": false,
+      "rows_in_training_orbits": 331,
+      "training_orbit_fraction": 0.646484375,
+      "unique_orbits": 477
+    }
+  },
+  "witness_rows_sha256": "94ea3d20d1ecdd2728638465ebc5ae79212e7208fdb6d9da1f1cec21aeb96c4c"
+}

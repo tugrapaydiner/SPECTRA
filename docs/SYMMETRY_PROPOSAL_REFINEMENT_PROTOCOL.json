@@ -1,0 +1,63 @@
+{
+  "schema": "spectra.symmetry_proposal_refinement.v1",
+  "status": "ADAPTIVE_DEVELOPMENT_NOT_CONFIRMATION",
+  "source_base_commit": "ecd3249368c27d432d001503273e151de266b4f2",
+  "question": "Does an eight-cycle identity prefix followed by the geometry-preserving four-view subgroup recover the union of useful solutions within only 20 transitions?",
+  "families": [
+    "sudoku_shift",
+    "maze"
+  ],
+  "surfaces": [
+    "previously_consumed_development"
+  ],
+  "model_seeds": {
+    "sudoku_shift": [
+      1401,
+      2402
+    ],
+    "maze": [
+      1701,
+      2702
+    ]
+  },
+  "examples_per_family": 128,
+  "arms": [
+    "identity_4",
+    "identity_20",
+    "identity_32",
+    "support4_prefix8",
+    "symbolic"
+  ],
+  "cycles_per_view": 4,
+  "view_order": [
+    "identity",
+    "transpose",
+    "rotate180",
+    "anti_transpose",
+    "rotate90",
+    "rotate270",
+    "flip_horizontal",
+    "flip_vertical"
+  ],
+  "maze_endpoint_swap_views": [
+    "rotate180",
+    "anti_transpose"
+  ],
+  "timing_rounds": 3,
+  "timing_order_seed": 18291,
+  "threads": 1,
+  "device": "cpu",
+  "gpu_permitted": false,
+  "candidate_reference_answers_permitted": false,
+  "training_updates": 0,
+  "new_confirmation_permitted": false,
+  "claims": "Adaptive consumed-development refinement. No independent confirmation, preregistered scientific success, matched wall-clock cap, novelty or superiority over classical solvers. Full first-attempt outcomes retained.",
+  "selection_disclosure": "Selected after inspecting all attempted prefix lengths 4..32 on consumed Attempt-1 development traces. No confirmation inference or new training occurred.",
+  "parent_rows_sha256": "40b5ecaa8a87ac3c45488e7142cabbd597cb6ef204e32a121445867432fdea7a",
+  "selected_policy": {
+    "identity_cycles": 8,
+    "cycles_per_view": 4,
+    "view_limit": 4,
+    "transition_budget": 20
+  }
+}

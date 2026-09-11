@@ -1,0 +1,1 @@
+The 3ec-based preliminary invocation was rejected before numerical execution because host sitecustomize preloaded NumPy. All original guard logic remains intact. The final a55-based run uses a clean interpreter with the same installed packages. This is an environment-startup failure, not a fixed-pool hash mismatch.

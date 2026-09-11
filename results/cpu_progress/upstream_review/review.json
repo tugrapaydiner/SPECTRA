@@ -1,0 +1,39 @@
+{
+  "upstream_commit": "3ecac9952c61c75cf49bfa422dee430bbe3d84f8",
+  "upstream_tree": "f54f126af4a513695201ea1b718360ef5dacafe5",
+  "full_source_tree_reconstructed_and_verified": true,
+  "ordered_replay_artifacts": [
+    {
+      "python": "311",
+      "artifact_id": 10184689119,
+      "zip_sha256": "8593625cc7aa35bdf17a656bc1830cccde0b535cce4b1c68ce3527ae31fc5f07",
+      "run_id": 34561817837,
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "profile": "historical-ordered",
+      "status": "PASS",
+      "head_scores_exact": 49152,
+      "pool_hashes_checked": 6
+    },
+    {
+      "python": "313",
+      "artifact_id": 10184665837,
+      "zip_sha256": "f2201fd0dc74db203d58d5759a29747a8f5b0ef1b747d632e89731aeb71d53b7",
+      "run_id": 34561817837,
+      "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+      "profile": "historical-ordered",
+      "status": "PASS",
+      "head_scores_exact": 49152,
+      "pool_hashes_checked": 6
+    }
+  ],
+  "legacy_failure": {
+    "run_id": 34561817781,
+    "artifact_id": 10184634006,
+    "zip_sha256": "a68d229bf15c7cbd65a6ebd588d0ed4a6d55f7319c10eac9e6187d5292cdc65c",
+    "observed_torch": "2.14.0+cpu",
+    "failures": 13,
+    "reason": "Optional historical replay extension enforces its torch 2.10.0+cpu contract; floating legacy installers selected 2.14.0+cpu.",
+    "local_change": "Pin the three reproducibility workflows to the declared CPU research stack. No tests skipped, no tolerance or historical hashes changed. Remote checks for these local edits have not run."
+  },
+  "remaining_boundary": "Downloaded successful ordered-replay artifacts cover AMD EPYC 7763 and 9V74. They do not establish successful execution of the new ordered profile on Intel."
+}

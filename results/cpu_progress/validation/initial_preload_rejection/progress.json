@@ -1,0 +1,51 @@
+[
+  {
+    "name": "pytest_fast",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "-m",
+      "pytest",
+      "-m",
+      "not slow",
+      "-ra",
+      "--junitxml=/mnt/data/integrated_validation/pytest_fast.xml"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 104.08653833900007
+  },
+  {
+    "name": "stored_original",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "scripts/verify_retained_results.py",
+      "--out",
+      "/mnt/data/integrated_validation/stored_original.json"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 4.086731227999735
+  },
+  {
+    "name": "checkpoint_original",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "scripts/verify_checkpoint_replay.py",
+      "--out",
+      "/mnt/data/integrated_validation/checkpoint_original"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 42.887816403000215
+  },
+  {
+    "name": "ordered_fixed_pool",
+    "command": [
+      "/opt/pyvenv/bin/python",
+      "scripts/verify_fixed_pool_replay.py",
+      "--cpu-profile",
+      "historical-ordered",
+      "--out",
+      "/mnt/data/integrated_validation/ordered_fixed_pool"
+    ],
+    "exit_code": 2,
+    "elapsed_seconds": 0.5660371640001358
+  }
+]

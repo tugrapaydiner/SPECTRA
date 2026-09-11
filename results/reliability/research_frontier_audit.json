@@ -1,0 +1,654 @@
+{
+  "analysis_source_sha256": {
+    "eval/paired_frontier.py": "f1feabf72e5c0acfa98c16f02fc5a199dc821eedbc25b4bd7dc0024c95f5a7fa",
+    "scripts/audit_research_frontier.py": "dfbfb3d56f105be6b52585b6f99826f76c521071f71351efee30e85967dc42e4"
+  },
+  "families": {
+    "maze": {
+      "comparisons": {
+        "identity_20": {
+          "bootstrap": {
+            "multiple_comparison_adjustment": false,
+            "replicates": 2000,
+            "seed": 2026091110,
+            "timing_rounds_resampled_as_examples": false,
+            "units": "independently resampled model seeds and shared example IDs"
+          },
+          "by_model_seed": {
+            "1701": {
+              "candidate_valid": 26,
+              "comparator_valid": 21,
+              "examples": 128,
+              "new_solves": 5,
+              "regressions": 0
+            },
+            "2702": {
+              "candidate_valid": 27,
+              "comparator_valid": 15,
+              "examples": 128,
+              "new_solves": 12,
+              "regressions": 0
+            }
+          },
+          "candidate": "support4_prefix8",
+          "candidate_valid": 53,
+          "comparator": "identity_20",
+          "comparator_valid": 36,
+          "descriptive_gate_conditions": {
+            "mean_latency_point_ratio": false,
+            "minimum_point_gain": true,
+            "p95_latency_point_ratio": false,
+            "positive_quality_interval_lower": true
+          },
+          "descriptive_gate_pass": false,
+          "endpoints": {
+            "mean_latency_ratio": {
+              "crossed_percentile_95": [
+                1.0037757370345803,
+                1.0703518523351119
+              ],
+              "point": 1.0408263668897502
+            },
+            "p95_latency_ratio": {
+              "crossed_percentile_95": [
+                1.0608246683450597,
+                1.108119693669977
+              ],
+              "point": 1.0787007276861065
+            },
+            "success_gain": {
+              "crossed_percentile_95": [
+                0.015625,
+                0.1328125
+              ],
+              "point": 0.06640625
+            }
+          },
+          "family": "maze",
+          "headroom": {
+            "available_additional_solves": 220,
+            "baseline_valid": 36,
+            "maximum_possible_success_gain": 0.859375,
+            "model_example_pairs": 256,
+            "point_gain_attainable_on_this_inventory": true,
+            "required_net_additional_solves": 13
+          },
+          "model_example_pairs": 256,
+          "model_seeds": [
+            1701,
+            2702
+          ],
+          "new_solves": 17,
+          "regressions": 0,
+          "scope": "Descriptive paired analysis; not independent confirmation, a selection-adjusted interval, a power calculation, or an equal-wall-clock-budget comparison. Latency gate uses point estimates, not interval upper bounds.",
+          "timing_rounds": 3,
+          "unique_examples": 128
+        },
+        "identity_32": {
+          "bootstrap": {
+            "multiple_comparison_adjustment": false,
+            "replicates": 2000,
+            "seed": 2026091110,
+            "timing_rounds_resampled_as_examples": false,
+            "units": "independently resampled model seeds and shared example IDs"
+          },
+          "by_model_seed": {
+            "1701": {
+              "candidate_valid": 26,
+              "comparator_valid": 21,
+              "examples": 128,
+              "new_solves": 5,
+              "regressions": 0
+            },
+            "2702": {
+              "candidate_valid": 27,
+              "comparator_valid": 16,
+              "examples": 128,
+              "new_solves": 11,
+              "regressions": 0
+            }
+          },
+          "candidate": "support4_prefix8",
+          "candidate_valid": 53,
+          "comparator": "identity_32",
+          "comparator_valid": 37,
+          "descriptive_gate_conditions": {
+            "mean_latency_point_ratio": true,
+            "minimum_point_gain": true,
+            "p95_latency_point_ratio": true,
+            "positive_quality_interval_lower": true
+          },
+          "descriptive_gate_pass": true,
+          "endpoints": {
+            "mean_latency_ratio": {
+              "crossed_percentile_95": [
+                0.6327455950265974,
+                0.6835523313592955
+              ],
+              "point": 0.6600353739709802
+            },
+            "p95_latency_ratio": {
+              "crossed_percentile_95": [
+                0.6609702429716025,
+                0.6928986586309898
+              ],
+              "point": 0.6763583449353848
+            },
+            "success_gain": {
+              "crossed_percentile_95": [
+                0.015625,
+                0.1171875
+              ],
+              "point": 0.0625
+            }
+          },
+          "family": "maze",
+          "headroom": {
+            "available_additional_solves": 219,
+            "baseline_valid": 37,
+            "maximum_possible_success_gain": 0.85546875,
+            "model_example_pairs": 256,
+            "point_gain_attainable_on_this_inventory": true,
+            "required_net_additional_solves": 13
+          },
+          "model_example_pairs": 256,
+          "model_seeds": [
+            1701,
+            2702
+          ],
+          "new_solves": 16,
+          "regressions": 0,
+          "scope": "Descriptive paired analysis; not independent confirmation, a selection-adjusted interval, a power calculation, or an equal-wall-clock-budget comparison. Latency gate uses point estimates, not interval upper bounds.",
+          "timing_rounds": 3,
+          "unique_examples": 128
+        },
+        "identity_4": {
+          "bootstrap": {
+            "multiple_comparison_adjustment": false,
+            "replicates": 2000,
+            "seed": 2026091110,
+            "timing_rounds_resampled_as_examples": false,
+            "units": "independently resampled model seeds and shared example IDs"
+          },
+          "by_model_seed": {
+            "1701": {
+              "candidate_valid": 26,
+              "comparator_valid": 16,
+              "examples": 128,
+              "new_solves": 10,
+              "regressions": 0
+            },
+            "2702": {
+              "candidate_valid": 27,
+              "comparator_valid": 15,
+              "examples": 128,
+              "new_solves": 12,
+              "regressions": 0
+            }
+          },
+          "candidate": "support4_prefix8",
+          "candidate_valid": 53,
+          "comparator": "identity_4",
+          "comparator_valid": 31,
+          "descriptive_gate_conditions": {
+            "mean_latency_point_ratio": false,
+            "minimum_point_gain": true,
+            "p95_latency_point_ratio": false,
+            "positive_quality_interval_lower": true
+          },
+          "descriptive_gate_pass": false,
+          "endpoints": {
+            "mean_latency_ratio": {
+              "crossed_percentile_95": [
+                4.371671257816899,
+                4.70684002951149
+              ],
+              "point": 4.546083242331723
+            },
+            "p95_latency_ratio": {
+              "crossed_percentile_95": [
+                4.63187036330476,
+                4.999712814448853
+              ],
+              "point": 4.842400942175182
+            },
+            "success_gain": {
+              "crossed_percentile_95": [
+                0.046875,
+                0.1328125
+              ],
+              "point": 0.0859375
+            }
+          },
+          "family": "maze",
+          "headroom": {
+            "available_additional_solves": 225,
+            "baseline_valid": 31,
+            "maximum_possible_success_gain": 0.87890625,
+            "model_example_pairs": 256,
+            "point_gain_attainable_on_this_inventory": true,
+            "required_net_additional_solves": 13
+          },
+          "model_example_pairs": 256,
+          "model_seeds": [
+            1701,
+            2702
+          ],
+          "new_solves": 22,
+          "regressions": 0,
+          "scope": "Descriptive paired analysis; not independent confirmation, a selection-adjusted interval, a power calculation, or an equal-wall-clock-budget comparison. Latency gate uses point estimates, not interval upper bounds.",
+          "timing_rounds": 3,
+          "unique_examples": 128
+        },
+        "symbolic": {
+          "bootstrap": {
+            "multiple_comparison_adjustment": false,
+            "replicates": 2000,
+            "seed": 2026091110,
+            "timing_rounds_resampled_as_examples": false,
+            "units": "independently resampled model seeds and shared example IDs"
+          },
+          "by_model_seed": {
+            "1701": {
+              "candidate_valid": 26,
+              "comparator_valid": 128,
+              "examples": 128,
+              "new_solves": 0,
+              "regressions": 102
+            },
+            "2702": {
+              "candidate_valid": 27,
+              "comparator_valid": 128,
+              "examples": 128,
+              "new_solves": 0,
+              "regressions": 101
+            }
+          },
+          "candidate": "support4_prefix8",
+          "candidate_valid": 53,
+          "comparator": "symbolic",
+          "comparator_valid": 256,
+          "descriptive_gate_conditions": {
+            "mean_latency_point_ratio": false,
+            "minimum_point_gain": false,
+            "p95_latency_point_ratio": false,
+            "positive_quality_interval_lower": false
+          },
+          "descriptive_gate_pass": false,
+          "endpoints": {
+            "mean_latency_ratio": {
+              "crossed_percentile_95": [
+                417.69777633901595,
+                468.19032160962433
+              ],
+              "point": 443.94874989345624
+            },
+            "p95_latency_ratio": {
+              "crossed_percentile_95": [
+                453.50634705985,
+                487.2374272325693
+              ],
+              "point": 468.87069823067213
+            },
+            "success_gain": {
+              "crossed_percentile_95": [
+                -0.85546875,
+                -0.7265625
+              ],
+              "point": -0.79296875
+            }
+          },
+          "family": "maze",
+          "headroom": {
+            "available_additional_solves": 0,
+            "baseline_valid": 256,
+            "maximum_possible_success_gain": 0.0,
+            "model_example_pairs": 256,
+            "point_gain_attainable_on_this_inventory": false,
+            "required_net_additional_solves": 13
+          },
+          "model_example_pairs": 256,
+          "model_seeds": [
+            1701,
+            2702
+          ],
+          "new_solves": 0,
+          "regressions": 203,
+          "scope": "Descriptive paired analysis; not independent confirmation, a selection-adjusted interval, a power calculation, or an equal-wall-clock-budget comparison. Latency gate uses point estimates, not interval upper bounds.",
+          "timing_rounds": 3,
+          "unique_examples": 128
+        }
+      },
+      "manifest_sha256": "b01ad85203a301409d2adadf14ca8975cffb4c37ce6b42d81086daa3aca422f4"
+    },
+    "sudoku_shift": {
+      "comparisons": {
+        "identity_20": {
+          "bootstrap": {
+            "multiple_comparison_adjustment": false,
+            "replicates": 2000,
+            "seed": 2026091110,
+            "timing_rounds_resampled_as_examples": false,
+            "units": "independently resampled model seeds and shared example IDs"
+          },
+          "by_model_seed": {
+            "1401": {
+              "candidate_valid": 128,
+              "comparator_valid": 120,
+              "examples": 128,
+              "new_solves": 8,
+              "regressions": 0
+            },
+            "2402": {
+              "candidate_valid": 127,
+              "comparator_valid": 120,
+              "examples": 128,
+              "new_solves": 7,
+              "regressions": 0
+            }
+          },
+          "candidate": "support4_prefix8",
+          "candidate_valid": 255,
+          "comparator": "identity_20",
+          "comparator_valid": 240,
+          "descriptive_gate_conditions": {
+            "mean_latency_point_ratio": true,
+            "minimum_point_gain": true,
+            "p95_latency_point_ratio": true,
+            "positive_quality_interval_lower": true
+          },
+          "descriptive_gate_pass": true,
+          "endpoints": {
+            "mean_latency_ratio": {
+              "crossed_percentile_95": [
+                0.8694171720066265,
+                0.9996596202123791
+              ],
+              "point": 0.9301622577260522
+            },
+            "p95_latency_ratio": {
+              "crossed_percentile_95": [
+                0.5873011738051218,
+                1.040914388429865
+              ],
+              "point": 0.6158441322447666
+            },
+            "success_gain": {
+              "crossed_percentile_95": [
+                0.0234375,
+                0.1015625
+              ],
+              "point": 0.05859375
+            }
+          },
+          "family": "sudoku_shift",
+          "headroom": {
+            "available_additional_solves": 16,
+            "baseline_valid": 240,
+            "maximum_possible_success_gain": 0.0625,
+            "model_example_pairs": 256,
+            "point_gain_attainable_on_this_inventory": true,
+            "required_net_additional_solves": 13
+          },
+          "model_example_pairs": 256,
+          "model_seeds": [
+            1401,
+            2402
+          ],
+          "new_solves": 15,
+          "regressions": 0,
+          "scope": "Descriptive paired analysis; not independent confirmation, a selection-adjusted interval, a power calculation, or an equal-wall-clock-budget comparison. Latency gate uses point estimates, not interval upper bounds.",
+          "timing_rounds": 3,
+          "unique_examples": 128
+        },
+        "identity_32": {
+          "bootstrap": {
+            "multiple_comparison_adjustment": false,
+            "replicates": 2000,
+            "seed": 2026091110,
+            "timing_rounds_resampled_as_examples": false,
+            "units": "independently resampled model seeds and shared example IDs"
+          },
+          "by_model_seed": {
+            "1401": {
+              "candidate_valid": 128,
+              "comparator_valid": 120,
+              "examples": 128,
+              "new_solves": 8,
+              "regressions": 0
+            },
+            "2402": {
+              "candidate_valid": 127,
+              "comparator_valid": 121,
+              "examples": 128,
+              "new_solves": 6,
+              "regressions": 0
+            }
+          },
+          "candidate": "support4_prefix8",
+          "candidate_valid": 255,
+          "comparator": "identity_32",
+          "comparator_valid": 241,
+          "descriptive_gate_conditions": {
+            "mean_latency_point_ratio": true,
+            "minimum_point_gain": true,
+            "p95_latency_point_ratio": true,
+            "positive_quality_interval_lower": true
+          },
+          "descriptive_gate_pass": true,
+          "endpoints": {
+            "mean_latency_ratio": {
+              "crossed_percentile_95": [
+                0.6988015065643043,
+                0.8964625194126835
+              ],
+              "point": 0.7841314202928281
+            },
+            "p95_latency_ratio": {
+              "crossed_percentile_95": [
+                0.37201520374977337,
+                1.0328208341373395
+              ],
+              "point": 0.3891415621504373
+            },
+            "success_gain": {
+              "crossed_percentile_95": [
+                0.0234375,
+                0.1015625
+              ],
+              "point": 0.0546875
+            }
+          },
+          "family": "sudoku_shift",
+          "headroom": {
+            "available_additional_solves": 15,
+            "baseline_valid": 241,
+            "maximum_possible_success_gain": 0.05859375,
+            "model_example_pairs": 256,
+            "point_gain_attainable_on_this_inventory": true,
+            "required_net_additional_solves": 13
+          },
+          "model_example_pairs": 256,
+          "model_seeds": [
+            1401,
+            2402
+          ],
+          "new_solves": 14,
+          "regressions": 0,
+          "scope": "Descriptive paired analysis; not independent confirmation, a selection-adjusted interval, a power calculation, or an equal-wall-clock-budget comparison. Latency gate uses point estimates, not interval upper bounds.",
+          "timing_rounds": 3,
+          "unique_examples": 128
+        },
+        "identity_4": {
+          "bootstrap": {
+            "multiple_comparison_adjustment": false,
+            "replicates": 2000,
+            "seed": 2026091110,
+            "timing_rounds_resampled_as_examples": false,
+            "units": "independently resampled model seeds and shared example IDs"
+          },
+          "by_model_seed": {
+            "1401": {
+              "candidate_valid": 128,
+              "comparator_valid": 112,
+              "examples": 128,
+              "new_solves": 16,
+              "regressions": 0
+            },
+            "2402": {
+              "candidate_valid": 127,
+              "comparator_valid": 114,
+              "examples": 128,
+              "new_solves": 13,
+              "regressions": 0
+            }
+          },
+          "candidate": "support4_prefix8",
+          "candidate_valid": 255,
+          "comparator": "identity_4",
+          "comparator_valid": 226,
+          "descriptive_gate_conditions": {
+            "mean_latency_point_ratio": false,
+            "minimum_point_gain": true,
+            "p95_latency_point_ratio": false,
+            "positive_quality_interval_lower": true
+          },
+          "descriptive_gate_pass": false,
+          "endpoints": {
+            "mean_latency_ratio": {
+              "crossed_percentile_95": [
+                1.1414307467163793,
+                1.4626147014532205
+              ],
+              "point": 1.2852868389352223
+            },
+            "p95_latency_ratio": {
+              "crossed_percentile_95": [
+                1.3910674982428741,
+                2.874953191851398
+              ],
+              "point": 2.5482794057052054
+            },
+            "success_gain": {
+              "crossed_percentile_95": [
+                0.0625,
+                0.17578125
+              ],
+              "point": 0.11328125
+            }
+          },
+          "family": "sudoku_shift",
+          "headroom": {
+            "available_additional_solves": 30,
+            "baseline_valid": 226,
+            "maximum_possible_success_gain": 0.1171875,
+            "model_example_pairs": 256,
+            "point_gain_attainable_on_this_inventory": true,
+            "required_net_additional_solves": 13
+          },
+          "model_example_pairs": 256,
+          "model_seeds": [
+            1401,
+            2402
+          ],
+          "new_solves": 29,
+          "regressions": 0,
+          "scope": "Descriptive paired analysis; not independent confirmation, a selection-adjusted interval, a power calculation, or an equal-wall-clock-budget comparison. Latency gate uses point estimates, not interval upper bounds.",
+          "timing_rounds": 3,
+          "unique_examples": 128
+        },
+        "symbolic": {
+          "bootstrap": {
+            "multiple_comparison_adjustment": false,
+            "replicates": 2000,
+            "seed": 2026091110,
+            "timing_rounds_resampled_as_examples": false,
+            "units": "independently resampled model seeds and shared example IDs"
+          },
+          "by_model_seed": {
+            "1401": {
+              "candidate_valid": 128,
+              "comparator_valid": 128,
+              "examples": 128,
+              "new_solves": 0,
+              "regressions": 0
+            },
+            "2402": {
+              "candidate_valid": 127,
+              "comparator_valid": 128,
+              "examples": 128,
+              "new_solves": 0,
+              "regressions": 1
+            }
+          },
+          "candidate": "support4_prefix8",
+          "candidate_valid": 255,
+          "comparator": "symbolic",
+          "comparator_valid": 256,
+          "descriptive_gate_conditions": {
+            "mean_latency_point_ratio": false,
+            "minimum_point_gain": false,
+            "p95_latency_point_ratio": false,
+            "positive_quality_interval_lower": false
+          },
+          "descriptive_gate_pass": false,
+          "endpoints": {
+            "mean_latency_ratio": {
+              "crossed_percentile_95": [
+                10.147002597761151,
+                13.79387538980927
+              ],
+              "point": 11.788368939071361
+            },
+            "p95_latency_ratio": {
+              "crossed_percentile_95": [
+                16.58427674505265,
+                35.3319312045791
+              ],
+              "point": 30.684329798791495
+            },
+            "success_gain": {
+              "crossed_percentile_95": [
+                -0.015625,
+                0.0
+              ],
+              "point": -0.00390625
+            }
+          },
+          "family": "sudoku_shift",
+          "headroom": {
+            "available_additional_solves": 0,
+            "baseline_valid": 256,
+            "maximum_possible_success_gain": 0.0,
+            "model_example_pairs": 256,
+            "point_gain_attainable_on_this_inventory": false,
+            "required_net_additional_solves": 13
+          },
+          "model_example_pairs": 256,
+          "model_seeds": [
+            1401,
+            2402
+          ],
+          "new_solves": 0,
+          "regressions": 1,
+          "scope": "Descriptive paired analysis; not independent confirmation, a selection-adjusted interval, a power calculation, or an equal-wall-clock-budget comparison. Latency gate uses point estimates, not interval upper bounds.",
+          "timing_rounds": 3,
+          "unique_examples": 128
+        }
+      },
+      "manifest_sha256": "afcbc728588b4b54785d66ffb201b84e499663e2fb5ef54c50abf78e87e60081"
+    }
+  },
+  "historical_executable_source_sha256": "c10c8226a6aa1e2e67e2d2de9df91415f2c345adf1a79e3b1901b9f9075ac23b",
+  "interpretation": "Eight comparisons are descriptive and not multiplicity adjusted. Two model seeds provide limited information about training variation. Physical energy and deployment value are not established by these intervals.",
+  "new_confirmation_generated": false,
+  "new_inference_or_training": false,
+  "policy_selection_adjusted": false,
+  "retained_rows_sha256": "123bbc137d7ea92a429853ca963c464a25f37652b32727f5dc4187207c975e68",
+  "schema": "spectra.research_frontier_audit.v1",
+  "scientific_status": "ADAPTIVE_DEVELOPMENT_ONLY",
+  "status": "PASS",
+  "threshold_application": "Retrospective diagnostic on consumed development; does not execute or pass the separate locked confirmation protocol.",
+  "threshold_reference_sha256": "e297c1f4d0ed5cff77f7c2954384b164ccff402b62759066f821cd0bca7e480f",
+  "timing_rows_checked": 7680
+}

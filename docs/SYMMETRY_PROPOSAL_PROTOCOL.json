@@ -1,0 +1,23 @@
+{
+  "schema": "spectra.symmetry_proposal_development.v1",
+  "status": "DEVELOPMENT_ONLY_NOT_PREREGISTERED_CONFIRMATION",
+  "source_base_commit": "ecd3249368c27d432d001503273e151de266b4f2",
+  "question": "Do exact input symmetries yield useful proposals beyond equal-transition identity continuation without any model update?",
+  "families": ["sudoku_shift", "maze"],
+  "surfaces": ["previously_consumed_development"],
+  "model_seeds": {"sudoku_shift": [1401, 2402], "maze": [1701, 2702]},
+  "examples_per_family": 128,
+  "arms": ["identity_4", "identity_32", "repeat_identity_32", "dihedral_32", "symbolic"],
+  "cycles_per_view": 4,
+  "view_order": ["identity", "transpose", "rotate180", "anti_transpose", "rotate90", "rotate270", "flip_horizontal", "flip_vertical"],
+  "maze_endpoint_swap_views": ["rotate180", "anti_transpose"],
+  "timing_rounds": 3,
+  "timing_order_seed": 18191,
+  "threads": 1,
+  "device": "cpu",
+  "gpu_permitted": false,
+  "candidate_reference_answers_permitted": false,
+  "training_updates": 0,
+  "new_confirmation_permitted": false,
+  "claims": "Descriptive paired proposal/cost evidence on consumed development only. Equal recursive-cycle caps are not equal wall-clock budgets; no scientific-gate promotion, novelty or practical classical-solver superiority claim."
+}
