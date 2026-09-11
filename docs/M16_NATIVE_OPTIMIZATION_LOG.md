@@ -1,0 +1,11 @@
+# M16 native optimization development log
+
+All measurements are CPU-only, single-threaded complete executions of the retained M10 graph. They use its exact inference artifact, the first 64 reconstructed test puzzles, five randomized interleaved rounds, and the same native semantic checker. This undertrained checkpoint solves none of these puzzles; the workload establishes fidelity/performance boundaries, not task capability.
+
+The initial validated AVX2 output-lane kernel preserved the hidden-index FP32 accumulation order and matched the original scalar graph bit-for-bit. On the local host its mean complete-solve time was 3.1683 ms versus 16.2042 ms for the original checked scalar path. An optimized dense FP32 implementation of the same effective weights took 1.5278 ms. Therefore the new native implementation was not claimed to beat the dense comparator.
+
+A second development version reuses each decoded weight-vector mask across four input vectors that are already materialized within the same linear invocation. It does not assume future recurrent states exist. It retains the original add/subtract operations, order, scales, bias, GELU, normalization, attention and quantization boundaries. The tiled version measured 2.2366 ms versus 15.9518 ms for the original scalar path and 1.5038 ms for dense FP32. It again matched original logits bit-for-bit; dense FP32 had small numerical differences but identical final answers on this fidelity set.
+
+Both raw benchmark directories are retained. The second version is selected before fresh confirmation. The cached handle keeps an extra transposed int8 weight layout: its payload is 36,968 bytes, including 28,128 additional int8 bytes, while the dense comparator retains 112,512 bytes of effective FP32 weights. Those are payload scopes, not complete process memory or cache-residency proofs. Original artifact storage remains retained by the runtime too.
+
+Kernel and full-graph tests cover odd dimensions, tails, zero/signed-zero values, input dtype/stride errors, malformed packing/scales, source-array mutation, lifetime, concurrent calls, exact checkers and full recurrent outputs. A standalone address/undefined-behavior sanitizer harness is included. No physical-energy, universally optimal kernel, or frontier-level importance claim follows from these measurements.

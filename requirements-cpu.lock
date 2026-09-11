@@ -1,0 +1,13 @@
+# Tested CPU reproduction environment. Install from the source checkout.
+# Python 3.13.5 was used for the retained local run. CI also tests Python 3.11.
+# No CUDA wheels or teacher APIs. Native code additionally needs g++ or clang++.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.10.0+cpu
+numpy==2.3.5
+PyYAML==6.0.3
+einops==0.8.2
+tqdm==4.67.3
+pandas==2.2.3
+psutil==7.2.2
+pytest==9.0.2
+setuptools==82.0.1

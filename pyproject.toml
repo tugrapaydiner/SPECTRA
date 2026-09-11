@@ -25,7 +25,10 @@ dev = ["pytest>=7.4"]
 # installed as importable packages (scripts are run directly).
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["common*", "model*", "train*", "eval*", "data*", "deploy*"]
+include = ["common*", "model*", "train*", "eval*", "data*", "deploy*", "spectra_reliability*"]
+
+[tool.setuptools.package-data]
+spectra_reliability = ["native_cpu.cpp"]
 
 [tool.pytest.ini_options]
 # Put the repo root on sys.path so `import model.trm`, `import train.losses`,
