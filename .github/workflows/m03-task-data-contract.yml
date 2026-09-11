@@ -28,8 +28,8 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p .m03/manifests
-          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m03/install_torch.txt
-          timeout 180s python -m pip install -r requirements.txt |& tee .m03/install_requirements.txt
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.10.0" |& tee .m03/install_torch.txt
+          timeout 180s python -m pip install -r requirements-cpu-research.txt |& tee .m03/install_requirements.txt
           python - <<'PY' | tee .m03/environment.txt
           import platform, torch, numpy, pytest
           print('platform=', platform.platform())

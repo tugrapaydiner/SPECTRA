@@ -1,0 +1,6 @@
+dependencies	passed	rc_torch=0 rc_requirements=0 elapsed_s=29
+energy_api_probe	passed	rc=0
+fast_tests	failed	rc=1 elapsed_s=95 budget_s=360
+native_kernel_tests	passed	rc=0 elapsed_s=4 budget_s=180
+native_extension_build	passed	rc=0 elapsed_s=29 budget_s=180
+training_smoke	passed	rc=0 elapsed_s=2 budget_s=30

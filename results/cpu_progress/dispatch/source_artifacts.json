@@ -1,0 +1,15 @@
+{
+  "status": "SOURCE_BOUND_DIAGNOSTIC_NOT_PORTABILITY_FIX",
+  "left": {
+    "run_id": 34558583954,
+    "artifact_id": 10183508536,
+    "zip_sha256": "36bef2ac9e68e65c4add4449de39b7fd8b0465432b4448d34560d8a70ff98406"
+  },
+  "right": {
+    "run_id": 34558579882,
+    "artifact_id": 10183501195,
+    "zip_sha256": "72b39743651296de3c5cb6fbf1f3added36c6751d08d1a48a70cbb0d76a68490"
+  },
+  "verification": "Each original ZIP SHA and every artifact inventory entry verified before trace comparison. Original archives remain available as downloaded conversation attachments.",
+  "claim_boundary": "These module traces locate observed output differences only. Existing historical full-pool hashes and acceptance checks are not altered."
+}

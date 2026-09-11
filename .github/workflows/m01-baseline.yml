@@ -82,10 +82,10 @@ jobs:
           set -o pipefail
           t0=$(date +%s)
           set +e
-          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" 2>&1 | tee .m01/install_torch.txt
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.10.0" 2>&1 | tee .m01/install_torch.txt
           rc_torch=${PIPESTATUS[0]}
           if [ "$rc_torch" -eq 0 ]; then
-            timeout 180s python -m pip install -r requirements.txt 2>&1 | tee .m01/install_requirements.txt
+            timeout 180s python -m pip install -r requirements-cpu-research.txt 2>&1 | tee .m01/install_requirements.txt
             rc_req=${PIPESTATUS[0]}
           else
             rc_req=125

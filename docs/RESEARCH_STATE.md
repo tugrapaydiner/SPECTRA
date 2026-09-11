@@ -13,6 +13,30 @@
 | M15 | **COMPLETE** bounded mechanism result; ancestral-overlap correction retained in M16 |
 | M16 | Implemented and evidence retained; native-checker speedup and evaluator-target controls |
 | M17 | Execution complete; **TWO_FAMILY_CLAIM_NOT_ESTABLISHED** |
+| Symmetry restart follow-up | Recovered implementation and evidence; **ADAPTIVE DEVELOPMENT ONLY** |
+
+## September 11 integrated follow-up
+
+The optional symmetry restart policy and its original source/answer/timing archives
+are retained in `results/cpu_progress/`. Consumed development gives 255/256 Sudoku
+and 53/256 maze solves, compared with 241/256 and 37/256 for 32-cycle continuation.
+These are two models on 128 common puzzles per family. The policy was adaptively
+selected on those puzzles. No new confirmation is established by integration.
+
+The new strict [paired frontier audit](../results/reliability/research_frontier_audit.json)
+uses complete externally declared model/example inventories and crossed resampling,
+after collapsing three timing rounds. It reports every baseline, not only the
+favorable 32-cycle comparison. The Sudoku p95 ratio is 0.389 but its descriptive
+95% interval is [0.372, 1.033]. Maze against the equal-20-cycle baseline has mean
+ratio 1.041 and p95 ratio 1.079. Classical solvers remain perfect and faster.
+
+See [the detailed review and research gates](RESEARCH_REVIEW_20260911.md).
+`FINAL_CPU_CONFIRMATION_PROTOCOL.json` remains byte-identical to its preexisting
+commit. The available source/evidence package does not contain the separately
+reported final-confirmation runner or raw results. A protocol alone does not
+establish that result. Its example seeds must be treated as potentially consumed;
+recover the original records or explicitly label any reconstruction a reproduction.
+Never present a rerun of those seeds as new independent confirmation.
 
 ## Current integration boundary
 
@@ -63,10 +87,10 @@ requirements. Those future gates are not claimed complete.
 
 ## Independent fixed-pool inference replay
 
-`python scripts/verify_fixed_pool_replay.py --out outputs/fixed-pool-replay`
+`python scripts/verify_fixed_pool_replay.py --cpu-profile historical-ordered --out outputs/fixed-pool-replay`
 reconstructs all previously published M17 pools from frozen checkpoints rather
-than only reaggregating their stored labels. The CLI uses an explicit historical
-AVX2 CPU profile, records dispatch settings, and requires the six exact pool-tensor
+than only reaggregating their stored labels. The ordered profile uses explicit historical
+arithmetic, records dispatch settings, and requires the six exact pool-tensor
 hashes. It checks 16,384 candidates, their 16,384 continuations and 49,152 head
 scores. Already-published Sudoku confirmation is replayed without generation or
 selection; the unused maze confirmation remains unopened.

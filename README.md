@@ -4,7 +4,7 @@
 
 ### Sparse Policy-guided Energy-aware Cache-Ternary Recursive Agent
 
-**An edge-native recursive reasoner** — a W1.58A8 recurrent core with latent search, adaptive execution, grounded verification, and a correctness-first native CPU path.
+**A research instrument for compact recursive models, checked search, and native inference.** Floating-point capability results and ternary deployment results have separate evidence boundaries.
 
 [Architecture spec](docs/ARCHITECTURE.md) · [Measurement protocol](docs/M13_PROTOCOL.md) · [Reasoning stack](#7-the-reasoning-stack) · [Telemetry](#8-the-telemetry-firehose)
 
@@ -12,9 +12,34 @@
 
 ---
 
+## CPU development update: verified symmetry restarts
+
+An optional frozen-model policy runs eight identity cycles and then three exact
+transformed views with four cycles each. On consumed development it solves
+**255/256 Sudoku** and **53/256 maze** model-example cases, versus **241/256**
+and **37/256** for 32-cycle identity continuation, with lower local mean and p95
+complete-solve latency and zero observed lost solves against that control.
+
+These are adaptively selected results on **128 distinct puzzles × two model seeds
+per task**, not fresh confirmation or a win over the perfect, faster classical
+comparators. The equal-20-cycle maze control is faster but solves fewer cases.
+No GPU or training update is used. Full timing scopes, original and replayed
+raw evidence, a preserved first-run retention failure, exact source inventories,
+and all claim boundaries are in [CPU progress](docs/CPU_PROGRESS.md).
+
+The frozen numerical replay has a separate, restricted
+[explicit-order reproduction profile](docs/ORDERED_REPLAY.md); it is not the
+B=1 symmetry policy or a universal CPU-portability guarantee.
+
+The [September 11 review](docs/RESEARCH_REVIEW_20260911.md) gives the evidence-based
+assessment and research priorities. The new paired audit retains an important
+qualification: the Sudoku p95 latency-ratio interval crosses 1 despite its lower
+point estimate. The maze equal-20-cycle comparator is faster. Neither result is
+an independently confirmed general search advantage.
+
 ## Current evidence: M16 integration and M17 outcome
 
-**CPU-only research instrument; not a demonstrated general-purpose reasoning or energy breakthrough.**
+**Current validated evidence comes from CPU experiments; general-purpose reasoning and physical-energy advantages remain unestablished.**
 
 The latest implemented paths add ancestor-wide data exclusions, typed evaluator targets,
 verified-answer retention, immutable native weight handles, and native Sudoku/maze
@@ -49,13 +74,16 @@ python -m pip install -r requirements-cpu-research.txt
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MAX_JOBS=1 \
   python -m pytest -m "not slow" -ra
 python scripts/verify_retained_results.py --out outputs/retained-audit.json
-python scripts/verify_fixed_pool_replay.py --cpu-profile historical-avx2 --out outputs/fixed-pool-replay
+python scripts/verify_fixed_pool_replay.py --cpu-profile historical-ordered --out outputs/fixed-pool-replay
+python scripts/verify_cpu_progress.py --out outputs/restart-integrity.json
+python scripts/verify_symmetry_checkpoint_replay.py --out outputs/restart-replay
+python scripts/audit_research_frontier.py --out outputs/frontier.json --verify-report results/reliability/research_frontier_audit.json
 ```
 
 The [fixed-pool inference replay](docs/FIXED_POOL_REPLAY.md) additionally
 reconstructs all 16,384 published M17 candidate states and 49,152 evaluator scores
 from the frozen checkpoints, with independently constructed labels and exact
-pool-tensor hashes. Its explicit AVX2 reproduction profile matters: host-default
+pool-tensor hashes. Its explicit ordered-arithmetic reproduction profile matters: host-default
 CPU dispatch is not assumed bitwise identical. Maze confirmation remains unopened.
 The maze diagnostic also shows that every nonempty invalid restored path receives
 the same structural score, 0.75; the failed two-family gate is not promoted.

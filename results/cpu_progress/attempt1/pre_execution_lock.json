@@ -1,0 +1,9 @@
+{
+  "scope": "local lock before first experimental execution; not independent preregistration",
+  "base": "ecd3249368c27d432d001503273e151de266b4f2",
+  "sha256": {
+    "docs/SYMMETRY_PROPOSAL_PROTOCOL.json": "f23153c020331c3abf6d051c2b91014cba4fb7c21cb73e59964e341c93473c25",
+    "eval/symmetry_search.py": "ad30f259872d56aeb38faf2d3202700e1c581e9c433dc4ac43097b541738520f",
+    "scripts/audit_symmetry_proposals.py": "757ccc0ce0bff3b3e1b965acb685f2ec48f206d835204c57edb776313c7dc2b2"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "upstream_head": "a55bb75411d99afcf19d80b73600d0de5dd7e6d9",
+  "artifact_id": 10185175392,
+  "run_id": 34563359655,
+  "zip_sha256": "fe16aa3f9c33eee561a6f40d7d5f9bd5b5f3c8669f5a57b9592340fa3615cf4a",
+  "all_member_hashes_verified": true,
+  "fixed_pool_status": "PASS",
+  "note": "Parallel upstream source, not the local symmetry feature patch; see recorded environment for observed host."
+}

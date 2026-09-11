@@ -1,0 +1,10 @@
+{
+  "scope": "Local execution lock after adaptive development selection; not independent preregistration",
+  "hashes": {
+    "eval/symmetry_search.py": "0f0eb174826c2c566414dee2f3b3545d25ed2d2898850c3a22d8c603afef4636",
+    "scripts/audit_symmetry_proposals.py": "fa45118f8e6cef81d9f2b9a9e7be27bc554dbbdee01d5ab5a3d6bb8bebf9e204",
+    "eval/symmetry_schedule.py": "315df7f071b59b738fd3d403655d9ad85624e94b8ba5908f52c630ceb465ed9c",
+    "docs/SYMMETRY_PROPOSAL_REFINEMENT_PROTOCOL.json": "d03ff20f8b5905856b7ffa069be6c81392f8284317c2dc20b8137a26d2846e8d",
+    "results/cpu_progress/selection/counterfactual_predictions.json": "550ca1ed4be49c1a60043cf87cab6bc012314205cae547b43c0893d3e0aed0e7"
+  }
+}

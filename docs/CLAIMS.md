@@ -2,6 +2,21 @@
 
 Purpose: separate what the repository currently **implements**, what its tests actually establish, what has a reproducible measurement artifact, and what remains a **hypothesis**. Passing a unit test upgrades only the domain actually exercised by that test.
 
+## Current scope (September 11, 2026)
+
+The detailed map below is the historical M01–M05 ledger. Its milestone-specific
+statements must not be read as a current assessment of M14–M17. Current authority:
+[research state](RESEARCH_STATE.md), [integration review](INTEGRATION_REVIEW.md),
+[restart evidence](CPU_PROGRESS.md), and [September 11 audit](RESEARCH_REVIEW_20260911.md).
+
+| Current claim | Evidence | Boundary |
+|---|---|---|
+| Task-specific recursive capability gain | M14 independent confirmation | Small floating-point Sudoku model and exact semantic exit; different from the ternary deployment stack |
+| Faithful native deployment and replay | M10, M16, fixed-pool replay and CI | Explicit configurations/arithmetic; no universal speed, cache or physical-energy result |
+| Verified symmetry restarts improve the retained 32-cycle neural comparison | `results/cpu_progress/attempt2` | Adaptively selected consumed development; classical solvers win; p95 uncertainty is disclosed |
+| Mean/p95/quality comparisons respect model and example pairing | `eval/paired_frontier.py`, `results/reliability/research_frontier_audit.json` | Descriptive crossed intervals; no selection adjustment or new confirmation |
+| Frontier-level scientific originality and adoption | Not established | TRM, ternary inference, augmentation and halt-first selection all have prior work |
+
 The live milestone register is [`docs/RESEARCH_STATE.md`](RESEARCH_STATE.md). The complete pre-M05 M01–M04 state record is preserved verbatim in [`docs/RESEARCH_STATE_M01_M04.md`](RESEARCH_STATE_M01_M04.md).
 
 ## Status vocabulary

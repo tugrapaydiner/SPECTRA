@@ -31,6 +31,10 @@ The replay CLIs select numerical dispatch before importing Torch or NumPy. A
 sitecustomize hook that imports these libraries first is rejected, rather than
 silently applying an ineffective profile. Run in a clean virtual environment.
 
+Activate that environment before running native builds: PyTorch invokes the
+`ninja` executable through PATH. The research requirements now install Ninja
+explicitly, rather than depending on a CI runner's preinstalled build tools.
+
 Long legacy training tests are a separate scope (`pytest -m slow`). Fast test
 counts must not be described as the full training suite. Complete transitive
 package versions and source archives are retained by CI; the direct package

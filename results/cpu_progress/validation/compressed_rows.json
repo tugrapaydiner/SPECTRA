@@ -1,0 +1,32 @@
+{
+  "checkpoint_new/comparisons.jsonl.gz": {
+    "raw_bytes": 468992,
+    "raw_sha256": "38deeefb932d27e7b7626cebc43b602af44ac4ceaba97835cd26af19a9c3eccd",
+    "rows": 2560
+  },
+  "checkpoint_original/rows.jsonl.gz": {
+    "raw_bytes": 744163,
+    "raw_sha256": "98e3df9bbd942fc727989dcc97c9850c65c572eb40b67b0db39191aa6e3208f6",
+    "rows": 3840
+  },
+  "ordered_fixed_pool/maze_development_rows.jsonl.gz": {
+    "raw_bytes": 645559,
+    "raw_sha256": "8cb91f4e002cafd9b098f90361985d3068c79ac3bfce8a34d97fba2edd96f77a",
+    "rows": 256
+  },
+  "ordered_fixed_pool/sudoku_shift_confirmation_rows.jsonl.gz": {
+    "raw_bytes": 1236991,
+    "raw_sha256": "ff3e099f065d38b97b34728be7f91904cbe1f8769d0dcfbfabaa1dae9f1699ba",
+    "rows": 512
+  },
+  "ordered_fixed_pool/sudoku_shift_development_rows.jsonl.gz": {
+    "raw_bytes": 617507,
+    "raw_sha256": "a57426b4a62b8afa500e885ae7e97c443ced7e35775247cd12012c713c466c62",
+    "rows": 256
+  },
+  "symmetry_audit/witness_rows.jsonl.gz": {
+    "raw_bytes": 1841174,
+    "raw_sha256": "94ea3d20d1ecdd2728638465ebc5ae79212e7208fdb6d9da1f1cec21aeb96c4c",
+    "rows": 5120
+  }
+}

@@ -66,6 +66,15 @@ jobs:
         run: |
           set -o pipefail
           timeout 600s python scripts/verify_fixed_pool_replay.py --cpu-profile historical-ordered --out .cpu-contracts/fixed_pool_replay | tee .cpu-contracts/fixed_pool_replay.txt
+      - name: Verify retained restart evidence and paired frontier analysis
+        run: |
+          set -o pipefail
+          python scripts/verify_cpu_progress.py --out .cpu-contracts/restart_evidence.json | tee .cpu-contracts/restart_evidence.txt
+          python scripts/audit_research_frontier.py --out .cpu-contracts/research_frontier.json --verify-report results/reliability/research_frontier_audit.json | tee .cpu-contracts/research_frontier.txt
+      - name: Replay every retained restart policy and comparator answer
+        run: |
+          set -o pipefail
+          timeout 600s python scripts/verify_symmetry_checkpoint_replay.py --out .cpu-contracts/restart_replay | tee .cpu-contracts/restart_replay.txt
       - name: Diagnose a failed strict replay on the same host
         if: failure()
         run: |

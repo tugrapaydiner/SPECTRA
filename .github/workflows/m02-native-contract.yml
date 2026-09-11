@@ -28,8 +28,8 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p .m02
-          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4" |& tee .m02/install_torch.txt
-          timeout 180s python -m pip install -r requirements.txt |& tee .m02/install_requirements.txt
+          timeout 360s python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.10.0" |& tee .m02/install_torch.txt
+          timeout 180s python -m pip install -r requirements-cpu-research.txt |& tee .m02/install_requirements.txt
           python - <<'PY' | tee .m02/environment.txt
           import platform, torch, numpy, pytest
           from deploy.torch_kernel import cpu_supports_avx2
