@@ -16,7 +16,7 @@
 
 ## Current integration boundary
 
-M16/M17 implementation is consolidated on `research/verifier-aligned-cpu-search`.
+M16/M17 implementation and fixed-pool replay have been merged into `main` through PRs #18 and #19.
 The native-checker path improves the historical complete-solve implementation on
 its retained small Sudoku comparison, not the performance of an arbitrary solver.
 M17 confirms a fixed-pool evaluator-target effect on harder Sudoku but fails its
@@ -35,6 +35,31 @@ verifies pinned M16/M17 archives, 1,728 manifest rows and 11,520 stored
 complete-solve answer records, then reproduces retained summaries without opening
 new confirmation data. Timing repetitions are not independent examples. Fixed-pool
 labels are reaggregated rather than independently inferred by this audit.
+
+## Structural-transfer audit and next CPU research gates
+
+The new [Sudoku4 symmetry audit](SYMMETRY_AUDIT.md) replays all 5,120 consumed
+M14 training/validation/development examples against the pinned manifest. Of the
+512 development puzzles, 351 (68.5547%) are equivalent to a training puzzle under
+the declared Sudoku spatial/digit symmetry group. A training-only orbit lookup
+solves precisely those 351 and abstains on the other 161; it receives no evaluation
+reference solution. This limits structural-generalization claims, not the original
+exact-disjoint in-distribution result.
+
+The neural advantage does not disappear in the post-hoc unseen-orbit stratum:
+the FP recursive candidate solves 799/805 model-example cases (99.2547%), versus
+707/805 (87.8261%) for the FP single-pass comparator. Those are 161 distinct puzzles
+across five seeds, not 805 independent examples. This is reaggregation of existing
+development outputs, not fresh confirmation, a causal memorization test or a new
+latency result. This audit does not inspect the separate M14 confirmation set.
+
+Input-only canonicalization, invertible witnesses, a training-only lookup baseline,
+opt-in orbit-disjoint generation and ancestry integration are implemented. Legacy
+recipes remain unchanged. Future structural-transfer studies must explicitly adopt
+the new policy and include orbit keys from all consumed ancestor datasets; old
+exact-only hashes are insufficient. See [CPU research gates](CPU_RESEARCH_GATES.md)
+for the proposed capability, baseline, latency-tail and independent-replication
+requirements. Those future gates are not claimed complete.
 
 ## Independent fixed-pool inference replay
 
