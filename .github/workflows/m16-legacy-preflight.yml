@@ -1,0 +1,41 @@
+name: m16-legacy-preflight
+on:
+  push:
+    branches: [research/m16-verifier-aligned-cpu]
+    paths: ['.github/workflows/m16-legacy-preflight.yml']
+permissions:
+  contents: read
+jobs:
+  original-slow-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      CUDA_VISIBLE_DEVICES: ''
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '1'
+      MAX_JOBS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: CPU-only dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.10.0+cpu'
+          python -m pip install 'numpy==2.3.5' 'PyYAML==6.0.3' 'einops==0.8.2' 'tqdm==4.67.3' 'pandas==2.2.3' 'psutil==7.2.2' 'pytest==9.0.2'
+      - name: Original learning thresholds, unchanged
+        run: |
+          set -o pipefail
+          mkdir -p .m16-preflight
+          free -m | tee .m16-preflight/memory.txt
+          python -c 'import torch; assert torch.version.cuda is None'
+          python -m pytest -m slow -ra |& tee .m16-preflight/pytest-slow.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m16-legacy-preflight-evidence
+          path: .m16-preflight/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
