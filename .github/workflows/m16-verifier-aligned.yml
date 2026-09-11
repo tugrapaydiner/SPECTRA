@@ -58,6 +58,10 @@ jobs:
         run: |
           set -o pipefail
           python scripts/verify_retained_results.py --out .cpu-contracts/retained_results_verified.json | tee .cpu-contracts/evidence_verification.txt
+      - name: Replay every frozen development checkpoint and complete-solve arm
+        run: |
+          set -o pipefail
+          timeout 600s python scripts/verify_checkpoint_replay.py --out .cpu-contracts/checkpoint_replay | tee .cpu-contracts/checkpoint_replay.txt
       - name: Hash verification artifacts
         if: always()
         run: |
