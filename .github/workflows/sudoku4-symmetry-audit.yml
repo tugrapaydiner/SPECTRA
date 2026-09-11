@@ -1,0 +1,76 @@
+name: sudoku4-symmetry-audit
+on:
+  push:
+    branches: [research/sudoku4-orbit-audit]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'data/**'
+      - 'scripts/_common.py'
+      - 'scripts/audit_sudoku_symmetry.py'
+      - 'tests/test_sudoku_symmetry.py'
+      - 'results/reliability/sudoku4_symmetry_audit.json'
+      - '.github/workflows/sudoku4-symmetry-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  symmetry:
+    name: Sudoku4 orbit contracts (Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CUDA_VISIBLE_DEVICES: ''
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MAX_JOBS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install CPU-only environment
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+          python -m pip install -r requirements-cpu-research.txt
+          python -c 'import torch; assert torch.version.cuda is None and not torch.cuda.is_available()'
+      - name: Record immutable source and dependencies
+        run: |
+          mkdir -p .symmetry-checks
+          git rev-parse HEAD > .symmetry-checks/source_commit.txt
+          git archive --format=tar.gz HEAD > .symmetry-checks/source.tar.gz
+          python -m pip freeze > .symmetry-checks/environment.lock.txt
+      - name: Independent finite-group oracle and split integration
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_sudoku_symmetry.py -ra --junitxml=.symmetry-checks/pytest.xml | tee .symmetry-checks/pytest.txt
+      - name: Replay consumed data and verify every retained audit field
+        run: |
+          set -o pipefail
+          python scripts/audit_sudoku_symmetry.py --out .symmetry-checks/audit --verify-report results/reliability/sudoku4_symmetry_audit.json | tee .symmetry-checks/audit.txt
+      - name: Hash artifacts
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root=Path('.symmetry-checks'); root.mkdir(exist_ok=True)
+          with (root/'sha256.txt').open('w') as out:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file() and p.name!='sha256.txt':
+                      out.write(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(root))+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sudoku4-orbit-audit-${{ matrix.python }}-${{ github.run_id }}-${{ github.sha }}
+          path: .symmetry-checks/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
