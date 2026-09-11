@@ -50,3 +50,45 @@ def test_unknown_and_timeout_receive_no_invented_witness_credit():
     out=summarize(cfg,items,rows,[])
     assert out['statuses']=={'TIMEOUT':1,'UNKNOWN_BUDGET':3}
     assert all(v==0 for budgets in out['all_within_cutoff_rates'].values() for v in budgets.values())
+
+
+@pytest.mark.parametrize('native_result', [True, False, None])
+def test_worker_live_payload_matches_json_representation(monkeypatch, native_result):
+    # Exercise the live multiprocessing payload, not only JSON fixtures. The
+    # first CI attempt exposed a tuple/list mismatch after all 384 real runs.
+    import json
+    import sys
+    import types
+    from . import external
+
+    class SolverDouble:
+        def __init__(self, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def conf_budget(self, budget): assert budget == CONFLICTS
+        def solve_limited(self): return native_result
+        def get_model(self): return [1]
+        def accum_stats(self):
+            return {'conflicts': 0, 'decisions': 1, 'propagations': 1, 'restarts': 0}
+
+    class Pipe:
+        def __init__(self): self.value = None; self.closed = False
+        def send(self, value): self.value = value
+        def close(self): self.closed = True
+
+    package = types.ModuleType('pysat')
+    module = types.ModuleType('pysat.solvers')
+    module.Solver = SolverDouble
+    package.solvers = module
+    monkeypatch.setitem(sys.modules, 'pysat', package)
+    monkeypatch.setitem(sys.modules, 'pysat.solvers', module)
+    monkeypatch.setattr(external.importlib.metadata, 'version', lambda name: VERSION)
+    pipe = Pipe()
+    problem = CNF(1, ((1,),))
+    external.worker(pipe, problem.record(), SOLVERS[0])
+    expected = 'SAT_VERIFIED' if native_result is True else 'UNSAT_REPORTED' if native_result is False else 'UNKNOWN_BUDGET'
+    assert pipe.closed and pipe.value['status'] == expected
+    assert pipe.value == json.loads(json.dumps(pipe.value, allow_nan=False))
+    assert pipe.value['witness'] == ([True] if native_result is True else None)
+    if native_result is True:
+        assert type(pipe.value['witness']) is list

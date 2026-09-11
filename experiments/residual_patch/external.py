@@ -54,7 +54,7 @@ def worker(pipe,record,solver):
         if witness is not None and not formula.satisfied(witness):raise ValueError('false SAT witness')
         complete_end=time.perf_counter_ns()
         pipe.send({'status':'SAT_VERIFIED' if result is True else 'UNSAT_REPORTED' if result is False else 'UNKNOWN_BUDGET',
-          'witness':witness,'setup_ns':setup_end-start,'solver_call_ns':solve_end-setup_end,
+          'witness':None if witness is None else list(witness),'setup_ns':setup_end-start,'solver_call_ns':solve_end-setup_end,
           'extract_count_delete_ns':deletion_end-solve_end,'independent_check_ns':complete_end-deletion_end,
           'complete_ns':complete_end-start,'counters':counters,'python_sat_version':version})
     except Exception:

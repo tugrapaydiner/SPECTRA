@@ -153,14 +153,14 @@ must be new paths; do not overwrite an existing experiment.
 
 ```bash
 python -m pytest experiments/residual_patch -q
-python -m experiments/residual_patch.experiment freeze --out outputs/repair-v1
-python -m experiments/residual_patch.experiment collect --out outputs/repair-v1
-python -m experiments/residual_patch.experiment train --out outputs/repair-v1
-python -m experiments/residual_patch.experiment validation --out outputs/repair-v1
-python -m experiments/residual_patch.followup train --original outputs/repair-v1 --out outputs/repair-v2
-python -m experiments/residual_patch.followup validation --original outputs/repair-v1 --out outputs/repair-v2
-python -m experiments/residual_patch.followup development --original outputs/repair-v1 --out outputs/repair-v2
-python -m experiments/residual_patch.audit --original outputs/repair-v1 --followup outputs/repair-v2 --replay --refit --out outputs/repair-audit.json
+python -m experiments.residual_patch.experiment freeze --out outputs/repair-v1
+python -m experiments.residual_patch.experiment collect --out outputs/repair-v1
+python -m experiments.residual_patch.experiment train --out outputs/repair-v1
+python -m experiments.residual_patch.experiment validation --out outputs/repair-v1
+python -m experiments.residual_patch.followup train --original outputs/repair-v1 --out outputs/repair-v2
+python -m experiments.residual_patch.followup validation --original outputs/repair-v1 --out outputs/repair-v2
+python -m experiments.residual_patch.followup development --original outputs/repair-v1 --out outputs/repair-v2
+python -m experiments.residual_patch.audit --original outputs/repair-v1 --followup outputs/repair-v2 --replay --refit --out outputs/repair-audit.json
 python -m experiments.residual_patch.external run --followup outputs/repair-v2 --out outputs/repair-external
 python -m experiments.residual_patch.external verify --followup outputs/repair-v2 --out outputs/repair-external
 ```
@@ -180,3 +180,18 @@ Related primary sources (not novelty certification): [NLocalSAT](https://arxiv.o
 and the [PySAT solver API](https://pysathq.github.io/docs/html/api/solvers.html).
 Neural constraint repair, stochastic local-search guidance and LNS are established
 research directions; any future originality claim must be substantially narrower.
+
+## Retained first CI failure and correction
+
+Run `34646255794` completed all training, native replays, model refits and all
+384 external solver observations, then failed external summary generation. The
+worker sent a tuple witness through multiprocessing while the strict summary
+expected the JSON list representation. Archived JSON witnesses were valid lists;
+independent replay checked every original row successfully. The original failed
+run and all its records remain retained, not relabeled as a passing run.
+
+The correction converts the witness to a list before sending it. Three worker
+round-trip regression cases cover SAT, UNSAT-report and budget-unknown outputs.
+No solver algorithm, measured timer, threshold or model is changed. The corrected
+head reruns all measurements and requires both live and archived verification.
+The Python module commands above also correct an earlier documentation typo.
