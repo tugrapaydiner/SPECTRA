@@ -1,0 +1,82 @@
+{
+  "base_main": "15fd921649f5c2e87ce346bd53e09bb92e25a61a",
+  "base_tree": "e94e58fce95e8fa606390b29f24fd3413db86944",
+  "local_tested_tree": "8d8cac4f041ecfab041d0846857764640edc264f",
+  "runs": [
+    {
+      "name": "baseline",
+      "junit": [
+        {
+          "tests": "716",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "110.156"
+        }
+      ],
+      "log_sha256": "9ef3da9205803177bf0c118893abeb85a3575de4b05c863bee03ec94ad0a50e6",
+      "xml_sha256": "9e725e4476d2e205375b3a227bae99ffb851606e0754a7f26fa98e0f2b2c00a8"
+    },
+    {
+      "name": "cnf_attempt1",
+      "junit": [
+        {
+          "tests": "81",
+          "failures": "1",
+          "errors": "0",
+          "skipped": "0",
+          "time": "0.186"
+        }
+      ],
+      "log_sha256": "515dd2437b4f72d30cf3f831a1a0506d2c5816e30898170fecfba601869bc793",
+      "xml_sha256": "08f7d80080813f5fb179514b7c2ebce00e03dc1e78c394ce7c7af1ce42e757b6"
+    },
+    {
+      "name": "cnf_attempt2",
+      "junit": [
+        {
+          "tests": "81",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "0.186"
+        }
+      ],
+      "log_sha256": "3c952b87218342cbe11dfc841b3b3ca3500e0a7bd9a6d3f5ac3f69211c13fa6c",
+      "xml_sha256": "6b2e3e40268a97415ad8ec2524e412380b77dce980e7b06bfc05786d661c61f2"
+    },
+    {
+      "name": "cnf_attempt3",
+      "junit": [
+        {
+          "tests": "84",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "0.191"
+        }
+      ],
+      "log_sha256": "727e3fac9cd2f63042d1e902d7c12b476b806a46da8d5204e0f410f5e9003c9c",
+      "xml_sha256": "8df2dfab00c827f8b7c5b4b74ee8c03e79e810565fdf4a58af0389cbfc895c0e"
+    },
+    {
+      "name": "final_fast",
+      "junit": [
+        {
+          "tests": "800",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "40.410"
+        }
+      ],
+      "log_sha256": "b03dfa21c429c62ef044fde272e7ed5bf0900525e2413b996908b3ddc4e8782a",
+      "xml_sha256": "f5f442302c26cd95f02edd78f720a0f13cea6fc3743702577b2724dc26ee8c6f"
+    }
+  ],
+  "limitations": [
+    "16 existing slow retraining tests deselected",
+    "PySAT absent locally; solver API doubles and synthetic times are unit tests only, not an empirical experiment",
+    "Initial focused attempt failed from a test-double class-scope NameError; corrected without changing runtime algorithm"
+  ]
+}

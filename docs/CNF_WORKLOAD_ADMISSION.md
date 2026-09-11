@@ -18,10 +18,31 @@ worker or used to construct a repair policy's features. Planting defines a
 separate, potentially easy distribution. These are **two distributions of one
 task**, not two unrelated task families.
 
-The initial protocol/source are to be committed before native solver measurement.
+The initial protocol/source were committed as `d47859a` before native solver measurement.
 That is an auditable ordering, not independent external preregistration. Repeated
 CI executions of the same inputs are runtime regressions, not new confirmation.
 All observations, unknowns and unsuccessful gates must remain available.
+
+## Measured outcome
+
+The first native pilot completed all **288 observations**: **189 independently
+verified SAT witnesses, 69 budget-limited unknowns and 30 UNSAT reports**. There
+were no execution errors or process timeouts. **None of the six tiers passes** the
+unchanged admission rule. Every qualifying-case count is zero. This does not
+classify the unknown inputs as UNSAT or establish that all formulas are easy.
+
+All raw measurement payloads are durably retained in
+[`results/sat_workload/`](../results/sat_workload/README.md), not just a temporary
+CI link. The byte-identical original pilot ZIP includes every input,
+measurement and provenance payload. Input regeneration additionally checks the
+source-frozen protocol and original hash. Both normal
+CPU CI versions require offline replay. The original outer archive was separately
+downloaded and checked against its GitHub digest, every member checksum and the
+complete 543-file source tree. See the retained manifest for exact identifiers.
+
+```bash
+python scripts/verify_sat_admission.py
+```
 
 ## Exact environment and repair identity
 
@@ -77,6 +98,17 @@ No UNSAT claim is independently certified without a checked proof. Physical
 energy remains null. CPU model, affinity, package version and source identity are
 recorded; these measurements do not certify cross-machine performance.
 
+### Observed budget overshoot
+
+A 2,000-conflict request was **not a strict observed-work cap**. CaDiCaL
+recorded up to **2,004 conflicts** (21 observations above the request); Glucose
+recorded up to **37,797 conflicts** (33 observations above the request). The
+independent replay exposes these diagnostics from the original counters. Do not
+claim equal actual conflicts or at-most-2,000-conflict execution. Full measured
+latency, raw counters and the separate process deadline remain the valid scopes.
+The original protocol already labels this a solver-specific request; the result
+is retained without rewriting counters, censoring overshoot or changing gates.
+
 ## Reproduction
 
 ```bash
@@ -96,6 +128,11 @@ The normal two-version CPU suite and the bounded native-solver workflow are both
 required before merge. Synthetic timing fixtures are tests, never research data.
 
 ## Prior art and the next scientific gate
+
+Recent [PTRM](https://arxiv.org/abs/2605.19943) and
+[Energy-guided Recursive Model](https://arxiv.org/abs/2607.10128) already study
+stochastic recursive trajectories and selection. Those are relevant baselines
+for any later claim about the recursive mechanism, not comparable Sudoku4 scores.
 
 Neural SAT initialization is established, e.g. [NLocalSAT (2020)](https://arxiv.org/abs/2001.09398).
 Make/break feedback and focused local search are established; random formulas near

@@ -50,11 +50,10 @@ jobs:
                   z.write(p, p.name)
           PY
           python scripts/sat_workload_gate.py verify --out .sat-validation/pilot.zip
-      - name: Verify previously retained pilot when present
+      - name: Verify every original retained pilot payload
         run: |
-          if [ -f results/sat_workload/pilot.zip ]; then
-            python scripts/sat_workload_gate.py verify --out results/sat_workload/pilot.zip > .sat-validation/retained-verification.json
-          fi
+          set -o pipefail
+          python scripts/verify_sat_admission.py | tee .sat-validation/retained-verification.json
       - name: Hash evidence including failed attempts
         if: always()
         run: |

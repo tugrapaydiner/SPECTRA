@@ -1,0 +1,16 @@
+{
+  "archive": "pilot.zip",
+  "bytes": 244291,
+  "ci_artifact": 10278195498,
+  "ci_artifact_zip_sha256": "e6dfb39b147c94424db20c99a49c47be71671c3a29e495ffb4977543b10de8d4",
+  "ci_run": 34635415241,
+  "execution_commit": "383410688b348f32b956933d21318e4d8c32c812",
+  "execution_tree": "8d8cac4f041ecfab041d0846857764640edc264f",
+  "original_pilot_zip_sha256": "8446d6ce013f14c8b767cae8ce042412cd5061fbcfd6478df75c793cfa3778bd",
+  "protocol_commit": "d47859aedad1a7b73cf48d0fa7a6347f411c17d3",
+  "retained_git_blob": "fe6986a461064c80a1251f697562f52f18a72f07",
+  "retention_publication_run": 34637226337,
+  "schema": "spectra.sat_retained.v1",
+  "sha256": "8446d6ce013f14c8b767cae8ce042412cd5061fbcfd6478df75c793cfa3778bd",
+  "storage": "one byte-identical original seven-payload ZIP; no generated replacements"
+}
