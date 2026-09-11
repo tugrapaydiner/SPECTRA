@@ -87,15 +87,19 @@ Proof: walls-kept and endpoints-kept are each one after restoration. Path-on-ope
 is one for a nonempty overlay and zero for an empty overlay. The fourth term is
 the exact semantic bit; the implementation averages the four terms. Consequently,
 all nonempty invalid candidates have score 0.75, regardless of how disconnected,
-misdirected or otherwise incorrect their paths are. On a nonempty current
-candidate, the declared improvement label is exactly
+misdirected or otherwise incorrect their paths are. On the retained maze problems,
+start and goal are nonadjacent, so every valid answer needs a nonempty PATH
+overlay. For a nonempty current candidate on these problems, the improvement
+label is exactly
 
 ```text
 1[Q(next) > Q(current) + 1e-6] = 1[not V(current) and V(next)].
 ```
 
 It is thus a solve-transition event on this subset, not graded progress toward a
-solution. The new replay verifies both identities on the real checkpoint outputs,
+solution. This event identity must not be generalized to adjacent endpoints: an
+empty valid route can score 0.75, equal to a nonempty invalid route. A dedicated
+counterexample test retains this boundary. The new replay verifies both identities on the real checkpoint outputs,
 not merely on a hand-built counterexample. Small tests also include empty, invalid
 nonempty and valid overlays and compare independent and production reconstruction.
 
