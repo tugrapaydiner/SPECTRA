@@ -8,7 +8,9 @@ on:
       - 'data/**'
       - 'scripts/_common.py'
       - 'scripts/audit_sudoku_symmetry.py'
+      - 'scripts/probe_replay_dispatch.py'
       - 'tests/test_sudoku_symmetry.py'
+      - 'tests/test_dispatch_trace.py'
       - 'results/reliability/sudoku4_symmetry_audit.json'
       - '.github/workflows/sudoku4-symmetry-audit.yml'
   workflow_dispatch:
@@ -49,11 +51,15 @@ jobs:
       - name: Independent finite-group oracle and split integration
         run: |
           set -o pipefail
-          python -m pytest tests/test_sudoku_symmetry.py -ra --junitxml=.symmetry-checks/pytest.xml | tee .symmetry-checks/pytest.txt
+          python -m pytest tests/test_sudoku_symmetry.py tests/test_dispatch_trace.py -ra --junitxml=.symmetry-checks/pytest.xml | tee .symmetry-checks/pytest.txt
       - name: Replay consumed data and verify every retained audit field
         run: |
           set -o pipefail
           python scripts/audit_sudoku_symmetry.py --out .symmetry-checks/audit --verify-report results/reliability/sudoku4_symmetry_audit.json | tee .symmetry-checks/audit.txt
+      - name: Capture numerical dispatch diagnosis without waiving strict replay
+        run: |
+          set -o pipefail
+          python scripts/probe_replay_dispatch.py --out .symmetry-checks/dispatch_probe | tee .symmetry-checks/dispatch_probe.txt
       - name: Hash artifacts
         if: always()
         run: |
