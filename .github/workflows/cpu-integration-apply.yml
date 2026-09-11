@@ -1,0 +1,110 @@
+name: apply-audited-cpu-integration
+on:
+  push:
+    branches: [research/verifier-aligned-cpu-search]
+    paths: ['.github/workflows/cpu-integration-apply.yml', '.integration-transport/**']
+permissions:
+  contents: write
+concurrency:
+  group: one-time-cpu-integration
+  cancel-in-progress: false
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CUDA_VISIBLE_DEVICES: ''
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MAX_JOBS: '1'
+      BRANCH: research/verifier-aligned-cpu-search
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact transport and apply only the reviewed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/$BRANCH"
+          test "$(git rev-parse HEAD^)" = 630efebde51781e707028abc1fc8fcba3339a71c
+          mkdir -p "$RUNNER_TEMP/integration-evidence"
+          cat .integration-transport/part0 .integration-transport/part1 .integration-transport/part2 .integration-transport/part3 > "$RUNNER_TEMP/integration.patch.gz"
+          PATCH_GZ="$RUNNER_TEMP/integration.patch.gz" PATCH_OUT="$RUNNER_TEMP/integration.patch" python - <<'PY'
+          import gzip, hashlib, os
+          from pathlib import Path
+          compressed=Path(os.environ['PATCH_GZ']).read_bytes()
+          assert hashlib.sha256(compressed).hexdigest()=='e6cd072c9d1e412c3fad109eef0e8bcd3a140e25ddb312122a380b74e96b03f7'
+          patch=gzip.decompress(compressed)
+          assert hashlib.sha256(patch).hexdigest()=='d22f824c296effb64aafb70de1661a9aebdff98d6ab63d5cfffaf4a99a72f94b'
+          Path(os.environ['PATCH_OUT']).write_bytes(patch)
+          PY
+          git apply --check --index "$RUNNER_TEMP/integration.patch"
+          git apply --index "$RUNNER_TEMP/integration.patch"
+          git rm -r .integration-transport .github/workflows/cpu-integration-apply.yml
+          git fetch origin research/m16-verifier-aligned-cpu
+          test "$(git rev-parse FETCH_HEAD)" = 2910d0c8447d03e353b515bc3a57c1cfe5bda839
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          tree=$(git write-tree)
+          candidate=$(git commit-tree "$tree" -p "$GITHUB_SHA" -p 2910d0c8447d03e353b515bc3a57c1cfe5bda839 -m 'Consolidate CPU reliability branches: isolated search states, strict measurements, independent evidence audit')
+          git checkout --detach "$candidate"
+          git diff --exit-code
+          git diff --cached --exit-code
+          echo "$candidate" > "$RUNNER_TEMP/integration-evidence/candidate_commit.txt"
+          echo 'd22f824c296effb64aafb70de1661a9aebdff98d6ab63d5cfffaf4a99a72f94b' > "$RUNNER_TEMP/integration-evidence/reviewed_patch_sha256.txt"
+          git diff --stat 1e29cb10662cb83ba9e28e4d30164fc373a547a5 HEAD > "$RUNNER_TEMP/integration-evidence/integrated_diff_stat.txt"
+          git archive --format=tar.gz HEAD > "$RUNNER_TEMP/integration-evidence/source.tar.gz"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install pinned CPU-only dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+          python -m pip install -r requirements-cpu-research.txt
+          python -m pip freeze > "$RUNNER_TEMP/integration-evidence/environment.lock.txt"
+          python -c 'import torch; assert torch.version.cuda is None and not torch.cuda.is_available()'
+      - name: Validate complete fast suite without weakening any tests
+        shell: bash
+        run: |
+          set -o pipefail
+          timeout 1200s python -m pytest -m 'not slow' -ra --junitxml="$RUNNER_TEMP/integration-evidence/pytest_fast.xml" | tee "$RUNNER_TEMP/integration-evidence/pytest_fast.txt"
+      - name: Verify durable evidence and independent semantic answers
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/verify_retained_results.py --out "$RUNNER_TEMP/integration-evidence/retained_results_verified.json" | tee "$RUNNER_TEMP/integration-evidence/evidence_verification.txt"
+      - name: Publish tested candidate to its existing branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate=$(cat "$RUNNER_TEMP/integration-evidence/candidate_commit.txt")
+          test "$(git rev-parse HEAD)" = "$candidate"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          remote=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          test "$remote" = "$GITHUB_SHA"
+          git push origin "$candidate:refs/heads/$BRANCH"
+          echo "$candidate" > "$RUNNER_TEMP/integration-evidence/published_commit.txt"
+      - name: Hash retained integration evidence
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'integration-evidence'
+          root.mkdir(exist_ok=True)
+          with (root/'sha256.txt').open('w') as out:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file() and p.name!='sha256.txt':
+                      out.write(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(root))+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spectra-integration-${{ github.run_id }}
+          path: ${{ runner.temp }}/integration-evidence/
+          if-no-files-found: error
+          retention-days: 90
