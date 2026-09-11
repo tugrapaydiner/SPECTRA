@@ -75,6 +75,10 @@ jobs:
         run: |
           set -o pipefail
           timeout 600s python scripts/verify_symmetry_checkpoint_replay.py --out .cpu-contracts/restart_replay | tee .cpu-contracts/restart_replay.txt
+      - name: Verify candidate coverage, refit excluded-fold policies and replay the full follow-up
+        run: |
+          set -o pipefail
+          timeout 900s python scripts/verify_failure_information.py --refit --replay --out .cpu-contracts/failure_information_verified.json | tee .cpu-contracts/failure_information_verified.txt
       - name: Diagnose a failed strict replay on the same host
         if: failure()
         run: |

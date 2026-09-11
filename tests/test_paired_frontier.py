@@ -122,3 +122,28 @@ def test_independent_draw_oracle_for_crossed_confidence_interval():
         draws.append(sum(delta[m][e] for m in models for e in examples) / 4)
     expected = np.quantile(draws, [.025, .975]).tolist()
     assert analyze(records())['endpoints']['success_gain']['crossed_percentile_95'] == expected
+
+
+def test_unequal_groups_are_resampled_whole_with_multiplicities():
+    rows = records()
+    extra = [{**r, 'example_id':'c'} for r in rows if r['example_id']=='a']
+    result = paired_frontier(rows+extra, family='test', candidate='new', comparator='base',
+        model_seeds=(11,22), example_ids=('a','b','c'), example_groups=('same','other','same'),
+        replicates=200)
+    rng = np.random.default_rng(2026091110)
+    delta = [[1,-1,1], [1,0,1]]
+    groups = [[1], [0,2]]  # sorted group keys: other, same
+    values = []
+    for _ in range(200):
+        models = rng.integers(2,size=2)
+        examples = [e for g in rng.integers(2,size=2) for e in groups[g]]
+        values.append(sum(delta[m][e] for m in models for e in examples)/(2*len(examples)))
+    assert result['endpoints']['success_gain']['crossed_percentile_95'] == np.quantile(values,[.025,.975]).tolist()
+    assert result['bootstrap']['unique_example_groups'] == 2
+    assert result['bootstrap']['policies_refitted_inside_bootstrap'] is False
+
+
+@pytest.mark.parametrize('groups', [('only',), ('same','same'), ('ok',''), (1,2), 'ab'])
+def test_invalid_group_inventory_rejected(groups):
+    with pytest.raises(ValueError):
+        analyze(records(), example_groups=groups)

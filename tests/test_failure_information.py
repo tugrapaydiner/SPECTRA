@@ -136,3 +136,75 @@ def test_observation_rejects_repeated_actions_and_noninteger_symbols():
         Observation((0,)*16, (1,)*16, ((0, (2,)*16), (0, (3,)*16)))
     with pytest.raises(ValueError):
         Observation((False,)*16, (1,)*16)
+
+
+def test_crossfit_holds_entire_groups_across_models():
+    from scripts.failure_information_pilot import crossfit_partition
+    cases = [{'core_seed': seed, 'group': group, 'fold': fold}
+             for seed in (1,2) for group,fold in [('a',0),('b',1),('c',0)]]
+    train, test = crossfit_partition(cases,0)
+    assert {c['group'] for c in train} == {'b'}
+    assert {c['group'] for c in test} == {'a','c'}
+    assert len(train)==2 and len(test)==4
+    cases[0]['fold']=1
+    with pytest.raises(ValueError):
+        crossfit_partition(cases,0)
+
+
+def test_maze_group_includes_both_endpoint_labelings_and_spatial_maps():
+    import torch
+    from eval.checkable_tasks import MAZE11
+    from eval.symmetry_search import grid_views
+    from scripts.failure_information_pilot import group_key
+    x = torch.zeros((1,121), dtype=torch.int64)
+    x[0,12], x[0,108], x[0,41] = 2,3,1
+    key = group_key(x,MAZE11)
+    swap = torch.tensor([0,1,3,2,4])
+    for view in grid_views(MAZE11):
+        transformed = view.apply(x)
+        assert group_key(transformed,MAZE11) == key
+        assert group_key(swap[transformed],MAZE11) == key
+
+
+def test_extended_view_creates_candidates_outside_old_four_cycle_ceiling():
+    from scripts.transpose_continuation_pilot import predict
+    c = case()
+    extended = [{'answer':[2]*16, 'valid':i==8} for i in range(32)]
+    assert coverage([c])['prefix_plus_all_views_oracle_valid']==0
+    assert not predict(c,extended,'prefix_transpose_12')['valid']
+    result = predict(c,extended,'prefix_transpose_20')
+    assert result['valid'] and result['transitions']==17
+    assert predict(c,extended,'transpose_20')['transitions']==9
+
+
+def test_extended_view_preserves_prefix_and_respects_depth_caps():
+    from scripts.transpose_continuation_pilot import predict
+    c = case(identity_time=5)
+    extended = [{'answer':[2]*16, 'valid':i==23} for i in range(32)]
+    assert predict(c,extended,'prefix_transpose_20')['transitions']==5
+    assert not predict(c,extended,'transpose_20')['valid']
+    with pytest.raises(ValueError):
+        predict(c,extended,'unknown')
+
+
+def test_bound_evidence_reader_checks_digest_and_count(tmp_path):
+    import gzip
+    from scripts.verify_failure_information import read_bound_rows
+    from scripts.failure_information_pilot import sha
+    raw = b'{"valid":false}\n'
+    path = tmp_path/'rows.gz'
+    path.write_bytes(gzip.compress(raw))
+    assert read_bound_rows(path,sha(raw),1)==[{'valid':False}]
+    with pytest.raises(ValueError):
+        read_bound_rows(path,'0'*64,1)
+    with pytest.raises(ValueError):
+        read_bound_rows(path,sha(raw),2)
+
+
+def test_evidence_analysis_rejects_incomplete_or_foreign_inventory():
+    from scripts.failure_information_pilot import timed_analysis
+    from scripts.transpose_continuation_pilot import analyze
+    with pytest.raises(ValueError):
+        timed_analysis([],[],{})
+    with pytest.raises(ValueError):
+        analyze([],{})

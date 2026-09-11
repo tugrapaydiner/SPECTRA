@@ -1,0 +1,28 @@
+sudoku_shift model=1401 round=0 complete
+sudoku_shift model=1401 round=1 complete
+sudoku_shift model=1401 round=2 complete
+sudoku_shift model=2402 round=0 complete
+sudoku_shift model=2402 round=1 complete
+sudoku_shift model=2402 round=2 complete
+maze model=1701 round=0 complete
+maze model=1701 round=1 complete
+maze model=1701 round=2 complete
+maze model=2702 round=0 complete
+maze model=2702 round=1 complete
+maze model=2702 round=2 complete
+Traceback (most recent call last):
+  File "/workspace/scratch/c39b33b0e163/SPECTRA/scripts/failure_information_pilot.py", line 429, in <module>
+    main()
+  File "/workspace/scratch/c39b33b0e163/SPECTRA/scripts/failure_information_pilot.py", line 421, in main
+    result = benchmark(args.out, args.collection, args.fit)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c39b33b0e163/SPECTRA/scripts/failure_information_pilot.py", line 390, in benchmark
+    comparisons = timed_analysis(rows, cases, collection_summary)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c39b33b0e163/SPECTRA/scripts/failure_information_pilot.py", line 324, in timed_analysis
+    reports[family][comparator] = paired_frontier(
+                                  ^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c39b33b0e163/SPECTRA/eval/paired_frontier.py", line 143, in paired_frontier
+    np.concatenate([group_members[g] for g in rng.integers(len(groups), size=len(groups))]))
+                    ~~~~~~~~~~~~~^^^
+IndexError: list index out of range

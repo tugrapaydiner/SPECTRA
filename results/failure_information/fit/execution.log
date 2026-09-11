@@ -1,0 +1,184 @@
+sudoku_shift fold=0 train=216 test=40 order=(1, 2, 0)
+sudoku_shift fold=1 train=182 test=74 order=(2, 4, 0)
+sudoku_shift fold=2 train=202 test=54 order=(0, 6, 2)
+sudoku_shift fold=3 train=214 test=42 order=(0, 1, 2)
+sudoku_shift fold=4 train=210 test=46 order=(0, 6, 2)
+maze fold=0 train=194 test=62 order=(0, 1, 2)
+maze fold=1 train=194 test=62 order=(0, 1, 2)
+maze fold=2 train=224 test=32 order=(0, 1, 2)
+maze fold=3 train=200 test=56 order=(0, 1, 2)
+maze fold=4 train=212 test=44 order=(0, 1, 2)
+{
+  "sudoku_shift": {
+    "original_order": {
+      "12": {
+        "valid": 251,
+        "transitions": 717
+      },
+      "16": {
+        "valid": 253,
+        "transitions": 735
+      },
+      "20": {
+        "valid": 255,
+        "transitions": 745
+      }
+    },
+    "best_static": {
+      "12": {
+        "valid": 246,
+        "transitions": 726
+      },
+      "16": {
+        "valid": 250,
+        "transitions": 763
+      },
+      "20": {
+        "valid": 253,
+        "transitions": 785
+      }
+    },
+    "hash_random": {
+      "12": {
+        "valid": 248,
+        "transitions": 723
+      },
+      "16": {
+        "valid": 250,
+        "transitions": 753
+      },
+      "20": {
+        "valid": 253,
+        "transitions": 775
+      }
+    },
+    "input_only": {
+      "12": {
+        "valid": 245,
+        "transitions": 724
+      },
+      "16": {
+        "valid": 250,
+        "transitions": 760
+      },
+      "20": {
+        "valid": 253,
+        "transitions": 782
+      }
+    },
+    "prefix_only": {
+      "12": {
+        "valid": 245,
+        "transitions": 726
+      },
+      "16": {
+        "valid": 251,
+        "transitions": 766
+      },
+      "20": {
+        "valid": 253,
+        "transitions": 785
+      }
+    },
+    "failure_aware": {
+      "12": {
+        "valid": 245,
+        "transitions": 726
+      },
+      "16": {
+        "valid": 251,
+        "transitions": 765
+      },
+      "20": {
+        "valid": 253,
+        "transitions": 784
+      }
+    }
+  },
+  "maze": {
+    "original_order": {
+      "12": {
+        "valid": 53,
+        "transitions": 2660
+      },
+      "16": {
+        "valid": 53,
+        "transitions": 3472
+      },
+      "20": {
+        "valid": 53,
+        "transitions": 4284
+      }
+    },
+    "best_static": {
+      "12": {
+        "valid": 53,
+        "transitions": 2660
+      },
+      "16": {
+        "valid": 53,
+        "transitions": 3472
+      },
+      "20": {
+        "valid": 53,
+        "transitions": 4284
+      }
+    },
+    "hash_random": {
+      "12": {
+        "valid": 40,
+        "transitions": 2698
+      },
+      "16": {
+        "valid": 41,
+        "transitions": 3560
+      },
+      "20": {
+        "valid": 43,
+        "transitions": 4414
+      }
+    },
+    "input_only": {
+      "12": {
+        "valid": 53,
+        "transitions": 2660
+      },
+      "16": {
+        "valid": 53,
+        "transitions": 3472
+      },
+      "20": {
+        "valid": 53,
+        "transitions": 4284
+      }
+    },
+    "prefix_only": {
+      "12": {
+        "valid": 53,
+        "transitions": 2660
+      },
+      "16": {
+        "valid": 53,
+        "transitions": 3472
+      },
+      "20": {
+        "valid": 53,
+        "transitions": 4284
+      }
+    },
+    "failure_aware": {
+      "12": {
+        "valid": 53,
+        "transitions": 2660
+      },
+      "16": {
+        "valid": 53,
+        "transitions": 3472
+      },
+      "20": {
+        "valid": 53,
+        "transitions": 4284
+      }
+    }
+  }
+}

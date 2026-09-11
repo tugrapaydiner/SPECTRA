@@ -14,6 +14,29 @@
 | M16 | Implemented and evidence retained; native-checker speedup and evaluator-target controls |
 | M17 | Execution complete; **TWO_FAMILY_CLAIM_NOT_ESTABLISHED** |
 | Symmetry restart follow-up | Recovered implementation and evidence; **ADAPTIVE DEVELOPMENT ONLY** |
+| Failure-information pilot | **FEEDBACK QUALITY GATE FAILED**; original candidate coverage already exhausted |
+| Static maze continuation follow-up | **ADAPTIVE DEVELOPMENT ONLY**; cheaper same-quality configuration and a five-solve, one-seed continuation gain |
+
+## Failure-information and continuation follow-up
+
+The [complete diagnostic and results](FAILURE_INFORMATION.md) retain 30,720
+original trajectory answers, 30 group-excluded controller fits and 16,384 extended
+transpose answers. The original fixed restart policy already reaches the complete
+four-cycle-view candidate ceiling: 255/256 Sudoku and 53/256 maze. Wrong-answer
+feedback adds no net accuracy over the simpler learned controls and incurs extra
+mean cost. Its frozen five-percentage-point pilot gate fails.
+
+Static maze pruning to identity 8 plus transpose 4 keeps all 53 observed solves
+while reducing mean latency by 39.37% and p95 by 41.25% in a paired development
+rerun. Identity 8 plus transpose 12 reaches 58/256 within 20 cycles; all five new
+solves come from one of the two model seeds, its quality interval includes zero,
+and its tail-cost interval crosses parity. Both configurations regress Sudoku.
+Classical solvers remain substantially faster and solve every evaluated case.
+These are selected development results, not a new default or confirmation.
+
+The user clarified a substantially stricter impact standard after the prior
+review: approximately **35/100** is the current subjective assessment. Validation
+improvements and the bounded maze result do not establish frontier-level impact.
 
 ## September 11 integrated follow-up
 

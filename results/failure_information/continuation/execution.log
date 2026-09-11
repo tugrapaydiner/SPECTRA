@@ -1,0 +1,17 @@
+sudoku_shift model=1401 extended 128 trajectories
+sudoku_shift model=1401 round=0 complete
+sudoku_shift model=1401 round=1 complete
+sudoku_shift model=1401 round=2 complete
+sudoku_shift model=2402 extended 128 trajectories
+sudoku_shift model=2402 round=0 complete
+sudoku_shift model=2402 round=1 complete
+sudoku_shift model=2402 round=2 complete
+maze model=1701 extended 128 trajectories
+maze model=1701 round=0 complete
+maze model=1701 round=1 complete
+maze model=1701 round=2 complete
+maze model=2702 extended 128 trajectories
+maze model=2702 round=0 complete
+maze model=2702 round=1 complete
+maze model=2702 round=2 complete
+FOLLOWUP_COMPLETE

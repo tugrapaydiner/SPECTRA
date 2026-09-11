@@ -12,6 +12,24 @@
 
 ---
 
+## Development follow-up: measure coverage before learning allocation
+
+The complete trajectory audit finds **zero additional solves available through
+selection alone** in the original measured candidate inventory. Thirty controllers
+fit with equivalent puzzles excluded across folds add no net accuracy from wrong-answer
+feedback. The failed feedback gate and every comparison are retained.
+
+A static maze refinement does help locally: identity 8 + transpose 4 keeps
+**53/256** solves with **39.37% lower mean** and **41.25% lower p95 latency** than
+the previous restart order. Giving transpose 12 cycles reaches **58/256** within
+the same 20-cycle cap, but all five new solves come from one model seed and the
+quality interval includes zero. These variants regress Sudoku; classical solvers
+remain perfect and far faster. These are adaptive development results.
+
+See [the experiment, limitations and checked runtime configuration](docs/FAILURE_INFORMATION.md).
+The full raw evidence, fitted policies, executable sources and failed initial
+aggregation attempt are retained in [`results/failure_information/`](results/failure_information/).
+
 ## CPU development update: verified symmetry restarts
 
 An optional frozen-model policy runs eight identity cycles and then three exact
@@ -78,6 +96,7 @@ python scripts/verify_fixed_pool_replay.py --cpu-profile historical-ordered --ou
 python scripts/verify_cpu_progress.py --out outputs/restart-integrity.json
 python scripts/verify_symmetry_checkpoint_replay.py --out outputs/restart-replay
 python scripts/audit_research_frontier.py --out outputs/frontier.json --verify-report results/reliability/research_frontier_audit.json
+python scripts/verify_failure_information.py --refit --replay --out outputs/failure-information.json
 ```
 
 The [fixed-pool inference replay](docs/FIXED_POOL_REPLAY.md) additionally

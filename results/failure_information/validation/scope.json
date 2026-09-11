@@ -1,0 +1,9 @@
+{
+  "fast_tests": 716,
+  "new_confirmation": false,
+  "scope": "Local integration validation; final commit/tree and remote CI are recorded in the PR.",
+  "selected_test_skips": 0,
+  "slow_tests_deselected": 16,
+  "source_code_sha256": "5d657a4e3d6d8eb8d36300c651f8376f73408b839155c3f28939ae7d77cafe7f",
+  "status": "PASS"
+}
