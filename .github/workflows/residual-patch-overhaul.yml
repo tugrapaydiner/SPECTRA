@@ -1,0 +1,87 @@
+name: residual-patch-overhaul
+on:
+  pull_request:
+    branches: [main]
+    paths: ['experiments/residual_patch/**', '.github/workflows/residual-patch-overhaul.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: residual-patch-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  native-learning-experiment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CUDA_VISIBLE_DEVICES: ''
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MAX_JOBS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Preserve exact source and verify every legacy blob
+        run: |
+          set -o pipefail
+          mkdir -p .residual-evidence/logs
+          git rev-parse HEAD > .residual-evidence/source_commit.txt
+          git rev-parse HEAD^{tree} > .residual-evidence/source_tree.txt
+          git archive --format=tar.gz HEAD > .residual-evidence/source.tar.gz
+          python -m experiments.residual_patch.check_legacy | tee .residual-evidence/legacy.json
+      - name: Install explicit CPU and external solver environment
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+          python -m pip install -r requirements-cpu-research.txt -r requirements-sat-research.txt
+          python -m pip freeze > .residual-evidence/environment.lock.txt
+      - name: Test atomic native semantics, data, learning and evidence contracts
+        run: |
+          set -o pipefail
+          python -m pytest experiments/residual_patch -ra --junitxml=.residual-evidence/contracts.xml | tee .residual-evidence/logs/contracts.txt
+          python scripts/sat_workload_gate.py smoke | tee .residual-evidence/external_smoke.json
+      - name: Reproduce initial frozen training and retained negative validation
+        run: |
+          set -o pipefail
+          python -m experiments.residual_patch.experiment freeze --out .residual-evidence/original
+          python -m experiments.residual_patch.experiment collect --out .residual-evidence/original | tee .residual-evidence/logs/collect.txt
+          python -m experiments.residual_patch.experiment train --out .residual-evidence/original | tee .residual-evidence/logs/train.txt
+          python -m experiments.residual_patch.experiment validation --out .residual-evidence/original | tee .residual-evidence/logs/original_validation.txt
+      - name: Reproduce declared ranking and call-frequency follow-up
+        run: |
+          set -o pipefail
+          python -m experiments.residual_patch.followup train --original .residual-evidence/original --out .residual-evidence/followup | tee .residual-evidence/logs/rank_train.txt
+          python -m experiments.residual_patch.followup validation --original .residual-evidence/original --out .residual-evidence/followup | tee .residual-evidence/logs/rank_validation.txt
+          python -m experiments.residual_patch.followup development --original .residual-evidence/original --out .residual-evidence/followup | tee .residual-evidence/logs/rank_development.txt
+      - name: Independent witness checks, full native work replay and all twelve model refits
+        run: |
+          set -o pipefail
+          python -m experiments.residual_patch.audit --original .residual-evidence/original --followup .residual-evidence/followup --replay --refit --out .residual-evidence/audit.json | tee .residual-evidence/logs/audit.txt
+      - name: Measure external classical context on the same development formulas
+        run: |
+          set -o pipefail
+          python -m experiments.residual_patch.external run --followup .residual-evidence/followup --out .residual-evidence/external | tee .residual-evidence/logs/external.txt
+          python -m experiments.residual_patch.external verify --followup .residual-evidence/followup --out .residual-evidence/external | tee .residual-evidence/logs/external_verify.txt
+      - name: Preserve every raw file including failures
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path('.residual-evidence');root.mkdir(exist_ok=True)
+          hashes={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob('*')) if p.is_file() and p!=root/'artifact_sha256.json'}
+          (root/'artifact_sha256.json').write_text(json.dumps(hashes,sort_keys=True,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: residual-patch-${{ github.run_id }}-${{ github.sha }}
+          path: .residual-evidence/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
