@@ -2,7 +2,7 @@
 
 ## Install the public tools
 
-From a checkout, run `python -m pip install .`. Version 0.7.0 has no mandatory
+From a checkout, run `python -m pip install .`. The base package has no mandatory
 third-party dependencies. The `spectra` command and `python -m spectra` are
 identical entry points. Run `spectra doctor` to inspect the environment without
 importing PyTorch.
@@ -24,11 +24,13 @@ witnesses are accepted; a report with a different formula fingerprint is rejecte
 python -m pip install pytest
 python -m pytest tests/public --confcutdir=tests/public
 python -m pip install build
-python -m build
-python scripts/check_installation.py --wheel dist/spectra-0.7.0-py3-none-any.whl --out install-check
+python -m build --outdir dist/current
+python scripts/check_current_installation.py --dist dist/current --out install-check
 ```
 
-The installation check uses a new virtual environment outside the repository,
+Use a fresh `dist/current` directory. The selector checks distribution metadata and
+rejects multiple wheels, a stale version, or missing native sources rather than
+guessing which artifact to test. The installation check uses a new virtual environment outside the repository,
 installs the actual wheel without dependencies, and exercises the public command,
 imported API and packaged native sources. It does not run from an editable checkout.
 CI also builds the wheel from the source distribution rather than only the source
@@ -76,3 +78,9 @@ The archive script defaults to a dry run. Applying it requires the precise merge
 commit, the checked manifest and the main-only maintenance workflow. It refuses
 wrong tags, changed branch tips, missing unarchived tips and non-merge commits.
 Tests exercise these cases against disposable local Git remotes.
+
+## Integrated CPU runtime
+
+The optional [runtime guide](RUNTIME_GUIDE.md) documents supported concrete runtime
+types, bitwise equivalence tests, full-cost benchmarking and profiling. Historical
+runtimes remain unchanged. No new runtime is selected silently by the public API.
