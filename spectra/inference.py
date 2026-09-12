@@ -10,6 +10,13 @@ from dataclasses import dataclass
 from typing import Any
 import torch
 from deploy.m10_runtime import CPURecursiveRuntime
+from deploy.validated_runtime import ValidatedCPURecursiveRuntime
+from spectra.blocked_runtime import BlockedCPURecursiveRuntime
+
+
+_SUPPORTED_RUNTIME_TYPES = (
+    CPURecursiveRuntime, ValidatedCPURecursiveRuntime, BlockedCPURecursiveRuntime
+)
 
 
 @dataclass(frozen=True)
@@ -28,10 +35,12 @@ def predict_final(runtime: CPURecursiveRuntime, x: torch.Tensor) -> FinalPredict
     they are omitted. Recurrence order, precision, quantization and final head
     operations are unchanged. This does NOT implement early stopping and makes
     no quality claim beyond equivalence to the historical final outputs. It is
-    deliberately limited to the stock runtime, not arbitrary subclass hooks.
+    deliberately limited to the three audited concrete runtime types, not arbitrary
+    subclass hooks. Validated and blocked handles own private packed-weight copies;
+    final-only execution does not bypass their input validation.
     """
-    if type(runtime) is not CPURecursiveRuntime:
-        raise TypeError("the unmodified CPURecursiveRuntime is required")
+    if type(runtime) not in _SUPPORTED_RUNTIME_TYPES:
+        raise TypeError("an unmodified supported CPU runtime is required; custom subclasses are not supported")
     runtime._reset_work()
     x_emb = runtime.encode_input(x)
     y = torch.zeros_like(x_emb)
