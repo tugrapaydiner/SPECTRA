@@ -84,3 +84,12 @@ Tests exercise these cases against disposable local Git remotes.
 The optional [runtime guide](RUNTIME_GUIDE.md) documents supported concrete runtime
 types, bitwise equivalence tests, full-cost benchmarking and profiling. Historical
 runtimes remain unchanged. No new runtime is selected silently by the public API.
+
+## Release intent
+
+The indexed-efficiency workflow compares `[project].version` with the previous
+main commit before any publication steps. Packaging-only edits do not request a
+new release; an unknown prior version fails closed. The existing protections
+against replacing tags/assets and the version-specific evidence packaging contract
+remain unchanged. A future version still requires its own compatible publication
+protocol; changing metadata alone does not authorize rewriting version 0.7.1.
