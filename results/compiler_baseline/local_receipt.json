@@ -1,0 +1,186 @@
+{
+  "base_commit": "b28e01b85bd95b78f291e466c25c13bfa2fc5b46",
+  "base_files_unchanged": 578,
+  "cases": 512,
+  "environment": {
+    "affinity": [
+      0
+    ],
+    "compiler": "c++ (Debian 14.2.0-19) 14.2.0",
+    "compiler_command": "c++",
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "cpu_threads": 1,
+    "cuda_used": false,
+    "energy_joules": null,
+    "numpy": "2.3.5",
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "python": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
+    "python_compiler": "GCC 14.2.0",
+    "torch": "2.10.0+cpu"
+  },
+  "execution_replays": 2048,
+  "final_execution_source_sha256": "358092e1c34e519c738d41f7e39883472123020ba07097fb33b2585ab8ca0b46",
+  "final_manifest_sha256": "0311a23482a6482ece4714414c8bc41477896b1c9054f05191d99f533aa6d6a0",
+  "final_measurement": "measurement03",
+  "final_summary_sha256": "15b0b514058fb6fb1bd60455d2ea5824c828cb145916076c6cd2b603cc3ca352",
+  "frozen_compiler_config": {
+    "TORCHINDUCTOR_FREEZING": "1",
+    "cache": "/mnt/data/spectra_compiler_work/measurement03-inductor-cache",
+    "cache_created_empty": true,
+    "cpu_capability": "AVX512",
+    "global_freezing": true,
+    "inline_inbuilt_nn_modules": true
+  },
+  "latency": {
+    "eager": {
+      "case_median_regressions_vs_prepared": 512,
+      "case_p95_regressions_vs_prepared": 493,
+      "charged_ns_per_valid": 799882.7761506276,
+      "over_prepared_ratio": 1.544224928821175,
+      "problem_cluster_ci95": [
+        1.5324914007700383,
+        1.5574986862751041
+      ],
+      "strata": {
+        "ordinary:1401": 1.4978986116723234,
+        "ordinary:2402": 1.5039371978360865,
+        "shifted:1401": 1.5730336626812942,
+        "shifted:2402": 1.5705370486330381
+      }
+    },
+    "inductor_default": {
+      "case_median_regressions_vs_prepared": 88,
+      "case_p95_regressions_vs_prepared": 156,
+      "charged_ns_per_valid": 488140.5983263598,
+      "over_prepared_ratio": 0.9475378782046247,
+      "problem_cluster_ci95": [
+        0.9428313643754758,
+        0.9522444425703693
+      ],
+      "strata": {
+        "ordinary:1401": 0.9426086845535586,
+        "ordinary:2402": 0.9456654550629717,
+        "shifted:1401": 0.9517147638029565,
+        "shifted:2402": 0.9476431656782911
+      }
+    },
+    "inductor_frozen": {
+      "case_median_regressions_vs_prepared": 0,
+      "case_p95_regressions_vs_prepared": 47,
+      "charged_ns_per_valid": 380045.1156604901,
+      "over_prepared_ratio": 0.7328396707922125,
+      "problem_cluster_ci95": [
+        0.7282162720016819,
+        0.7376358031396908
+      ],
+      "strata": {
+        "ordinary:1401": 0.7470099430865282,
+        "ordinary:2402": 0.7460359495542851,
+        "shifted:1401": 0.7210333151808471,
+        "shifted:2402": 0.7272661350931756
+      }
+    },
+    "prepared": {
+      "case_median_regressions_vs_prepared": 0,
+      "case_p95_regressions_vs_prepared": 0,
+      "charged_ns_per_valid": 517334.43693962944,
+      "over_prepared_ratio": 1.0,
+      "problem_cluster_ci95": [
+        1.0,
+        1.0
+      ],
+      "strata": {
+        "ordinary:1401": 1.0,
+        "ordinary:2402": 1.0,
+        "shifted:1401": 1.0,
+        "shifted:2402": 1.0
+      }
+    }
+  },
+  "limits": [
+    "previously observed development cases and two fixed checkpoints",
+    "no new trained capability or generalization result",
+    "compiler paths are not bitwise reference-equivalent",
+    "seven repeats do not establish production tails",
+    "per-run initially empty shared Inductor cache; setup order allows within-run reuse",
+    "no peak-memory or energy advantage",
+    "original exact API, historical results and PR27 unchanged"
+  ],
+  "protocol_commit": "8b35c0879864fa8fd958d457d2442d173a32d784",
+  "quality": {
+    "eager": {
+      "bounded_task_track_pass": true,
+      "changed_answers": 0,
+      "changed_depths": 0,
+      "changed_work": 0,
+      "exact_track_pass": true,
+      "gained_valid": 0,
+      "lost_valid": 0,
+      "max_abs_logits": 0.0,
+      "nonbitwise_cases": 0,
+      "nonfinite_cases": 0,
+      "valid": 478
+    },
+    "inductor_default": {
+      "bounded_task_track_pass": true,
+      "changed_answers": 0,
+      "changed_depths": 0,
+      "changed_work": 0,
+      "exact_track_pass": false,
+      "gained_valid": 0,
+      "lost_valid": 0,
+      "max_abs_logits": 3.0994415283203125e-05,
+      "nonbitwise_cases": 512,
+      "nonfinite_cases": 0,
+      "valid": 478
+    },
+    "inductor_frozen": {
+      "bounded_task_track_pass": true,
+      "changed_answers": 0,
+      "changed_depths": 0,
+      "changed_work": 0,
+      "exact_track_pass": false,
+      "gained_valid": 0,
+      "lost_valid": 0,
+      "max_abs_logits": 3.504753112792969e-05,
+      "nonbitwise_cases": 512,
+      "nonfinite_cases": 0,
+      "valid": 478
+    },
+    "prepared": {
+      "bounded_task_track_pass": true,
+      "changed_answers": 0,
+      "changed_depths": 0,
+      "changed_work": 0,
+      "exact_track_pass": true,
+      "gained_valid": 0,
+      "lost_valid": 0,
+      "max_abs_logits": 0.0,
+      "nonbitwise_cases": 0,
+      "nonfinite_cases": 0,
+      "valid": 478
+    }
+  },
+  "retained_attempts": {
+    "corrected_focused": "59 passed",
+    "initial_focused_tests": "2 failed, 55 passed; error type fixed; failures retained",
+    "initial_option_only_freezing_probe": "compiled, but packed frozen parameters were not established",
+    "measurement01": "aborted before timings due over-restrictive freezing guard; retained",
+    "measurement02": "first complete 14336-row run retained with its source snapshot",
+    "measurement03": "separate final complete run after installed-helper cache isolation fix",
+    "whole_solve_capture": "unsupported native checker binding; regional compilation succeeds"
+  },
+  "schema": "spectra.compiler_baseline.local_receipt.v1",
+  "scope": "local observations only; final-head CI checked separately; no merge or release",
+  "step_replays": 8192,
+  "timing_observations": 14336,
+  "unique_puzzles": 256,
+  "validation": {
+    "actual_installed_compiler_modes": 2,
+    "full_fast_passed": 1591,
+    "historical_warnings": 2,
+    "new_tests_included": 59,
+    "public_install_checks": 11,
+    "slow_deselected": 16
+  }
+}
