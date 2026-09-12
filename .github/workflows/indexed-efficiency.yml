@@ -123,17 +123,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Detect an explicit package version transition
+        id: version_intent
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          python - <<'PY'
+          import os,re,subprocess,tomllib
+          from pathlib import Path
+          before=os.environ['BEFORE_SHA']
+          if not re.fullmatch(r'[0-9a-f]{40}',before) or before=='0'*40:
+              raise ValueError('Cannot prove a version transition without a previous commit')
+          old_text=subprocess.check_output(['git','show',f'{before}:pyproject.toml'],text=True)
+          old=tomllib.loads(old_text)['project']['version']
+          new=tomllib.loads(Path('pyproject.toml').read_text())['project']['version']
+          if not all(isinstance(v,str) and v.strip() for v in (old,new)):
+              raise ValueError('Package versions must be nonempty strings')
+          changed=old!=new
+          with open(os.environ['GITHUB_OUTPUT'],'a') as stream:
+              stream.write(f'changed={str(changed).lower()}\n')
+          print(f'Package version {old} -> {new}; publication requested: {changed}')
+          PY
       - uses: actions/download-artifact@v4
+        if: steps.version_intent.outputs.changed == 'true'
         with:
           pattern: efficiency-*-${{ github.run_id }}-*
           path: .release-inputs
       - name: Check exact source identity and prepare durable selected receipts
+        if: steps.version_intent.outputs.changed == 'true'
         run: python scripts/package_efficiency_release.py --inputs .release-inputs --out .release
       - name: Publish a new versioned release without replacing an existing tag
+        if: steps.version_intent.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
