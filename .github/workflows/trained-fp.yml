@@ -1,0 +1,82 @@
+name: trained-fp-execution
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: trained-fp-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  trained-fp:
+    name: Trained FP (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      CUDA_VISIBLE_DEVICES: ''
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      MAX_JOBS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Retain exact source and declared CPU environment
+        run: |
+          mkdir -p .trained-fp
+          git rev-parse HEAD > .trained-fp/source_commit.txt
+          git rev-parse HEAD^{tree} > .trained-fp/source_tree.txt
+          git archive --format=tar.gz HEAD > .trained-fp/source.tar.gz
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+          python -m pip install -r requirements-cpu-research.txt build
+          python -m pip freeze > .trained-fp/environment.lock.txt
+      - name: Runtime and independent evidence contracts
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_fp_runtime.py tests/test_fp_evidence.py -ra --junitxml=.trained-fp/tests.xml | tee .trained-fp/tests.txt
+      - name: Actual source-distribution wheel outside the checkout
+        run: |
+          set -o pipefail
+          python -m build --outdir .trained-fp/dist | tee .trained-fp/build.txt
+          python scripts/check_current_installation.py --dist .trained-fp/dist --out .trained-fp/public-install | tee .trained-fp/public-install.txt
+          python scripts/check_fp_installation.py --dist .trained-fp/dist --out .trained-fp/native-install | tee .trained-fp/native-install.txt
+      - name: Complete trained four-arm matrix and exact execution replay
+        run: |
+          set -o pipefail
+          python scripts/bench_trained_fp.py run --out .trained-fp/measurement | tee .trained-fp/measurement.txt
+          python scripts/bench_trained_fp.py verify --out .trained-fp/measurement --replay | tee .trained-fp/replay.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s=json.loads(Path('.trained-fp/measurement/summary.json').read_text())
+          assert s['cases']==512 and s['observations']==14336
+          assert s['exact_answer_validity_work']
+          # Performance gates stay visible as scientific outcomes; never loosen them.
+          print('Declared timing gate:', s['gate'])
+          PY
+      - name: Separate matched-preparation eager control
+        run: |
+          set -o pipefail
+          python scripts/bench_fp_controls.py run --out .trained-fp/controls | tee .trained-fp/controls.txt
+          python scripts/bench_fp_controls.py verify --out .trained-fp/controls --replay | tee .trained-fp/control-replay.txt
+      - name: Keep observations, remove disposable installations
+        if: always()
+        run: rm -rf .trained-fp/public-install/venv .trained-fp/native-install/venv .trained-fp/native-install/fresh-native-builds
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trained-fp-${{ matrix.python }}-${{ github.run_id }}-${{ github.sha }}
+          path: .trained-fp/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error

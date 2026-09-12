@@ -1,0 +1,88 @@
+{
+  "artifacts": 8,
+  "base_commit": "9fd6682345b34e992b3cab7e55750e9ef4b04e87",
+  "branch": "perf/integrated-final-runtime",
+  "calls": 1344,
+  "cases": 32,
+  "comparators": "six arms: checked/validated/blocked each with trace/final; best non-blocked includes newly enabled validated+final composition",
+  "environment": {
+    "affinity": [
+      0
+    ],
+    "compiler": "c++ (Debian 14.2.0-19) 14.2.0",
+    "compiler_command": "c++",
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "cpu_threads": 1,
+    "cuda_used": false,
+    "energy_joules": null,
+    "numpy": "2.3.5",
+    "platform": "Linux-6.18.35-x86_64-with-glibc2.41",
+    "python": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
+    "python_compiler": "GCC 14.2.0",
+    "torch": "2.10.0+cpu"
+  },
+  "fixture_manifest_sha256": "7f88b264cb3fa961ce6362fa87f951be30a9bbb3b45114a0556ffce32e745a0f",
+  "fixture_training_steps_each": 128,
+  "limits": [
+    "No improved answer quality: all generated fixture cases failed strict Sudoku validity.",
+    "Timing repetitions are not independent models; ratios describe this fixed local matrix.",
+    "Returned tensor bytes are not peak RAM. Owned native weights duplicate artifact storage.",
+    "Fresh-process absolute RSS includes imports and preloaded extensions; no memory or energy improvement claimed.",
+    "An initial native-install harness failed to inherit Torch; explicit parent research-site handoff fixed the harness. Both attempts retained.",
+    "The earlier development benchmark remains retained; final benchmark reran after source metadata and installation helper were complete.",
+    "CI measurements and status must be checked separately. No merge, new release, or permission change implied."
+  ],
+  "measurement_manifest_sha256": "070d3e180bf59707b8cf94027e6f00946837457ec573f37ec969bd796fe8319e",
+  "ratio_of_summed_case_medians": {
+    "blocked_final_over_checked_trace": 0.3180791114551277,
+    "blocked_final_over_fastest_existing_per_case": 0.40490304267914196,
+    "blocked_final_over_validated_final": 0.40347659468676184
+  },
+  "regressed_case_count_vs_best_nonblocked": 0,
+  "retention": {
+    "changed_paths": [
+      "docs/DEVELOPMENT.md",
+      "docs/README.md",
+      "docs/STATUS.md",
+      "pyproject.toml",
+      "spectra/inference.py"
+    ],
+    "original_files": 552,
+    "unchanged": 547
+  },
+  "schema": "spectra.integrated_runtime.local_receipt.v1",
+  "scope": "local CPU implementation measurement; not a release or learned-capability result",
+  "source_sha256": {
+    "scripts/bench_integrated_runtime.py": "851c604cee0f273d8b1de8684dd8fd56a59c77f9d3c38355b170e06d4fa66349",
+    "scripts/prepare_runtime_fixtures.py": "71b63717a353d49d201317b7ba8678338ae3a94e115d4a2fa1ed648fadf4f52e",
+    "spectra/__init__.py": "4bfcd04048ed17da53d562abc4718d5faf9bb25069b56ce66c15f90e32ef13bd",
+    "spectra/__main__.py": "7944cfa47caaa198e70dbb6362bb7551f3767d2534a553bff7255d008f8e319d",
+    "spectra/_native/__init__.py": "8f2e8fc49f220a80b4af0079f4e0cd87d2d42db38bf4320e06fbad3363fecac9",
+    "spectra/_native/blocked_linear.cpp": "e0a21c19524acd779bbd3280f90b9ccfae94723a0c5a92d0d5888c57af654e31",
+    "spectra/blocked_runtime.py": "0211352b7093717420cd83e1b4de9d68a6433bb2ad4188945f7d756aab0964b4",
+    "spectra/cli.py": "e1624558f2a691d5fe0bbaf63e62f1d6f75a7681dd7a0b7cd35bc5099bfa3709",
+    "spectra/cnf/__init__.py": "c5b4ea1e25f67cd27768b28f697eccdc0d9a63440652e91d669afcb11c5bb0d7",
+    "spectra/cnf/dimacs.py": "5f4e02e431aa6d669a622ff6d6288588a63ad226d242afa705d762d56fb6ec21",
+    "spectra/cnf/indexed.py": "52e0610591d97556602915da1d8fd84287c778cf6c620857f4d1f3bc3a0c625e",
+    "spectra/cnf/ranked.py": "f8befc3130e3594a03d0db87355baeb2dd6030350f072206906808dbe68af2c2",
+    "spectra/cnf/search.py": "872733b2ad694b30bdd3f96e84147dc752a7f17096273e66864bc03fa68d06c9",
+    "spectra/cnf/state.py": "e3b1b5bb735e1c6f36fb9dcf6148aafab4141543e7a1a502f399d7a838d6982d",
+    "spectra/evidence.py": "1d883445d1734dfd0ae12bd110160a3baf72303f2a9957e099892a6e34c3412e",
+    "spectra/inference.py": "9401a5dc1c9d3f26f65d7091f65b0b027dda4569ef6dceca7c06a4e91d09567e"
+  },
+  "trained_fixture_artifacts": 2,
+  "untrained_artifacts": 6,
+  "valid_sudoku_outputs_across_all_fixture_cases": 0,
+  "validation": {
+    "checkpoint_comparisons": 3840,
+    "checkpoint_mismatches": 0,
+    "fast_tests_passed": 1385,
+    "native_install_fresh_compilation": true,
+    "native_installed_wheel_arms": 6,
+    "public_installed_wheel_checks": 11,
+    "retained_answers_checked": 11520,
+    "slow_tests_deselected": 16,
+    "unique_runtime_executions_replayed": 192,
+    "warnings": 2
+  }
+}
