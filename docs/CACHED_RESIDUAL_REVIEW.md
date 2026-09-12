@@ -78,66 +78,85 @@ state.flip_patch((0, 1))
 assert state.unsatisfied == (0,)
 ```
 
-## Measured local result: same decisions, less time
+## Verified local result: same decisions, less time
 
 The [protocol](CACHED_RESIDUAL_PROTOCOL.md) was committed remotely as
-`f4e743dd59510537cf10f8829747e39427d34172` before timing. Both arms use the same
-Python focused probSAT-style policy, not the authors' optimized implementation.
-There are 64 unfiltered formulas, uniform/planted distributions, four sizes from
-64 to 512 variables, two search seeds and three timing rounds: 768 observations.
-The cap is 1,024 flips, without restarts. Both engines solve the same 53 of 128
-formula/search-seed pairs; other results are UNKNOWN, not UNSAT.
+`f4e743dd59510537cf10f8829747e39427d34172` before the retained measurement below.
+Both arms use the same Python focused probSAT-style policy, not the authors'
+optimized implementation. There are 64 unfiltered formulas, uniform/planted
+families, four sizes from 64 to 512 variables, two search seeds and three timing
+rounds: **768 observations**. The cap is 1,024 flips, without restarts. Actual RNG
+initialization XORs the declared case seed with each declared search seed. Both
+engines solve exactly **53 of 128** formula/search-seed pairs; other results are
+UNKNOWN, not UNSAT. All 128 paired trajectories agree exactly.
 
-| Local attempt | Reference mean | Cached mean | Cached/reference mean ratio, descriptive 95% interval | p95 ratio | Gate |
-|---|---:|---:|---|---:|---|
-| Initial generic patch update | 14.9468 ms | 12.1466 ms | 0.81266 [0.79681, 0.82677] | 0.88993 | FAIL |
-| Specialized single-flip update | 15.1334 ms | 9.0362 ms | 0.59711 [0.58314, 0.60971] | 0.68601 | PASS |
+| Verified local measurement | Reference | Cached |
+|---|---:|---:|
+| Mean complete execution | 14.87567 ms | 9.06444 ms |
+| Solved formula/search-seed pairs | 53/128 | 53/128 |
 
-The final local mean reduction is 40.3% (about 1.67x throughput at the same fixed
-work), not a 40.3% improvement in the neural solver. Each of the eight family/size
-cells passes the unchanged nonregression gate. Timing includes random assignment
-creation, state construction, every scoring/search step, final original-formula
-checking and state release. Parsed input generation, weight-table construction,
-source hashing and JSON serialization are outside. Runs that hit the flip cap
-remain included. This is not a complete SAT decision procedure or a cold-start,
-energy, native-learner or external-portfolio comparison.
+The cached/reference mean-time ratio is **0.60935**, with descriptive paired
+formula-cluster 95% interval **[0.59778, 0.61977]**. That is **39.1% lower mean
+execution time** (about 1.64x reciprocal speed), not a 39.1% improvement in the
+neural solver. Each of the eight family/size cells passes the unchanged gate.
+The p95 point ratio is **0.70693**. This p95 is computed over formula/search-seed
+costs after averaging the three timing repetitions, not over individual requests
+in a production-serving latency distribution.
 
-The failed first attempt is retained with its own exact source. The second
-attempt is an adaptive implementation improvement on the same declared inputs;
-its interval is descriptive, not an untouched statistical confirmation. CI runs
-repeat these inputs on the CI hosts/Python versions and are reproduction, not
-independent external-team replication. Do not combine repetitions as new formulas.
+Timing includes random assignment creation, state construction, every scoring
+and search step, final original-formula checking and state release. Parsed input
+generation, immutable weight-table creation, source hashing and serialization are
+outside. Runs hitting the flip cap remain included. This is not a complete SAT
+decision procedure or a cold-start, physical-energy, native-learner or optimized
+external-portfolio comparison. The local host has CPU-only PyTorch, a four-core
+CPU quota and 4 GiB memory limit; no GPU was used.
+
+### Evidence correction
+
+The initial draft of this review and PR24 included a supposed earlier generic
+update timing attempt, different local final timing numbers, and a stale-build-lock
+recovery account. Their original local source/log/result files were not present
+when checked. Those statements are **withdrawn as unverified**, not represented
+as retained experiments or reproduced results. The measured table above comes
+from the actual bundled `local_run/` raw inputs and 768 observations. Historical
+Git commits preserve the draft; this correction supersedes it. No performance
+threshold, score implementation or input was changed to obtain this result.
+
+The downloaded initial CI run **34670591162** is a separate, verified failure:
+both new cache jobs stopped at test collection because shared `tests/conftest.py`
+imports PyTorch and the new workflow installed only NumPy and pytest. No cache
+benchmark ran in those failed jobs. The correction installs the existing declared
+CPU environment, including CPU-only PyTorch; shared test setup remains unchanged.
+The first failed CI artifact/source is retained in the delivery bundle.
 
 ## Validation and retention
 
-Local validation of the final code: **875 fast tests passed, 16 historical slow
-retraining tests deselected, two warnings**. The 67 new tests include exhaustive
-small truth tables, optimized and atomic flip paths, randomized long patch
-sequences, invalid-input atomicity, coupled patches and evidence tampering.
-All 768 answers in each local attempt were independently checked against the
-original formulas. Each attempt replayed 256 engine-specific deterministic
-paths/work records; the failed attempt still reports FAIL. Existing retained
-results and SAT-admission verifiers also pass without changing their scientific
-outcomes.
+The **67 new tests pass locally**. They include exhaustive small truth tables,
+optimized and atomic flip paths, randomized long patch sequences, invalid-input
+atomicity, coupled patches and evidence tampering. All **768** local answers were
+independently checked against the original formulas. All **256** engine-specific
+deterministic paths and work records replay exactly. The existing retained-result
+verifier also passes with its negative two-family scientific outcome unchanged.
 
-The first full regression invocation was interrupted by the tool timeout. Its
-retry waited on a stale native-build lock. Those logs are retained; neither is
-called a pass. After confirming no compiler remained, the stale build lock was
-removed, the 20 native arithmetic tests passed, and the full suite completed.
-No source or numerical tolerance was changed to obtain the pass.
+Full legacy fast-regression outcomes and final-head CI receipts are recorded in
+PR24. The **16 historical slow retraining tests** remain a separately reported
+scope; neither a cache test nor an integrity audit establishes those training
+gates. No claim is made that historical training runs were repeated.
 
 The new read-only workflow checks Python 3.11 and 3.13, preserves the exact source,
 runs all new contracts, records every comparison observation, replays all paths
 and requires the unchanged bounded systems gate. Existing full regression and
-checkpoint/evidence workflows remain untouched. Final CI receipts and merge
-status belong to the associated PR, not this pre-CI local report.
+checkpoint/evidence workflows are untouched. Merge requires all final-head checks
+to pass and their source/evidence archives to be verified.
 
-Original local raw inputs, observations, failed-attempt source and logs are
-provided in the conversation evidence bundle. They are not falsely described as
-permanent raw Git blobs. CI archives have a 90-day retention setting; users who
-need long-term reproduction must retain the delivered bundle or archive the CI
-artifacts. The code deterministically regenerates inputs and reproduces all
-non-timing observations; wall-clock durations cannot be regenerated exactly.
+The verified local raw inputs, observations, source identity, replay receipts and
+logs are supplied in the conversation evidence bundle, alongside the failed CI
+archive. They are not falsely described as permanent raw Git blobs. CI archives
+have a 90-day retention setting. Retain the delivered bundle for long-term
+reproduction. The code deterministically regenerates inputs and all non-timing
+observations; wall-clock durations cannot be regenerated exactly. CI measurements
+repeat the declared inputs and are reproduction, not untouched statistical
+confirmation or independent external-team replication.
 
 ```bash
 python -m pytest tests/test_cnf_cached.py tests/test_cnf_cache_benchmark.py -q
