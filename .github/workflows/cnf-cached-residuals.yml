@@ -1,0 +1,70 @@
+name: cnf-cached-residuals
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-cache:
+    name: Exact residual cache (Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Preserve immutable execution source
+        run: |
+          mkdir -p .cnf-cache
+          git rev-parse HEAD > .cnf-cache/source_commit.txt
+          git rev-parse HEAD^{tree} > .cnf-cache/source_tree.txt
+          git archive --format=tar.gz HEAD > .cnf-cache/source.tar.gz
+      - name: Install bounded comparison dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+          python -m pip install -r requirements-cpu-research.txt
+          python -m pip freeze > .cnf-cache/environment.lock.txt
+      - name: Independent truth-table and evidence-tamper tests
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_cnf_cached.py tests/test_cnf_cache_benchmark.py -ra --junitxml=.cnf-cache/pytest.xml | tee .cnf-cache/pytest.txt
+      - name: Complete frozen same-policy comparison
+        run: |
+          set -o pipefail
+          python -m eval.cnf_cache_benchmark run --out .cnf-cache/experiment | tee .cnf-cache/run.txt
+      - name: Replay every path and independently check every answer
+        run: |
+          set -o pipefail
+          python -m eval.cnf_cache_benchmark verify --out .cnf-cache/experiment --replay | tee .cnf-cache/replay.json
+      - name: Require the unchanged bounded systems gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('.cnf-cache/experiment/summary.json').read_text())
+          assert report['systems_gate'] == 'PASS', report
+          assert report['learned_capability'] is False
+          PY
+      - name: Hash all evidence including failed attempts
+        if: always()
+        run: |
+          cd .cnf-cache
+          find . -type f ! -name sha256.txt -print0 | sort -z | xargs -0 sha256sum > sha256.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cnf-cache-${{ matrix.python }}-${{ github.run_id }}
+          path: .cnf-cache/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
