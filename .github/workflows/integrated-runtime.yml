@@ -1,0 +1,79 @@
+name: integrated-runtime
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: integrated-runtime-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  runtime-contract:
+    name: Integrated runtime (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      CUDA_VISIBLE_DEVICES: ''
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      MAX_JOBS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Record exact source and install declared CPU dependencies
+        run: |
+          mkdir -p .runtime
+          git rev-parse HEAD > .runtime/source_commit.txt
+          git rev-parse HEAD^{tree} > .runtime/source_tree.txt
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+          python -m pip install -r requirements-cpu-research.txt build
+          python -m pip freeze > .runtime/environment.lock.txt
+      - name: Exact native, graph, evidence and documented-build contracts
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_integrated_runtime.py tests/test_integrated_runtime_evidence.py tests/public/test_current_installation.py -ra --junitxml=.runtime/tests.xml | tee .runtime/tests.txt
+      - name: Build from sdist and test actual installed public and native APIs
+        run: |
+          set -o pipefail
+          python -m build --outdir .runtime/dist | tee .runtime/build.txt
+          python scripts/check_current_installation.py --dist .runtime/dist --out .runtime/public-install | tee .runtime/public-install.txt
+          python scripts/check_integrated_installation.py --dist .runtime/dist --out .runtime/native-install | tee .runtime/native-install.txt
+      - name: Freeze declared execution fixtures including two trained artifacts
+        run: |
+          set -o pipefail
+          python scripts/prepare_runtime_fixtures.py --out .runtime/fixtures | tee .runtime/prepare.txt
+      - name: Measure every arm and independently replay each unique execution
+        run: |
+          set -o pipefail
+          python scripts/bench_integrated_runtime.py run --fixtures .runtime/fixtures --out .runtime/measurement | tee .runtime/measurement.txt
+          python scripts/bench_integrated_runtime.py verify --fixtures .runtime/fixtures --out .runtime/measurement --replay | tee .runtime/replay.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('.runtime/measurement/summary.json').read_text())
+          assert report['calls'] == 1344 and report['cases'] == 32
+          assert report['artifacts'] == 8 and report['exact_final_bits']
+          # Correctness is gating; timings are retained observations, not a universal threshold.
+          PY
+      - name: Remove disposable installations, not measurements
+        if: always()
+        run: rm -rf .runtime/public-install/venv .runtime/native-install/venv .runtime/native-install/fresh-native-builds
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integrated-runtime-${{ matrix.python }}-${{ github.run_id }}-${{ github.sha }}
+          path: .runtime/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
