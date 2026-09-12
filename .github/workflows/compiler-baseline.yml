@@ -1,0 +1,84 @@
+name: compiler-baseline
+on:
+  pull_request:
+    branches: [main, perf/integrated-final-runtime]
+    paths:
+      - 'spectra/compiler_*.py'
+      - 'scripts/*compiler*.py'
+      - 'tests/test_compiler_*.py'
+      - 'docs/COMPILER_*.md'
+      - '.github/workflows/compiler-baseline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: compiler-baseline-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compiler:
+    name: Compiler baseline (Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CUDA_VISIBLE_DEVICES: ''
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MAX_JOBS: '1'
+      TORCHINDUCTOR_FREEZING: '1'
+      TORCHINDUCTOR_COMPILE_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Record exact source and install declared CPU environment
+        run: |
+          mkdir -p .compiler
+          git rev-parse HEAD > .compiler/source_commit.txt
+          git rev-parse HEAD^{tree} > .compiler/source_tree.txt
+          git archive --format=tar.gz HEAD > .compiler/source.tar.gz
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+          python -m pip install -r requirements-cpu-research.txt build
+          python -m pip freeze > .compiler/environment.txt
+      - name: Full fast regression including new adapter and corruption contracts
+        run: |
+          set -o pipefail
+          python -m pytest -m 'not slow' --junitxml=.compiler/tests.xml | tee .compiler/tests.txt
+      - name: Actual source-distribution wheel outside checkout
+        run: |
+          set -o pipefail
+          python -m build --outdir .compiler/dist | tee .compiler/build.txt
+          python scripts/check_current_installation.py --dist .compiler/dist --out .compiler/install | tee .compiler/install.txt
+      - name: Real compiler from the installed wheel with fresh native build
+        run: |
+          set -o pipefail
+          python scripts/check_compiler_installation.py --dist .compiler/dist --out .compiler/native-install | tee .compiler/native-install.txt
+      - name: All four arms with real compilation, preserved failures, and independent audit
+        run: |
+          set -o pipefail
+          python scripts/bench_compiler_baseline.py run --out .compiler/measurement | tee .compiler/measurement.txt
+          python scripts/bench_compiler_baseline.py verify --out .compiler/measurement --replay | tee .compiler/replay.txt
+      - name: Retained evidence and checkpoint fidelity
+        run: |
+          set -o pipefail
+          python scripts/verify_retained_results.py --out .compiler/retained.json | tee .compiler/retained.txt
+          python scripts/verify_checkpoint_replay.py --out .compiler/checkpoint-replay | tee .compiler/checkpoint-replay.txt
+      - name: Remove disposable install and binary cache, not observations or generated sources
+        if: always()
+        run: rm -rf .compiler/install/venv .compiler/native-install/venv .compiler/measurement-inductor-cache
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compiler-${{ matrix.python }}-${{ github.run_id }}-${{ github.sha }}
+          path: .compiler/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
