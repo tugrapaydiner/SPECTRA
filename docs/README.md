@@ -40,3 +40,9 @@ its presentation.
 [Runtime API, profiling and reproduction](RUNTIME_GUIDE.md) ·
 [Evaluation protocol](INTEGRATED_RUNTIME_PROTOCOL.md). The new kernel is opt-in;
 no historical scientific claim is expanded by enabling it.
+
+## Trained FP execution
+
+[Prepared FP runtime, trained-task protocol, strongest eager control and replay](TRAINED_FP_GUIDE.md).
+This is separate from the packed-runtime fixture comparison and does not change
+historical learned results.

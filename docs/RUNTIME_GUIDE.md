@@ -132,3 +132,9 @@ blocked payload; neither is peak RSS. This alternative is not promoted into the
 exact API, and the packed optimization does not establish superiority over dense
 libraries. Its separate script, raw observations and portability diagnostics are
 retained in the PR27 delivery bundle and described in the PR audit receipt.
+
+## Separate trained FP execution path
+
+The [trained FP guide](TRAINED_FP_GUIDE.md) covers a prepared ATen execution context
+for the accepted, unquantized FP checkpoints. It is a different artifact format
+and benchmark from the packed experiments above; their speedups do not multiply.
