@@ -1,0 +1,74 @@
+name: public-package
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Preserve exact source
+        run: |
+          mkdir -p .public-package
+          git rev-parse HEAD > .public-package/source_commit.txt
+          git rev-parse HEAD^{tree} > .public-package/source_tree.txt
+          git archive --format=tar.gz HEAD > .public-package/source.tar.gz
+      - name: Install test and build tools only
+        run: python -m pip install build pytest==9.0.2 numpy==2.3.5
+      - name: Dependency-light contracts and archival concurrency tests
+        run: |
+          set -o pipefail
+          python -m pytest tests/public --confcutdir=tests/public -ra --junitxml=.public-package/pytest.xml | tee .public-package/pytest.txt
+      - name: Verify retained originals and current guide links
+        run: python scripts/audit_workspace.py --out .public-package/workspace_audit.json
+      - name: Build wheel from sdist and verify outside-checkout installation
+        run: |
+          set -o pipefail
+          python -m build --outdir .public-package/dist | tee .public-package/build.txt
+          python scripts/check_installation.py --wheel .public-package/dist/spectra-0.7.0-py3-none-any.whl --out .public-package/install | tee .public-package/install.txt
+      - name: Run and replay frozen compact-state comparison
+        run: |
+          set -o pipefail
+          python scripts/bench_compact_cnf.py run --out .public-package/compact | tee .public-package/compact-run.txt
+          python scripts/bench_compact_cnf.py verify --out .public-package/compact --replay | tee .public-package/compact-replay.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('.public-package/compact/summary.json').read_text())
+          assert report['gate']=='PASS',report
+          PY
+      - name: Retain small receipts and hashes, not the disposable venv
+        if: always()
+        run: |
+          rm -rf .public-package/install/venv
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path('.public-package');root.mkdir(exist_ok=True)
+          (root/'SHA256.json').write_text(json.dumps({str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob('*')) if p.is_file() and p!=root/'SHA256.json'},indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-package-${{ matrix.python }}-${{ github.run_id }}
+          path: .public-package/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error

@@ -1,6 +1,6 @@
 # SPECTRA Architecture — Current Evidence Boundary
 
-The original long implementation blueprint is preserved as `ARCHITECTURE_LEGACY.md`. It is design history, not a current evidence ledger. Current claims are governed by milestone protocols/acceptance gates and `CLAIMS.md`.
+The original long implementation blueprint is preserved as [the archived legacy architecture](https://github.com/tugrapaydiner/SPECTRA/blob/181e236528b5b58263c98b09925f0d7612c919d3/docs/ARCHITECTURE_LEGACY.md). It is design history, not a current evidence ledger. Current claims are governed by milestone protocols/acceptance gates and `CLAIMS.md`.
 
 ## Recurrent core and control
 SPECTRA uses explicit recurrent state `(x,y,z)` with shared computation. M11 established physical early exit and faithful active-query sparsity with full K/V context. M12 established a real router/halter actor-critic training path, but its learned-control pilot collapsed; no learned-control superiority is claimed.

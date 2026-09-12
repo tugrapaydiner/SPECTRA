@@ -4,29 +4,30 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectra"
-version = "0.6.0"
-description = "SPECTRA: Sparse Policy-guided Energy-aware Cache-Ternary Recursive Agent"
+version = "0.7.0"
+description = "Checked research tools for compact reasoning, exact CNF state and reproducible evidence"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "SPECTRA" }]
-dependencies = [
-    "torch>=2.4",
-    "numpy>=1.24",
-    "pyyaml>=6.0",
-    "einops>=0.7",
-    "tqdm>=4.66",
-]
+dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7.4"]
+dev = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66", "pytest>=7.4"]
 
-# Top-level packages mirror BLUEPRINT.md section 13. Tests and scripts are not
-# installed as importable packages (scripts are run directly).
+# Historical top-level packages remain import-compatible; spectra is the public API.
+research = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66"]
+native = ["torch>=2.4", "ninja>=1.11"]
+
+[project.scripts]
+spectra = "spectra.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["common*", "model*", "train*", "eval*", "data*", "deploy*"]
+include = ["spectra*", "common*", "model*", "train*", "eval*", "data*", "deploy*"]
 
+
+[tool.setuptools.package-data]
+deploy = ["*.cpp", "cpp_sparse_kernel/*.cpp", "cpp_sparse_kernel/CMakeLists.txt"]
 [tool.pytest.ini_options]
 # Put the repo root on sys.path so `import model.trm`, `import train.losses`,
 # etc. resolve during tests without an editable install.

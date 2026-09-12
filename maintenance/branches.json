@@ -1,0 +1,193 @@
+{
+  "schema": "spectra.branch_cleanup.v1",
+  "repository": "tugrapaydiner/SPECTRA",
+  "reviewed_main": "181e236528b5b58263c98b09925f0d7612c919d3",
+  "archive_prefix": "archive/2026-09-12/",
+  "keep": [
+    "main",
+    "research/neighborhood-repair"
+  ],
+  "merge_branch": "maintenance/consolidate-research-workspace",
+  "branches": [
+    {
+      "name": "docs/m06-acceptance-gate-lock",
+      "sha": "54e79d6480de3b164b012a582b6450fc587e4591",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/cnf-workload-admission",
+      "sha": "a89d9da9db1238c259fa725fa76fcd55dc95fc13",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/cpu-search-reliability-overhaul",
+      "sha": "1e29cb10662cb83ba9e28e4d30164fc373a547a5",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/exact-cached-residuals",
+      "sha": "44eb529af2f3314ddafc68673ab57662cc2a4ff9",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/failure-information-pilot",
+      "sha": "e2cc522fe7f435c7aca02080475e05e24b718aeb",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m01-baseline",
+      "sha": "f189dadf9b32c0cdb438bb5ffdb1d24edfa16256",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m02-native-contract",
+      "sha": "9d15a046787d0b0a803258d244bf9982305840d1",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m03-task-data-eval",
+      "sha": "f77917bb4f8a41b9946f1d62e1933fb36140ba44",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m04-repro-checkpoints",
+      "sha": "8f39110ef64b4384fdec1a4b4fe8909e5a79f48b",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m05-checkpoint-eval",
+      "sha": "87afe7489f4dfbb0f0b792dec9b982b60070a379",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m06-capability-gates",
+      "sha": "f8188ef40f131058ff6f4c31d4b44a9cb34cadf5",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m07-grounded-verifier",
+      "sha": "886941ccd1bda1685c7a0735d3ab0f5d4cb35d70",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m08-mcts-reference",
+      "sha": "a16c9fa4422d95c5f37f761f4b63b6c006d86b95",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m09-trained-actions",
+      "sha": "fb9f11ee4b1605146afcae53b25981fd295a30d1",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m10-cpu-deployment",
+      "sha": "8d9c6f890867fb8f3e5aa3068011059947e87055",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m11-adaptive-execution",
+      "sha": "f9a532d0c02a444f325aca131bbc3122047a9efd",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m12-router-halter-rl",
+      "sha": "2a48fad6831dd25135e570a3e07ec5a631522190",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m13-measurement-protocol",
+      "sha": "9cc7015749ba49a6c2813388483dcd88246c3fdc",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m14-attempt2-early-exit",
+      "sha": "6895800ba3774ea857de5d84232a2cbed34fcdf1",
+      "disposition": "archive_only",
+      "reason": "Superseded early-exit attempt; keep exact implementation and protocol history."
+    },
+    {
+      "name": "research/m14-attempt2-single-stream",
+      "sha": "738b27204794005c6e8fd889888d0c36b5772983",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m14-attempt3-semantic-early-exit",
+      "sha": "d1e491f412494c0756753bfa4b78b8002133d39c",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m14-attempt4-anytime-supervision",
+      "sha": "d8480dccd089a235ee8823161e1ed87745c28c22",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m14-attempt5-dual-stream-semantic-exit",
+      "sha": "1e22ffb22f9997dac5b1bc2546e4f76f2bdf050e",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m14-controlled-comparison",
+      "sha": "26d1cf94100d9489ef11d7f7850e83344a8e9783",
+      "disposition": "archive_only",
+      "reason": "Superseded M14 experiment with retained failed comparison gates; keep exact history, do not replace accepted M14."
+    },
+    {
+      "name": "research/m14-primary-controlled-experiment",
+      "sha": "2e47964624d94b89595e4ab1b0dbe785d2da6aef",
+      "disposition": "archive_only",
+      "reason": "Superseded adaptive-depth/N0 attempts; preserve unmerged implementation and protocol history."
+    },
+    {
+      "name": "research/m15-mechanism-ablations",
+      "sha": "ec4b41413eeb01a0d64ec9c7c83f271c4926d888",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/m16-verifier-aligned-cpu",
+      "sha": "095c1ed65ffa3beabc55e42052c2f3b038a3150e",
+      "disposition": "archive_only",
+      "reason": "Only standalone evidence manifest helper recovered. Parallel search still aliases mutable callback state; do not merge the alternative stack."
+    },
+    {
+      "name": "research/residual-patch-overhaul",
+      "sha": "6c0d8695a1def36ef112d8864df700a2bc4eb3ae",
+      "disposition": "archive_only",
+      "reason": "Completed negative learner experiment; preserve source and discussion, do not promote."
+    },
+    {
+      "name": "research/sudoku4-orbit-audit",
+      "sha": "8ba885a21544c1507c313987a445102b86076615",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    },
+    {
+      "name": "research/verifier-aligned-cpu-search",
+      "sha": "4caacbddd1b0497aaff5ffc0480d22f78616a518",
+      "disposition": "merged",
+      "reason": "All tip commits are ancestors of the reviewed main."
+    }
+  ]
+}
