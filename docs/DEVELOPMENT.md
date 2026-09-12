@@ -58,8 +58,9 @@ python -m eval.cnf_cache_benchmark verify --out original-cache-run --replay
 NumPy is needed for experiment statistics, not for the public CNF tools. Preserve
 the complete directory and its exact execution source. Timing and allocation
 numbers are observations; a deterministic trajectory replay does not regenerate
-historical wall-clock times. CI artifacts expire after 90 days. Keep the delivered
-bundle for long-term evidence retention. Historical raw results remain in `results/`.
+historical wall-clock times. Public-package and replay artifacts use 90-day
+retention; native/task artifacts use 14 days. Keep the delivered bundle for
+long-term evidence retention. Historical raw results remain in `results/`.
 
 ## Branch and history policy
 
