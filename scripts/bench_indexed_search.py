@@ -107,16 +107,28 @@ def quantile(values, p):
 
 
 def ratios_by_formula(case_ids, table, cap, engine, bootstrap_seed):
-    pairs = [(sum(table[(c, cap, 'reference')])/len(table[(c, cap, 'reference')]),
-              sum(table[(c, cap, engine)])/len(table[(c, cap, engine)])) for c in case_ids]
-    before = sum(a for a, _ in pairs)/len(pairs)
-    after = sum(b for _, b in pairs)/len(pairs)
+    # The declared inventory is balanced: every formula has the same number of
+    # seeds/rounds under both arms. Keep nanosecond totals as exact integers until
+    # the final division. Float sum() changed across supported Python versions;
+    # averaging float means first made otherwise identical reports differ by ULPs.
+    counts = {len(table[(c, cap, arm)]) for c in case_ids for arm in ('reference', engine)}
+    if len(counts) != 1 or not counts or min(counts) == 0:
+        raise ValueError('formula aggregation requires a nonempty balanced inventory')
+    observations = counts.pop()
+    pairs = []
+    for case in case_ids:
+        arms = [table[(case, cap, arm)] for arm in ('reference', engine)]
+        if any(not positive_int(value) for arm in arms for value in arm):
+            raise ValueError('aggregation requires positive integer nanoseconds')
+        pairs.append(tuple(sum(arm) for arm in arms))
+    before, after = sum(a for a, _ in pairs), sum(b for _, b in pairs)
+    denominator = len(pairs) * observations * 1_000_000
     rng = SplitMix64(bootstrap_seed)
     draws = []
     for _ in range(CONFIG['bootstrap_repeats']):
         selected = [pairs[rng.below(len(pairs))] for _ in pairs]
         draws.append(sum(b for _, b in selected)/sum(a for a, _ in selected))
-    return dict(reference_mean_ms=before/1e6, candidate_mean_ms=after/1e6,
+    return dict(reference_mean_ms=before/denominator, candidate_mean_ms=after/denominator,
                 mean_ratio=after/before, ratio_ci95=[quantile(draws, .025), quantile(draws, .975)],
                 independent_formulas=len(pairs))
 
@@ -213,7 +225,7 @@ def analyze(cases, rows, memory, preparation):
     primary = ratios_by_formula(large, table, 4096, 'indexed_cold', CONFIG['bootstrap_seed'])
     gates = dict(exact_paths=True, primary_mean=primary['mean_ratio'] <= CONFIG['primary_maximum_ratio'],
                  primary_upper95=primary['ratio_ci95'][1] < CONFIG['primary_maximum_upper95'])
-    return dict(schema='spectra.indexed_benchmark.v1', observations=len(rows), paired_paths=len(deterministic),
+    return dict(schema='spectra.indexed_benchmark.v2', aggregation='balanced_integer_nanoseconds_v1', observations=len(rows), paired_paths=len(deterministic),
                 independent_formulas=len(cases), timing='outer complete-call wall_ns', cells=cells,
                 primary=primary, gates=gates, gate='PASS' if all(gates.values()) else 'FAIL',
                 verified_sat_observations=solves, memory=memory, preparation=preparation,
