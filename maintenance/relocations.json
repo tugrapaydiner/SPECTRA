@@ -1,0 +1,393 @@
+{
+  "base": "181e236528b5b58263c98b09925f0d7612c919d3",
+  "moves": [
+    {
+      "from": ".github/workflows/m01-baseline.yml",
+      "original_sha256": "2138b920be0088e3bfa02ebd08daae3669f2b34da539ff93f77570177a1430ac",
+      "original_blob": "59ae8c4cd3347980332ca41f551c604e87ab8f6f",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m02-native-contract.yml",
+      "to": ".github/workflows/native-contract.yml",
+      "original_sha256": "8fff6c991253907492eae01b451f04ec15caa7d453ec86097022380513ab1445",
+      "current_sha256": "4d6f93d13e30934242ce6358f764a3787541327eedd704c6d3e56af9e460ca88",
+      "original_blob": "9857a5aba2c92d21afc90dfd2e6cff2abf3706d1",
+      "disposition": "relocated"
+    },
+    {
+      "from": ".github/workflows/m03-task-data-contract.yml",
+      "to": ".github/workflows/task-data-contract.yml",
+      "original_sha256": "6b32f61f1579e8a1c989ef1d34ea8aaef438264ae1a75946f611435f70b5c29e",
+      "current_sha256": "f4d540dc29dd0fb710964a8fc61c32dfc31e61d6487b80ffb40f028f7c0c24ed",
+      "original_blob": "54dd2627c2b2c25a58d8cbfc622dc980786aa028",
+      "disposition": "relocated"
+    },
+    {
+      "from": ".github/workflows/m04-repro-training.yml",
+      "original_sha256": "bd21e62fe06acc8e5a5afde4bbfa6b45f19860a895a215b2dac5441268037bf4",
+      "original_blob": "b274db372fb0b6be951bc4804a8f5b4a12b9b75a",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m05-checkpoint-eval.yml",
+      "original_sha256": "39b50aa482d601b780f02d7006791fbe6f95773eb8be5377c57113d5c05b1011",
+      "original_blob": "9e8759262222df565196f346cbde7d351fe7ad0c",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m06-controlled-baseline.yml",
+      "original_sha256": "f61df15cfe9665f0b3f33f7c023b62b75610980e6f7efaa7b448ca3d24c45a92",
+      "original_blob": "49eb92c3855243e1f226fab3e5799319c2a4ebeb",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m07-grounded-verifier.yml",
+      "original_sha256": "8af6bbcae37973a79da0a42077f045041e0c22b4610640a04dc58e4beae4f76b",
+      "original_blob": "6371eaa144d22c32cc43b5f95a0586397b886337",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m08-mcts-reference.yml",
+      "original_sha256": "d3e0847797c060966aa109fa71356843bc82c74cf7ee52f26a2e79ece0b484eb",
+      "original_blob": "c4fa74e2a9b13f8726d9e7edf81d82969e8a5bce",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m09-trained-actions.yml",
+      "original_sha256": "47128b59999816f657038520717f50b4b9ab1e2ccc746431952e1d4952b34468",
+      "original_blob": "b128fc23da9407a4b145cbb50d0fdec384446929",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m10-cpu-deployment.yml",
+      "original_sha256": "3b5dd8e38b0a677dc363811bd9dc0e6ffc399d141916c9563aacc636a82bbaef",
+      "original_blob": "e203fee7d2dbb7beafd4600b7b17bece48120545",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m11-adaptive-execution.yml",
+      "original_sha256": "25766986d08c3b24c5ded48e95f664ac224aa7d2716913022f8282f51fd94090",
+      "original_blob": "8efcab9f7c12fedf1731179418912b814d73307e",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m12-router-halter-rl.yml",
+      "original_sha256": "2b1f5ee1fd6219512b5449dd0b2d405981a9576fd72be77d078372cbe8ed76d1",
+      "original_blob": "245ae5b48b9a756395f63a2d9f2cd82127e5f97b",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m13-measurement-protocol.yml",
+      "original_sha256": "baa5f037eee69b342285bdcc9be256381f30e1a17e774f132884f494a26af038",
+      "original_blob": "a3f2c4ed4613371094cd94f4fe5998188d3027ad",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m14-attempt2-single-stream.yml",
+      "original_sha256": "d1a61eee13801a8a92ac37e6c50ce33bae2f8345476a18f672878c2cde6260bc",
+      "original_blob": "c9a9488584b0004c11a1e2e402732da091ba8dfd",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m14-attempt3-semantic-early-exit.yml",
+      "original_sha256": "3faf125343401fbecd5bd090f4643ce722ac1155ea049f8fd9d55c5798175982",
+      "original_blob": "9166e084530045c70e380287c145d9d05b980a44",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m14-attempt4-anytime-supervision.yml",
+      "original_sha256": "ea9134ec2136c121fa93f4a430743d36bc26fab8b7ccbd9a04f739b2b93a5744",
+      "original_blob": "897c1664fba4962224a88aec75c0d5a7ab78ad49",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m14-attempt5-dual-stream-semantic-exit.yml",
+      "original_sha256": "d69e6bb50f93a4961bd1c14dc1e5b0d553340fb8c92a1a3b4a4282f7d30e9e88",
+      "original_blob": "39288b8c8cf8e4fb2feb1240db4a8b43c7a5050a",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m14-primary-controlled-experiment.yml",
+      "original_sha256": "479a2b86470bdd4db049e838c4ac8e6aaee6a9ff1855c007be5b773c01c771b6",
+      "original_blob": "9c743c1e34486fb8c4fac5ff91c506e79cf36976",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m15-mechanism-ablations.yml",
+      "original_sha256": "d6ce2c6f62b1da8a179b3b279d19691b91011c2495d6f82ca96cf5a24828031f",
+      "original_blob": "94ab4fd4ea64fd13287515eac0e471023dcd9fd1",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m16-retain-accepted.yml",
+      "original_sha256": "1ba894ec48bbd37a9b87c039086774c38e1afe46d5f321305628e3caca10b2fc",
+      "original_blob": "acf534f09379b293e677ac748bc5777a342d8ac0",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": ".github/workflows/m16-verifier-aligned.yml",
+      "to": ".github/workflows/cpu-regression.yml",
+      "original_sha256": "44d20028e2edbdf0148121bc95ef24131afddd3792fc56723d57987fcdc825b1",
+      "current_sha256": "42d65936e0768136a0ff5b7ecfd511d7827ff889c1cc8c87d772a46472263e83",
+      "original_blob": "e85d7d203eb19297120a473b38b6578462e6c3d2",
+      "disposition": "relocated"
+    },
+    {
+      "from": ".github/workflows/m17-cross-task.yml",
+      "original_sha256": "e4aeb36884d0a88299af952fa66ebcacc9f4d7a1ffc293f7ce0010df3bbdf30a",
+      "original_blob": "8597b9fbd38c4daec1d22d465ad102161ee0beb8",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "README.md",
+      "original_sha256": "86457e185398e41bbdd2040469cba470a05a9ad4f6463ea87f97dbe34d0f4a6f",
+      "original_blob": "5abaff5e7d1a3816b4c5155bb3c193a3228b3799",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/ARCHITECTURE_LEGACY.md",
+      "original_sha256": "67cda99f782c023b0b3a4e4dccc6da3ddb1de8b89b394a6d0e58f419abf9f535",
+      "original_blob": "8671cdf6fad7c88f0b1b15fbed0a3e1fce3ab4d9",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/BASELINE_GATE.md",
+      "original_sha256": "ce747009fef125756a7c0d084ad5fc8b2b82996737e467d14f62e5aa7de19510",
+      "original_blob": "32eeb48a3015be80cc07b0bb863be8cd70f4132c",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/CACHED_RESIDUAL_REVIEW.md",
+      "original_sha256": "9d8402588cf13c72c57c228aa11e466703b53bceb21f94dd8f67092038186dea",
+      "original_blob": "20444b6b3c64af7eba37578e5ff20542fe030c95",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/CNF_WORKLOAD_ADMISSION.md",
+      "original_sha256": "48dd96ebcfc27f865c4643573120d3600fc1157ed5f3e3b56d1111c76deb0f81",
+      "original_blob": "a01048fd7a1e676efae02089c5ace48c8b2775b3",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/CPU_REPRODUCTION.md",
+      "original_sha256": "c9540423ee19ae0822fd6d30fd0d29f9c203986e66be5728b14b9ad1ef7b30a8",
+      "original_blob": "1277318b01900eeb0f4d5da039e9a3226da7f4ba",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/INTEGRATION_VALIDATION.md",
+      "original_sha256": "b053973401ca5e2b5fe2d6b3373fc949a1682cc4d6120ac23d8ba1d7fcd19458",
+      "original_blob": "7018526e27fca6166733c98edbe69d2f2048172f",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M02_ACCEPTANCE_GATE.md",
+      "original_sha256": "8d8b98a61a9d042386d0a96eaa256ea6b757b0da852755284678aba0fb7497ee",
+      "original_blob": "64228b6464191975047a34b883a63ca8aa2462e4",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M06_ACCEPTANCE_GATE.md",
+      "original_sha256": "c300de75a6ed7342767faa52ef498535cc27f5b89820d5e92878f2d0d9f0e91b",
+      "original_blob": "bdc52e29e689a5c333956c621f00322572ef93d4",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M07_ACCEPTANCE_GATE.md",
+      "original_sha256": "6d053c172fe315055a7cdfc5c56bec95d904ddde97a28267e67abadd1d1caf49",
+      "original_blob": "40adc736a2042fbe0292900b999d39e4c0bf4a7a",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M08_ACCEPTANCE_GATE.md",
+      "original_sha256": "c98d880da3c0b0ddce579b49f2defc5dae9b65d9a69ed4a3e49c86554f8af993",
+      "original_blob": "55b3583711410b7153cb34121174e3707a09df40",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M09_ACCEPTANCE_GATE.md",
+      "original_sha256": "5fb4a846220b5e51aefabd01c1d4a6edf924b095363b5b6946e26afa6fb74a13",
+      "original_blob": "a24f39897785bafde1a2ad11bf04e7c242ec3eca",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M09_PROTOCOL.md",
+      "original_sha256": "87f2f6fcf646ae8ad94f7e95678fecdcaee294c900a09a9f773db82c013a270c",
+      "original_blob": "aeba3b021c893c0d6fe7df051c28ae105de1ef01",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M10_ACCEPTANCE_GATE.md",
+      "original_sha256": "53e9dd40baf4b96af803de4ea4f98e38bd723e5093217d0a8f9a8cd31635013f",
+      "original_blob": "862df429909a4706900b7b542a48ea1f6d5b3d1a",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M10_FINAL_VALIDATION_NOTE.md",
+      "original_sha256": "f28cd15b29a3dae2bebfb52a3f26f56580d7d497721099ba590ad1f34fd302c9",
+      "original_blob": "b63626651e03543d9135de9c2dc22e0583420a7c",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M10_PROTOCOL.md",
+      "original_sha256": "470d964b67996dcab6cd5f58e62be2a0d363d2f04649dcf7d49caa87b22e2a0a",
+      "original_blob": "231168544bf402024c5718e1b852c1c74dd73445",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M11_ACCEPTANCE_GATE.md",
+      "original_sha256": "d8b208783fe3515b1ad126a59027883146fe474624ce4ce0b054daa16cc0dad6",
+      "original_blob": "de916dfd14bc34e21740e21228fc0660cee20d71",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M11_PROTOCOL.md",
+      "original_sha256": "933de7b60793b80a7ddefaf197fbf582a46589839a2c021752d118e0dfa6414e",
+      "original_blob": "235e0ebbc43848a0554e0c071262db7679f983f6",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M12_ACCEPTANCE_GATE.md",
+      "original_sha256": "2483ce2ed0aba4ce0be423d7c3ef0973f983c9e3e1300e3d58f99a7c05ccf574",
+      "original_blob": "2a0f531f2a79b653b550c727dfe2cc4c7133c34e",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M12_PROTOCOL.md",
+      "original_sha256": "a02d0799d199e3b0dbfa309a88e0f4ffbe9fcd97397ec392da6a27ccca31b544",
+      "original_blob": "0a826a43b3fa3c914925c67d5917d9dd1c1070ed",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M13_ACCEPTANCE_GATE.md",
+      "original_sha256": "e5be3fc86d96be018198d61dac877f977a9c7d9fe090e432ef9d6ec5ddddcd83",
+      "original_blob": "8fbf9731d5dbd8b2470ded82ef30d119df31a789",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M13_PROTOCOL.md",
+      "original_sha256": "a3118d36a8702dc994163503534d4b9790340dd0fe0e3dccec502fb6ced16848",
+      "original_blob": "eedd26c7abf4833fa7d6e084fde5ae995a4d3919",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M14_ATTEMPT2_LAUNCH.md",
+      "original_sha256": "71bd238b0f1c9a158a00dbefc6c5a6208be1dcebceaeb857a8a4e1fa041c66fc",
+      "original_blob": "be70991a5aa1044f4fefa9399d58addfa4f7b9ed",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M16_PROTOCOL.md",
+      "original_sha256": "e746594882fae6bb6d6dcf55e9a3932d072beebc98ae21703431e117d57005d2",
+      "original_blob": "bfb320a6bb76a95c282de1d903f82cb8832bc6c0",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M17_IMPLEMENTATION_NOTES.md",
+      "original_sha256": "2252b766358d6f4b04bce7c96282e38ad6fb78cbbec93ee02835ebf5d315de55",
+      "original_blob": "fca6b35394899bc65315550efb4ec222b1f125d2",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/M17_PROTOCOL.md",
+      "original_sha256": "a182f769220d2a717f79a49e1d1e6f3a9df0dcee5d59098cdb5179728102312b",
+      "original_blob": "8f2be052197c78611e684f68fde3134fd50b3c1c",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/PARALLEL_BRANCH_REVIEW.md",
+      "original_sha256": "4707ef3666f303db3e4fe0376c2c07603f13a53fe7d7bc58f4101aa6c7994bd8",
+      "original_blob": "59d19d61ebd9da9dbf3d16c29d8afe7b3fb16362",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/RESEARCH_STATE_M05.md",
+      "original_sha256": "e55dcbac558c5dcc5da11182fa15dccc58b1f777bd871ae908c76ef055d84fed",
+      "original_blob": "08ed850a4e9b58b9c4b58367c3c15d79a4c0decc",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/RESEARCH_STATE_M06.md",
+      "original_sha256": "8bbf43569e9058850cb4ba155520599d3997b9a93b2b4f5165297e8629bd5b30",
+      "original_blob": "a35fe3b249ac4fe3cca4f7a488c753901a616eab",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/RESEARCH_STATE_M07.md",
+      "original_sha256": "e054bd9cdd7a00d77b24de9bfc545cc3bfe810935107de51e761fb55339da25b",
+      "original_blob": "730366e4102522903cac6f71d0a86e39d0020bc6",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/RESEARCH_STATE_M08.md",
+      "original_sha256": "5e880ec686653e039115449798b02d7ef06e7b1cbf1bcbbd0058c2d15cfa5364",
+      "original_blob": "121c0026d5d49a5ee76024e1ae5bef2161ef188a",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/RESEARCH_STATE_M09.md",
+      "original_sha256": "ebc0f7897a1e9eefe029e4aeba4cc18bba5856a34d74ce2ae240dae7ba95ba47",
+      "original_blob": "d0bf21a825fbe312d0a116f1d637f547e4fa2cc9",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    },
+    {
+      "from": "docs/RESEARCH_STATE_M10_M12.md",
+      "original_sha256": "960cda3c65b101ac8e6e83b8c511c40af664b34024c064d48a777cca28687e65",
+      "original_blob": "0ceed3e8d0a0bae7918e0187def75cb505e17546",
+      "retained_commit": "181e236528b5b58263c98b09925f0d7612c919d3",
+      "disposition": "git_history"
+    }
+  ]
+}

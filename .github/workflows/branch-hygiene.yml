@@ -1,0 +1,47 @@
+name: branch-hygiene
+on:
+  push:
+    branches: [main]
+    paths: ['maintenance/branches.json']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive-reviewed-tips:
+    if: github.repository == 'tugrapaydiner/SPECTRA' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Snapshot refs before applying the exact reviewed retirement manifest
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/branch-hygiene
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --tags
+          git ls-remote --heads --tags origin > /tmp/branch-hygiene/before_refs.txt
+          git bundle create /tmp/branch-hygiene/before.bundle --all
+          git rev-parse HEAD > /tmp/branch-hygiene/source_commit.txt
+      - name: Archive and retire reviewed tips with a single atomic push
+        env:
+          MERGE_COMMIT: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          python scripts/maintenance_archive_branches.py --manifest maintenance/branches.json --merge-commit "$MERGE_COMMIT" --receipt /tmp/branch-hygiene/receipt.json --apply | tee /tmp/branch-hygiene/execution.txt
+      - name: Retain the post-operation remote inventory
+        if: always()
+        run: |
+          mkdir -p /tmp/branch-hygiene
+          git ls-remote --heads --tags origin > /tmp/branch-hygiene/after_refs.txt
+          cd /tmp/branch-hygiene
+          sha256sum *.txt *.json *.bundle > sha256.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: branch-hygiene-${{ github.run_id }}
+          path: /tmp/branch-hygiene/
+          retention-days: 90
+          if-no-files-found: error

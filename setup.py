@@ -1,23 +1,18 @@
-"""Optional native build for the SPECTRA fused ternary CPU extension.
+"""Native compilation is explicit; ordinary wheels are compiler-free.
 
-The pure-PyTorch baseline needs no compilation. ``python setup.py build_ext
---inplace`` builds a host-safe native extension: AVX2 is enabled only when the
-current x86 CPU reports AVX2; otherwise the same source compiles its scalar path.
+``python setup.py build_ext --inplace`` remains supported for historical
+workflows. To build a binary wheel, set SPECTRA_BUILD_NATIVE=1 with PyTorch
+already installed and use --no-build-isolation. Build failures are errors.
 """
 from __future__ import annotations
-
+import os
 import platform
 import sys
-from pathlib import Path
-
 from setuptools import setup
-
-_SRC = Path(__file__).parent / "deploy" / "cpp_sparse_kernel" / "extension.cpp"
 
 
 def _cpu_supports_avx2(torch_module) -> bool:
-    machine = platform.machine().lower()
-    if machine not in {"x86_64", "amd64", "i386", "i686", "x86"}:
+    if platform.machine().lower() not in {"x86_64", "amd64", "i386", "i686", "x86"}:
         return False
     try:
         cap = str(torch_module.backends.cpu.get_cpu_capability()).upper()
@@ -26,27 +21,25 @@ def _cpu_supports_avx2(torch_module) -> bool:
         return False
 
 
-ext_modules: list = []
-cmdclass: dict = {}
-try:
-    import torch
-    from torch.utils.cpp_extension import BuildExtension, CppExtension
-
-    use_avx2 = _cpu_supports_avx2(torch)
+def native_options() -> dict:
+    value = os.environ.get("SPECTRA_BUILD_NATIVE", "0")
+    if value not in {"0", "1"}:
+        raise ValueError("SPECTRA_BUILD_NATIVE must be 0 or 1")
+    if "build_ext" not in sys.argv and value != "1":
+        return {"ext_modules": [], "cmdclass": {}}
+    try:
+        import torch
+        from torch.utils.cpp_extension import BuildExtension, CppExtension
+    except ImportError as error:
+        raise RuntimeError("Explicit native builds require PyTorch; install the native extra first") from error
+    avx2 = _cpu_supports_avx2(torch)
     if sys.platform == "win32":
-        cxx_flags = ["/O2", "/std:c++20"] + (["/arch:AVX2"] if use_avx2 else [])
+        flags = ["/O2", "/std:c++20"] + (["/arch:AVX2"] if avx2 else [])
     else:
-        cxx_flags = ["-O3", "-std=c++20"] + (["-mavx2"] if use_avx2 else [])
-    print(f"[spectra] building native {'AVX2' if use_avx2 else 'scalar'} backend")
-    ext_modules = [
-        CppExtension(
-            name="spectra_kernel_ext",
-            sources=[str(_SRC)],
-            extra_compile_args={"cxx": cxx_flags},
-        )
-    ]
-    cmdclass = {"build_ext": BuildExtension}
-except Exception as exc:
-    print(f"[spectra] native extension configuration unavailable: {exc}")
+        flags = ["-O3", "-std=c++20"] + (["-mavx2"] if avx2 else [])
+    return {"ext_modules": [CppExtension(name="spectra_kernel_ext",
+                sources=["deploy/cpp_sparse_kernel/extension.cpp"],
+                extra_compile_args={"cxx": flags})],
+            "cmdclass": {"build_ext": BuildExtension}}
 
-setup(ext_modules=ext_modules, cmdclass=cmdclass)
+setup(**native_options())
