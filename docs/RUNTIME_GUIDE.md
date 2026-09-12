@@ -1,0 +1,105 @@
+# Integrated CPU execution
+
+This branch adds opt-in composition of final-only output with owned validated
+packed weights, plus an independent four-vector blocked native linear. It does
+not change the historical runtime, training graph, checkpoint format, or scientific
+results. The original `forward` still returns the diagnostic trajectory.
+
+```python
+from deploy.m10_artifact import load_cpu_artifact
+from deploy.validated_runtime import ValidatedCPURecursiveRuntime
+from spectra.inference import predict_final
+
+runtime = ValidatedCPURecursiveRuntime(load_cpu_artifact("model.pt"))
+prediction = predict_final(runtime, input_tokens)
+```
+
+To opt into ordered independent-vector blocking:
+
+```python
+from spectra.blocked_runtime import BlockedCPURecursiveRuntime
+runtime = BlockedCPURecursiveRuntime(load_cpu_artifact("model.pt"))
+prediction = predict_final(runtime, input_tokens)
+```
+
+Only the three audited concrete runtime classes are accepted by `predict_final`;
+arbitrary subclasses are rejected. Importing the base `spectra` package does not
+import Torch or compile native code. Constructing the blocked runtime requires
+Torch, Ninja and a compatible C++ compiler. Native source ships in ordinary wheels.
+Use a separate runtime instance for each concurrent worker. Do not monkeypatch
+methods or mutate architecture/tensor dictionaries on a supported runtime.
+
+## Arithmetic and memory contract
+
+Four independent input vectors share packed-weight decoding. Each output still
+visits hidden coordinates in increasing order; positive/negative products, skipped
+zero weights, row scales, bias placement and final FP32 operations are unchanged.
+The new extension forbids fast-math and FP contraction. It does not predequantize
+weights, reorder a reduction, approximate attention, or change recurrent budgets.
+Compiler-specific vectorization is not claimed as a measured ISA contract.
+
+Handles validate private copies before use and retain packed weights, scales and
+biases. The artifact remains resident too: this is not zero-copy. Returned tensor
+storage excludes temporary tensors, owned native payload, allocator overhead and
+process RSS. Final-only execution does not perform early exit or claim better
+answers. Raw bit patterns, rather than only `torch.equal`, are checked by tests.
+
+## Reproduction
+
+```bash
+python -m pytest tests/test_integrated_runtime.py tests/test_output_only_inference.py
+python scripts/prepare_runtime_fixtures.py --out outputs/runtime-fixtures
+python scripts/bench_integrated_runtime.py run --fixtures outputs/runtime-fixtures --out outputs/runtime-benchmark
+python scripts/bench_integrated_runtime.py verify --fixtures outputs/runtime-fixtures --out outputs/runtime-benchmark --replay
+```
+
+The fixture preparation uses six untrained artifacts and two newly trained
+hard-ternary/A8 artifacts (128 fixed optimizer steps each). These are execution
+fixtures, not a new Sudoku capability result. All training curves, checkpoint
+identities, inputs and preparation hashes are retained. Existing FP-only M16
+checkpoints are never converted and mislabeled as equivalent packed models.
+
+The benchmark compares checked, validated and blocked weights, each with full
+trace and final-only outputs. It retains every case and round. Native loading,
+construction and first calls are distinct from warm inference-plus-check latency.
+Fresh-process RSS measurements are separately scoped and include process overhead.
+A runtime instance is not shared between arms. See the
+[evaluation protocol](INTEGRATED_RUNTIME_PROTOCOL.md) for interpretation limits.
+
+## Local measurement and validation
+
+On one pinned AMD EPYC 9V74 CPU core, Python 3.13.5, Torch 2.10.0+cpu and
+GCC 14.2, the final matrix has **1,344 calls over 32 cases from eight artifacts**.
+The blocked final-only path has a ratio of summed case-median inference-plus-check
+latencies of **0.404903** against the best non-blocked control in each case
+(about **2.47x faster**) and **0.318079** against checked tracing. The best
+non-blocked set includes the newly enabled validated/final composition; this is
+not merely a comparison against the slowest historical baseline. No case-median
+regression occurred in this fixed local matrix. All 192 distinct executions replay
+with identical final bits. Repetitions do not create more independent artifacts;
+these are descriptive measurements, not a universal speed or statistical gate.
+
+**Every fixture output failed strict Sudoku validity, including the newly trained
+fixtures.** This is faster equivalent execution, not faster successful solving,
+better learned reasoning, an external-solver result or validation of quantization
+quality. The trained dim64/batch1 first case measured 12.025 ms for validated-final
+versus 5.547 ms blocked-final; its batch4 first case measured 34.028 versus 12.493 ms.
+All cases and raw observations are retained in the delivered evidence bundle and
+are regenerated by the dedicated CI workflow.
+
+The final local fast suite passed **1,385 tests**, with **16 slow tests excluded**
+and two historical warnings. The sdist-built wheel passed 11 dependency-free
+installation checks and all six native execution arms from an isolated installation
+with fresh native compilation. Historical checks independently verified 11,520
+stored answers and replayed 3,840 checkpoint answer/validity/work comparisons
+without mismatches. The first installed-native check exposed a nested-venv dependency
+handoff problem; the corrected helper explicitly exposes the declared parent
+research dependency site while requiring SPECTRA imports inside the new venv.
+The original failed attempt is preserved alongside the corrected success.
+
+See the [machine-readable local receipt](../results/integrated_runtime/local_receipt.json)
+for exact digests and environment. The complete final measurement manifest has
+SHA256 `070d3e180bf59707b8cf94027e6f00946837457ec573f37ec969bd796fe8319e`.
+An earlier development run is preserved separately, not replaced. These are local
+receipts; a configured CI workflow is not proof that its run has passed. This
+branch does not overwrite the published 0.7.1 release.
