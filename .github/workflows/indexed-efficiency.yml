@@ -129,7 +129,7 @@ jobs:
           python-version: '3.13'
       - uses: actions/download-artifact@v4
         with:
-          pattern: efficiency-*-${{ github.run_id }}-${{ github.run_attempt }}
+          pattern: efficiency-*-${{ github.run_id }}-*
           path: .release-inputs
       - name: Check exact source identity and prepare durable selected receipts
         run: python scripts/package_efficiency_release.py --inputs .release-inputs --out .release
@@ -154,6 +154,13 @@ jobs:
             exit 1
           fi
           gh release create "$TAG" .release/SPECTRA-source.tar.gz .release/SPECTRA-efficiency-evidence.tar.gz .release/spectra-0.7.1-py3-none-any.whl .release/SHA256SUMS .release/RELEASE_NOTES.md --target "$GITHUB_SHA" --draft --title "SPECTRA $VERSION: exact search efficiency" --notes-file .release/RELEASE_NOTES.md
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > .release/tag-receipt.json
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          ref=json.loads(Path('.release/tag-receipt.json').read_text())
+          assert ref['object']['type']=='commit' and ref['object']['sha']==os.environ['GITHUB_SHA']
+          PY
           gh release view "$TAG" --json assets > .release/uploaded-assets.json
           python - <<'PY'
           import json
