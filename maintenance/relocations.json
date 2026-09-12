@@ -12,7 +12,7 @@
       "from": ".github/workflows/m02-native-contract.yml",
       "to": ".github/workflows/native-contract.yml",
       "original_sha256": "8fff6c991253907492eae01b451f04ec15caa7d453ec86097022380513ab1445",
-      "current_sha256": "4d6f93d13e30934242ce6358f764a3787541327eedd704c6d3e56af9e460ca88",
+      "current_sha256": "c86e75b7c7cf1e98d724227ed73910a96dfcecf6271c24597bf8c37b6dd1d388",
       "original_blob": "9857a5aba2c92d21afc90dfd2e6cff2abf3706d1",
       "disposition": "relocated"
     },

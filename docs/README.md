@@ -30,3 +30,7 @@ at a full immutable commit. [File receipts](../maintenance/relocations.json) and
 Protocols referenced by executable or retained-evidence checks keep their original
 paths and bytes. The project does not rewrite old scientific outcomes to simplify
 its presentation.
+
+## Indexed efficiency
+
+[Use, results, invariants and reproduction](EFFICIENCY_GUIDE.md) · [Frozen protocol](INDEXED_SEARCH_PROTOCOL.md).

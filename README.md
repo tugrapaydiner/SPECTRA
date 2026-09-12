@@ -1,6 +1,6 @@
 # SPECTRA
 
-**Compact reasoning research, exact search state, and replayable evidence.**
+**CPU-efficient verified search, compact reasoning experiments, and replayable evidence.**
 
 SPECTRA is a research workbench, not a frontier-model replacement. The usable
 public interface is `spectra`: dependency-light CNF tools and artifact checking.
@@ -10,16 +10,31 @@ visible rather than promoted into the default system.
 [Current results](docs/STATUS.md) · [Documentation](docs/README.md) ·
 [Development](docs/DEVELOPMENT.md) · [Historical experiments](docs/history/README.md)
 
+## Measured implementation result
+
+The optional indexed backend preserves seeded search paths while removing
+per-flip sorting. In a frozen local comparison, larger 4096-flip executions take
+**4.21x less time**, including preparation. Small cases can be slower and cold
+allocation increases. Large cases in that comparison return `UNKNOWN`: this is
+cheaper identical bounded search, not SAT superiority or a new learned result.
+The [efficiency guide](docs/EFFICIENCY_GUIDE.md) includes all cells, ablations,
+uncertainty, memory scope and reproduction commands.
+
+Output-only CPU inference additionally avoids retaining diagnostic trajectories
+and preserves final numerical outputs; returned tensor storage is not peak RAM.
+
 ## Start here
 
 Use Python 3.10 or newer. Install from this checkout; this command does not
-claim that version 0.7.0 is published to a package index.
+claim that version 0.7.1 is published to a package index.
 
 ```bash
 python -m pip install .
 spectra doctor
 spectra cnf solve examples/tiny.cnf --seed 7 --max-flips 1024 --out answer.json
 spectra cnf check examples/tiny.cnf answer.json
+# Opt in; the historical compact backend remains the default.
+spectra cnf solve examples/tiny.cnf --backend indexed --seed 7 --max-flips 4096 --out indexed.json
 ```
 
 The base install needs neither PyTorch nor a C++ compiler. Output is JSON and
