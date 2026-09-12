@@ -30,6 +30,8 @@ def main(argv: list[str] | None = None) -> int:
     solve_parser.add_argument("--seed", type=int, default=0)
     solve_parser.add_argument("--max-flips", type=int, default=1024)
     solve_parser.add_argument("--out", type=Path)
+    solve_parser.add_argument("--backend", choices=["compact", "indexed"], default="compact",
+                              help="indexed preserves seeded paths; compact is the historical default")
     check_parser = actions.add_parser("check", help="Check a complete Boolean witness against original clauses")
     check_parser.add_argument("input", type=Path)
     check_parser.add_argument("witness", type=Path, help="JSON object with a Boolean-list witness field")
@@ -46,13 +48,16 @@ def main(argv: list[str] | None = None) -> int:
             from .evidence import verify
             _emit(verify(args.root, json.loads(args.manifest.read_text(encoding="utf-8"))), None)
         else:
-            from .cnf import read_dimacs, solve
+            from .cnf import read_dimacs, solve, solve_indexed
             with args.input.open(encoding="utf-8") as stream:
                 problem = read_dimacs(stream)
             if args.action == "solve":
                 if args.out is not None and args.out.exists():
                     raise FileExistsError(f"refusing to replace {args.out}")
-                result = solve(problem, seed=args.seed, max_flips=args.max_flips).record()
+                solver = solve_indexed if args.backend == "indexed" else solve
+                result = solver(problem, seed=args.seed, max_flips=args.max_flips).record()
+                result["backend"] = args.backend
+                result["timing_scope"] = "cold_search_including_preparation"
                 result["formula_sha256"] = problem.sha256()
                 _emit(result, args.out)
             else:
