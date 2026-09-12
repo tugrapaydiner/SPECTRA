@@ -77,7 +77,7 @@ jobs:
         run: |
           set -o pipefail
           python -m pip wheel --no-build-isolation --no-deps --wheel-dir .m02/wheels . | tee .m02/wheel-build.txt
-          python scripts/check_native_installation.py --wheel .m02/wheels/spectra-0.7.0-py3-none-any.whl --out .m02/installed-native | tee .m02/installed-native.txt
+          python scripts/check_native_installation.py --wheel .m02/wheels/spectra-0.7.1-py3-none-any.whl --out .m02/installed-native | tee .m02/installed-native.txt
           rm -rf .m02/installed-native/venv .m02/installed-native/fresh_native_builds
 
       - name: Prove scalar fallback build

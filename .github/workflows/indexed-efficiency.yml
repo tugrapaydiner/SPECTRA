@@ -1,0 +1,177 @@
+name: indexed-efficiency
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths: ['pyproject.toml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: indexed-efficiency-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  indexed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.13']
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Export exact tested source
+        run: |
+          mkdir -p .indexed
+          git rev-parse HEAD > .indexed/source_commit.txt
+          git rev-parse HEAD^{tree} > .indexed/source_tree.txt
+          git archive --format=tar.gz HEAD > .indexed/source.tar.gz
+      - name: Install base test/build tools
+        run: |
+          python -m pip install build pytest==9.0.2
+          python -m pip freeze > .indexed/environment.lock.txt
+      - name: Public contracts including corruption rejection
+        run: |
+          set -o pipefail
+          python -m pytest tests/public --confcutdir=tests/public -ra --junitxml=.indexed/pytest.xml | tee .indexed/pytest.txt
+      - name: Actual sdist-built wheel outside the checkout
+        run: |
+          set -o pipefail
+          python -m build --outdir .indexed/dist | tee .indexed/build.txt
+          python scripts/check_indexed_installation.py --wheel .indexed/dist/spectra-0.7.1-py3-none-any.whl --out .indexed/install | tee .indexed/install.txt
+      - name: Frozen four-arm full-cost benchmark and every unique replay
+        run: |
+          set -o pipefail
+          CPU=$(python -c 'import os;print(min(os.sched_getaffinity(0)))')
+          taskset -c "$CPU" python scripts/bench_indexed_search.py run --out .indexed/evidence | tee .indexed/measurement.txt
+          taskset -c "$CPU" python scripts/bench_indexed_search.py verify --out .indexed/evidence --replay | tee .indexed/replay.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('.indexed/evidence/summary.json').read_text())
+          assert report['gate']=='PASS',report['primary']
+          assert report['observations']==1152 and report['paired_paths']==96
+          PY
+      - name: Retain results without disposable installation
+        if: always()
+        run: rm -rf .indexed/install/venv
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: efficiency-cnf-${{ matrix.python }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .indexed/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+  output-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CUDA_VISIBLE_DEVICES: ''
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      MAX_JOBS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Export source and install the declared CPU environment
+        run: |
+          mkdir -p .output-only
+          git rev-parse HEAD > .output-only/source_commit.txt
+          git rev-parse HEAD^{tree} > .output-only/source_tree.txt
+          git archive --format=tar.gz HEAD > .output-only/source.tar.gz
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+          python -m pip install -r requirements-cpu-research.txt
+          python -m pip freeze > .output-only/environment.lock.txt
+      - name: Bitwise contracts and bounded API measurements
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_output_only_inference.py -ra --junitxml=.output-only/pytest.xml | tee .output-only/pytest.txt
+          CPU=$(python -c 'import os;print(min(os.sched_getaffinity(0)))')
+          taskset -c "$CPU" python scripts/bench_output_only.py --out .output-only/evidence | tee .output-only/measurement.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: efficiency-output-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .output-only/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+  publish-versioned-evidence:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'tugrapaydiner/SPECTRA'
+    needs: [indexed, output-only]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: efficiency-*-${{ github.run_id }}-*
+          path: .release-inputs
+      - name: Check exact source identity and prepare durable selected receipts
+        run: python scripts/package_efficiency_release.py --inputs .release-inputs --out .release
+      - name: Publish a new versioned release without replacing an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(python -c 'import spectra;print(spectra.__version__)')
+          test "$VERSION" = '0.7.1'
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Refusing to overwrite an existing release: $TAG" >&2
+            exit 1
+          fi
+          set +e
+          git ls-remote --exit-code --tags origin "refs/tags/$TAG" > .release/existing-tag.txt
+          TAG_STATUS=$?
+          set -e
+          if test "$TAG_STATUS" != 2; then
+            echo "Tag exists or tag lookup failed; refusing publication." >&2
+            exit 1
+          fi
+          # Create the exact ref explicitly; draft creation need not materialize a tag.
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > .release/created-tag.json
+          gh release create "$TAG" .release/SPECTRA-source.tar.gz .release/SPECTRA-efficiency-evidence.tar.gz .release/spectra-0.7.1-py3-none-any.whl .release/SHA256SUMS .release/RELEASE_NOTES.md --verify-tag --target "$GITHUB_SHA" --draft --title "SPECTRA $VERSION: exact search efficiency" --notes-file .release/RELEASE_NOTES.md
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > .release/tag-receipt.json
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          ref=json.loads(Path('.release/tag-receipt.json').read_text())
+          assert ref['object']['type']=='commit' and ref['object']['sha']==os.environ['GITHUB_SHA']
+          PY
+          gh release view "$TAG" --json assets > .release/uploaded-assets.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('.release')
+          assets=json.loads((root/'uploaded-assets.json').read_text())['assets']
+          expected={p.name:p.stat().st_size for p in root.iterdir() if p.name in {'SPECTRA-source.tar.gz','SPECTRA-efficiency-evidence.tar.gz','spectra-0.7.1-py3-none-any.whl','SHA256SUMS','RELEASE_NOTES.md'}}
+          assert {a['name']:a['size'] for a in assets}==expected
+          PY
+          gh release download "$TAG" --dir .release/download-check
+          (cd .release/download-check && sha256sum --check SHA256SUMS)
+          gh release edit "$TAG" --draft=false

@@ -4,6 +4,20 @@ This is a software and research status page, not a hiring-level certification.
 The historical learned capability assessment remains weak relative to frontier
 impact; cleaning the repository does not turn a failed scientific gate into a pass.
 
+## Current efficiency upgrade: 0.7.1
+
+An opt-in ranked/prepared search implementation removes repeated residual sorting
+without changing seeded trajectories. The frozen local primary full-call ratio
+is 0.237505 [0.216128, 0.281891]; 1152 answers and 384 backend paths verify exactly.
+Small-case regressions and increased cold allocation remain visible. Large cases
+return UNKNOWN. This is not a learned or external-solver superiority result.
+
+An output-only CPU API preserves final outputs without retaining the diagnostic
+trajectory. Its storage measurements are returned tensor storage, not peak RAM.
+See [the efficiency guide](EFFICIENCY_GUIDE.md) for evidence, scope and commands.
+Versioned publication depends on successful exact-source CI; historical evidence
+and all original research dispositions below are unchanged.
+
 ## Public release surface
 
 Version 0.7.0 adds a compiler-free base installation, one `spectra` command, strict

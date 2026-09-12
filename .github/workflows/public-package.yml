@@ -42,7 +42,7 @@ jobs:
         run: |
           set -o pipefail
           python -m build --outdir .public-package/dist | tee .public-package/build.txt
-          python scripts/check_installation.py --wheel .public-package/dist/spectra-0.7.0-py3-none-any.whl --out .public-package/install | tee .public-package/install.txt
+          python scripts/check_installation.py --wheel .public-package/dist/spectra-0.7.1-py3-none-any.whl --out .public-package/install | tee .public-package/install.txt
       - name: Run and replay frozen compact-state comparison
         run: |
           set -o pipefail
