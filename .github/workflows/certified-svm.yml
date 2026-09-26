@@ -1,0 +1,56 @@
+name: certified-svm
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths: ['spectra/svm*.py', 'spectra/_native/ovo/**', 'tests/svm/**', 'scripts/check_svm_installation.py', '.github/workflows/certified-svm.yml', 'pyproject.toml', 'MANIFEST.in']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  svm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.13']
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install test, export and build tools
+        run: python -m pip install build pytest scikit-learn
+      - name: Preserve source identity and run portable contracts
+        run: |
+          mkdir -p .svm-ci
+          git rev-parse HEAD > .svm-ci/commit.txt
+          git rev-parse HEAD^{tree} > .svm-ci/tree.txt
+          python -m pip freeze > .svm-ci/environment.txt
+          python -m pytest tests/svm --confcutdir=tests/svm --junitxml=.svm-ci/pytest.xml
+      - name: Build actual wheel through source distribution
+        run: python -m build --outdir .svm-ci/dist
+      - name: Compile and execute installed wheel without numerical frameworks
+        run: |
+          WHEEL=$(find .svm-ci/dist -maxdepth 1 -name '*.whl')
+          test "$(printf '%s\n' "$WHEEL" | wc -l)" -eq 1
+          python scripts/check_svm_installation.py --wheel "$WHEEL" --out .svm-ci/installed
+      - name: Remove disposable environment before retaining receipts
+        if: always()
+        run: rm -rf .svm-ci/installed/venv
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: certified-svm-${{ matrix.python }}-${{ github.run_id }}
+          path: .svm-ci/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error

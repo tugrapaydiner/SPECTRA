@@ -59,3 +59,8 @@ assets/data/
 /.output-only/
 /.cpu-contracts/
 /install-check/
+
+# Certified SVM package checks
+/.svm-ci/
+/svm-build/
+/svm-wheel-check/
