@@ -92,3 +92,15 @@ research code, regenerate old measurements or relax tolerances for tidiness.
 The [history index](history/README.md) and [contribution policy](../CONTRIBUTING.md)
 cover the existing archived tips. The branch-retirement script remains dry-run
 by default and refuses advanced tips; no history rewrite is part of this cleanup.
+
+## Optional runtime tracks in the integrated candidate
+
+The prepared FP32 and compiler baselines are included without changing the
+default solver. Use [prepared execution](TRAINED_FP_GUIDE.md),
+[packed execution](RUNTIME_GUIDE.md) and [compiler controls](COMPILER_BASELINE_GUIDE.md).
+A fresh named distribution check can also be run with:
+
+```bash
+python -m build --outdir dist/current
+python scripts/check_current_installation.py --dist dist/current --out install-check
+```

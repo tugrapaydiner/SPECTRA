@@ -41,3 +41,8 @@ Evidence-bound protocols retain their original locations. Raw evidence remains
 under `results/`; research module paths remain compatible with saved records.
 The installed wheel is not the complete research archive: use a full Git checkout
 for historical replay and the workspace-preservation audit.
+
+## Integrated optional execution
+
+[Prepared FP32](TRAINED_FP_GUIDE.md), [packed runtime](RUNTIME_GUIDE.md) and
+[compiler baseline](COMPILER_BASELINE_GUIDE.md) are separate opt-in tracks.

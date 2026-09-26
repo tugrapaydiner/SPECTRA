@@ -15,7 +15,7 @@ Two later changes remain open and unmerged: [PR27](https://github.com/tugrapaydi
 (`b28e01b85bd95b78f291e466c25c13bfa2fc5b46`) contains optional prepared execution;
 [PR28](https://github.com/tugrapaydiner/SPECTRA/pull/28)
 (`4cb091653bd720d36f36bccecdae7781824f4985`) is its stacked compiler comparison.
-They are not included in the main release. Their reported speedups must not be
+They are included in this local integration candidate, not in the published main release. Their reported speedups must not be
 mixed with v0.7.1's classical CNF or untrained output-only fixtures.
 Only PR27's isolated package-version publication guard is reused in this cleanup.
 

@@ -20,6 +20,7 @@ from spectra import __version__
 from check_indexed_installation import verify
 
 REQUIRED_SOURCES = {
+    "spectra/_native/blocked_linear.cpp", "spectra/_native/fp_step.cpp",
     "deploy/m10_dense_extension.cpp", "deploy/replay_ordered_extension.cpp",
     "deploy/cpp_sparse_kernel/extension.cpp", "deploy/cpp_sparse_kernel/spectra_kernel.cpp",
 }
