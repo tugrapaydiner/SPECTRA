@@ -2,3 +2,4 @@ include LICENSE README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md
 recursive-include deploy *.cpp *.h *.hpp CMakeLists.txt
 recursive-include examples *.cnf
 recursive-include docs *.md *.json
+recursive-include spectra/_native *.cpp *.h *.hpp
