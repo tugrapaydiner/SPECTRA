@@ -1,0 +1,23 @@
+# Trained FP execution protocol
+
+Status: protocol, not a measured outcome. Extends PR27 without replacing its packed-runtime experiment.
+
+## Question and implementation boundary
+
+Can a once-prepared, owning CPU FP32 runtime reduce complete semantic-exit latency of the accepted trained M14 dim64 checkpoints without changing any per-step recurrent state, logits, decoded answer, validity, or executed depth within the same environment?
+
+Candidate: move the fixed n=T=1 evaluation graph into an ATen C++ execution context. Reuse PyTorch's existing native multi-head attention, RMSNorm, linear, GELU, addition and multiplication operations in the historical order. Precompute only input-independent positions. Own all weight copies. The existing exact native Sudoku checker remains the terminal authority and is constructed inside each solve. No puzzle answers or recurrent states are cached across solves. No training, quantization, batch compaction, approximation, changed budget, or altered old implementation is part of this change. Restrict the public surface to audited CPU FP32 eval-mode module geometry; reject unsupported hooks, graph mutations, autocast and attention-dispatch modes rather than silently changing the reference.
+
+## Locked evidence and workload
+
+Use both accepted `fp_recursive_dim64` checkpoints, seeds 1401 and 2402, through the existing hash-checking `scripts.m16_evidence.Evidence` loader. No replacement or retraining. Use all test inputs from two already-observed DEVELOPMENT manifests: M16 `experiment/manifests/seed2026091601_arrays.npz` and M17 `experiment/sudoku_shift/manifests/seed2026091703_arrays.npz`, from the retained accepted M16/M17 archives. Do not open the confirmation/reserve surfaces. Record archive/member/checkpoint digests and input IDs before timing. These are previously observed performance workloads, not untouched capability confirmation or symmetry-disjoint generalization evidence.
+
+Four complete-solve arms: historical Python semantic exit, existing native-checker semantic exit, prepared FP execution with the same native checker, and the existing exact symbolic solver plus native checking. Four recurrent steps maximum. The primary comparator is the existing native-checker implementation, not the slower Python implementation. If another semantically equivalent noncandidate neural control is faster, disclose it separately. The symbolic comparator remains visible even if it dominates.
+
+Warm native libraries/model preparation outside timing; include input encoding, state creation, recurrence, per-step decoding/checking, answer return, and result bookkeeping inside every call. Measure preparation, first-call and resident owned payload separately. Charge fresh checker construction every solve. Interleave all four arms in seven seeded randomized rounds for every model/input pair; retain all rows and failures. Pin one CPU with intra/inter-op threads one. Timing values are integer nanoseconds. Independently check original clues and complete Sudoku validity outside timing; this extra audit is not the solve's checker. Compare every candidate output and executed step to the reference; separately replay every intermediate FP32 state/logit bit pattern for the candidate against the historical recurrence.
+
+## Prespecified analysis and gates
+
+For each family/model/input/arm take the median of seven observations. Report ratio of summed candidate versus native-control medians, family/model breakdowns, every case ratio, empirical tail quantiles, paired problem-cluster bootstrap interval (2000 draws; both fixed models retained per sampled problem), valid fractions and total charged time per verified solution. Do not treat repeated timings or two fixed models as independent population samples. Runtime gate: exact fidelity; nonzero verified answers in each family/model stratum; overall point ratio <=0.80 with bootstrap upper bound <1; each family/model point ratio <=1.0. Failed scientific/performance gates are retained outcomes, not a reason to loosen tolerances or delete rows. Seven samples do not establish production P95/P99 guarantees.
+
+Publish the development profiling/attempts separately. Freeze final executable/fixture digests before a separate complete measurement. Verification must reject incomplete/duplicate case-arm-round coverage, tampered answers/work, altered timing summaries and source mismatches. Replay does not regenerate historical timing. Include cold preparation break-even and explicit memory scope; do not claim energy reduction without counters. No external solver superiority, novel learned capability, cross-hardware bitwise guarantee, or hiring implication follows merely from a passing runtime gate.

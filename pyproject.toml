@@ -27,6 +27,7 @@ include = ["spectra*", "common*", "model*", "train*", "eval*", "data*", "deploy*
 
 
 [tool.setuptools.package-data]
+"spectra._native" = ["*.cpp"]
 deploy = ["*.cpp", "cpp_sparse_kernel/*.cpp", "cpp_sparse_kernel/CMakeLists.txt"]
 [tool.pytest.ini_options]
 # Put the repo root on sys.path so `import model.trm`, `import train.losses`,
