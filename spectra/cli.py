@@ -7,6 +7,7 @@ from pathlib import Path
 import platform
 import sys
 from . import __version__
+from ._json import DEFAULT_MAX_BYTES, load_file
 
 
 def _emit(value: dict, destination: Path | None) -> None:
@@ -38,6 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     evidence = commands.add_parser("evidence", help="Verify a portable hash/size manifest, not scientific validity")
     evidence.add_argument("root", type=Path)
     evidence.add_argument("manifest", type=Path)
+    for json_parser in (check_parser, evidence):
+        json_parser.add_argument("--max-json-bytes", type=int, default=DEFAULT_MAX_BYTES,
+                                 help="maximum witness/manifest bytes (default: 16777216)")
     args = parser.parse_args(argv)
     try:
         if args.command == "doctor":
@@ -46,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
                    "cnf_requires_torch": False}, None)
         elif args.command == "evidence":
             from .evidence import verify
-            _emit(verify(args.root, json.loads(args.manifest.read_text(encoding="utf-8"))), None)
+            _emit(verify(args.root, load_file(args.manifest, max_bytes=args.max_json_bytes)), None)
         else:
             from .cnf import read_dimacs, solve, solve_indexed
             with args.input.open(encoding="utf-8") as stream:
@@ -61,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
                 result["formula_sha256"] = problem.sha256()
                 _emit(result, args.out)
             else:
-                record = json.loads(args.witness.read_text(encoding="utf-8"))
+                record = load_file(args.witness, max_bytes=args.max_json_bytes)
                 if type(record) is not dict or type(record.get("witness")) is not list:
                     raise ValueError("expected a JSON object containing a Boolean-list witness")
                 if "formula_sha256" in record and record["formula_sha256"] != problem.sha256():

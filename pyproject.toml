@@ -12,7 +12,14 @@ license = { text = "MIT" }
 authors = [{ name = "SPECTRA" }]
 dependencies = []
 
+[project.urls]
+Repository = "https://github.com/tugrapaydiner/SPECTRA"
+Documentation = "https://github.com/tugrapaydiner/SPECTRA/blob/main/docs/README.md"
+Issues = "https://github.com/tugrapaydiner/SPECTRA/issues"
+Changelog = "https://github.com/tugrapaydiner/SPECTRA/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
+test = ["pytest>=7.4"]
 dev = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66", "pytest>=7.4"]
 
 # Historical top-level packages remain import-compatible; spectra is the public API.

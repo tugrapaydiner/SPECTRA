@@ -21,6 +21,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'scripts'))
 import bench_indexed_search as cnf_bench
+from check_current_installation import select_wheel, verify_sources
+from spectra import __version__
 
 
 def load(path):
@@ -151,13 +153,8 @@ def package(inputs, out):
                 raise ValueError('output contract inventory mismatch')
         validation['artifacts'][folder.name] = dict(tests=tests, report=report)
     wheel_folder = next(p for p in cnf if '-3.13-' in p.name)
-    wheel = wheel_folder/'dist/spectra-0.7.1-py3-none-any.whl'
-    with zipfile.ZipFile(wheel) as archive:
-        if archive.testzip() is not None:
-            raise ValueError('wheel CRC failure')
-        for name in ('spectra/cnf/indexed.py', 'spectra/cnf/ranked.py', 'spectra/inference.py'):
-            if archive.read(name) != (ROOT/name).read_bytes():
-                raise ValueError('wheel does not match tested source')
+    wheel = select_wheel(wheel_folder/'dist', __version__)
+    validation['wheel_source_identity'] = verify_sources(wheel, ROOT)
     out.mkdir(parents=True)
     (out/'SPECTRA-source.tar.gz').write_bytes(source)
     shutil.copy2(wheel, out/wheel.name)
@@ -178,7 +175,7 @@ def package(inputs, out):
         raw = (json.dumps(receipt, indent=2, sort_keys=True)+'\n').encode()
         info = tarfile.TarInfo('RELEASE_RECEIPT.json'); info.size = len(raw); info.mode = 0o644
         archive.addfile(info, io.BytesIO(raw))
-    lines = ['# SPECTRA 0.7.1: exact search efficiency', '', f'Source `{head}`; tree `{tree}`.', '',
+    lines = [f'# SPECTRA {__version__}: exact search efficiency', '', f'Source `{head}`; tree `{tree}`.', '',
              'Opt-in indexed CPU search preserves every seeded path and original-clause answer.',
              'Historical search and neural replay implementations are unchanged.', '']
     for name, value in validation['artifacts'].items():

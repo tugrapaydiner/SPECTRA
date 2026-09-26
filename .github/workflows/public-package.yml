@@ -36,13 +36,15 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest tests/public --confcutdir=tests/public -ra --junitxml=.public-package/pytest.xml | tee .public-package/pytest.txt
+      - name: Check release metadata and current navigation
+        run: python scripts/check_release_readiness.py --out .public-package/release-readiness.json
       - name: Verify retained originals and current guide links
         run: python scripts/audit_workspace.py --out .public-package/workspace_audit.json
       - name: Build wheel from sdist and verify outside-checkout installation
         run: |
           set -o pipefail
           python -m build --outdir .public-package/dist | tee .public-package/build.txt
-          python scripts/check_installation.py --wheel .public-package/dist/spectra-0.7.1-py3-none-any.whl --out .public-package/install | tee .public-package/install.txt
+          python scripts/check_current_installation.py --dist .public-package/dist --out .public-package/install | tee .public-package/install.txt
       - name: Run and replay frozen compact-state comparison
         run: |
           set -o pipefail
