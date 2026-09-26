@@ -29,6 +29,26 @@ for classes in (2,3,10):
         assert verify_certificate(classes,result.class_index,result.pair_outcomes)
         assert session.predict_many([[0.]*16,[1.]*16])==[classes-1]*2
         checks+=3
+# Exercise the new generic format and shared lifetime from this installed wheel.
+from spectra.svm_shared import PreparedModel
+labels=['class-a','class-b','class-c'];features=3;count=3
+meta=json.dumps({'labels':labels},separators=(',',':')).encode()
+payload=struct.pack('<dIII',.5,1,1,1)+struct.pack('<18d',*([0.]*18))
+body=meta+payload
+model=Path.cwd()/'generic.srt'
+model.write_bytes(struct.pack('<8sIIIIII',b'SPCSVM02',3,count,features,len(meta),len(payload),zlib.crc32(body))+body)
+owner=PreparedModel(model,library,input_dtype='float64')
+a,b=owner.session(),owner.session()
+assert a.info['model_id']==b.info['model_id'];checks+=1
+assert owner.features==3 and owner.labels==tuple(labels);checks+=1
+owner.close();model.unlink()
+assert a.predict([0.,0.,0.])=='class-c';checks+=1
+assert b.predict_many([[0.,0.,0.],[1.,1.,1.]])==['class-c']*2;checks+=1
+p=a.predict_with_certificate([0.,0.,0.],schedule='cost_aware')
+assert p.label=='class-c' and verify_certificate(3,p.class_index,p.pair_outcomes);checks+=1
+a.close()
+assert b.predict_index([0.,0.,0.])==2;checks+=1
+b.close()
 assert not ({'torch','numpy','sklearn'} & sys.modules.keys())
 checks+=1
 print(json.dumps({'status':'PASS','checks':checks,'package':__import__('spectra').__file__,

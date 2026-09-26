@@ -44,3 +44,6 @@ int sp_svm_single(void* handle, const float* input, int features, int schedule,
     return et_run(handle, input, features, schedule, hint, output, stats, capacity);
 }
 }
+
+// New ABI is additive. Existing Session and historical engine symbols are intact.
+#include "shared.hpp"
