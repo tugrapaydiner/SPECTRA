@@ -15,19 +15,21 @@ def wheel(path, *, version=None, name="spectra", source=True, extra_metadata=Fal
     if version is None: version = module.__version__
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("spectra.dist-info/METADATA", f"Name: {name}\nVersion: {version}\n")
-        if source: archive.writestr("spectra/_native/blocked_linear.cpp", "fixture")
+        if source:
+            for member in sorted(module.REQUIRED_SOURCES):
+                archive.writestr(member, "fixture")
         if extra_metadata: archive.writestr("other.dist-info/METADATA", "Name: other\nVersion: 1\n")
 
 
 def test_selects_current_wheel_without_version_in_command(tmp_path):
-    p = tmp_path / "current.whl"; wheel(p)
+    p = tmp_path / f"spectra-{module.__version__}-py3-none-any.whl"; wheel(p)
     assert module.select_wheel(tmp_path) == p
 
 
 @pytest.mark.parametrize("kind", ["empty", "ambiguous", "stale", "wrong_project", "missing_source", "ambiguous_metadata"])
 def test_refuses_ambiguous_or_stale_build(kind, tmp_path):
     if kind != "empty":
-        wheel(tmp_path / "one.whl", version="0.0.0" if kind == "stale" else None,
+        wheel(tmp_path / f"spectra-{module.__version__}-py3-none-any.whl", version="0.0.0" if kind == "stale" else None,
               name="other" if kind == "wrong_project" else "spectra",
               source=kind != "missing_source", extra_metadata=kind == "ambiguous_metadata")
     if kind == "ambiguous": wheel(tmp_path / "two.whl")

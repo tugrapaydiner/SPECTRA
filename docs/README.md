@@ -1,48 +1,48 @@
 # Documentation
 
-Start with [current status](STATUS.md), [development and installation](DEVELOPMENT.md),
-and the [repository README](../README.md). These are the current entry points.
+## Use and maintain SPECTRA
 
-## Current tools
+| Task | Guide |
+|---|---|
+| Install and run the public tools | [Quick start](../README.md#quick-start) |
+| Understand API, input formats and return values | [API and CLI](API.md) |
+| Check what is released, measured or experimental | [Current status](STATUS.md) |
+| Run tests, build a wheel or reproduce experiments | [Development](DEVELOPMENT.md) |
+| Prepare a new release | [Release checklist](RELEASING.md) |
+| Submit a change | [Contributing](../CONTRIBUTING.md) |
+| Handle external inputs and trusted checkpoints | [Security](../SECURITY.md) |
+| Review maintenance changes | [Changelog](../CHANGELOG.md) |
 
-The public API lives in `spectra/`. The CNF CLI accepts strict DIMACS and emits
-complete, independently checkable witnesses. The evidence API checks portable
-hash/size manifests. Neither API silently loads a neural checkpoint.
-The [compact-state protocol](COMPACT_CNF_PROTOCOL.md) is the current bounded
-systems experiment; the [older cache protocol](CACHED_RESIDUAL_PROTOCOL.md) stays
-unchanged so its evidence still replays.
+## Measured systems work
 
-## Scientific evidence and boundaries
+[Indexed efficiency](EFFICIENCY_GUIDE.md) is the v0.7.1 implementation guide.
+Its [frozen protocol](INDEXED_SEARCH_PROTOCOL.md), the
+[compact CNF protocol](COMPACT_CNF_PROTOCOL.md) and the earlier
+[cached-residual protocol](CACHED_RESIDUAL_PROTOCOL.md) describe separate
+experiments. Do not multiply their speedups or replace their original results
+with measurements from a different implementation or host.
 
-[Research review](RESEARCH_REVIEW_20260911.md) explains the Sudoku, maze and
-classical-comparator limitations. [Symmetry audit](SYMMETRY_AUDIT.md),
-[fixed-pool replay](FIXED_POOL_REPLAY.md), and
-[failure-information study](FAILURE_INFORMATION.md) cover their respective
-contracts. The historical [research log](RESEARCH_STATE.md), [claim ledger](CLAIMS.md)
-and [architecture description](ARCHITECTURE.md) are retained context, not a claim
-that every proposed component has earned promotion.
+## Research evidence
 
-## Retired work
+[Research review](RESEARCH_REVIEW_20260911.md) covers Sudoku, maze and stronger
+classical comparators. [Symmetry audit](SYMMETRY_AUDIT.md),
+[fixed-pool replay](FIXED_POOL_REPLAY.md) and
+[failure-information study](FAILURE_INFORMATION.md) define their own contracts.
+The [research log](RESEARCH_STATE.md), [claim ledger](CLAIMS.md) and
+[architecture description](ARCHITECTURE.md) are historical research context,
+not release instructions or proof that every proposed component works.
 
-The [history index](history/README.md) links every retired document and workflow
-at a full immutable commit. [File receipts](../maintenance/relocations.json) and
-[branch receipts](../maintenance/branches.json) make the cleanup inspectable.
-Protocols referenced by executable or retained-evidence checks keep their original
-paths and bytes. The project does not rewrite old scientific outcomes to simplify
-its presentation.
+## Preserved history
 
-## Indexed efficiency
+The [history index](history/README.md) links retired documents and workflows at
+immutable commits. [File receipts](../maintenance/relocations.json) and
+[branch receipts](../maintenance/branches.json) record the earlier archival work.
+Evidence-bound protocols retain their original locations. Raw evidence remains
+under `results/`; research module paths remain compatible with saved records.
+The installed wheel is not the complete research archive: use a full Git checkout
+for historical replay and the workspace-preservation audit.
 
-[Use, results, invariants and reproduction](EFFICIENCY_GUIDE.md) · [Frozen protocol](INDEXED_SEARCH_PROTOCOL.md).
+## Integrated optional execution
 
-## Integrated CPU execution
-
-[Runtime API, profiling and reproduction](RUNTIME_GUIDE.md) ·
-[Evaluation protocol](INTEGRATED_RUNTIME_PROTOCOL.md). The new kernel is opt-in;
-no historical scientific claim is expanded by enabling it.
-
-## Trained FP execution
-
-[Prepared FP runtime, trained-task protocol, strongest eager control and replay](TRAINED_FP_GUIDE.md).
-This is separate from the packed-runtime fixture comparison and does not change
-historical learned results.
+[Prepared FP32](TRAINED_FP_GUIDE.md), [packed runtime](RUNTIME_GUIDE.md) and
+[compiler baseline](COMPILER_BASELINE_GUIDE.md) are separate opt-in tracks.

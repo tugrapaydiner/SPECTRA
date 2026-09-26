@@ -48,7 +48,7 @@ jobs:
         run: |
           set -o pipefail
           python -m build --outdir .indexed/dist | tee .indexed/build.txt
-          python scripts/check_indexed_installation.py --wheel .indexed/dist/spectra-0.7.1-py3-none-any.whl --out .indexed/install | tee .indexed/install.txt
+          python scripts/check_current_installation.py --dist .indexed/dist --out .indexed/install | tee .indexed/install.txt
       - name: Frozen four-arm full-cost benchmark and every unique replay
         run: |
           set -o pipefail
@@ -164,7 +164,8 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=$(python -c 'import spectra;print(spectra.__version__)')
-          test "$VERSION" = '0.7.1'
+          python scripts/check_release_readiness.py
+          export VERSION
           TAG="v$VERSION"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Refusing to overwrite an existing release: $TAG" >&2
@@ -180,7 +181,7 @@ jobs:
           fi
           # Create the exact ref explicitly; draft creation need not materialize a tag.
           gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > .release/created-tag.json
-          gh release create "$TAG" .release/SPECTRA-source.tar.gz .release/SPECTRA-efficiency-evidence.tar.gz .release/spectra-0.7.1-py3-none-any.whl .release/SHA256SUMS .release/RELEASE_NOTES.md --verify-tag --target "$GITHUB_SHA" --draft --title "SPECTRA $VERSION: exact search efficiency" --notes-file .release/RELEASE_NOTES.md
+          gh release create "$TAG" .release/SPECTRA-source.tar.gz .release/SPECTRA-efficiency-evidence.tar.gz .release/"spectra-$VERSION-py3-none-any.whl" .release/SHA256SUMS .release/RELEASE_NOTES.md --verify-tag --target "$GITHUB_SHA" --draft --title "SPECTRA $VERSION: exact search efficiency" --notes-file .release/RELEASE_NOTES.md
           gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > .release/tag-receipt.json
           python - <<'PY'
           import json,os
@@ -190,11 +191,11 @@ jobs:
           PY
           gh release view "$TAG" --json assets > .release/uploaded-assets.json
           python - <<'PY'
-          import json
+          import json,os
           from pathlib import Path
           root=Path('.release')
           assets=json.loads((root/'uploaded-assets.json').read_text())['assets']
-          expected={p.name:p.stat().st_size for p in root.iterdir() if p.name in {'SPECTRA-source.tar.gz','SPECTRA-efficiency-evidence.tar.gz','spectra-0.7.1-py3-none-any.whl','SHA256SUMS','RELEASE_NOTES.md'}}
+          expected={p.name:p.stat().st_size for p in root.iterdir() if p.name in {'SPECTRA-source.tar.gz','SPECTRA-efficiency-evidence.tar.gz',f"spectra-{os.environ['VERSION']}-py3-none-any.whl",'SHA256SUMS','RELEASE_NOTES.md'}}
           assert {a['name']:a['size'] for a in assets}==expected
           PY
           gh release download "$TAG" --dir .release/download-check

@@ -1,8 +1,27 @@
 # Current status
 
-This page separates released implementation results, experimental work, and
-historical scientific outcomes. A systems optimization does not turn a failed
-scientific gate into a pass.
+This page separates released tools, open experiments and historical measurements.
+Repository maintenance does not turn a failed scientific gate into a pass.
+
+## Delivery state
+
+Checked on 2026-09-26: the latest published GitHub release is
+[v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1), from
+`9fd6682345b34e992b3cab7e55750e9ef4b04e87` (2026-09-12). The cleanup described in
+[the changelog](../CHANGELOG.md) is an unreleased maintenance change, not a new
+model, version tag or PyPI publication.
+
+Two later changes remain open and unmerged: [PR27](https://github.com/tugrapaydiner/SPECTRA/pull/27)
+(`b28e01b85bd95b78f291e466c25c13bfa2fc5b46`) contains optional prepared execution;
+[PR28](https://github.com/tugrapaydiner/SPECTRA/pull/28)
+(`4cb091653bd720d36f36bccecdae7781824f4985`) is its stacked compiler comparison.
+They are included in this local integration candidate, not in the published main release. Their reported speedups must not be
+mixed with v0.7.1's classical CNF or untrained output-only fixtures.
+Only PR27's isolated package-version publication guard is reused in this cleanup.
+
+Use [Development](DEVELOPMENT.md) for current commands and
+[Releasing](RELEASING.md) for final acceptance. Test counts below are dated
+historical receipts, not an assertion that this checkout was just validated.
 
 ## Current efficiency upgrade: 0.7.1
 
@@ -15,20 +34,10 @@ return UNKNOWN. This is not a learned or external-solver superiority result.
 An output-only CPU API preserves final outputs without retaining the diagnostic
 trajectory. Its storage measurements are returned tensor storage, not peak RAM.
 See [the efficiency guide](EFFICIENCY_GUIDE.md) for evidence, scope and commands.
-The 0.7.1 GitHub release was published from `9fd6682` on September 12, 2026.
-Its release receipt reports 1,157 fast tests, with 16 slow tests excluded. These
-are historical release counts, not a dynamically updated test badge. All original
-research dispositions below are unchanged.
+The v0.7.1 publication receipt is linked above. Historical evidence and all
+original research dispositions below are unchanged.
 
-## Experimental integrated runtime
-
-The opt-in [integrated runtime](RUNTIME_GUIDE.md) combines owned validated weights
-with final-only execution and adds a separate ordered four-vector blocked kernel.
-Historical operators remain available and unchanged. Current branch validation
-and measurement scope are documented in that guide, not folded into the older
-0.7.1 search result.
-
-## Public release surface
+## Public interface introduced in 0.7.0
 
 Version 0.7.0 adds a compiler-free base installation, one `spectra` command, strict
 DIMACS interchange, exact compact CNF state, capped search and witness checking.
@@ -103,7 +112,7 @@ larger selector; then compare full execution cost, classical baselines and
 proposal/selector factorial controls on untouched cases. Another packaging or
 cache improvement is not a substitute for that learned result.
 
-## Repository cleanup
+## Earlier repository cleanup — PR25
 
 The starting inventory had 32 branches: 25 non-main tips already in main and six
 unmerged tips. Five completed/superseded unmerged branches are retained through
@@ -120,9 +129,9 @@ are removed, not their unique native and task checks. M01's energy API and small
 optimizer smoke are moved into the canonical CPU workflow. Retained checkpoint,
 fixed-pool, restart, controller-refit and SAT-admission audits remain active.
 
-## Historical 0.7.0 / PR25 local acceptance receipt
+## Historical local acceptance receipt — PR25
 
-The final local fast suite has 999 passes, 16 historical slow tests deselected,
+The PR25 local fast suite had 999 passes, 16 historical slow tests deselected,
 and two warnings. This includes 108 public contracts and 16 new compact-evidence
 contracts; they are not additional to the 999 count. The actual wheel built from
 a source distribution passes eight outside-checkout commands in a clean venv
