@@ -38,7 +38,7 @@ def build_runtime(out: str | Path, *, target: str = 'portable', compiler: str = 
     folder = Path(out).resolve()
     folder.mkdir(parents=True, exist_ok=False)
     library = folder / 'libspectra_svm.so'
-    entry = SOURCE / 'exact_tables_20260926' / 'engine.cpp'
+    entry = SOURCE / 'runtime.cpp'
     command = [compiler, '-std=c++17', '-O3', '-fno-fast-math', '-ffp-contract=off',
                '-fPIC', '-shared']
     if target == 'avx2':
@@ -128,14 +128,19 @@ class Session:
             raise ValueError('NUL in model path')
         self._lib = C.CDLL(str(Path(library).resolve(strict=True)))
         lib = self._lib
+        lib.sp_svm_abi.restype = C.c_int
+        if lib.sp_svm_abi() != 1:
+            raise ValueError('unsupported SPECTRA SVM ABI')
         lib.et_error.restype = C.c_char_p
         lib.et_create.argtypes = [C.c_char_p, C.c_int]
         lib.et_create.restype = C.c_void_p
         lib.et_destroy.argtypes = [C.c_void_p]
         lib.et_destroy.restype = None
         lib.et_info.argtypes = [C.c_void_p, C.POINTER(C.c_uint64), C.c_int]
-        lib.et_run.argtypes = [C.c_void_p, C.POINTER(C.c_float), C.c_int, C.c_int, C.c_int,
+        lib.sp_svm_single.argtypes = [C.c_void_p, C.POINTER(C.c_float), C.c_int, C.c_int, C.c_int,
                               C.POINTER(C.c_int), C.POINTER(C.c_uint64), C.c_int]
+        lib.sp_svm_batch.argtypes = [C.c_void_p, C.POINTER(C.c_float), C.c_int, C.c_int,
+                                      C.c_int, C.c_int, C.POINTER(C.c_int), C.c_int]
         lib.et_certificate.argtypes = [C.c_void_p, C.POINTER(C.c_int8), C.c_int]
         self._handle = lib.et_create(path, int(tables))
         if not self._handle:
@@ -171,7 +176,7 @@ class Session:
             mode = self._settings(schedule, hint)
             data = (C.c_float * 16).from_buffer(packed)
             out, stats = C.c_int(), (C.c_uint64 * 10)()
-            self._check(self._lib.et_run(self._handle, data, 16, mode, hint,
+            self._check(self._lib.sp_svm_single(self._handle, data, 16, mode, hint,
                                          C.byref(out), stats, 10))
             if not certificate:
                 return out.value
@@ -188,6 +193,27 @@ class Session:
 
     def predict_with_certificate(self, values: Iterable[float], *, schedule: str = 'beretta_cert', hint: int = -1) -> Prediction:
         return self._run(_input(values), schedule, hint, True)
+
+    def predict_many(self, rows: Iterable[Iterable[float]], *, schedule: str = 'beretta_cert', hint: int = -1) -> list[int]:
+        """One native call, fresh model state per row; at most 65,536 rows.
+
+        Input conversion and output materialization are included in this API.
+        No cross-row kernel reuse, matrix batching or new threading is implied.
+        """
+        packed = array('f')
+        count = 0
+        for row in rows:
+            if count == MAX_ROWS:
+                raise ValueError('batch exceeds 65,536 rows')
+            packed.extend(_input(row))
+            count += 1
+        with self._lock:
+            mode = self._settings(schedule, hint)
+            output = (C.c_int * count)()
+            data = (C.c_float * len(packed)).from_buffer(packed) if count else None
+            self._check(self._lib.sp_svm_batch(self._handle, data, count, 16,
+                                               mode, hint, output, count))
+            return list(output)
 
     def close(self) -> None:
         with self._lock:
