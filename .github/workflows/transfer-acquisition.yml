@@ -1,0 +1,44 @@
+name: transfer-acquisition
+on:
+  push:
+    branches: [research/independent-transfer-20260926]
+    paths: [.github/workflows/transfer-acquisition.yml, experiments/transfer_20260926/PROTOCOL.md]
+permissions:
+  contents: read
+jobs:
+  public-inputs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Acquire public datasets and reproducible CPU wheels
+        run: |
+          mkdir -p acquisition/data acquisition/wheels
+          python - <<'PY'
+          import urllib.request,hashlib,json,os
+          from pathlib import Path
+          root=Path('acquisition');receipts=[]
+          for name,url in [('pendigits.zip','https://archive.ics.uci.edu/static/public/81/pen%2Bbased%2Brecognition%2Bof%2Bhandwritten%2Bdigits.zip'),('letter.zip','https://archive.ics.uci.edu/static/public/59/letter%2Brecognition.zip')]:
+              with urllib.request.urlopen(url,timeout=60) as r: data=r.read(8*1024*1024+1)
+              assert len(data)<=8*1024*1024 and data[:2]==b'PK'
+              (root/'data'/name).write_bytes(data)
+              receipts.append(dict(name=name,url=url,bytes=len(data),sha256=hashlib.sha256(data).hexdigest()))
+          (root/'acquisition.json').write_text(json.dumps(dict(source_commit=os.environ['GITHUB_SHA'],data=receipts),indent=2))
+          PY
+          python -m pip download --only-binary=:all: --no-deps --dest acquisition/wheels onnx==1.20.1 onnxruntime==1.30.0
+          python -m pip download --only-binary=:all: --no-deps --dest acquisition/wheels onnxruntime==1.23.2 flatbuffers coloredlogs humanfriendly
+          python - <<'PY'
+          import hashlib,json,os,platform
+          from pathlib import Path
+          root=Path('acquisition')
+          (root/'manifest.json').write_text(json.dumps(dict(source_commit=os.environ['GITHUB_SHA'],python=platform.python_version(),files={str(p.relative_to(root)):dict(bytes=p.stat().st_size,sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for p in sorted(root.rglob('*')) if p.is_file()}),indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spectra-transfer-inputs-${{ github.sha }}
+          path: acquisition/
+          if-no-files-found: error
+          retention-days: 30
