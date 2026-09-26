@@ -7,6 +7,7 @@
 | Install and run the public tools | [Quick start](../README.md#quick-start) |
 | Understand API, input formats and return values | [API and CLI](API.md) |
 | Run optional framework-free certified SVM inference | [SVM runtime](SVM.md) |
+| Share prepared SVM data and use other feature dimensions | [Shared SVM](SVM_SHARED.md) |
 | Check what is released, measured or experimental | [Current status](STATUS.md) |
 | Run tests, build a wheel or reproduce experiments | [Development](DEVELOPMENT.md) |
 | Prepare a new release | [Release checklist](RELEASING.md) |
