@@ -64,3 +64,6 @@ assets/data/
 /.svm-ci/
 /svm-build/
 /svm-wheel-check/
+
+# Disposable native-platform acceptance receipts
+/.svm-platform/

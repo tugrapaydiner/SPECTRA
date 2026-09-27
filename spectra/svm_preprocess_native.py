@@ -18,39 +18,14 @@ import sysconfig
 SOURCE = Path(__file__).resolve().parent / '_native' / 'ovo' / 'preprocess.cpp'
 
 
-def build_preprocessor(out: str | Path, *, compiler: str = 'g++') -> Path:
-    """Build for this CPython ABI, not abi3 or a universal binary.
+def build_preprocessor(out: str | Path, *, compiler: str | None = None) -> Path:
+    """Explicit build for the running GIL-enabled CPython ABI, not abi3.
 
-    Requires the running interpreter's development headers and a C++17 compiler.
-    Import and installation never compile. Failed build logs are retained.
-    Linux and GIL-enabled CPython are the currently accepted build scope.
+    Supports Linux x86-64/ARM64 and Windows x64. Requires development headers;
+    Windows also requires its matching CPython import library and MSVC.
     """
-    if sys.implementation.name != 'cpython' or sys.platform != 'linux':
-        raise ValueError('compiled preprocessing requires CPython on Linux')
-    if sysconfig.get_config_var('Py_GIL_DISABLED'):
-        raise ValueError('free-threaded CPython is not supported')
-    include = Path(sysconfig.get_path('include'))
-    if not (include / 'Python.h').is_file():
-        raise ValueError('CPython development headers are required')
-    suffix = sysconfig.get_config_var('EXT_SUFFIX')
-    if not isinstance(suffix, str) or not suffix.endswith('.so'):
-        raise ValueError('unsupported CPython extension suffix')
-    folder = Path(out).resolve()
-    folder.mkdir(parents=True, exist_ok=False)
-    library = folder / ('_spectra_preprocess' + suffix)
-    command = [compiler, '-std=c++17', '-O3', '-fno-fast-math', '-ffp-contract=off',
-               '-fPIC', '-shared', '-I' + str(include), str(SOURCE), '-o', str(library)]
-    process = subprocess.run(command, capture_output=True, text=True, check=False)
-    receipt = {'command': command, 'returncode': process.returncode,
-               'stdout': process.stdout, 'stderr': process.stderr, 'python': sys.version,
-               'soabi': sysconfig.get_config_var('SOABI'),
-               'source_sha256': hashlib.sha256(SOURCE.read_bytes()).hexdigest()}
-    if process.returncode == 0:
-        receipt['library_sha256'] = hashlib.sha256(library.read_bytes()).hexdigest()
-    (folder / 'build.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
-    if process.returncode:
-        raise RuntimeError(f'preprocessing build failed; see {folder / "build.json"}')
-    return library
+    from .svm_build import preprocessor_build
+    return preprocessor_build(out, SOURCE, compiler=compiler)
 
 
 class NativePreprocessor:

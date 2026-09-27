@@ -26,36 +26,15 @@ SCHEDULES = {'exhaustive': 0, 'lazy': 1, 'knockout_cert': 2,
 MAX_ROWS = 65536
 
 
-def build_runtime(out: str | Path, *, target: str = 'portable', compiler: str = 'g++') -> Path:
-    """Build locally with strict arithmetic; require a fresh output directory.
+def build_runtime(out: str | Path, *, target: str = 'portable', compiler: str | None = None) -> Path:
+    """Explicit strict-arithmetic build; portable Linux x86-64/ARM64 or Windows x64.
 
-    Linux is the tested platform. AVX2 is an explicit hardware-specific opt-in.
-    A failed build retains its log; no binary fallback is substituted.
+    Windows needs MSVC in an x64 developer environment; Linux needs g++.
+    AVX2 is an explicit hardware-specific choice, never automatic dispatch.
+    Fresh output directories and retained failure receipts are required.
     """
-    if sys.platform != 'linux' or target not in ('portable', 'avx2'):
-        raise ValueError('supported build: Linux, target portable or avx2')
-    if target == 'avx2' and platform.machine().lower() not in ('x86_64', 'amd64'):
-        raise ValueError('AVX2 requires x86-64')
-    folder = Path(out).resolve()
-    folder.mkdir(parents=True, exist_ok=False)
-    library = folder / 'libspectra_svm.so'
-    entry = SOURCE / 'runtime.cpp'
-    command = [compiler, '-std=c++17', '-O3', '-fno-fast-math', '-ffp-contract=off',
-               '-fPIC', '-shared']
-    if target == 'avx2':
-        command.append('-mavx2')
-    command += [str(entry), '-o', str(library)]
-    process = subprocess.run(command, capture_output=True, text=True, check=False)
-    receipt = {'command': command, 'returncode': process.returncode,
-               'stdout': process.stdout, 'stderr': process.stderr, 'target': target,
-               'source_sha256': {p.relative_to(SOURCE).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-                                 for p in sorted(SOURCE.rglob('*')) if p.suffix in ('.cpp', '.hpp')}}
-    if process.returncode == 0:
-        receipt['library_sha256'] = hashlib.sha256(library.read_bytes()).hexdigest()
-    (folder / 'build.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
-    if process.returncode:
-        raise RuntimeError(f'native build failed; see {folder / "build.json"}')
-    return library
+    from .svm_build import runtime_build
+    return runtime_build(out, SOURCE, target=target, compiler=compiler)
 
 
 def verify_certificate(classes: int, winner: int, outcomes: Iterable[int]) -> bool:
@@ -124,6 +103,8 @@ class Session(_NativeOwner):
         if type(tables) is not bool:
             raise ValueError('tables must be bool')
         path = os.fsencode(model)
+        if sys.platform == 'win32' and not path.isascii():
+            raise ValueError('legacy Windows Session requires an ASCII model path; use PreparedModel for Unicode')
         if b'\0' in path:
             raise ValueError('NUL in model path')
         self._lib = C.CDLL(str(Path(library).resolve(strict=True)))

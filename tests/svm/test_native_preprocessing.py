@@ -156,15 +156,15 @@ def test_wrong_abi_and_reference_type(prelib,tmp_path):
     with pytest.raises(ValueError,match='ABI'):NativePreprocessor(reference(),p)
 
 
-def test_non_nearest_rejected(compiled):
-    import ctypes
-    lib=ctypes.CDLL(None);lib.fegetround.restype=ctypes.c_int
-    original=lib.fegetround()
-    # Linux/glibc FE_DOWNWARD; scope is the already supported Linux platform.
+def test_non_nearest_rejected(compiled, rounding_library):
+    lib = rounding_library
+    original = lib.test_get_round()
     try:
-        assert lib.fesetround(0x400)==0
-        with pytest.raises(ValueError,match='round-to-nearest'):compiled.transform([[0.,'α',0.]])
-    finally:assert lib.fesetround(original)==0
+        assert lib.test_set_round(lib.test_downward()) == 0
+        with pytest.raises(ValueError, match='round-to-nearest'):
+            compiled.transform([[0.,'α',0.]])
+    finally:
+        assert lib.test_set_round(original) == 0
 
 
 def test_optional_pipeline_end_to_end(prelib,library,tmp_path):

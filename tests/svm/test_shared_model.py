@@ -199,15 +199,14 @@ def test_public_model_metadata_is_readonly(tmp_path,library,field):
             with pytest.raises(AttributeError):setattr(obj,field,None)
 
 
-def test_native_rounding_rejected_without_output(tmp_path,library):
-    libc=C.CDLL(None)
-    if not hasattr(libc,'fegetround') or not hasattr(libc,'fesetround'):
-        pytest.skip('C floating-point environment functions unavailable')
-    path=encoded(tmp_path/'m.srt')
-    with PreparedModel(path,library) as m,m.session() as w:
-        old=libc.fegetround()
-        # FE_DOWNWARD on the tested Linux x86-64 platform.
+def test_native_rounding_rejected_without_output(tmp_path, library, rounding_library):
+    libc = rounding_library
+    path = encoded(tmp_path/'m.srt')
+    with PreparedModel(path, library) as m, m.session() as w:
+        old = libc.test_get_round()
         try:
-            if libc.fesetround(0x400):pytest.skip('FE_DOWNWARD unsupported')
-            with pytest.raises(ValueError,match='round-to-nearest'):w.predict([0.]*16)
-        finally:libc.fesetround(old)
+            assert libc.test_set_round(libc.test_downward()) == 0
+            with pytest.raises(ValueError, match='round-to-nearest'):
+                w.predict([0.]*16)
+        finally:
+            assert libc.test_set_round(old) == 0
