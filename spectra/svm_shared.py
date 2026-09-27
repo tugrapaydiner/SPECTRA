@@ -14,6 +14,7 @@ import itertools
 import os
 from pathlib import Path
 import struct
+import sys
 import threading
 from typing import Iterable
 import zlib
@@ -294,6 +295,59 @@ class SharedSession:
 
     def predict_many(self, rows, *, schedule='beretta_cert', hint=-1):
         return [self.labels[i] for i in self._run(rows, schedule, hint, False)]
+
+    def predict_buffer(self, values, *, schedule='beretta_cert', hint=-1):
+        """Borrow a contiguous binary64 buffer and return a fresh list of labels.
+
+        Use a float64 session and a writable, aligned, native-endian buffer:
+        array('d') flat rows or a C-contiguous 2D float64 matrix. Inputs are NOT
+        modified. The caller must not mutate them concurrently. The exporting
+        object stays alive and resizing is blocked while its view is held.
+        Readonly, noncontiguous or float32 buffers use predict_many instead.
+        Native code validates the entire batch's finite values before any output.
+        This amortizes conversion only; numerical work and per-row resets stay
+        identical. Successful calls do not expose a last-row certificate.
+        """
+        if self.input_dtype != 'float64':
+            raise ValueError('predict_buffer requires explicit float64 session precision')
+        try:
+            view = memoryview(values)
+        except TypeError as error:
+            raise ValueError('a native binary64 buffer is required') from error
+        try:
+            native = '<d' if sys.byteorder == 'little' else '>d'
+            if view.format not in ('d', '@d', '=d', native) or view.itemsize != 8:
+                raise ValueError('native-endian binary64 buffer required; no implicit casting')
+            if view.readonly or not view.c_contiguous or view.ndim not in (1, 2):
+                raise ValueError('writable C-contiguous one- or two-dimensional buffer required')
+            if view.ndim == 2 and view.shape[1] != self.features:
+                raise ValueError('buffer feature dimension mismatch')
+            elements = view.nbytes // 8
+            if elements % self.features:
+                raise ValueError('flat buffer must contain complete rows')
+            count = elements // self.features
+            if count > 65536 or elements > MAX_ELEMENTS:
+                raise ValueError('batch exceeds row/element limit')
+            data = (C.c_double * elements).from_buffer(view) if elements else None
+            if data is not None and C.addressof(data) % C.alignment(C.c_double):
+                raise ValueError('binary64 buffer must be naturally aligned')
+            with self._lock:
+                if not self._handle:
+                    raise ValueError('closed worker')
+                if type(schedule) is not str or schedule not in SHARED_SCHEDULES:
+                    raise ValueError('invalid schedule')
+                if type(hint) is not int or not -1 <= hint < len(self.labels):
+                    raise ValueError('hint must be a valid class INDEX or -1')
+                output, stats = (C.c_int * count)(), (C.c_uint64 * 5)()
+                _check(self._lib, self._lib.sp_worker_run(self._handle, data, count, self.features,
+                    SHARED_SCHEDULES[schedule], hint, output, count, stats, 5, 0))
+                return [self.labels[i] for i in output]
+        finally:
+            # ctypes can hold a second export; dropping it before release permits
+            # the caller to resize its array once this method returns.
+            if 'data' in locals():
+                del data
+            view.release()
 
     def predict_with_certificate(self, row, *, schedule='beretta_cert', hint=-1):
         return self._run([row], schedule, hint, True)
