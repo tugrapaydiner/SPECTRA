@@ -48,7 +48,38 @@ p=a.predict_with_certificate([0.,0.,0.],schedule='cost_aware')
 assert p.label=='class-c' and verify_certificate(3,p.class_index,p.pair_outcomes);checks+=1
 a.close()
 assert b.predict_index([0.,0.,0.])==2;checks+=1
+# The deployment probe uses only inert schema/model bytes, not sklearn or pandas.
+from array import array
+assert b.predict_buffer(array('d',[0.]*6))==['class-c']*2;checks+=1
+assert b.predict_buffer(array('d'))==[];checks+=1
+try:
+    b.predict_buffer(array('f',[0.]*3))
+except ValueError:checks+=1
+else:raise AssertionError('float32 buffer was accepted')
+assert 'numpy' not in sys.modules;checks+=1
 b.close()
+from spectra.svm_pipeline import Preprocessor, PreparedPipeline, SCHEMA
+import hashlib
+folder=Path.cwd()/'pipeline';folder.mkdir()
+model=folder/'model.srt'
+model.write_bytes(struct.pack('<8sIIIIII',b'SPCSVM02',3,count,features,len(meta),len(payload),zlib.crc32(body))+body)
+plan={'schema':SCHEMA,'columns':['number','category'],'features':3,
+      'model_sha256':hashlib.sha256(model.read_bytes()).hexdigest(),
+      'operations':[{'kind':'numeric','column':0,'fill':(2.).hex(),'mean':(1.).hex(),'scale':(2.).hex()},
+                    {'kind':'onehot','column':1,'categories':['a','b'],'unknown':'ignore'}]}
+(folder/'preprocessing.json').write_text(json.dumps(plan))
+prep=Preprocessor.load(folder/'preprocessing.json')
+assert prep.transform([[None,'a']]).tolist()==[.5,1.,0.];checks+=1
+owner=PreparedPipeline(folder,library);worker=owner.session()
+assert worker.predict_many([[1.,'a'],[None,'unknown']])==['class-c']*2;checks+=1
+assert worker.predict_with_certificate([1.,'a']).label=='class-c';checks+=1
+try:worker.predict([float('inf'),'a'])
+except ValueError:checks+=1
+else:raise AssertionError('infinite raw feature accepted')
+owner.close();assert worker.predict([1.,'b'])=='class-c';checks+=1
+assert worker.predict_many([])==[];checks+=1
+worker.close()
+assert not ({'pandas','torch','numpy','sklearn'} & sys.modules.keys());checks+=1
 assert not ({'torch','numpy','sklearn'} & sys.modules.keys())
 checks+=1
 print(json.dumps({'status':'PASS','checks':checks,'package':__import__('spectra').__file__,
