@@ -23,7 +23,7 @@ from .svm import SCHEDULES, build_runtime, verify_certificate
 MAX_BYTES = 64 * 1024 * 1024
 MAX_ELEMENTS = 8_000_000
 # Opt-in prototype; an ordering heuristic, never an acceptance rule.
-SHARED_SCHEDULES = {**SCHEDULES, 'cost_aware': 6}
+SHARED_SCHEDULES = {**SCHEDULES, 'cost_aware': 6, 'binary_stream': 7}
 
 
 def _unique_object(pairs):

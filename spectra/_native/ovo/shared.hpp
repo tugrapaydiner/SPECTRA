@@ -197,6 +197,67 @@ struct Worker {
         sum+=p.bias; work.terms+=p.ids.size(); lo::require(std::isfinite(sum),"nonfinite pair decision");
         return model->c==2?(sum>=0?1:0):(sum>0?i:j);
     }
+
+    // Optional binary specialization. There is only one classifier, hence no
+    // within-request cross-pair kernel reuse. Preserve feature/term order and
+    // scalar libm exp; do not turn a sum of products into an FMA/reduction tree.
+    double binary_stream_score(const double* x) {
+        const auto& p=model->pairs[0];
+        double sum=0;
+        for(size_t first=0;first<p.ids.size();first+=4) {
+            int count=int(std::min(size_t(4),p.ids.size()-first));
+            double dist[4];
+            if(model->d==16)distance_kind<16>(p.ids.data()+first,count,x,dist);
+            else distance_kind<0>(p.ids.data()+first,count,x,dist);
+            for(int k=0;k<count;++k) {
+                double value=std::exp(-model->gamma*dist[k]);
+                lo::require(std::isfinite(value)&&value>=0&&value<=1,"invalid streamed kernel");
+                sum+=p.values[first+size_t(k)]*value;
+            }
+        }
+        sum+=p.bias;
+        lo::require(std::isfinite(sum),"nonfinite streamed pair decision");
+        return sum;
+    }
+    int finish_binary(double score) {
+        const auto terms=model->pairs[0].ids.size();
+        work.kernels=terms;work.terms=terms;
+        const int winner=score>=0?1:0; // The original binary SVC zero convention.
+        vote.add(0,1,winner);
+        lo::require(vote.certificate()==winner,"binary vote certificate mismatch");
+        valid_certificate=true;return winner;
+    }
+#if defined(__AVX2__)
+    // Each SIMD lane is one independent input, NOT a partial floating-point sum.
+    // Input feature packing is caller-owned temporary storage (4*d doubles).
+    // This direct-distance path never reads/writes the request kernel cache.
+    void binary_four_scores(const double* x,double* packed,double* out) const {
+        const auto& p=model->pairs[0];const auto d=model->d;
+        for(int f=0;f<d;++f) {
+            packed[4*f]=x[f];packed[4*f+1]=x[d+f];
+            packed[4*f+2]=x[2*d+f];packed[4*f+3]=x[3*d+f];
+        }
+        __m256d score=_mm256_setzero_pd();
+        for(size_t t=0;t<p.ids.size();++t) {
+            const double* sv=model->sv.data()+size_t(p.ids[t])*d;
+            __m256d distance=_mm256_setzero_pd();
+            for(int f=0;f<d;++f) {
+                const __m256d diff=_mm256_sub_pd(_mm256_loadu_pd(packed+4*f),_mm256_set1_pd(sv[f]));
+                distance=_mm256_add_pd(distance,_mm256_mul_pd(diff,diff));
+            }
+            double terms[4];_mm256_storeu_pd(terms,distance);
+            for(int lane=0;lane<4;++lane) {
+                terms[lane]=std::exp(-model->gamma*terms[lane]);
+                lo::require(std::isfinite(terms[lane])&&terms[lane]>=0&&terms[lane]<=1,
+                            "invalid row-lane kernel");
+            }
+            score=_mm256_add_pd(score,_mm256_mul_pd(_mm256_set1_pd(p.values[t]),_mm256_loadu_pd(terms)));
+        }
+        score=_mm256_add_pd(score,_mm256_set1_pd(p.bias));
+        _mm256_storeu_pd(out,score);
+        for(int lane=0;lane<4;++lane)lo::require(std::isfinite(out[lane]),"nonfinite row-lane decision");
+    }
+#endif
     // Experimental: selection only. This score never participates in acceptance.
     int cost_aware(const double* x) {
         const int c=model->c;
@@ -224,6 +285,10 @@ struct Worker {
     }
     int run(const double* x,int mode,int hint) {
         begin(x);
+        if(mode==7) {
+            if(model->c==2)return finish_binary(binary_stream_score(x));
+            mode=5; // Explicitly preserve the old scheduler for multiclass inputs.
+        }
         std::fill(priority.begin(),priority.end(),0);
         if(mode==1||mode>=4||hint>=0)for(int i=0;i<model->c;++i) {
             double sum=0;
@@ -271,13 +336,31 @@ int sp_worker_run(void* p,const double* inputs,int rows,int features,int mode,in
         lo::require(rows>=0&&rows<=65536&&features==w.model->d&&uint64_t(rows)*features<=8000000&&capacity==rows&&stats&&stats_count==5&&
                     (certificate==0||(certificate==1&&rows==1)),
                     "invalid worker geometry");
-        lo::require(mode>=0&&mode<=6&&hint>=-1&&hint<w.model->c,"invalid worker schedule/hint");
+        lo::require(mode>=0&&mode<=7&&hint>=-1&&hint<w.model->c,"invalid worker schedule/hint");
         lo::require(std::fegetround()==FE_TONEAREST,"round-to-nearest required");
         lo::require(!rows||(inputs&&output),"null worker buffers");
         for(size_t i=0;i<size_t(rows)*features;++i)lo::require(std::isfinite(inputs[i]),"nonfinite input");
         uint64_t totals[5]={};
         try {
-            for(int row=0;row<rows;++row){output[row]=w.run(inputs+size_t(row)*features,mode,hint);
+            int row=0;
+#if defined(__AVX2__)
+            if(mode==7 && w.model->c==2 && !w.model->tables && rows>=4) {
+                // Allocate once per batch, never once per support or prediction.
+                // At d<=4096, this scratch is bounded by 128 KiB.
+                std::vector<double> packed(size_t(features)*4);
+                for(;row+4<=rows;row+=4) {
+                    double scores[4];
+                    w.binary_four_scores(inputs+size_t(row)*features,packed.data(),scores);
+                    for(int lane=0;lane<4;++lane) {
+                        w.begin(inputs+size_t(row+lane)*features);
+                        output[row+lane]=w.finish_binary(scores[lane]);
+                        totals[0]+=w.work.kernels;totals[1]+=w.work.pairs;totals[2]+=w.work.terms;
+                        totals[3]+=w.work.cert_checks;totals[4]+=w.cost_terms;
+                    }
+                }
+            }
+#endif
+            for(;row<rows;++row){output[row]=w.run(inputs+size_t(row)*features,mode,hint);
                 totals[0]+=w.work.kernels;totals[1]+=w.work.pairs;totals[2]+=w.work.terms;
                 totals[3]+=w.work.cert_checks;totals[4]+=w.cost_terms;}
         } catch(...) {w.valid_certificate=false;throw;}

@@ -77,7 +77,7 @@ class NativePreprocessor:
             raise ValueError('cannot load preprocessing extension')
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        if module.abi() != 3:
+        if module.abi() != 4:
             raise ValueError('unsupported preprocessing ABI')
         self._reference, self._module = reference, module
         numerical = tuple((o.column, o.output, o.fill, o.mean, o.scale) for o in reference._numerical)

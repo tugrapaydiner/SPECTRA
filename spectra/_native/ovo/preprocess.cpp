@@ -306,7 +306,7 @@ PyObject* predict_fused(PyObject*,PyObject* args) {
         auto* w=static_cast<BoundWorker*>(PyCapsule_GetPointer(wc,worker_capsule));if(!w) return nullptr;
         auto mode=integer(mode_object),hint=integer(hint_object),requested=integer(tile_object);
         const auto classes=PyTuple_GET_SIZE(w->labels);
-        require(mode>=0&&mode<=6&&hint>=-1&&hint<classes,"invalid worker schedule/hint");
+        require(mode>=0&&mode<=7&&hint>=-1&&hint<classes,"invalid worker schedule/hint");
         require(requested>=1&&requested<=128,"tile_rows must be between 1 and 128");
         require(std::fegetround()==FE_TONEAREST,"round-to-nearest required");
         auto n=eligible_rows(*p,rows);
@@ -342,7 +342,7 @@ PyObject* predict_fused(PyObject*,PyObject* args) {
         return output.release();
     });
 }
-PyObject* abi(PyObject*,PyObject*) { return PyLong_FromLong(3); }
+PyObject* abi(PyObject*,PyObject*) { return PyLong_FromLong(4); }
 PyMethodDef methods[]={
     {"prepare",prepare,METH_VARARGS,"Create an owned, checked preprocessing plan."},
     {"transform",transform,METH_VARARGS,"Return fresh binary64 bytes or NotImplemented for reference fallback."},
