@@ -106,3 +106,11 @@ not a new learned architecture, higher accuracy, external reproduction or releas
 The old API remains preferable where its narrower interface is faster. Linux is
 the only exercised build path; Windows/ARM performance and numerical acceptance
 are not implied by support for arbitrary feature dimensions.
+
+## Optional binary execution profile
+
+`binary_stream` specializes the one-pair binary case and falls back to
+`beretta_cert` for multiclass models. It is opt-in, not a new default. See
+[SVM_BINARY_STREAM.md](SVM_BINARY_STREAM.md) for numerical order, temporary-buffer,
+feature-table and CPU instruction-set boundaries. Rebuild the runtime and optional
+preprocessing extension after updating.

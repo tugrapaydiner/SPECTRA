@@ -86,4 +86,4 @@ frameworks installed. No new package version or replacement of v0.7.1 is implied
 An additional opt-in `PipelineSession.predict_fused` path can avoid a full-batch
 transformed matrix and intermediate Python buffer wrappers. See
 [SVM_FUSED.md](SVM_FUSED.md) for the explicit input, lifetime, fallback and resource
-boundaries. Rebuild the optional extension for its operation ABI 3.
+boundaries. Rebuild the optional extension for its operation ABI 4.

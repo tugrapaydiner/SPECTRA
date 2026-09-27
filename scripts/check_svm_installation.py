@@ -102,6 +102,18 @@ worker.close()
 try:worker.predict_fused([[1.,'a']])
 except ValueError:checks+=1
 else:raise AssertionError('fused pipeline used a closed worker')
+# Binary streaming must execute from the installed wheel, not only source tests.
+bmeta=b'{"labels":[10,20]}'
+bpayload=struct.pack('<dII9d',.5,1,1,*([0.]*9))
+bbody=bmeta+bpayload
+bpath=Path.cwd()/'binary-stream.srt'
+bpath.write_bytes(struct.pack('<8sIIIIII',b'SPCSVM02',2,2,3,len(bmeta),len(bpayload),zlib.crc32(bbody))+bbody)
+with PreparedModel(bpath,library,input_dtype='float64') as bm,bm.session() as bw:
+    assert bw.predict_buffer(array('d',[0.]*39),schedule='binary_stream')==[20]*13;checks+=1
+    assert bw.predict_with_certificate([0.]*3,schedule='binary_stream').label==20;checks+=1
+    assert bw.predict_buffer(array('d'),schedule='binary_stream')==[];checks+=1
+with PreparedPipeline(folder,library,preprocessor_library=prelibrary) as pm,pm.session() as pw:
+    assert pw.predict_fused([[1.,'a']]*5,schedule='binary_stream')==['class-c']*5;checks+=1
 assert not ({'pandas','torch','numpy','sklearn'} & sys.modules.keys());checks+=1
 assert not ({'torch','numpy','sklearn'} & sys.modules.keys())
 checks+=1

@@ -20,7 +20,7 @@ with PreparedPipeline('exported-model', svm, preprocessor_library=pre) as model:
 value conventions as `predict_many`. Both build directories must be fresh. The
 existing Python preprocessor remains available; no code compiles during import or
 package installation. Rebuild the CPython-specific preprocessing extension: its
-private operation ABI is now 3. This is not abi3 or a universal binary.
+private operation ABI is now 4. This is not abi3 or a universal binary.
 
 ## Resource and numerical contract
 
