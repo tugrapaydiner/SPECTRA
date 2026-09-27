@@ -114,6 +114,27 @@ with PreparedModel(bpath,library,input_dtype='float64') as bm,bm.session() as bw
     assert bw.predict_buffer(array('d'),schedule='binary_stream')==[];checks+=1
 with PreparedPipeline(folder,library,preprocessor_library=prelibrary) as pm,pm.session() as pw:
     assert pw.predict_fused([[1.,'a']]*5,schedule='binary_stream')==['class-c']*5;checks+=1
+# Reentrant close must not destroy a pointer already borrowed by a request.
+with PreparedModel(bpath,library,input_dtype='float64') as lm:
+    lw=lm.session();run=lw._lib.sp_worker_run
+    def closing_run(*args):
+        lw.close()
+        assert lw._handle is not None
+        return run(*args)
+    lw._lib.sp_worker_run=closing_run
+    try:
+        assert lw.predict_with_certificate([0.]*3).label==20;checks+=1
+        assert lw._handle is None;checks+=1
+    finally:
+        lw._lib.sp_worker_run=run;lw.close()
+from spectra.svm_receipt import create_receipt,verify_receipt
+with PreparedModel(bpath,library,input_dtype='float64') as rm,rm.session() as rw:
+    receipt=create_receipt(rw,[0.]*3,schedule='binary_stream')
+assert verify_receipt(bpath,receipt,expected_input=[0.]*3,input_dtype='float64')['verified'];checks+=1
+rp=Path.cwd()/'decision.json';rp.write_text(json.dumps(receipt))
+import subprocess
+replay='import sys;from spectra.svm_receipt import load_receipt,verify_receipt; r=verify_receipt(sys.argv[1],load_receipt(sys.argv[2]),expected_input=[0.]*3,input_dtype="float64");assert r["verified"];assert not ({"ctypes","numpy","sklearn","torch","spectra.svm_shared"}&sys.modules.keys())'
+subprocess.run([sys.executable,'-I','-c',replay,str(bpath),str(rp)],check=True);checks+=1
 assert not ({'pandas','torch','numpy','sklearn'} & sys.modules.keys());checks+=1
 assert not ({'torch','numpy','sklearn'} & sys.modules.keys())
 checks+=1

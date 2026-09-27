@@ -9,6 +9,7 @@
 | Run optional framework-free certified SVM inference | [SVM runtime](SVM.md) |
 | Export fitted raw-input preprocessing and SVM inference | [Pipeline deployment](SVM_PIPELINE.md) |
 | Share prepared SVM data and use other feature dimensions | [Shared SVM](SVM_SHARED.md) |
+| Independently replay a model/input-bound SVM decision | [Decision receipts](SVM_RECEIPTS.md) |
 | Check what is released, measured or experimental | [Current status](STATUS.md) |
 | Run tests, build a wheel or reproduce experiments | [Development](DEVELOPMENT.md) |
 | Prepare a new release | [Release checklist](RELEASING.md) |
