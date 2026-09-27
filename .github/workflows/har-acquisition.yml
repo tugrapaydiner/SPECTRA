@@ -1,0 +1,42 @@
+name: har-acquisition
+on:
+  push:
+    branches: [research/har-execution]
+    paths: [.github/workflows/har-acquisition.yml, experiments/har_execution/PROTOCOL.md]
+permissions:
+  contents: read
+jobs:
+  public-data:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Acquire official public feature archive with bounded inventory
+        shell: python
+        run: |
+          import urllib.request,hashlib,json,zipfile,io,pathlib,os
+          root=pathlib.Path('har-inputs');root.mkdir()
+          url='https://archive.ics.uci.edu/static/public/240/human%2Bactivity%2Brecognition%2Busing%2Bsmartphones.zip'
+          with urllib.request.urlopen(url,timeout=60) as r: raw=r.read(70*1024*1024+1)
+          assert len(raw)<=70*1024*1024
+          selected=['README.txt','features.txt','features_info.txt','activity_labels.txt','train/X_train.txt','train/y_train.txt','train/subject_train.txt','test/X_test.txt','test/y_test.txt','test/subject_test.txt']
+          outer=zipfile.ZipFile(io.BytesIO(raw));assert outer.testzip() is None
+          if 'UCI HAR Dataset.zip' in outer.namelist():
+              archive=zipfile.ZipFile(io.BytesIO(outer.read('UCI HAR Dataset.zip')))
+          else: archive=outer
+          names=archive.namelist();assert len(names)==len(set(names))
+          for name in selected:
+              full='UCI HAR Dataset/'+name;info=archive.getinfo(full)
+              assert info.file_size<=70*1024*1024
+              value=archive.read(full);path=root/name;path.parent.mkdir(exist_ok=True);path.write_bytes(value)
+          manifest={'url':url,'archive_bytes':len(raw),'archive_sha256':hashlib.sha256(raw).hexdigest(),'source_commit':os.environ['GITHUB_SHA'],'license':'CC BY4.0 per UCI dataset page','files':{p.relative_to(root).as_posix():{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(root.rglob('*')) if p.is_file()}}
+          (root/'ACQUISITION.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: har-features-${{ github.sha }}
+          path: har-inputs/
+          if-no-files-found: error
+          retention-days: 30
