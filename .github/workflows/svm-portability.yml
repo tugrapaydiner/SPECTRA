@@ -26,6 +26,8 @@ jobs:
       MKL_NUM_THREADS: '1'
       PYTHONUTF8: '1'
     steps:
+      - name: Preserve canonical source bytes on every host
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
