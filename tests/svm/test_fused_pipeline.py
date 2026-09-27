@@ -170,7 +170,7 @@ def test_real_signal_during_tiles(pipeline,action):
     w=pipeline.session();rows=[[1.,'b',2.] for _ in range(12000)];seen=[]
     expected=w.predict_many(rows[:1])[0]
     def handler(*_):
-        seen.append(w._worker._fused_active)
+        seen.append(w._worker._native_active)
         if action=='close':w.close()
         elif action=='interrupt':raise KeyboardInterrupt('test interruption')
         else:rows.clear()
@@ -195,17 +195,17 @@ def test_real_signal_during_tiles(pipeline,action):
 def test_close_before_busy_flag_cannot_use_stale_pointer(pipeline):
     import inspect
     import sys
-    from spectra.svm_preprocess_native import _FusedRunner
+    from spectra.svm_lifetime import _NativeOwner
     w=pipeline.session();w.predict_fused([[1.,'b',2.]])
-    source,start=inspect.getsourcelines(_FusedRunner.predict)
-    target=start+next(i for i,s in enumerate(source) if 'worker._fused_active = True' in s)
+    source,start=inspect.getsourcelines(_NativeOwner._operation.__wrapped__)
+    target=start+next(i for i,s in enumerate(source) if 'self._native_active = True' in s)
     seen=[]
     def tracer(frame,event,arg):
-        if event=='line' and frame.f_code is _FusedRunner.predict.__code__ and frame.f_lineno==target:
+        if event=='line' and frame.f_code is _NativeOwner._operation.__wrapped__.__code__ and frame.f_lineno==target:
             seen.append(True);w.close()
         return tracer
     previous=sys.gettrace();sys.settrace(tracer)
     try:
         with pytest.raises(ValueError,match='closed'):w.predict_fused([[1.,'b',2.]])
     finally:sys.settrace(previous)
-    assert seen==[True] and not w._worker._fused_active and not w._worker._handle
+    assert seen==[True] and not w._worker._native_active and not w._worker._handle

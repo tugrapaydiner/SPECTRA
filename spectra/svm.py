@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 from typing import Iterable
+from .svm_lifetime import _NativeOwner
 
 SOURCE = Path(__file__).resolve().parent / '_native' / 'ovo'
 SCHEDULES = {'exhaustive': 0, 'lazy': 1, 'knockout_cert': 2,
@@ -111,7 +112,7 @@ def _input(values: Iterable[float]) -> array:
     return packed
 
 
-class Session:
+class Session(_NativeOwner):
     """Owning session; calls and close are serialized with one lock.
 
     ctypes releases the GIL during native calls. Do not remove this lock: the
@@ -119,8 +120,7 @@ class Session:
     execution. The caller must trust the supplied native library.
     """
     def __init__(self, model: str | Path, library: str | Path, *, tables: bool = False):
-        self._lock = threading.RLock()
-        self._handle = None
+        self._init_lifetime('session')
         if type(tables) is not bool:
             raise ValueError('tables must be bool')
         path = os.fsencode(model)
@@ -142,12 +142,14 @@ class Session:
         lib.sp_svm_batch.argtypes = [C.c_void_p, C.POINTER(C.c_float), C.c_int, C.c_int,
                                       C.c_int, C.c_int, C.POINTER(C.c_int), C.c_int]
         lib.et_certificate.argtypes = [C.c_void_p, C.POINTER(C.c_int8), C.c_int]
-        self._handle = lib.et_create(path, int(tables))
-        if not self._handle:
+        pointer = lib.et_create(path, int(tables))
+        if not pointer:
             raise ValueError(lib.et_error().decode('utf-8', errors='replace'))
+        self._adopt(pointer, lib, 'et_destroy')
         try:
             raw = (C.c_uint64 * 8)()
-            self._check(lib.et_info(self._handle, raw, 8))
+            with self._operation() as handle:
+                self._check(lib.et_info(handle, raw, 8))
             self._info = dict(zip(('classes', 'supports', 'tables_enabled', 'dictionary_values',
                                    'prepared_bytes', 'scratch_bytes', 'code_bytes', 'value_bytes'), raw))
         except BaseException:
@@ -172,17 +174,17 @@ class Session:
         return SCHEDULES[schedule]
 
     def _run(self, packed: array, schedule: str, hint: int, certificate: bool):
-        with self._lock:
+        with self._operation() as handle:
             mode = self._settings(schedule, hint)
             data = (C.c_float * 16).from_buffer(packed)
             out, stats = C.c_int(), (C.c_uint64 * 10)()
-            self._check(self._lib.sp_svm_single(self._handle, data, 16, mode, hint,
+            self._check(self._lib.sp_svm_single(handle, data, 16, mode, hint,
                                          C.byref(out), stats, 10))
             if not certificate:
                 return out.value
             classes = self._info['classes']
             trace = (C.c_int8 * (classes * (classes - 1) // 2))()
-            self._check(self._lib.et_certificate(self._handle, trace, len(trace)))
+            self._check(self._lib.et_certificate(handle, trace, len(trace)))
             known = tuple(trace)
             if not verify_certificate(classes, out.value, known):
                 raise RuntimeError('native vote certificate failed independent check')
@@ -207,29 +209,10 @@ class Session:
                 raise ValueError('batch exceeds 65,536 rows')
             packed.extend(_input(row))
             count += 1
-        with self._lock:
+        with self._operation() as handle:
             mode = self._settings(schedule, hint)
             output = (C.c_int * count)()
             data = (C.c_float * len(packed)).from_buffer(packed) if count else None
-            self._check(self._lib.sp_svm_batch(self._handle, data, count, 16,
+            self._check(self._lib.sp_svm_batch(handle, data, count, 16,
                                                mode, hint, output, count))
             return list(output)
-
-    def close(self) -> None:
-        with self._lock:
-            if self._handle:
-                self._lib.et_destroy(self._handle)
-                self._handle = None
-
-    def __enter__(self):
-        with self._lock:
-            if not self._handle:
-                raise ValueError('closed session')
-        return self
-
-    def __exit__(self, *args):
-        self.close()
-
-    def __del__(self):
-        if hasattr(self, '_lock'):
-            self.close()

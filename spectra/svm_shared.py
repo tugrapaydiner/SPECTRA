@@ -19,6 +19,7 @@ import threading
 from typing import Iterable
 import zlib
 from .svm import SCHEDULES, build_runtime, verify_certificate
+from .svm_lifetime import _NativeOwner
 
 MAX_BYTES = 64 * 1024 * 1024
 MAX_ELEMENTS = 8_000_000
@@ -110,7 +111,7 @@ def _check(lib, status):
         raise ValueError(lib.et_error().decode('utf-8', errors='replace'))
 
 
-class PreparedModel:
+class PreparedModel(_NativeOwner):
     """One immutable native model; sessions allocate private caches, not weights.
 
     Labels are integers or strings and preserve exporter class ordering. Input
@@ -121,8 +122,7 @@ class PreparedModel:
     """
     def __init__(self, model: str | Path, library: str | Path, *, tables: bool = False,
                  input_dtype: str = 'float32'):
-        self._lock = threading.RLock()
-        self._handle = None
+        self._init_lifetime('prepared model')
         if type(tables) is not bool or input_dtype not in ('float32', 'float64'):
             raise ValueError('expected tables bool and input_dtype float32 or float64')
         self._input_dtype = input_dtype
@@ -133,12 +133,14 @@ class PreparedModel:
         self._lib = _bind(library)
         # Decode labels and native weights from the SAME owned bytes: no reopen race.
         blob = C.create_string_buffer(raw, len(raw))
-        self._handle = self._lib.sp_model_create(blob, len(raw), int(tables))
-        if not self._handle:
+        pointer = self._lib.sp_model_create(blob, len(raw), int(tables))
+        if not pointer:
             raise ValueError(self._lib.et_error().decode('utf-8', errors='replace'))
+        self._adopt(pointer, self._lib, 'sp_model_destroy')
         try:
             values = (C.c_uint64 * 7)()
-            _check(self._lib, self._lib.sp_model_info(self._handle, values, 7))
+            with self._operation() as handle:
+                _check(self._lib, self._lib.sp_model_info(handle, values, 7))
             self._info = dict(zip(('model_id', 'features', 'classes', 'support_vectors',
                                    'shared_prepared_bytes', 'tables_enabled', 'dictionary_values'), values))
             if self._info['features'] != self.features or self._info['classes'] != len(self.labels):
@@ -168,32 +170,12 @@ class PreparedModel:
         return {**self._info, 'sha256': self.sha256, 'input_dtype': self.input_dtype, 'labels': self.labels}
 
     def session(self) -> 'SharedSession':
-        with self._lock:
-            if not self._handle:
-                raise ValueError('closed prepared model')
-            handle = self._lib.sp_worker_create(self._handle)
+        with self._operation() as owner_handle:
+            handle = self._lib.sp_worker_create(owner_handle)
             if not handle:
                 raise ValueError(self._lib.et_error().decode('utf-8', errors='replace'))
             return SharedSession(self._lib, handle, self.features, self.labels, self.input_dtype, self.sha256)
 
-    def close(self):
-        with self._lock:
-            if self._handle:
-                self._lib.sp_model_destroy(self._handle)
-                self._handle = None
-
-    def __enter__(self):
-        with self._lock:
-            if not self._handle:
-                raise ValueError('closed prepared model')
-        return self
-
-    def __exit__(self, *args):
-        self.close()
-
-    def __del__(self):
-        if hasattr(self, '_lock'):
-            self.close()
 
 
 @dataclass(frozen=True)
@@ -208,17 +190,17 @@ class CertifiedPrediction:
     cost_scan_terms: int
 
 
-class SharedSession:
+class SharedSession(_NativeOwner):
     """Create via PreparedModel.session(). Native caches are private and locked."""
     def __init__(self, lib, handle, features, labels, input_dtype, sha256):
-        self._lock = threading.RLock()
-        self._lib, self._handle = lib, handle
-        self._fused_active = False
-        self._close_after_fused = False
+        self._init_lifetime('worker')
+        self._lib = lib
+        self._adopt(handle, lib, 'sp_worker_destroy')
         self._features, self._labels, self._input_dtype, self._sha256 = features, labels, input_dtype, sha256
         try:
             values = (C.c_uint64 * 3)()
-            _check(lib, lib.sp_worker_info(handle, values, 3))
+            with self._operation() as live_handle:
+                _check(lib, lib.sp_worker_info(live_handle, values, 3))
             self._info = dict(zip(('model_id', 'shared_prepared_bytes', 'worker_scratch_bytes'), values))
         except BaseException:
             self.close()
@@ -269,23 +251,19 @@ class SharedSession:
 
     def _run(self, rows, schedule, hint, certificate):
         packed, count = self._pack(rows)
-        with self._lock:
-            if self._fused_active:
-                raise ValueError('reentrant inference during fused execution')
-            if not self._handle:
-                raise ValueError('closed worker')
+        with self._operation() as handle:
             if type(schedule) is not str or schedule not in SHARED_SCHEDULES:
                 raise ValueError('invalid schedule')
             if type(hint) is not int or not -1 <= hint < len(self.labels):
                 raise ValueError('hint must be a class INDEX or -1, not a label')
             data = (C.c_double * len(packed)).from_buffer(packed) if count else None
             output, stats = (C.c_int * count)(), (C.c_uint64 * 5)()
-            _check(self._lib, self._lib.sp_worker_run(self._handle, data, count, self.features,
+            _check(self._lib, self._lib.sp_worker_run(handle, data, count, self.features,
                 SHARED_SCHEDULES[schedule], hint, output, count, stats, 5, int(certificate)))
             if not certificate:
                 return list(output)
             trace = (C.c_int8 * (len(self.labels)*(len(self.labels)-1)//2))()
-            _check(self._lib, self._lib.sp_worker_certificate(self._handle, trace, len(trace)))
+            _check(self._lib, self._lib.sp_worker_certificate(handle, trace, len(trace)))
             known = tuple(trace)
             if not verify_certificate(len(self.labels), output[0], known):
                 raise RuntimeError('independent vote certificate check failed')
@@ -335,17 +313,13 @@ class SharedSession:
             data = (C.c_double * elements).from_buffer(view) if elements else None
             if data is not None and C.addressof(data) % C.alignment(C.c_double):
                 raise ValueError('binary64 buffer must be naturally aligned')
-            with self._lock:
-                if self._fused_active:
-                    raise ValueError('reentrant inference during fused execution')
-                if not self._handle:
-                    raise ValueError('closed worker')
+            with self._operation() as handle:
                 if type(schedule) is not str or schedule not in SHARED_SCHEDULES:
                     raise ValueError('invalid schedule')
                 if type(hint) is not int or not -1 <= hint < len(self.labels):
                     raise ValueError('hint must be a valid class INDEX or -1')
                 output, stats = (C.c_int * count)(), (C.c_uint64 * 5)()
-                _check(self._lib, self._lib.sp_worker_run(self._handle, data, count, self.features,
+                _check(self._lib, self._lib.sp_worker_run(handle, data, count, self.features,
                     SHARED_SCHEDULES[schedule], hint, output, count, stats, 5, 0))
                 return [self.labels[i] for i in output]
         finally:
@@ -357,27 +331,3 @@ class SharedSession:
 
     def predict_with_certificate(self, row, *, schedule='beretta_cert', hint=-1):
         return self._run([row], schedule, hint, True)
-
-    def close(self):
-        with self._lock:
-            if self._fused_active:
-                # A signal handler can re-enter an RLock on the same thread.
-                # Keep the borrowed pointer alive until the C request unwinds.
-                self._close_after_fused = True
-                return
-            if self._handle:
-                self._lib.sp_worker_destroy(self._handle)
-                self._handle = None
-
-    def __enter__(self):
-        with self._lock:
-            if not self._handle:
-                raise ValueError('closed worker')
-        return self
-
-    def __exit__(self, *args):
-        self.close()
-
-    def __del__(self):
-        if hasattr(self, '_lock'):
-            self.close()
