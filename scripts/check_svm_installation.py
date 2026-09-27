@@ -135,6 +135,23 @@ rp=Path.cwd()/'decision.json';rp.write_text(json.dumps(receipt))
 import subprocess
 replay='import sys;from spectra.svm_receipt import load_receipt,verify_receipt; r=verify_receipt(sys.argv[1],load_receipt(sys.argv[2]),expected_input=[0.]*3,input_dtype="float64");assert r["verified"];assert not ({"ctypes","numpy","sklearn","torch","spectra.svm_shared"}&sys.modules.keys())'
 subprocess.run([sys.executable,'-I','-c',replay,str(bpath),str(rp)],check=True);checks+=1
+# The offline JSONL route must run from the installed package as well.
+import io
+from spectra.svm_stream import run_stream,Limits
+with PreparedPipeline(folder,library,preprocessor_library=prelibrary) as pm:
+    target=Path.cwd()/'stream-output.jsonl'
+    result=run_stream(io.BytesIO(b'[1.0,"a"]\n[null,"b"]\n'),target,pm,limits=Limits(batch_rows=1))
+    assert result['rows']==2 and result['batches']==2;checks+=1
+    objects=[json.loads(line) for line in target.read_text().splitlines()]
+    assert [v['label'] for v in objects[1:-1]]==['class-c']*2;checks+=1
+    try:run_stream(io.BytesIO(b''),target,pm)
+    except FileExistsError:checks+=1
+    else:raise AssertionError('stream replaced existing output')
+    failed=Path.cwd()/'stream-failed.jsonl'
+    try:run_stream(io.BytesIO(b'[1.0,"a"]\n[true,"b"]\n'),failed,pm,limits=Limits(batch_rows=1))
+    except ValueError:checks+=1
+    else:raise AssertionError('invalid JSONL scalar accepted')
+    assert not failed.exists();checks+=1
 assert not ({'pandas','torch','numpy','sklearn'} & sys.modules.keys());checks+=1
 assert not ({'torch','numpy','sklearn'} & sys.modules.keys())
 checks+=1
