@@ -23,7 +23,8 @@ SVM_EXPORTS = (
     'et_tournament', 'et_feature_probe', 'sp_svm_abi', 'sp_svm_batch', 'sp_svm_single',
     'sp_shared_abi', 'sp_model_create', 'sp_model_destroy', 'sp_worker_create',
     'sp_worker_destroy', 'sp_model_info', 'sp_worker_info', 'sp_worker_run',
-    'sp_worker_certificate',
+    'sp_worker_certificate', 'sp_boolean_abi', 'sp_model_create_boolean',
+    'sp_model_boolean_info', 'sp_worker_boolean_info',
 )
 
 

@@ -254,7 +254,7 @@ class PreparedPipeline:
     the bundle and the supplied executable library as trusted deployment inputs.
     """
     def __init__(self, folder: str | Path, library: str | Path, *, tables=False,
-                 preprocessor_library: str | Path | None = None):
+                 preprocessor_library: str | Path | None = None, boolean: str = 'off'):
         self._lock = threading.RLock()
         self._closed = True
         self._model = None
@@ -263,7 +263,7 @@ class PreparedPipeline:
         if preprocessor_library is not None:
             from .svm_preprocess_native import NativePreprocessor
             self._preprocessor = NativePreprocessor(self._preprocessor, preprocessor_library)
-        model = PreparedModel(folder / 'model.srt', library, tables=tables, input_dtype='float64')
+        model = PreparedModel(folder / 'model.srt', library, tables=tables, input_dtype='float64', boolean=boolean)
         try:
             if model.sha256 != self.preprocessor.model_sha256 or model.features != self.preprocessor.features:
                 raise ValueError('preprocessing/model binding mismatch')
