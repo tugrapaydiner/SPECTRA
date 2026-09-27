@@ -25,6 +25,7 @@ MAX_BYTES = 64 * 1024 * 1024
 MAX_ELEMENTS = 8_000_000
 # Opt-in prototype; an ordering heuristic, never an acceptance rule.
 SHARED_SCHEDULES = {**SCHEDULES, 'cost_aware': 6, 'binary_stream': 7}
+BOOLEAN_MODES = {'off': 0, 'packed': 1, 'lookup': 2}
 
 
 def _unique_object(pairs):
@@ -106,6 +107,20 @@ def _bind(path):
     return lib
 
 
+def _bind_boolean(lib):
+    try:
+        lib.sp_boolean_abi.restype = C.c_int
+        if lib.sp_boolean_abi() != 1:
+            raise ValueError('unsupported Boolean specialization ABI')
+        lib.sp_model_create_boolean.argtypes = [C.c_void_p, C.c_uint64, C.c_int, C.c_int]
+        lib.sp_model_create_boolean.restype = C.c_void_p
+        for name in ('sp_model_boolean_info', 'sp_worker_boolean_info'):
+            getattr(lib, name).argtypes = [C.c_void_p, C.POINTER(C.c_uint64), C.c_int]
+            getattr(lib, name).restype = C.c_int
+    except AttributeError as error:
+        raise ValueError('rebuild native library for Boolean specialization') from error
+
+
 def _check(lib, status):
     if status:
         raise ValueError(lib.et_error().decode('utf-8', errors='replace'))
@@ -121,10 +136,13 @@ class PreparedModel(_NativeOwner):
     library is executable code and must be trusted. This is not a process sandbox.
     """
     def __init__(self, model: str | Path, library: str | Path, *, tables: bool = False,
-                 input_dtype: str = 'float32'):
+                 input_dtype: str = 'float32', boolean: str = 'off'):
         self._init_lifetime('prepared model')
         if type(tables) is not bool or input_dtype not in ('float32', 'float64'):
             raise ValueError('expected tables bool and input_dtype float32 or float64')
+        if type(boolean) is not str or boolean not in BOOLEAN_MODES:
+            raise ValueError('boolean must be off, packed or lookup')
+        self._boolean = boolean
         self._input_dtype = input_dtype
         with Path(model).open('rb') as stream:
             raw = stream.read(MAX_BYTES + 1)
@@ -133,7 +151,11 @@ class PreparedModel(_NativeOwner):
         self._lib = _bind(library)
         # Decode labels and native weights from the SAME owned bytes: no reopen race.
         blob = C.create_string_buffer(raw, len(raw))
-        pointer = self._lib.sp_model_create(blob, len(raw), int(tables))
+        if boolean == 'off':
+            pointer = self._lib.sp_model_create(blob, len(raw), int(tables))
+        else:
+            _bind_boolean(self._lib)
+            pointer = self._lib.sp_model_create_boolean(blob, len(raw), int(tables), BOOLEAN_MODES[boolean])
         if not pointer:
             raise ValueError(self._lib.et_error().decode('utf-8', errors='replace'))
         self._adopt(pointer, self._lib, 'sp_model_destroy')
@@ -143,6 +165,12 @@ class PreparedModel(_NativeOwner):
                 _check(self._lib, self._lib.sp_model_info(handle, values, 7))
             self._info = dict(zip(('model_id', 'features', 'classes', 'support_vectors',
                                    'shared_prepared_bytes', 'tables_enabled', 'dictionary_values'), values))
+            if boolean != 'off':
+                extra = (C.c_uint64 * 4)()
+                with self._operation() as handle:
+                    _check(self._lib, self._lib.sp_model_boolean_info(handle, extra, 4))
+                self._info.update(zip(('boolean_mode', 'boolean_enabled', 'boolean_words',
+                                       'boolean_support_bytes'), map(int, extra)))
             if self._info['features'] != self.features or self._info['classes'] != len(self.labels):
                 raise ValueError('native/Python model geometry mismatch')
         except BaseException:
@@ -225,6 +253,19 @@ class SharedSession(_NativeOwner):
     @property
     def info(self):
         return {**self._info, 'features': self.features, 'classes': len(self.labels), 'sha256': self.sha256}
+
+    @property
+    def boolean_stats(self):
+        """Last completed row's work, not an aggregated batch or certificate.
+
+        Query eligibility and memoized kernel values reset on every new input.
+        Rebuild old libraries before calling this additive diagnostic interface.
+        """
+        _bind_boolean(self._lib)
+        result = (C.c_uint64 * 4)()
+        with self._operation() as handle:
+            _check(self._lib, self._lib.sp_worker_boolean_info(handle, result, 4))
+        return dict(zip(('active', 'word_comparisons', 'exp_calls', 'lookup_hits'), map(int, result)))
 
     def _pack(self, rows: Iterable[Iterable[float]]):
         packed = array('d')

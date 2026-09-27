@@ -16,9 +16,16 @@ struct Model {
     std::vector<uint8_t> codes;
     std::vector<lo::Pair> pairs;
     bool tables = false, global_codes = false;
+    // Optional side representation: originals remain for exact general-input fallback.
+    int boolean_mode = 0; // 0 off, 1 packed distance, 2 per-input kernel lookup
+    size_t boolean_words = 0;
+    std::vector<uint64_t> boolean_supports;
+    bool boolean_enabled() const { return !boolean_supports.empty(); }
     inline static std::atomic<uint64_t> next_id{1};
 
-    Model(const unsigned char* bytes, size_t size, bool requested) : id(next_id++) {
+    Model(const unsigned char* bytes, size_t size, bool requested, int boolean = 0) : id(next_id++) {
+        lo::require(boolean >= 0 && boolean <= 2, "invalid Boolean specialization");
+        boolean_mode = boolean;
         lo::require(bytes && size >= 24 && size <= lo::MAX_BYTES, "invalid model size");
         const uint16_t one = 1;
         lo::require(*reinterpret_cast<const uint8_t*>(&one) == 1 &&
@@ -90,6 +97,15 @@ struct Model {
                 sum += sv[size_t(d)*k+f]/double(counts[i]);
             centers[size_t(i)*d+f] = sum;
         }
+        if (boolean_mode && std::all_of(sv.begin(), sv.end(), [](double v) {
+                return v == 0.0 || v == 1.0;
+            })) {
+            boolean_words = (size_t(d) + 63) / 64;
+            boolean_supports.assign(size_t(nsv) * boolean_words, uint64_t(0));
+            for (int k = 0; k < nsv; ++k) for (int f = 0; f < d; ++f)
+                if (sv[size_t(k)*d+f] == 1.0)
+                    boolean_supports[size_t(k)*boolean_words+size_t(f)/64] |= uint64_t(1) << (f%64);
+        }
         et::FeatureTables trial(d, nsv, sv.data(), requested, false);
         tables = trial.enabled; global_codes = trial.global_codes;
         offsets = std::move(trial.offsets); values = std::move(trial.values); codes = std::move(trial.codes);
@@ -101,7 +117,8 @@ struct Model {
     }
     uint64_t storage() const {
         uint64_t n = sizeof(*this) + 8*(sv.capacity()+centers.capacity()+values.capacity()) +
-                     4*(offsets.capacity()+active.capacity()) + codes.capacity() + sizeof(lo::Pair)*pairs.capacity();
+                     4*(offsets.capacity()+active.capacity()) + codes.capacity() + sizeof(lo::Pair)*pairs.capacity() +
+                     8*boolean_supports.capacity();
         for (const auto& p : pairs) n += 4*p.ids.capacity()+8*p.values.capacity();
         return n;
     }
@@ -116,22 +133,77 @@ struct Worker {
     lo::Votes vote;
     lo::Work work;
     bool valid_certificate = false;
+    bool boolean_input = false;
+    std::vector<uint64_t> boolean_query, distance_epochs;
+    std::vector<double> distance_kernels;
+    uint64_t hamming_words = 0, boolean_exps = 0, boolean_hits = 0;
     explicit Worker(Owner prepared) : model(std::move(prepared)), kernel(model->nsv),
-        squared(model->values.size()), priority(model->c), epoch(model->nsv,0), vote(model->c) {}
+        squared(model->values.size()), priority(model->c), epoch(model->nsv,0), vote(model->c),
+        boolean_query(model->boolean_words),
+        distance_epochs(model->boolean_enabled() && model->boolean_mode==2 ? size_t(model->d)+1 : 0, 0),
+        distance_kernels(distance_epochs.size()) {}
     uint64_t scratch() const {
         return sizeof(*this)+8*(kernel.capacity()+squared.capacity()+priority.capacity()+epoch.capacity())+
-               vote.known.capacity()+sizeof(int)*(vote.low.capacity()+vote.remain.capacity());
+               vote.known.capacity()+sizeof(int)*(vote.low.capacity()+vote.remain.capacity())+
+               8*(boolean_query.capacity()+distance_epochs.capacity()+distance_kernels.capacity());
     }
     void begin(const double* x) {
         valid_certificate = false;
         work = lo::Work{}; work.classes = model->c; work.supports = model->nsv;
         rounds = cost_terms = 0;
-        if (++serial == 0) { std::fill(epoch.begin(),epoch.end(),0); serial = 1; }
+        if (++serial == 0) {
+            std::fill(epoch.begin(),epoch.end(),0);
+            std::fill(distance_epochs.begin(),distance_epochs.end(),0);
+            serial = 1;
+        }
+        boolean_input = false;
+        hamming_words = boolean_exps = boolean_hits = 0;
+        if (model->boolean_enabled()) {
+            std::fill(boolean_query.begin(), boolean_query.end(), uint64_t(0));
+            boolean_input = true;
+            for (int f=0; f<model->d; ++f) {
+                // Exact predicate: even the smallest nonzero subnormal is a fallback.
+                if (x[f] != 0.0 && x[f] != 1.0) { boolean_input = false; break; }
+                if (x[f] == 1.0) boolean_query[size_t(f)/64] |= uint64_t(1) << (f%64);
+            }
+        }
         vote.reset(work);
-        if (model->tables) for (int d=0; d<model->d; ++d)
+        if (model->tables && !boolean_input) for (int d=0; d<model->d; ++d)
             for (uint32_t k=model->offsets[d]; k<model->offsets[d+1]; ++k) {
                 double t = x[d]-model->values[k]; squared[k] = t*t;
             }
+    }
+    // Portable SWAR population count; compilers may use a matching instruction.
+    // No AVX2/popcnt dependency is introduced into a portable binary.
+    static unsigned population(uint64_t v) {
+        v -= (v >> 1) & UINT64_C(0x5555555555555555);
+        v = (v & UINT64_C(0x3333333333333333)) + ((v >> 2) & UINT64_C(0x3333333333333333));
+        v = (v + (v >> 4)) & UINT64_C(0x0f0f0f0f0f0f0f0f);
+        return unsigned((v * UINT64_C(0x0101010101010101)) >> 56);
+    }
+    void boolean_distances(const uint32_t* ids, int count, double* out) {
+        for (int k=0; k<count; ++k) {
+            const auto* support=model->boolean_supports.data()+size_t(ids[k])*model->boolean_words;
+            unsigned sum=0;
+            for (size_t word=0; word<model->boolean_words; ++word)
+                sum+=population(boolean_query[word]^support[word]);
+            out[k]=double(sum); // <=4096, and identical to the ordered FP64 sum.
+            hamming_words+=model->boolean_words;
+        }
+    }
+    double kernel_value(double distance) {
+        if (boolean_input && model->boolean_mode==2) {
+            const size_t slot=size_t(distance); // exact bounded nonnegative integer
+            if (distance_epochs[slot]==serial) { ++boolean_hits; return distance_kernels[slot]; }
+            const double value=std::exp(-model->gamma*distance);
+            lo::require(std::isfinite(value)&&value>=0&&value<=1,"invalid Boolean kernel");
+            distance_kernels[slot]=value;distance_epochs[slot]=serial;++boolean_exps;
+            return value;
+        }
+        const double value=std::exp(-model->gamma*distance);
+        lo::require(std::isfinite(value)&&value>=0&&value<=1,"invalid kernel");
+        if (boolean_input) ++boolean_exps;
+        return value;
     }
     template<int D, bool Tables, bool Global>
     void distances(const uint32_t* ids, int count, const double* x, double* out) const {
@@ -167,12 +239,20 @@ struct Worker {
             out[k]=sum;
         }
     }
-    template<int D> void distance_kind(const uint32_t* ids, int count, const double* x, double* out) const {
+    template<int D> void distance_kind(const uint32_t* ids, int count, const double* x, double* out) {
         if (!model->tables) distances<D,false,false>(ids,count,x,out);
         else if (model->global_codes) distances<D,true,true>(ids,count,x,out);
         else distances<D,true,false>(ids,count,x,out);
     }
+    void prepare_boolean(const std::vector<uint32_t>& ids) {
+        for (uint32_t id:ids) if (epoch[id]!=serial) {
+            double distance;
+            boolean_distances(&id,1,&distance);
+            kernel[id]=kernel_value(distance);epoch[id]=serial;++work.kernels;
+        }
+    }
     void prepare(const std::vector<uint32_t>& ids, const double* x) {
+        if (boolean_input) { prepare_boolean(ids); return; }
         uint32_t todo[4]; int size=0;
         auto flush = [&] {
             double dist[4];
@@ -204,6 +284,15 @@ struct Worker {
     double binary_stream_score(const double* x) {
         const auto& p=model->pairs[0];
         double sum=0;
+        if (boolean_input) {
+            for (size_t t=0;t<p.ids.size();++t) {
+                double distance;boolean_distances(p.ids.data()+t,1,&distance);
+                sum+=p.values[t]*kernel_value(distance);
+            }
+            sum+=p.bias;
+            lo::require(std::isfinite(sum),"nonfinite Boolean pair decision");
+            return sum;
+        }
         for(size_t first=0;first<p.ids.size();first+=4) {
             int count=int(std::min(size_t(4),p.ids.size()-first));
             double dist[4];
@@ -315,6 +404,25 @@ void* sp_model_create(const unsigned char* bytes,uint64_t size,int tables) {
         result=new spm::Owner(std::move(model));});
     return result;
 }
+// Separate additive entry points: the original model ABI/default stay unchanged.
+int sp_boolean_abi(){return 1;}
+void* sp_model_create_boolean(const unsigned char* bytes,uint64_t size,int tables,int mode) {
+    void* result=nullptr;
+    lo::protect([&]{lo::require(tables==0||tables==1,"invalid table option");
+        lo::require(mode>=1&&mode<=2,"invalid Boolean mode");
+        lo::require(std::fegetround()==FE_TONEAREST,"round-to-nearest required");
+        result=new spm::Owner(std::make_shared<const spm::Model>(bytes,size,bool(tables),mode));});
+    return result;
+}
+int sp_model_boolean_info(void* p,uint64_t* out,int count){return lo::protect([&]{
+    lo::require(p&&out&&count==4,"invalid Boolean model info");const auto&m=**static_cast<spm::Owner*>(p);
+    const uint64_t values[]={uint64_t(m.boolean_mode),uint64_t(m.boolean_enabled()),
+                            uint64_t(m.boolean_words),uint64_t(8*m.boolean_supports.capacity())};
+    std::copy(values,values+4,out);});}
+int sp_worker_boolean_info(void* p,uint64_t* out,int count){return lo::protect([&]{
+    lo::require(p&&out&&count==4,"invalid Boolean worker info");const auto&w=*static_cast<spm::Worker*>(p);
+    const uint64_t values[]={uint64_t(w.boolean_input),w.hamming_words,w.boolean_exps,w.boolean_hits};
+    std::copy(values,values+4,out);});}
 void sp_model_destroy(void* p){delete static_cast<spm::Owner*>(p);}
 void* sp_worker_create(void* p) {
     void* result=nullptr;lo::protect([&]{lo::require(p,"null model");
@@ -344,7 +452,7 @@ int sp_worker_run(void* p,const double* inputs,int rows,int features,int mode,in
         try {
             int row=0;
 #if defined(__AVX2__)
-            if(mode==7 && w.model->c==2 && !w.model->tables && rows>=4) {
+            if(mode==7 && w.model->c==2 && !w.model->tables && !w.model->boolean_enabled() && rows>=4) {
                 // Allocate once per batch, never once per support or prediction.
                 // At d<=4096, this scratch is bounded by 128 KiB.
                 std::vector<double> packed(size_t(features)*4);

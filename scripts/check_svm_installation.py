@@ -152,6 +152,21 @@ with PreparedPipeline(folder,library,preprocessor_library=prelibrary) as pm:
     except ValueError:checks+=1
     else:raise AssertionError('invalid JSONL scalar accepted')
     assert not failed.exists();checks+=1
+# Optional exact Boolean domain, exercised from the installed native source.
+from array import array
+boolean_meta=b'{"labels":[10,20]}'
+boolean_numbers=[0.]*6+[1.]*6+[1.,1.,-1.,-1.,0.]
+boolean_payload=struct.pack('<dII',.5,2,2)+struct.pack('<17d',*boolean_numbers)
+boolean_body=boolean_meta+boolean_payload
+boolean_path=Path.cwd()/'boolean-model.srt'
+boolean_path.write_bytes(struct.pack('<8sIIIIII',b'SPCSVM02',2,4,3,len(boolean_meta),len(boolean_payload),zlib.crc32(boolean_body))+boolean_body)
+with PreparedModel(boolean_path,library,input_dtype='float64',boolean='lookup') as bo,bo.session() as bw:
+    assert bo.info['boolean_enabled']==1;checks+=1
+    assert bw.predict_many([[0.]*3,[1.]*3])==[20,10];checks+=1
+    assert bw.boolean_stats['exp_calls']==2 and bw.boolean_stats['lookup_hits']==2;checks+=1
+    assert bw.predict_with_certificate([1.]*3).label==10;checks+=1
+    bw.predict([.5]*3)
+    assert bw.boolean_stats['active']==0;checks+=1
 assert not ({'pandas','torch','numpy','sklearn'} & sys.modules.keys());checks+=1
 assert not ({'torch','numpy','sklearn'} & sys.modules.keys())
 checks+=1
