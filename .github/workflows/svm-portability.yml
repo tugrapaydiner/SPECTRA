@@ -1,0 +1,93 @@
+name: svm-portability
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-platform:
+    name: '${{ matrix.os }} / Python ${{ matrix.python }}'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04-arm
+            python: '3.13'
+          - os: windows-2022
+            python: '3.11'
+          - os: windows-2022
+            python: '3.13'
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      PYTHONUTF8: '1'
+    steps:
+      - name: Preserve canonical source bytes on every host
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Configure MSVC x64 without adding a third-party action
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'MSVC x64 build tools not found' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $lines = & cmd /c "`"$vcvars`" >nul && set"
+          if ($LASTEXITCODE -ne 0) { throw 'MSVC environment setup failed' }
+          foreach ($line in $lines) {
+            $pair = $line -split '=', 2
+            if ($pair.Count -eq 2 -and $pair[0] -in @('PATH','INCLUDE','LIB','LIBPATH','VCToolsInstallDir','VCINSTALLDIR','WindowsSdkDir','WindowsSDKVersion')) {
+              $line | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            }
+          }
+      - name: Install build and compatibility-test tools only
+        run: python -m pip install build pytest==9.0.2 scikit-learn==1.8.0 pandas==2.2.3
+      - name: Preserve tested source and environment
+        shell: python
+        run: |
+          import pathlib,subprocess,sys,json,platform
+          root=pathlib.Path('.svm-platform');root.mkdir()
+          for name,ref in [('commit','HEAD'),('tree','HEAD^{tree}')]:
+              (root/(name+'.txt')).write_bytes(subprocess.check_output(['git','rev-parse',ref]))
+          (root/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
+          (root/'host.json').write_text(json.dumps({'python':sys.version,'platform':platform.platform(),'machine':platform.machine()}),encoding='utf-8')
+      - name: Full SVM compatibility suite on the actual target CPU and operating system
+        run: python -m pytest tests/svm --confcutdir=tests/svm --junitxml=.svm-platform/pytest.xml -ra
+      - name: Build wheel through its source distribution
+        run: python -m build --outdir .svm-platform/dist
+      - name: Install without frameworks and execute both compiled components
+        shell: python
+        run: |
+          import pathlib,subprocess,sys,json
+          sys.path.insert(0,'scripts')
+          from check_current_installation import select_wheel,verify_sources
+          root=pathlib.Path('.svm-platform')
+          wheel=select_wheel(root/'dist')
+          (root/'source-match.json').write_text(json.dumps(verify_sources(wheel)),encoding='utf-8')
+          subprocess.run([sys.executable,'scripts/check_svm_installation.py','--wheel',str(wheel),'--out',str(root/'installed')],check=True)
+      - name: Retain receipts and our built libraries, not a virtual environment
+        if: always()
+        shell: python
+        run: |
+          import pathlib,shutil,hashlib,json
+          root=pathlib.Path('.svm-platform');root.mkdir(exist_ok=True)
+          shutil.rmtree(root/'installed'/'venv',ignore_errors=True)
+          (root/'SHA256.json').write_text(json.dumps({p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob('*')) if p.is_file() and p.name!='SHA256.json'},indent=2),encoding='utf-8')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: svm-portability-${{ matrix.os }}-${{ matrix.python }}-${{ github.run_id }}
+          path: .svm-platform/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error

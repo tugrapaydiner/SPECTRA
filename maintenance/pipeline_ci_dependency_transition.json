@@ -1,0 +1,16 @@
+{
+  "schema": "spectra.workflow_evolution.v1",
+  "path": ".github/workflows/cpu-regression.yml",
+  "change_commit": "df5ce9af8563e28722768dddb29c67b3d0c2a124",
+  "previous_source_commit": "5e8ef3b15762ecab2907fc651ee6aedc47d2424b",
+  "previous_sha256": "42d65936e0768136a0ff5b7ecfd511d7827ff889c1cc8c87d772a46472263e83",
+  "current_sha256": "6ef18f6d2f08d2f565b1b55c5ed5c61cc2849d92ee4a7773f05983039ff140ea",
+  "reason": "Add pinned scikit-learn 1.8.0 for fitted export tests under unchanged historical constraints; no skipped test or relaxed numerical guard.",
+  "original_base": "181e236528b5b58263c98b09925f0d7612c919d3",
+  "original_path": ".github/workflows/m16-verifier-aligned.yml",
+  "original_blob": "e85d7d203eb19297120a473b38b6578462e6c3d2",
+  "original_sha256": "44d20028e2edbdf0148121bc95ef24131afddd3792fc56723d57987fcdc825b1",
+  "preservation": "Only current_sha256 changes in relocations.json; all original identities and 449 historical files remain unchanged.",
+  "prior_failed_run": 36288448373,
+  "acceptance": "Run unchanged scripts/audit_workspace.py; fresh exact-head CI required separately."
+}

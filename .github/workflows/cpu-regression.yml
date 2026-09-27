@@ -44,11 +44,16 @@ jobs:
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
           python -m pip install -r requirements-cpu-research.txt
+          # SVM export fixtures are test-only; keep historical numerical pins.
+          python -m pip install --constraint requirements-cpu-research.txt scikit-learn==1.8.0
           python -m pip freeze > .cpu-contracts/environment.lock.txt
           python - <<'PYCPU'
           import torch
           assert torch.version.cuda is None and not torch.cuda.is_available()
           print('CPU-only torch:', torch.__version__)
+          import sklearn
+          assert sklearn.__version__ == '1.8.0'
+          print('SVM export test dependency:', sklearn.__version__)
           PYCPU
       - name: Full fast regression including native builds
         run: |

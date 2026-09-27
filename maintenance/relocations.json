@@ -147,7 +147,7 @@
       "from": ".github/workflows/m16-verifier-aligned.yml",
       "to": ".github/workflows/cpu-regression.yml",
       "original_sha256": "44d20028e2edbdf0148121bc95ef24131afddd3792fc56723d57987fcdc825b1",
-      "current_sha256": "42d65936e0768136a0ff5b7ecfd511d7827ff889c1cc8c87d772a46472263e83",
+      "current_sha256": "6ef18f6d2f08d2f565b1b55c5ed5c61cc2849d92ee4a7773f05983039ff140ea",
       "original_blob": "e85d7d203eb19297120a473b38b6578462e6c3d2",
       "disposition": "relocated"
     },

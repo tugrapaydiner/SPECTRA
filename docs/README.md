@@ -6,6 +6,10 @@
 |---|---|
 | Install and run the public tools | [Quick start](../README.md#quick-start) |
 | Understand API, input formats and return values | [API and CLI](API.md) |
+| Run optional framework-free certified SVM inference | [SVM runtime](SVM.md) |
+| Export fitted raw-input preprocessing and SVM inference | [Pipeline deployment](SVM_PIPELINE.md) |
+| Share prepared SVM data and use other feature dimensions | [Shared SVM](SVM_SHARED.md) |
+| Independently replay a model/input-bound SVM decision | [Decision receipts](SVM_RECEIPTS.md) |
 | Check what is released, measured or experimental | [Current status](STATUS.md) |
 | Run tests, build a wheel or reproduce experiments | [Development](DEVELOPMENT.md) |
 | Prepare a new release | [Release checklist](RELEASING.md) |
@@ -46,3 +50,6 @@ for historical replay and the workspace-preservation audit.
 
 [Prepared FP32](TRAINED_FP_GUIDE.md), [packed runtime](RUNTIME_GUIDE.md) and
 [compiler baseline](COMPILER_BASELINE_GUIDE.md) are separate opt-in tracks.
+
+[Optional compiled preprocessing](SVM_PREPROCESS_NATIVE.md) retains the raw-pipeline
+contract while reducing Python loop and built-in row-copy overhead.
