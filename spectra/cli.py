@@ -23,6 +23,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="spectra", description="Checked research tools; exact answers, explicit limits.")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
+    from .svm_stream import add_parser
+    add_parser(commands)
     commands.add_parser("doctor", help="Report installation without importing optional ML libraries")
     cnf = commands.add_parser("cnf", help="Classical Boolean CNF tools")
     actions = cnf.add_subparsers(dest="action", required=True)
@@ -44,7 +46,10 @@ def main(argv: list[str] | None = None) -> int:
                                  help="maximum witness/manifest bytes (default: 16777216)")
     args = parser.parse_args(argv)
     try:
-        if args.command == "doctor":
+        if args.command == "svm":
+            from .svm_stream import execute
+            _emit(execute(args), None)
+        elif args.command == "doctor":
             _emit({"version": __version__, "python": platform.python_version(),
                    "torch_installed": importlib.util.find_spec("torch") is not None,
                    "cnf_requires_torch": False}, None)

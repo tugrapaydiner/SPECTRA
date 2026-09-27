@@ -101,3 +101,24 @@ maintenance/   byte-retention and archived-branch receipts
 Research evidence and old module paths are intentionally kept in place. The
 [history index](docs/history/README.md) explains work already archived; this
 cleanup neither rewrites Git history nor deletes unfavorable experiments.
+
+## Offline raw-input SVM deployment
+
+Supported fitted pipelines can run without numerical frameworks after export and
+explicit native compilation. The new offline runner reads one raw feature array
+per JSONL line, keeps bounded chunks in memory, and publishes a complete new output
+file only after clean EOF and successful inference:
+
+```bash
+spectra svm run exported-model --library /path/to/runtime-library \
+  --preprocessor /path/to/preprocessing-extension \
+  --input rows.jsonl --output predictions.jsonl
+```
+
+The output includes ordered labels, model/plan identity and a completion record.
+It does not independently certify the true label or authenticate an input file.
+See [streaming deployment](docs/SVM_STREAM.md) for exact limits, failure handling,
+Windows usage and filesystem requirements. The [frozen-corpus reconstruction and
+replay](experiments/streaming/README.md) covers the same eighteen retained models,
+not new accuracy examples. This remains unreleased source, not replacement v0.7.1
+release bytes.

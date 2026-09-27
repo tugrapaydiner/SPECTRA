@@ -6,7 +6,33 @@ on:
 permissions:
   contents: read
 jobs:
+  frozen-corpus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install the original reconstruction environment
+        run: python -m pip install numpy==2.3.5 scipy==1.17.0 pandas==2.2.3 scikit-learn==1.8.0 joblib==1.5.3 threadpoolctl==3.6.0
+      - name: Reconstruct existing corpus or reject any changed model/input bytes
+        run: python experiments/streaming/corpus.py --out .stream-corpus
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frozen-svm-corpus-${{ github.sha }}
+          path: .stream-corpus/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error
   native-platform:
+    needs: frozen-corpus
     name: '${{ matrix.os }} / Python ${{ matrix.python }}'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -14,6 +40,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - os: ubuntu-24.04
+            python: '3.13'
           - os: ubuntu-24.04-arm
             python: '3.13'
           - os: windows-2022
@@ -75,6 +103,24 @@ jobs:
           wheel=select_wheel(root/'dist')
           (root/'source-match.json').write_text(json.dumps(verify_sources(wheel)),encoding='utf-8')
           subprocess.run([sys.executable,'scripts/check_svm_installation.py','--wheel',str(wheel),'--out',str(root/'installed')],check=True)
+      - uses: actions/download-artifact@v4
+        with:
+          name: frozen-svm-corpus-${{ github.sha }}
+          path: .stream-corpus/
+      - name: Replay all retained models and the offline CLI from the installed wheel
+        shell: python
+        run: |
+          import pathlib,subprocess,os
+          root=pathlib.Path('.svm-platform').resolve();installed=root/'installed'
+          python=installed/'venv'/('Scripts/python.exe' if os.name=='nt' else 'bin/python')
+          runtime=next(p for p in (installed/'native').iterdir() if p.suffix in ('.so','.dll'))
+          preprocessor=next(p for p in (installed/'preprocessing-native').iterdir() if p.suffix in ('.so','.pyd'))
+          subprocess.run([str(python),'-I','scripts/check_svm_stream_corpus.py',
+              '--corpus',str(pathlib.Path('.stream-corpus').resolve()),
+              '--manifest','experiments/streaming/corpus_manifest.json',
+              '--auditor','experiments/streaming/audit.py',
+              '--library',str(runtime),'--preprocessor',str(preprocessor),
+              '--out',str(root/'corpus-replay')],check=True)
       - name: Retain receipts and our built libraries, not a virtual environment
         if: always()
         shell: python
