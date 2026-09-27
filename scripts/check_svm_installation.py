@@ -92,7 +92,16 @@ try:worker.predict([float('inf'),'a'])
 except ValueError:checks+=1
 else:raise AssertionError('compiled pipeline accepted infinity')
 assert worker.predict_many([])==[];checks+=1
+assert worker.predict_fused([[1.,'a'],[None,'unknown']]*129)==['class-c']*258;checks+=1
+assert worker.predict_fused(iter([[1.,'a']]))==['class-c'];checks+=1
+assert worker.predict_fused([],tile_rows=1)==[];checks+=1
+try:worker.predict_fused([[1.,'a']]*129+[[float('inf'),'a']],tile_rows=1)
+except ValueError:checks+=1
+else:raise AssertionError('fused pipeline accepted late infinity')
 worker.close()
+try:worker.predict_fused([[1.,'a']])
+except ValueError:checks+=1
+else:raise AssertionError('fused pipeline used a closed worker')
 assert not ({'pandas','torch','numpy','sklearn'} & sys.modules.keys());checks+=1
 assert not ({'torch','numpy','sklearn'} & sys.modules.keys())
 checks+=1

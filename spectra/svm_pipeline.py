@@ -311,6 +311,7 @@ class PipelineSession:
     """Private native worker. Existing sessions survive prepared-owner close."""
     def __init__(self, preprocessor, worker):
         self._preprocessor, self._worker = preprocessor, worker
+        self._fused_runner = None
 
     @property
     def columns(self):
@@ -319,6 +320,23 @@ class PipelineSession:
     def predict_many(self, rows, *, columns=None, schedule='beretta_cert', hint=-1):
         values = self._preprocessor.transform(rows, columns=columns)
         return self._worker.predict_buffer(values, schedule=schedule, hint=hint)
+
+    def predict_fused(self, rows, *, columns=None, schedule='beretta_cert', hint=-1, tile_rows=128):
+        """Optional compiled preprocessing and inference in one bounded-tile call.
+
+        Requires an explicitly supplied compiled preprocessor. Ordinary built-in
+        rows use at most min(tile_rows, 16384/features) transformed rows at once;
+        feature scratch <=128 KiB. Input/output storage is additional. Custom
+        objects/iterators use the existing full-batch reference fallback. The
+        caller must not mutate rows while this method runs. No partial labels are
+        returned on error; native internal work may already have occurred.
+        """
+        from .svm_preprocess_native import _FusedRunner
+        with self._worker._lock:
+            if self._fused_runner is None:
+                self._fused_runner = _FusedRunner(self._preprocessor, self._worker)
+            return self._fused_runner.predict(rows, columns=columns, schedule=schedule,
+                                               hint=hint, tile_rows=tile_rows)
 
     def predict(self, row, *, columns=None, schedule='beretta_cert', hint=-1):
         return self.predict_many([row], columns=columns, schedule=schedule, hint=hint)[0]

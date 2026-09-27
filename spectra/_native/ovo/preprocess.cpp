@@ -10,6 +10,7 @@
 #include <memory>
 #include <stdexcept>
 #include <vector>
+#include <cstdint>
 
 static_assert(sizeof(double) == 8 && std::numeric_limits<double>::is_iec559,
               "IEEE binary64 required");
@@ -181,11 +182,173 @@ PyObject* transform_impl(PyObject* args, bool raw_input) {
 }
 PyObject* transform(PyObject*,PyObject* args) { return transform_impl(args,false); }
 PyObject* transform_raw(PyObject*,PyObject* args) { return transform_impl(args,true); }
-PyObject* abi(PyObject*,PyObject*) { return PyLong_FromLong(2); }
+
+// The private binding accepts addresses only from the already-loaded, ABI-checked
+// SVM library. It is not a public safe deserialization surface for raw pointers.
+using RunWorker = int (*)(void*,const double*,int,int,int,int,int*,int,uint64_t*,int,int);
+using LastError = const char* (*)();
+constexpr const char* worker_capsule = "spectra.preprocessing.worker.v1";
+struct BoundWorker {
+    void* handle;
+    RunWorker run;
+    LastError error;
+    PyObject* labels;
+    PyObject* owner;  // Holds the Python worker and thus its CDLL alive.
+    BoundWorker(void* h,RunWorker r,LastError e,PyObject* l,PyObject* o):
+        handle(h),run(r),error(e),labels(l),owner(o) {Py_INCREF(labels);Py_INCREF(owner);}
+    BoundWorker(const BoundWorker&)=delete;
+    BoundWorker& operator=(const BoundWorker&)=delete;
+    ~BoundWorker() { Py_DECREF(labels); Py_DECREF(owner); }
+};
+void destroy_worker(PyObject* cap) {
+    auto* p=static_cast<BoundWorker*>(PyCapsule_GetPointer(cap,worker_capsule));
+    if(p) delete p; else PyErr_Clear();
+}
+void* address(PyObject* p) {
+    require(PyLong_CheckExact(p),"native address must be an integer");
+    auto* value=PyLong_AsVoidPtr(p);
+    require(!PyErr_Occurred() && value,"null or invalid native address");
+    return value;
+}
+PyObject* bind_worker(PyObject*,PyObject* args) {
+    return protect([&]() -> PyObject* {
+        PyObject *handle,*run,*error,*labels,*owner;
+        if(!PyArg_ParseTuple(args,"OOOOO",&handle,&run,&error,&labels,&owner)) return nullptr;
+        auto* h=address(handle);auto* f=address(run);auto* e=address(error);
+        require(PyTuple_CheckExact(labels),"labels must be an immutable tuple");
+        auto n=PyTuple_GET_SIZE(labels);require(n>=2&&n<=128,"invalid label count");
+        // All pointers are trusted; the Python caller must hold the worker lock
+        // and check its live handle before every invocation, not just binding.
+        auto p=std::make_unique<BoundWorker>(h,reinterpret_cast<RunWorker>(f),
+                                              reinterpret_cast<LastError>(e),labels,owner);
+        Ref cap(PyCapsule_New(p.get(),worker_capsule,destroy_worker));
+        if(!cap.p) return nullptr;
+        p.release();return cap.release();
+    });
+}
+
+struct Detached {
+    PyThreadState* state;
+    Detached():state(PyEval_SaveThread()) {}
+    ~Detached() { PyEval_RestoreThread(state); }
+    Detached(const Detached&)=delete;
+    Detached& operator=(const Detached&)=delete;
+};
+
+// Return -1 for unsupported custom objects, otherwise the size. No user callback
+// is invoked, so fallback neither consumes iterators nor converts a scalar twice.
+Py_ssize_t eligible_rows(const Plan& p,PyObject* rows) {
+    if(!PyList_CheckExact(rows)&&!PyTuple_CheckExact(rows)) return -1;
+    auto n=PySequence_Fast_GET_SIZE(rows);
+    require(n<=p.cap,"batch exceeds row/element cap");
+    for(Py_ssize_t r=0;r<n;++r) {
+        auto* row=PySequence_Fast_GET_ITEM(rows,r);
+        if(!PyList_CheckExact(row)&&!PyTuple_CheckExact(row)) return -1;
+        require(PySequence_Fast_GET_SIZE(row)==p.columns,"invalid raw row");
+        for(const auto& op:p.numeric) {
+            auto* x=PySequence_Fast_GET_ITEM(row,op.col);
+            if(x!=Py_None&&!PyFloat_CheckExact(x)&&!PyLong_CheckExact(x)) return -1;
+        }
+        for(const auto& op:p.category)
+            if(!PyUnicode_CheckExact(PySequence_Fast_GET_ITEM(row,op.col))) return -1;
+    }
+    return n;
+}
+
+// This traversal never runs with a detached thread state. Between tiles another
+// thread may have run; check containers before using unchecked indexing macros.
+// Mutating caller input is unsupported, but never an excuse for unsafe indexing.
+bool fill_tile(const Plan& p,PyObject* rows,Py_ssize_t total,Py_ssize_t first,
+               Py_ssize_t count,double* out) {
+    require(PySequence_Fast_GET_SIZE(rows)==total,"input batch mutated during inference");
+    std::fill(out,out+count*p.features,0.);
+    for(Py_ssize_t r=0;r<count;++r) {
+        auto* row=PySequence_Fast_GET_ITEM(rows,first+r);
+        require((PyList_CheckExact(row)||PyTuple_CheckExact(row))&&
+                PySequence_Fast_GET_SIZE(row)==p.columns,"input row mutated during inference");
+        auto base=r*p.features;
+        for(const auto& op:p.numeric) {
+            auto* v=PySequence_Fast_GET_ITEM(row,op.col);double x;
+            if(v==Py_None) x=op.fill;
+            else if(PyFloat_CheckExact(v)) x=PyFloat_AS_DOUBLE(v);
+            else if(PyLong_CheckExact(v)) {
+                x=PyLong_AsDouble(v);
+                if(PyErr_Occurred()) {PyErr_Clear();throw std::invalid_argument("invalid numeric feature");}
+            } else throw std::invalid_argument("input scalar mutated during inference");
+            if(std::isnan(x)) x=op.fill;
+            require(std::isfinite(x),"infinite raw feature");
+            const double centered=x-op.mean;
+            const double value=centered/op.scale;
+            require(std::isfinite(value),"nonfinite transformed feature");
+            out[base+op.out]=value;
+        }
+        for(const auto& op:p.category) {
+            auto* v=PySequence_Fast_GET_ITEM(row,op.col);
+            require(PyUnicode_CheckExact(v),"input category mutated during inference");
+            Py_ssize_t length=0;
+            if(!PyUnicode_AsUTF8AndSize(v,&length)) return false;
+            require(length<=4096,"categorical value exceeds byte limit");
+            auto* value=PyDict_GetItemWithError(op.lookup,v);
+            if(!value) {
+                if(PyErr_Occurred()) return false;
+                require(!op.strict,"unknown categorical value");
+            } else out[base+PyLong_AsSsize_t(value)]=1.;
+        }
+    }
+    return true;
+}
+
+PyObject* predict_fused(PyObject*,PyObject* args) {
+    return protect([&]() -> PyObject* {
+        PyObject *pc,*wc,*rows,*mode_object,*hint_object,*tile_object;
+        if(!PyArg_ParseTuple(args,"OOOOOO",&pc,&wc,&rows,&mode_object,&hint_object,&tile_object)) return nullptr;
+        auto* p=static_cast<Plan*>(PyCapsule_GetPointer(pc,capsule_name));if(!p) return nullptr;
+        auto* w=static_cast<BoundWorker*>(PyCapsule_GetPointer(wc,worker_capsule));if(!w) return nullptr;
+        auto mode=integer(mode_object),hint=integer(hint_object),requested=integer(tile_object);
+        const auto classes=PyTuple_GET_SIZE(w->labels);
+        require(mode>=0&&mode<=6&&hint>=-1&&hint<classes,"invalid worker schedule/hint");
+        require(requested>=1&&requested<=128,"tile_rows must be between 1 and 128");
+        require(std::fegetround()==FE_TONEAREST,"round-to-nearest required");
+        auto n=eligible_rows(*p,rows);
+        if(n<0) {Py_INCREF(Py_NotImplemented);return Py_NotImplemented;}
+        auto tile=std::min({requested,Py_ssize_t(16384)/p->features,std::max(n,Py_ssize_t(1))});
+        std::vector<double> values(size_t(tile*p->features));
+        std::vector<int> indices(static_cast<size_t>(tile),0);
+        Ref output(PyList_New(n));if(!output.p) return nullptr;
+        uint64_t stats[5]={};
+        // An empty batch still invalidates a preceding native certificate.
+        if(n==0) {
+            int status=w->run(w->handle,nullptr,0,int(p->features),int(mode),int(hint),nullptr,0,stats,5,0);
+            if(status) throw std::invalid_argument(w->error());
+        }
+        for(Py_ssize_t first=0;first<n;first+=tile) {
+            auto count=std::min(tile,n-first);
+            if(!fill_tile(*p,rows,n,first,count,values.data())) return nullptr;
+            int status;
+            {
+                Detached detached; // Only private plain C++ buffers are touched.
+                status=w->run(w->handle,values.data(),int(count),int(p->features),int(mode),int(hint),
+                              indices.data(),int(count),stats,5,0);
+            }
+            if(status) throw std::invalid_argument(w->error());
+            for(Py_ssize_t r=0;r<count;++r) {
+                auto index=indices[size_t(r)];
+                require(index>=0&&index<classes,"native class index out of range");
+                auto* label=PyTuple_GET_ITEM(w->labels,index);Py_INCREF(label);
+                PyList_SET_ITEM(output.p,first+r,label);
+            }
+            if(PyErr_CheckSignals()<0) return nullptr;
+        }
+        return output.release();
+    });
+}
+PyObject* abi(PyObject*,PyObject*) { return PyLong_FromLong(3); }
 PyMethodDef methods[]={
     {"prepare",prepare,METH_VARARGS,"Create an owned, checked preprocessing plan."},
     {"transform",transform,METH_VARARGS,"Return fresh binary64 bytes or NotImplemented for reference fallback."},
     {"transform_raw",transform_raw,METH_VARARGS,"Traverse exact built-in containers under the GIL; otherwise request reference fallback."},
+    {"_bind_worker",bind_worker,METH_VARARGS,"PRIVATE trusted native-address binding; caller must protect worker lifetime and lock."},
+    {"predict_fused",predict_fused,METH_VARARGS,"Optional bounded-tile pipeline; requires live locked private worker binding."},
     {"abi",abi,METH_NOARGS,"Return the preprocessing ABI version."},
     {nullptr,nullptr,0,nullptr}};
 PyModuleDef definition={PyModuleDef_HEAD_INIT,"_spectra_preprocess",

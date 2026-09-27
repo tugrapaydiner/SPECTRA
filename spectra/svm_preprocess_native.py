@@ -77,7 +77,7 @@ class NativePreprocessor:
             raise ValueError('cannot load preprocessing extension')
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        if module.abi() != 2:
+        if module.abi() != 3:
             raise ValueError('unsupported preprocessing ABI')
         self._reference, self._module = reference, module
         numerical = tuple((o.column, o.output, o.fill, o.mean, o.scale) for o in reference._numerical)
@@ -113,3 +113,62 @@ class NativePreprocessor:
         if result is NotImplemented:
             return self._reference._transform_rows(materialized)
         return memoryview(result).cast('d')
+
+
+class _FusedRunner:
+    """Private live-worker binding. Every call is serialized with worker.close().
+
+    The capsule keeps the worker/CDLL alive; its saved pointer alone does NOT stop
+    an explicit close. A live-handle check under the SAME lock is mandatory.
+    """
+    def __init__(self, preprocessor, worker):
+        import ctypes
+        from .svm_shared import SharedSession
+        if type(preprocessor) is not NativePreprocessor or type(worker) is not SharedSession:
+            raise ValueError('fused execution requires stock compiled preprocessing and worker')
+        self._preprocessor, self._worker = preprocessor, worker
+        with worker._lock:
+            if not worker._handle:
+                raise ValueError('closed worker')
+            if worker.features != preprocessor.features or worker.sha256 != preprocessor.model_sha256:
+                raise ValueError('fused preprocessing/model binding mismatch')
+            if worker.input_dtype != 'float64':
+                raise ValueError('fused execution requires explicit float64 precision')
+            self._capsule = preprocessor._module._bind_worker(
+                worker._handle, ctypes.cast(worker._lib.sp_worker_run, ctypes.c_void_p).value,
+                ctypes.cast(worker._lib.et_error, ctypes.c_void_p).value, worker.labels, worker)
+
+    def predict(self, rows, *, columns=None, schedule='beretta_cert', hint=-1, tile_rows=128):
+        from .svm_shared import SHARED_SCHEDULES
+        if type(tile_rows) is not int or not 1 <= tile_rows <= 128:
+            raise ValueError('tile_rows must be an integer between 1 and 128')
+        prep, worker = self._preprocessor, self._worker
+        if columns is not None and tuple(itertools.islice(iter(columns), len(prep.columns)+1)) != prep.columns:
+            raise ValueError('input schema/order mismatch')
+        with worker._lock:
+            if worker._fused_active:
+                raise ValueError('reentrant inference during fused execution')
+            if not worker._handle:
+                raise ValueError('closed worker')
+            if type(schedule) is not str or schedule not in SHARED_SCHEDULES:
+                raise ValueError('invalid schedule')
+            if type(hint) is not int or not -1 <= hint < len(worker.labels):
+                raise ValueError('hint must be a valid class INDEX or -1')
+            try:
+                worker._fused_active = True
+                # A signal may have closed the worker between the earlier check
+                # and setting the busy flag. Never enter C with that saved pointer.
+                if not worker._handle:
+                    raise ValueError('closed worker')
+                result = prep._module.predict_fused(prep._plan, self._capsule, rows,
+                                                   SHARED_SCHEDULES[schedule], hint, tile_rows)
+            finally:
+                worker._fused_active = False
+                if worker._close_after_fused:
+                    worker._close_after_fused = False
+                    worker.close()
+            if result is NotImplemented:
+                # No custom conversion/iteration happened in the eligibility pass.
+                # Reference fallback retains the old full-batch memory behavior.
+                return worker.predict_buffer(prep.transform(rows), schedule=schedule, hint=hint)
+            return result

@@ -213,6 +213,8 @@ class SharedSession:
     def __init__(self, lib, handle, features, labels, input_dtype, sha256):
         self._lock = threading.RLock()
         self._lib, self._handle = lib, handle
+        self._fused_active = False
+        self._close_after_fused = False
         self._features, self._labels, self._input_dtype, self._sha256 = features, labels, input_dtype, sha256
         try:
             values = (C.c_uint64 * 3)()
@@ -268,6 +270,8 @@ class SharedSession:
     def _run(self, rows, schedule, hint, certificate):
         packed, count = self._pack(rows)
         with self._lock:
+            if self._fused_active:
+                raise ValueError('reentrant inference during fused execution')
             if not self._handle:
                 raise ValueError('closed worker')
             if type(schedule) is not str or schedule not in SHARED_SCHEDULES:
@@ -332,6 +336,8 @@ class SharedSession:
             if data is not None and C.addressof(data) % C.alignment(C.c_double):
                 raise ValueError('binary64 buffer must be naturally aligned')
             with self._lock:
+                if self._fused_active:
+                    raise ValueError('reentrant inference during fused execution')
                 if not self._handle:
                     raise ValueError('closed worker')
                 if type(schedule) is not str or schedule not in SHARED_SCHEDULES:
@@ -354,6 +360,11 @@ class SharedSession:
 
     def close(self):
         with self._lock:
+            if self._fused_active:
+                # A signal handler can re-enter an RLock on the same thread.
+                # Keep the borrowed pointer alive until the C request unwinds.
+                self._close_after_fused = True
+                return
             if self._handle:
                 self._lib.sp_worker_destroy(self._handle)
                 self._handle = None

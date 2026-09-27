@@ -80,3 +80,10 @@ The explicit filename above is an example for CPython 3.13/Linux x86-64. Use the
 actual path returned by `build_preprocessor` on the target interpreter. The installed
 wheel check builds this extension from the wheel's shipped source, with no numerical
 frameworks installed. No new package version or replacement of v0.7.1 is implied.
+
+## Tiled fused inference
+
+An additional opt-in `PipelineSession.predict_fused` path can avoid a full-batch
+transformed matrix and intermediate Python buffer wrappers. See
+[SVM_FUSED.md](SVM_FUSED.md) for the explicit input, lifetime, fallback and resource
+boundaries. Rebuild the optional extension for its operation ABI 3.
