@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install test, export and build tools
-        run: python -m pip install build pytest scikit-learn
+        run: python -m pip install build pytest scikit-learn pandas
       - name: Preserve source identity and run portable contracts
         run: |
           mkdir -p .svm-ci
