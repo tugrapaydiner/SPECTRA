@@ -115,6 +115,7 @@ jobs:
           python=installed/'venv'/('Scripts/python.exe' if os.name=='nt' else 'bin/python')
           runtime=next(p for p in (installed/'native').iterdir() if p.suffix in ('.so','.dll'))
           preprocessor=next(p for p in (installed/'preprocessing-native').iterdir() if p.suffix in ('.so','.pyd'))
+          subprocess.run([str(python),'-I','scripts/check_linear_installation.py','--out',str(root/'linear-installed')],check=True)
           subprocess.run([str(python),'-I','scripts/check_svm_stream_corpus.py',
               '--corpus',str(pathlib.Path('.stream-corpus').resolve()),
               '--manifest','experiments/streaming/corpus_manifest.json',
