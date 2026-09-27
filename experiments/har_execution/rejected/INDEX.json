@@ -1,0 +1,22 @@
+{
+  "disposition": "REJECTED; not installed or promoted",
+  "files": {
+    "packet16.patch": {
+      "bytes": 12490,
+      "sha256": "e6e3188005e16a15b643df4422a796e617fb3ab80f9e9ea9fed808819d08b899"
+    },
+    "packet16_train_pilot.json": {
+      "bytes": 6562,
+      "sha256": "821078974e81698d0d8c19bbb170a86e86525a1531ed6e618d6773f8a01c486a"
+    },
+    "packet_train_pilot.json": {
+      "bytes": 6569,
+      "sha256": "742577eb3fcfb0710a9086df13161ac5759f9300d82cffcf76c793e4a0954dcf"
+    },
+    "train_pilot.json": {
+      "bytes": 4398,
+      "sha256": "05c671032adbd8d17fe506c058281836ad93f00f2bafe4be6422573cb928e21f"
+    }
+  },
+  "location": "literal failed source patch and all timing rows are included in the delivered evidence/rejected directory"
+}

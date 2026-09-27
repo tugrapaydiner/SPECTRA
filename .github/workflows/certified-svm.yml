@@ -4,7 +4,7 @@ on:
     branches: [main]
   push:
     branches: [main]
-    paths: ['spectra/svm*.py', 'spectra/_native/ovo/**', 'tests/svm/**', 'scripts/check_svm_installation.py', '.github/workflows/certified-svm.yml', 'pyproject.toml', 'MANIFEST.in']
+    paths: ['spectra/svm*.py', 'spectra/linear.py', 'scripts/check_linear_installation.py', 'spectra/_native/ovo/**', 'tests/svm/**', 'scripts/check_svm_installation.py', '.github/workflows/certified-svm.yml', 'pyproject.toml', 'MANIFEST.in']
   workflow_dispatch:
 permissions:
   contents: read
@@ -43,6 +43,7 @@ jobs:
           WHEEL=$(find .svm-ci/dist -maxdepth 1 -name '*.whl')
           test "$(printf '%s\n' "$WHEEL" | wc -l)" -eq 1
           python scripts/check_svm_installation.py --wheel "$WHEEL" --out .svm-ci/installed
+          .svm-ci/installed/venv/bin/python -I scripts/check_linear_installation.py --out .svm-ci/linear-installed
       - name: Remove disposable environment before retaining receipts
         if: always()
         run: rm -rf .svm-ci/installed/venv
