@@ -112,7 +112,9 @@ def test_work_budget_is_enforced(tmp_path, library):
 
 
 @pytest.mark.parametrize('raw', [b'{}', b'{"format":1,"format":2}', b'{"x":NaN}',
-                                 b'\xff', b'[]', b'[' * 10000, b' ' * (1048576 + 1)])
+                                 b'\xff', b'[]', b'[' * 10000, b' ' * (1048576 + 1)],
+                         ids=['empty-object', 'duplicate-key', 'nan', 'invalid-utf8',
+                              'array-root', 'excessive-nesting', 'over-byte-limit'])
 def test_strict_receipt_file_input(tmp_path, raw):
     file = tmp_path / 'receipt.json';file.write_bytes(raw)
     if raw == b'{}':
@@ -135,6 +137,7 @@ def test_independent_model_decoder_rejects_malformed(tmp_path, damage):
     elif damage == 'nonfinite': struct.pack_into('<d', raw, offset, float('inf'))
     elif damage == 'bound': struct.pack_into('<d', raw, len(raw) - 8, sys.float_info.max)
     if damage not in ('short', 'crc'): struct.pack_into('<I', raw, 28, zlib.crc32(raw[32:]))
+    path.write_bytes(raw)
     with pytest.raises(ValueError): _Model(bytes(raw))
 
 
