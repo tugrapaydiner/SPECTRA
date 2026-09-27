@@ -180,6 +180,10 @@ class Preprocessor:
         booleans and numeric strings are rejected in numeric columns. None/NaN is
         accepted there only because the plan explicitly stores an imputation value.
         """
+        return self._transform_rows(self._materialize(rows, columns=columns))
+
+    def _materialize(self, rows, *, columns=None):
+        """One bounded snapshot shared by reference and optional compiled paths."""
         if columns is not None and tuple(itertools.islice(iter(columns), len(self.columns) + 1)) != self.columns:
             raise ValueError('input schema/order mismatch')
         if isinstance(rows, (str, bytes, Mapping)):
@@ -194,6 +198,10 @@ class Preprocessor:
             if len(values) != len(self.columns):
                 raise ValueError('raw row feature count mismatch')
             materialized.append(values)
+        return materialized
+
+    def _transform_rows(self, materialized):
+        """Reference arithmetic on a checked, materialized batch."""
         output = array('d', [0.0]) * (len(materialized) * self.features)
         for index, values in enumerate(materialized):
             base = index * self.features
@@ -245,12 +253,16 @@ class PreparedPipeline:
     actually consumed. Hashes provide identity, NOT author authentication. Treat
     the bundle and the supplied executable library as trusted deployment inputs.
     """
-    def __init__(self, folder: str | Path, library: str | Path, *, tables=False):
+    def __init__(self, folder: str | Path, library: str | Path, *, tables=False,
+                 preprocessor_library: str | Path | None = None):
         self._lock = threading.RLock()
         self._closed = True
         self._model = None
         folder = Path(folder)
         self._preprocessor = Preprocessor.load(folder / 'preprocessing.json')
+        if preprocessor_library is not None:
+            from .svm_preprocess_native import NativePreprocessor
+            self._preprocessor = NativePreprocessor(self._preprocessor, preprocessor_library)
         model = PreparedModel(folder / 'model.srt', library, tables=tables, input_dtype='float64')
         try:
             if model.sha256 != self.preprocessor.model_sha256 or model.features != self.preprocessor.features:

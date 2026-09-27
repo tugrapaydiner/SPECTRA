@@ -79,11 +79,26 @@ else:raise AssertionError('infinite raw feature accepted')
 owner.close();assert worker.predict([1.,'b'])=='class-c';checks+=1
 assert worker.predict_many([])==[];checks+=1
 worker.close()
+# Compile the optional CPython extension from the actual installed source too.
+from spectra.svm_preprocess_native import build_preprocessor, NativePreprocessor
+prelibrary=build_preprocessor(Path.cwd()/'preprocessing-native');checks+=1
+native=NativePreprocessor(prep,prelibrary)
+assert native.transform([[None,'a'],[1.,'unknown']]).tobytes()==prep.transform([[None,'a'],[1.,'unknown']]).tobytes();checks+=1
+owner=PreparedPipeline(folder,library,preprocessor_library=prelibrary);worker=owner.session()
+owner.close()
+assert worker.predict_many([[1.,'a'],[None,'unknown']])==['class-c']*2;checks+=1
+assert worker.predict_with_certificate([1.,'b']).label=='class-c';checks+=1
+try:worker.predict([float('inf'),'a'])
+except ValueError:checks+=1
+else:raise AssertionError('compiled pipeline accepted infinity')
+assert worker.predict_many([])==[];checks+=1
+worker.close()
 assert not ({'pandas','torch','numpy','sklearn'} & sys.modules.keys());checks+=1
 assert not ({'torch','numpy','sklearn'} & sys.modules.keys())
 checks+=1
 print(json.dumps({'status':'PASS','checks':checks,'package':__import__('spectra').__file__,
-                  'native_build':json.loads((Path.cwd()/'native/build.json').read_text())}))
+                  'native_build':json.loads((Path.cwd()/'native/build.json').read_text()),
+                  'preprocessor_build':json.loads((Path.cwd()/'preprocessing-native/build.json').read_text())}))
 '''
 
 
