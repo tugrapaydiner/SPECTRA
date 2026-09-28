@@ -1,0 +1,36 @@
+name: learned-kernel-splice-inputs
+on:
+  push:
+    branches: [research/learned-kernel-profile]
+    paths: [.github/workflows/learned-kernel-splice-inputs.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  official-data:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Acquire original UCI bytes only
+        shell: python
+        run: |
+          import urllib.request,pathlib,hashlib,json,os,zipfile,io
+          out=pathlib.Path('splice-inputs');out.mkdir()
+          url='https://archive.ics.uci.edu/static/public/69/molecular%2Bbiology%2Bsplice%2Bjunction%2Bgene%2Bsequences.zip'
+          with urllib.request.urlopen(url,timeout=60) as r: raw=r.read(4*1024*1024+1)
+          assert len(raw)<=4*1024*1024
+          with zipfile.ZipFile(io.BytesIO(raw)) as z:
+              assert z.testzip() is None
+              assert any(n.endswith('splice.data') for n in z.namelist())
+          (out/'splice.zip').write_bytes(raw)
+          (out/'receipt.json').write_text(json.dumps({'url':url,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'source_commit':os.environ['GITHUB_SHA'],'scope':'official acquisition only; no model fitting or final-test calls'},indent=2))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: splice-official-${{ github.sha }}
+          path: splice-inputs/
+          retention-days: 30
+          if-no-files-found: error
