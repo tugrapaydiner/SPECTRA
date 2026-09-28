@@ -1,0 +1,22 @@
+{
+  "format":"spectra.nonlinear-drift.export-pretest.v1",
+  "selection_commit":"03b679d73d8b2156e326a9c50e5d63b64707b882",
+  "freeze_sha256":"e0c35ff06f7e9237f9ad120c38a22b125cedc87ebac748b70b02be424b5cd06b",
+  "export_manifest_sha256":"ae628e750a6e5496545738432c14b6a78be055fbc7e348caf849564b0d46077b",
+  "sources":{
+    "study.py":"c7e18cefd262bb1fa7ce834d7ba9be5e3938bfd8bdfcc57c352db3c1ddfd3770",
+    "export.py":"6451721ef5a94c39ef185bbcf622038219df18213d509ce006f2f691135b8d21",
+    "compact.cpp":"945e85a256f95cf033fee1062587fb3d221721b1ae90757e17cfca3908be68a4",
+    "runtime.py":"3e02abd4cb0cfc5b48d65e5ab919578dc62fc9e3410a164831c35e16c399149d"
+  },
+  "artifacts":{
+    "linear.bin":{"bytes":6232,"sha256":"e862daea00056d5d02ceed36f79d6619d0903ac9c752de94efef806f9faa98a1"},
+    "svc.srt":{"bytes":275784,"sha256":"87fce46b44e90c4b53a67cc4686cd22cc3ab74d01e51bc2dadb9f0cc9d7ac487"},
+    "mlp.bin":{"bytes":102488,"sha256":"e074617b9d0b62ad7122f99a4e36084c47fba76a8f44b868d5962288f888d053"},
+    "forest.bin":{"bytes":1823112,"sha256":"88d62d8f93ea1844c44af93b209b179ce8d24494360bbd26ac0b55c8907c1560"},
+    "landmark.bin":{"bytes":68704,"sha256":"22242ce4c23b104469df586ef45ce8ab63477d8ef111a0742c240c3bccdc7497"},
+    "landmark_reference.bin":{"bytes":101472,"sha256":"6e8ecfa13049144ca417b871c52c3174c0e395e353ed1d15a424f2a9d3d1989e"}
+  },
+  "development_fidelity":{"rows":2497,"native_variants":5,"class_disagreements":0,"largest_absolute_score_error":4.866773650746836e-12},
+  "boundary":"No final-test model call has occurred. Classifiers and native representations are fixed. Algebraic normalization folding is not claimed bitwise exact; all outputs must be checked. Native unit/adversarial tests and final runtime comparisons remain pending. No deployment promotion."
+}
