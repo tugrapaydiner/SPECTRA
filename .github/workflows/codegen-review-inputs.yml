@@ -1,0 +1,36 @@
+name: codegen-review-inputs
+on:
+  push:
+    branches: [research/codegen-upstream-validation]
+    paths: [.github/workflows/codegen-review-inputs.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  upstream-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: BayesWitnesses/m2cgen
+          ref: 9784632311986234032673cdbfd29fc4c5cb429d
+          path: upstream
+          persist-credentials: false
+      - name: Retain complete pinned source without executing it
+        shell: python
+        run: |
+          import pathlib,subprocess,hashlib,json
+          source=pathlib.Path('upstream');out=pathlib.Path('upstream-evidence');out.mkdir()
+          commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip()
+          assert commit=='9784632311986234032673cdbfd29fc4c5cb429d'
+          tree=subprocess.check_output(['git','rev-parse','HEAD^{tree}'],cwd=source,text=True).strip()
+          data=subprocess.check_output(['git','archive','--format=tar.gz','HEAD'],cwd=source)
+          (out/'source.tar.gz').write_bytes(data)
+          (out/'provenance.json').write_text(json.dumps({'repository':'BayesWitnesses/m2cgen','commit':commit,'tree':tree,'archive_sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'scope':'source acquisition only; no tests or performance result'},indent=2))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m2cgen-upstream-9784632
+          path: upstream-evidence/
+          retention-days: 30
+          if-no-files-found: error
