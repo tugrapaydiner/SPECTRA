@@ -33,8 +33,9 @@ jobs:
         shell: python
         run: |
           import pathlib,subprocess,sys,os,json,hashlib
-          from experiments.learned_kernel.build import build
           root=pathlib.Path('.learned-check').resolve();root.mkdir()
+          sys.path.insert(0,str(pathlib.Path.cwd()))
+          from experiments.learned_kernel.build import build
           target='${{ matrix.target }}'
           library=build(root/'native','portable' if target=='portable' else 'avx2',target=='ubsan')
           env=dict(os.environ,LEARNED_KERNEL_LIBRARY=str(library))
