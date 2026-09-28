@@ -1,0 +1,18 @@
+{
+  "dataset":"UCI69 splice", "test_opened":false,
+  "split_sha256":"d1527bf09df5231f3dfdfd2a7b9dd9123976b73c2047fa95ce43a0f2bb09fec1",
+  "model_manifest_sha256":"3cb1a2120c8bf5bafff8c007a617e11f33fc8b0bd4d205cbf24d6f998d70b04d",
+  "fit_rows":1276,"validation_rows":319,"test_rows":1595,"features":480,
+  "exact_duplicate_rows":185,"exact_duplicate_groups_isolated":true,
+  "baseline":"rbf","candidate":"metric","selected":"metric",
+  "models":{
+    "rbf":{"validation_correct":310,"supports":1172,"tag":"2-single-2-10","sha256":"523b5c093d11b3365040c23a9789170bda768cb9fdbef4ce1018a5d1706581f0"},
+    "laplace":{"validation_correct":310,"supports":1172,"tag":"1-single-2-10","sha256":"413d10108f4b84c79eed5a54c2e477ea7d976ebf6d42752b651e94b7574ed345"},
+    "uniform":{"validation_correct":308,"supports":1008,"tag":"2-uniform-0-10","sha256":"6d00e96ae80d4019c0b6e18a650f0f4041e63da6051ab1040a2d6ca105261de5"},
+    "aligned":{"validation_correct":309,"supports":864,"tag":"2-alignment-0-1","sha256":"f1981c1c0692c800288ea90fbdeeaed1e0f13073d75e4e0bd4da6cd4488b63c5"},
+    "metric":{"validation_correct":311,"supports":1160,"tag":"metric-1.0-4-10","sha256":"62916b894926f24beaba044e4ecdc0826541ecd3a1049ef273eee04e45d6f65c"},
+    "linear":{"validation_correct":298,"tag":"linear-0.1","checkpoint_sha256":"f4cda8f444301554fe7e60980c521b3ec1525ef99314e722c5a476e03a428fa7"},
+    "mlp":{"validation_correct":305,"tag":"mlp-2-41","checkpoint_sha256":"b4835c8f5cf588ee1adce03676be3bddc5018c8901658d1c1cca655753164579"}
+  },
+  "scope":"Same previously frozen method/search, including the unfavorable high-gamma fits. No test prediction, full-development refit, gene-family disjointness, clinical or general-intelligence claim. The one-answer validation advantage may fail on test; retain all controls regardless. Semeion's previous failed confirmation remains unchanged."
+}
