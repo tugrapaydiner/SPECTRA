@@ -1,0 +1,36 @@
+name: nonlinear-admission-inputs
+on:
+  push:
+    branches: [research/nonlinear-admission]
+    paths: [.github/workflows/nonlinear-admission-inputs.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Acquire official archives without training or test predictions
+        shell: python
+        run: |
+          import urllib.request,pathlib,hashlib,json,os,zipfile
+          out=pathlib.Path('inputs');out.mkdir()
+          urls={'isolet.zip':'https://archive.ics.uci.edu/static/public/54/isolet.zip','gas.zip':'https://archive.ics.uci.edu/static/public/224/gas%2Bsensor%2Barray%2Bdrift%2Bdataset.zip'}
+          records={}
+          for name,url in urls.items():
+              with urllib.request.urlopen(url,timeout=90) as response: raw=response.read(32*1024*1024+1)
+              assert len(raw)<=32*1024*1024
+              path=out/name;path.write_bytes(raw)
+              with zipfile.ZipFile(path) as z: assert z.testzip() is None
+              records[name]={'url':url,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
+          (out/'ACQUISITION.json').write_text(json.dumps({'source_commit':os.environ['GITHUB_SHA'],'files':records,'scope':'official data acquisition only; no model fitting or predictions'},indent=2))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nonlinear-admission-inputs
+          path: inputs/
+          retention-days: 30
+          if-no-files-found: error
