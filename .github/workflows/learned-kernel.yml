@@ -1,0 +1,53 @@
+name: learned-kernel
+on:
+  push:
+    branches: [research/learned-kernel-profile]
+    paths: [experiments/learned_kernel/**, .github/workflows/learned-kernel.yml]
+  pull_request:
+    branches: [main]
+    paths: [experiments/learned_kernel/**, .github/workflows/learned-kernel.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  finite-learning-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [portable, avx2, ubsan]
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install numpy==2.3.5 scipy==1.17.0 scikit-learn==1.8.0 pytest==9.0.2
+      - name: Build and test the exact checked-out source
+        shell: python
+        run: |
+          import pathlib,subprocess,sys,os,json,hashlib
+          from experiments.learned_kernel.build import build
+          root=pathlib.Path('.learned-check').resolve();root.mkdir()
+          target='${{ matrix.target }}'
+          library=build(root/'native','portable' if target=='portable' else 'avx2',target=='ubsan')
+          env=dict(os.environ,LEARNED_KERNEL_LIBRARY=str(library))
+          cmd=[sys.executable,'-m','pytest','experiments/learned_kernel/test_runtime.py','experiments/learned_kernel/test_training.py','--confcutdir=experiments/learned_kernel','-q','--junitxml='+str(root/'tests.xml')]
+          p=subprocess.run(cmd,env=env,capture_output=True,text=True)
+          (root/'tests.log').write_text(p.stdout+'\n'+p.stderr)
+          (root/'receipt.json').write_text(json.dumps({'returncode':p.returncode,'command':cmd,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'files':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in pathlib.Path('experiments/learned_kernel').glob('*') if f.is_file()}},indent=2))
+          assert p.returncode==0,p.stdout+p.stderr
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: learned-kernel-${{ matrix.target }}-${{ github.sha }}
+          path: .learned-check/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error
