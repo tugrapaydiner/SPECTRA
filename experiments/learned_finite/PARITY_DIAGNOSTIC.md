@@ -1,0 +1,7 @@
+# Controlled expressiveness diagnostic, not application confirmation
+
+The natural-data holdouts remain unopened. Separately test whether a learned spectral table can express a16-way binary interaction without an expanded runtime feature vector. Use the complete16-bit cube and target parity of all16 bits. This deliberately favors a hypothesis class containing parity; it is not a new real-world dataset or evidence of broad reasoning.
+
+Fixed random seed20260928 chooses128 fitting patterns and64 distinct validation patterns without replacement; all other65344 cube vertices are evaluation-only. Fit the original32-slot isotropic RBF search and a four-C centered-alignment spectral/radial table mixture using exactly the same procedure as the natural-data extension. Learn mixture coefficients from fitting labels only. Validation selects C, not interaction orders or new features. The spectral basis order set is already fixed at1/2/3/4/6/8/12/16. No post-evaluation tuning or modification of natural-data candidates.
+
+Record accuracy on every unobserved cube vertex, support count, serialized model bytes and independent integer/ordered-score agreement. Verify no fitting or validation vertex is counted in the final score. This is a diagnostic of representational bias and compiled high-order interactions. A positive result must not override a failed natural-data primary gate or be described as general intelligence, a novel XOR solution, an independent task population or production utility.
