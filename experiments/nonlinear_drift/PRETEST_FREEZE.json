@@ -1,0 +1,25 @@
+{
+  "format": "spectra.nonlinear-drift.pretest.v1",
+  "protocol_commit": "096a63ceaf223f2b7e0587b0b4a5700100201e44",
+  "complete_freeze_sha256": "e0c35ff06f7e9237f9ad120c38a22b125cedc87ebac748b70b02be424b5cd06b",
+  "study_source_sha256": "c7e18cefd262bb1fa7ce834d7ba9be5e3938bfd8bdfcc57c352db3c1ddfd3770",
+  "dataset_sha256": "91e8f466f202e7a093d657673ce47311c3e90416f7df3057966058961c351fe4",
+  "scaler_sha256": "c86c81e03987c35d6d64585ace06b79ed0e05b41b217244092c84d4c29f2b5a0",
+  "train_batches": [1,2,3,4],
+  "validation_batches": [5,6],
+  "test_batches": [7,8,9,10],
+  "train_rows": 3436,
+  "validation_rows": 2497,
+  "candidate_count": 38,
+  "selection": "maximum pooled validation balanced accuracy, then accuracy, then original candidate order; no final predictions yet",
+  "selected": {
+    "linear": {"name":"linear-01","sha256":"ec48003f2e25146f0f97380f91868fe6dccd7d3b0f0e060e022f8b545a8452dc"},
+    "svc": {"name":"svc-12","sha256":"e4dba1b1e5c19219c1bfda2490649e09d6c479769a8acfc023b570ebd7826c85"},
+    "mlp": {"name":"mlp-19","sha256":"ec55c06dd9f2974d3afec12458159b0bdd067163b9d776d7795710250cdd8e5a"},
+    "forest": {"name":"forest-22","sha256":"1d2f226bddef648fee92e0f95e247dbcf6ae5259f0d10563e6daffe4a69619bb"},
+    "landmark": {"name":"landmark-27","sha256":"c33844f7b3f7978ab20541a6655be37d1da1493e081588787ee51176a1666e42"}
+  },
+  "training_cpu_seconds": 92.782486455,
+  "warnings": "Two nonselected high-C linear fits reached their cap; all six MLP fits reached the predetermined 300 epochs. Warnings and all candidate outcomes are retained. No extra training or changed budget.",
+  "boundary": "All candidates and selected parameters are frozen before any final-test call. Native export implementation and verification are still being developed using validation data only. No quality or speed result claimed."
+}
