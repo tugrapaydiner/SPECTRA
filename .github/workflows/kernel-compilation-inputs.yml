@@ -1,0 +1,35 @@
+name: kernel-compilation-inputs
+on:
+  push:
+    branches: [research/kernel-compilation]
+    paths: [.github/workflows/kernel-compilation-inputs.yml]
+permissions:
+  contents: read
+jobs:
+  public-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Acquire official public data without fitting models
+        shell: python
+        run: |
+          import pathlib,urllib.request,hashlib,json,os,zipfile,io
+          root=pathlib.Path('inputs');root.mkdir()
+          url='https://archive.ics.uci.edu/static/public/159/magic+gamma+telescope.zip'
+          with urllib.request.urlopen(url,timeout=60) as response:
+              data=response.read(4*1024*1024+1)
+          assert len(data)<=4*1024*1024
+          with zipfile.ZipFile(io.BytesIO(data)) as archive:
+              assert archive.testzip() is None
+              assert 'magic04.data' in archive.namelist()
+          (root/'magic.zip').write_bytes(data)
+          (root/'receipt.json').write_text(json.dumps({'url':url,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'source_commit':os.environ['GITHUB_SHA'],'scope':'public data acquisition only; no training or result','attribution':'Bock,R.(2004).MAGIC Gamma Telescope.UCI doi:10.24432/C52C8B.CC BY4.0'},indent=2))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernel-compilation-inputs
+          path: inputs/
+          retention-days: 30
+          if-no-files-found: error
