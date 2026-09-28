@@ -1,0 +1,46 @@
+{
+  "scope": "All selections precede current test-model calls. Letter and Pendigits partitions were historically consumed; Semeion test predictions have not been made.",
+  "manifests": {
+    "frozen_old/FROZEN_SHA256.json": "f47ee1eed7a99f5def8022aa1108b26ad7b212ebfdc8b39081c65ff35df04130",
+    "semeion_data/split.json": "61dbdc134dbbfdb2caa145eb59d62f40364dc52daf2a94a083c7095df70e74b7",
+    "semeion_fits/FROZEN_SHA256.json": "a54ea0f1af5c44eb9727158b13ba63b65e0937227a3158b4909f9165d7358aee"
+  },
+  "method_amendment": "In old-task validation, positive radial mixtures did not reliably beat single-scale kernels. Before fitting Semeion, freeze a second candidate: training-only local triplet-margin diagonal metric with two rounds, regularization 0.01/0.1/1, projected to exactly 2*d nonnegative integer feature weights. Gamma factors1/4/16 over training median distance and C10/100. Stored support columns are not physically duplicated. Select a learned metric only for strictly better validation accuracy than the equally tuned RBF; retain RBF on ties. Both families and uniform/aligned/Laplacian controls remain in final results. This is established metric/multiple-kernel learning, not a first-invention claim.",
+  "old": {
+    "letter": {
+      "baseline": "rbf", "candidate": "metric", "selected": "metric",
+      "validation_rows": 3200,
+      "models": {
+        "rbf": {"correct":3116,"supports":6429,"sha256":"74ce87107b20b910ba0aadffffb80b4ddde41afd0be2231ef76f4c0731aa2bc5"},
+        "metric": {"correct":3121,"supports":5898,"sha256":"0c6bb2572e04cf0734a1ee2e5eb66e6939f61683d6e31993ac03e5bf9c0ae2a7"},
+        "uniform": {"correct":3120,"supports":7732,"sha256":"d1efdf24587466bcb7b278c9eb9bd20767e85cf87f3c8c744d316c27a71988f3"},
+        "aligned": {"correct":3114,"supports":8532,"sha256":"2693f086408a5ac519c5722b5a9a21d5090e53666dc35578d27643a4d105a111"},
+        "laplace": {"correct":3104,"supports":9007,"sha256":"1f9da856c60f3982dfd5e51df14908e1074c7629cda5a1683e805c7fe0981bc3"}
+      }
+    },
+    "pendigits": {
+      "baseline":"rbf","candidate":"metric","selected":"rbf","validation_rows":1499,
+      "models": {
+        "rbf":{"correct":1496,"supports":591,"sha256":"b2da98bca0c6393048be00f76be5491fbae0cd44e65dbce13d5c4358e627657e"},
+        "metric":{"correct":1496,"supports":591,"sha256":"7ec088f2b8373bf4bf4332c12bcafc84df39df3e122aa1b87b0891fa9f14c846"},
+        "uniform":{"correct":1495,"supports":1218,"sha256":"3ad387ac8d0e09c967819fa54130e47e75ec5d10a8b562d1de54d49f88e6a45f"},
+        "aligned":{"correct":1496,"supports":902,"sha256":"ce99c7e606fa19678efeec43a8391f17602ba9c66a87019b9cecf043a826cdda"},
+        "laplace":{"correct":1496,"supports":2114,"sha256":"af65c90424b1ab614db10cdaa5e64bc8f6b24b5b07c8f3926ee830caf03f7c64"}
+      }
+    }
+  },
+  "semeion": {
+    "fit_rows":636,"validation_rows":160,"test_rows":797,
+    "baseline":"rbf","candidate":"metric","selected":"metric","test_opened":false,
+    "number_of_kernel_fits":54,"number_of_control_fits":9,
+    "models":{
+      "rbf":{"correct":152,"supports":546,"sha256":"fdbb204fbebd2f19fb7bcfc60e40d0695540a133ef9c77c8909b2ce8a199417f"},
+      "metric":{"correct":153,"supports":539,"sha256":"cb37d44b18ef669cd866f4b032f1c01554c179e9d7ca1aadd14a183186b6422b"},
+      "uniform":{"correct":148,"supports":622,"sha256":"bc9088ac7f402a2c12d16634c621643a8ffc10b2e537543bc066bdaaad95d879"},
+      "aligned":{"correct":152,"supports":550,"sha256":"0823ba305ae5dd04ea98b5f94f8e0503f4fa42b801857ec9e279bf793440e0b3"},
+      "laplace":{"correct":152,"supports":546,"sha256":"e610eb2fd76ecf9f61eda782cc2820000fdf1df159fe947e93b9c2e6640477fa"},
+      "linear":{"correct":138,"parameters":2570,"sha256":"188349cf04c0e2da55bbafe39185a370cb0d66c48506e5879fa3ce3481f2f7df"},
+      "mlp":{"correct":150,"parameters":17098,"sha256":"1a9697956e9f83bba075501786deec867052fceae6fb600b16e77ac1276530d7"}
+    }
+  }
+}
