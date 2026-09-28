@@ -1,0 +1,11 @@
+# Additional native-baseline strength check
+
+The primary 1,584-cell timing run is complete and retained unchanged. It is not replaced by this experiment. All frozen models, chronological final outcomes and failed90%-quality admission remain unchanged; no new fitting, selection or feature processing occurs.
+
+The current SPECTRA SVM uses AVX2 across independent kernel work, while the first experimental Nyström emitter evaluates each input's distance chain serially. Before calling that approximate model intrinsically more expensive, add a fixed stronger lowering to BOTH its mapped and folded variants: four independent inputs occupy SIMD lanes, preserving each input's feature, normalization and classifier-term order. Use the same scalar system exp, strict noncontracted arithmetic and original constants. This is standard SIMD organization, not a novel learned architecture.
+
+Implement portable fallback and AVX2 versions. Compare actual output scores bit-for-bit with each corresponding prior native variant for all frozen final inputs; additionally require the unchanged trained-model label and score-tolerance checks. Keep explicit normalization in the mapped control so vectorization is not awarded only to the folded candidate. No changed approximation rank, learned parameter, cache of input answers or label-dependent shortcut.
+
+One separate completed panel will compare nine fixed arms: linear, MLP, original mapped, original folded, row-SIMD mapped, row-SIMD folded, Clang LIBSVM, Clang original generated C and matching Clang SPECTRA. Use the primary experiment's first-up-to512 rows per final batch, prepared/scaled scopes, chunks1/32, nine fixed shuffled repetitions. All output labels checked, fresh labels and preprocessing costs retained; compile/build/setup outside warm timers. Preserve all regressions, including small batches. Do not splice preferred cells into the first run or claim better final model quality.
+
+If SIMD fidelity fails, report it and retain the existing control; do not silently widen tolerance or reinterpret bitwise matching. The extra build allocates fixed4-input feature and kernel scratch, included in documentation, not a whole-process memory reduction. No result is implied by this amendment.
