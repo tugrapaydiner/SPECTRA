@@ -1,0 +1,73 @@
+name: codegen-review
+on:
+  push:
+    branches: [research/codegen-upstream-validation]
+    paths: [experiments/codegen_review/**, .github/workflows/codegen-review.yml]
+  pull_request:
+    branches: [main]
+    paths: [experiments/codegen_review/**, .github/workflows/codegen-review.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  upstream-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: spectra
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: BayesWitnesses/m2cgen
+          ref: 9784632311986234032673cdbfd29fc4c5cb429d
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install upstream-compatible test environment
+        run: |
+          python -m pip install 'setuptools<60' wheel Cython==0.29.32 numpy==1.23.3 pandas==1.5.3
+          python -m pip install --no-build-isolation -r upstream/requirements-test.txt
+      - name: Run identical original tests on isolated source copies
+        shell: python
+        run: |
+          import pathlib,subprocess,sys,os,json,hashlib
+          out=pathlib.Path('review-results').resolve();out.mkdir()
+          source=pathlib.Path('upstream').resolve()
+          own=pathlib.Path('spectra/experiments/codegen_review').resolve()
+          (out/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
+          (out/'source_commit.txt').write_bytes(subprocess.check_output(['git','rev-parse','HEAD'],cwd='spectra'))
+          (out/'upstream_commit.txt').write_bytes(subprocess.check_output(['git','rev-parse','HEAD'],cwd=source))
+          results=[]
+          for variant in ('stock','guard','single'):
+              destination=pathlib.Path('work-'+variant).resolve()
+              subprocess.run([sys.executable,str(own/'apply.py'),'--source',str(source),'--destination',str(destination),'--variant',variant],check=True)
+              env=dict(os.environ,PYTHONPATH=str(destination))
+              args=[sys.executable,'-m','pytest','tests','--ignore=tests/e2e','-q','--junitxml='+str(out/(variant+'.xml'))]
+              p=subprocess.run(args,cwd=destination,env=env,capture_output=True,text=True,timeout=240)
+              (out/(variant+'.log')).write_text(p.stdout+'\n'+p.stderr)
+              (out/(variant+'-patch.json')).write_bytes((destination/'SPECTRA_PATCH_RECEIPT.json').read_bytes())
+              files={str(f.relative_to(destination)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted((destination/'m2cgen').rglob('*.py'))}
+              results.append({'variant':variant,'returncode':p.returncode,'command':args,'source_sha256':files})
+          (out/'results.json').write_text(json.dumps(results,indent=2))
+          env=dict(os.environ,PYTHONPATH=str(destination),M2CGEN_ORIGINAL_SOURCE=str(source))
+          args=[sys.executable,'-m','pytest',str(own/'test_cache.py'),str(own/'test_apply.py'),str(own/'test_audit.py'),'--confcutdir='+str(own),'-q','--junitxml='+str(out/'focused.xml')]
+          p=subprocess.run(args,cwd=destination,env=env,capture_output=True,text=True,timeout=120)
+          (out/'focused.log').write_text(p.stdout+'\n'+p.stderr)
+          (out/'focused.json').write_text(json.dumps({'returncode':p.returncode,'command':args}))
+          assert p.returncode==0,p.stdout+p.stderr
+          assert all(r['returncode']==0 for r in results),results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-codegen-review-${{ github.sha }}
+          path: review-results/
+          retention-days: 30
+          if-no-files-found: warn
