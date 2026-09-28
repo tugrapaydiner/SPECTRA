@@ -2,7 +2,7 @@ name: codegen-review
 on:
   push:
     branches: [research/codegen-upstream-validation]
-    paths: [experiments/codegen_review/cache.py, experiments/codegen_review/apply.py, .github/workflows/codegen-review.yml]
+    paths: [experiments/codegen_review/**, .github/workflows/codegen-review.yml]
   pull_request:
     branches: [main]
     paths: [experiments/codegen_review/**, .github/workflows/codegen-review.yml]
@@ -41,13 +41,14 @@ jobs:
           import pathlib,subprocess,sys,os,json,hashlib
           out=pathlib.Path('review-results').resolve();out.mkdir()
           source=pathlib.Path('upstream').resolve()
+          own=pathlib.Path('spectra/experiments/codegen_review').resolve()
           (out/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
           (out/'source_commit.txt').write_bytes(subprocess.check_output(['git','rev-parse','HEAD'],cwd='spectra'))
           (out/'upstream_commit.txt').write_bytes(subprocess.check_output(['git','rev-parse','HEAD'],cwd=source))
           results=[]
           for variant in ('stock','guard','single'):
               destination=pathlib.Path('work-'+variant).resolve()
-              subprocess.run([sys.executable,'spectra/experiments/codegen_review/apply.py','--source',str(source),'--destination',str(destination),'--variant',variant],check=True)
+              subprocess.run([sys.executable,str(own/'apply.py'),'--source',str(source),'--destination',str(destination),'--variant',variant],check=True)
               env=dict(os.environ,PYTHONPATH=str(destination))
               args=[sys.executable,'-m','pytest','tests','--ignore=tests/e2e','-q','--junitxml='+str(out/(variant+'.xml'))]
               p=subprocess.run(args,cwd=destination,env=env,capture_output=True,text=True,timeout=240)
@@ -56,6 +57,12 @@ jobs:
               files={str(f.relative_to(destination)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted((destination/'m2cgen').rglob('*.py'))}
               results.append({'variant':variant,'returncode':p.returncode,'command':args,'source_sha256':files})
           (out/'results.json').write_text(json.dumps(results,indent=2))
+          env=dict(os.environ,PYTHONPATH=str(destination),M2CGEN_ORIGINAL_SOURCE=str(source))
+          args=[sys.executable,'-m','pytest',str(own/'test_cache.py'),str(own/'test_apply.py'),str(own/'test_audit.py'),'--confcutdir='+str(own),'-q','--junitxml='+str(out/'focused.xml')]
+          p=subprocess.run(args,cwd=destination,env=env,capture_output=True,text=True,timeout=120)
+          (out/'focused.log').write_text(p.stdout+'\n'+p.stderr)
+          (out/'focused.json').write_text(json.dumps({'returncode':p.returncode,'command':args}))
+          assert p.returncode==0,p.stdout+p.stderr
           assert all(r['returncode']==0 for r in results),results
       - uses: actions/upload-artifact@v4
         if: always()

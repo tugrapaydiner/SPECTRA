@@ -30,6 +30,16 @@ def apply(source: Path, destination: Path, variant: str):
     if not (package / 'ast.py').is_file():
         raise ValueError('source must contain the original m2cgen package')
     interpreter = package / 'interpreters/interpreter.py'
+    identity = (hashlib.sha256((package/'ast.py').read_bytes()).hexdigest(),
+                hashlib.sha256(interpreter.read_bytes()).hexdigest())
+    known = {
+        ('fc4712516653f672c5e33eaa813e9655dec74f1e13a0a8b09b01c93da671e62c',
+         'e6bb10e359e3ccb0f5e8973b51cbeb7b3eb96d660525243b052ac941fa05a778'),
+        ('70da81a16119e9579e56f5bd2e3fd912f6eb8da5c483a9cefc71f307180054ba',
+         'fa893e24d26fd702d871240a1bfb1c0ab76258affac3a5d216ba68630c7b8400'),
+    }
+    if identity not in known:
+        raise ValueError('unvalidated AST/interpreter source; refusing guessed semantics')
     original = interpreter.read_text(encoding='utf-8')
     if original.count('self._cached_expr_results = {}') != 2 or original.count(LOOKUP) != 2:
         raise ValueError('unexpected cache construction or lookup sites')
@@ -50,8 +60,8 @@ def apply(source: Path, destination: Path, variant: str):
                         text.replace('self._cached_expr_results = {}', 'self._cached_expr_results = TypeGuardedCache()'))
             if text != path.read_text(encoding='utf-8'):
                 changes[path.relative_to(source).as_posix()] = text.encode('utf-8')
-        # 0.10.0 has three sites; inspected current master has five.
-        if sum(sites.values()) not in (3, 5):
+        # Both pinned source snapshots have five lookup sites.
+        if sum(sites.values()) != 5:
             raise ValueError('unexpected cache lookup inventory')
         if variant in ('guard', 'single'):
             raw = Path(__file__).with_name('cache.py').read_bytes()
