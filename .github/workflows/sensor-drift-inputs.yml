@@ -1,0 +1,36 @@
+name: sensor-drift-inputs
+on:
+  push:
+    branches: [research/sensor-drift-admission]
+    paths: [.github/workflows/sensor-drift-inputs.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  official-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Acquire the official research dataset without fitting models
+        shell: python
+        run: |
+          import urllib.request,pathlib,hashlib,json,zipfile,io,os
+          out=pathlib.Path('sensor-source');out.mkdir()
+          url='https://archive.ics.uci.edu/static/public/224/gas+sensor+array+drift+dataset.zip'
+          with urllib.request.urlopen(url,timeout=90) as r:data=r.read(20*1024*1024+1)
+          assert len(data)<=20*1024*1024
+          with zipfile.ZipFile(io.BytesIO(data)) as z:
+              assert z.testzip() is None
+              inventory={i.filename:{'bytes':i.file_size} for i in z.infolist()}
+          (out/'gas_sensor_drift_224.zip').write_bytes(data)
+          (out/'acquisition.json').write_text(json.dumps({'url':url,'source_commit':os.environ['GITHUB_SHA'],'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'inventory':inventory,'scope':'source acquisition only; no model training or predictions','terms':'UCI displays CC BY4.0 and retains research-only text; preserve both, research use only'},indent=2))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sensor-drift-official-${{ github.sha }}
+          path: sensor-source/
+          retention-days: 30
+          if-no-files-found: error
