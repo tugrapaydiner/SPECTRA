@@ -1,0 +1,31 @@
+name: nonlinear-drift-inputs
+on:
+  push:
+    branches: [research/nonlinear-drift-admission]
+    paths: [.github/workflows/nonlinear-drift-inputs.yml]
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Download official research data only
+        shell: python
+        run: |
+          import pathlib,urllib.request,hashlib,json,os
+          root=pathlib.Path('input-evidence');root.mkdir()
+          url='https://archive.ics.uci.edu/static/public/224/gas%2Bsensor%2Barray%2Bdrift%2Bdataset.zip'
+          with urllib.request.urlopen(url,timeout=60) as r:data=r.read(32*1024*1024+1)
+          assert len(data)<=32*1024*1024 and data[:2]==b'PK'
+          (root/'gas.zip').write_bytes(data)
+          (root/'provenance.json').write_text(json.dumps({'url':url,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'source_commit':os.environ['GITHUB_SHA'],'scope':'acquisition only; no data fitting or test prediction'},indent=2))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nonlinear-drift-inputs
+          path: input-evidence/
+          retention-days: 30
+          if-no-files-found: error
