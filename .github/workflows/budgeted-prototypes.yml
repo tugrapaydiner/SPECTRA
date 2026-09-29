@@ -43,14 +43,23 @@ jobs:
           (root/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
           sources={p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('experiments/budgeted_prototypes').glob('*') if p.is_file()}
           (root/'source.json').write_text(json.dumps({'head':head,'tree':tree,'base':base,'sources':sources},indent=2))
-      - name: Portable own-score and trained-geometry contracts
-        run: python -m pytest experiments/budgeted_prototypes/test_prototypes.py --import-mode=importlib --confcutdir=experiments/budgeted_prototypes -q --junitxml=.prototype-ci/portable.xml
+      - name: Portable runtime and complete evidence-auditor contracts
+        run: python -m pytest experiments/budgeted_prototypes/test_prototypes.py experiments/budgeted_prototypes/test_audit.py --import-mode=importlib --confcutdir=experiments/budgeted_prototypes -q --junitxml=.prototype-ci/portable.xml
       - name: Instrument prototype implementation
         run: python experiments/budgeted_prototypes/build.py --out .prototype-ci/ubsan --target portable --ubsan --layout register
-      - name: Same numerical and ownership contracts under UBSan
+      - name: Same runtime and evidence contracts under UBSan
         env:
           PROTOTYPE_LIBRARY: .prototype-ci/ubsan/prototypes.so
-        run: python -m pytest experiments/budgeted_prototypes/test_prototypes.py --import-mode=importlib --confcutdir=experiments/budgeted_prototypes -q --junitxml=.prototype-ci/ubsan.xml
+        run: python -m pytest experiments/budgeted_prototypes/test_prototypes.py experiments/budgeted_prototypes/test_audit.py --import-mode=importlib --confcutdir=experiments/budgeted_prototypes -q --junitxml=.prototype-ci/ubsan.xml
+      - name: Verify tested source did not change
+        shell: python
+        run: |
+          import pathlib,json,hashlib,subprocess
+          record=json.loads(pathlib.Path('.prototype-ci/source.json').read_text())
+          for name,wanted in record['sources'].items():
+              assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()==wanted,name
+          subprocess.run(['git','diff','--exit-code','HEAD','--','.github/workflows/budgeted-prototypes.yml','experiments/budgeted_prototypes'],check=True)
+          pathlib.Path('.prototype-ci/source-after.json').write_text(json.dumps({'status':'PASS','files':len(record['sources']),'tree':record['tree']},indent=2))
       - name: Record all artifact identities
         if: always()
         shell: python

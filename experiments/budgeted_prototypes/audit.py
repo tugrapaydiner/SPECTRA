@@ -21,7 +21,11 @@ def unique(items):
 
 def decode(text):
     def fail(x):raise ValueError('nonfinite JSON')
-    return json.loads(text,object_pairs_hook=unique,parse_constant=fail)
+    def finite_float(value):
+        number=float(value)
+        if not math.isfinite(number):raise ValueError('nonfinite JSON number')
+        return number
+    return json.loads(text,object_pairs_hook=unique,parse_constant=fail,parse_float=finite_float)
 def read(p):return decode(Path(p).read_text(encoding='utf-8'))
 def check(ok,message):
     if not ok:raise ValueError(message)
@@ -40,22 +44,31 @@ def member(root,name):
     return target
 
 def npy(raw):
-    check(raw[:6]==b'\x93NUMPY' and raw[6] in (1,2,3),'invalid NPY signature')
-    size=2 if raw[6]==1 else 4;offset=8+size;n=int.from_bytes(raw[8:offset],'little')
-    check(n<65536 and offset+n<=len(raw),'invalid NPY header')
-    h=ast.literal_eval(raw[offset:offset+n].decode('latin1'))
-    check(type(h) is dict and not h['fortran_order'],'unsupported array order')
-    shape=h['shape'];check(type(shape) is tuple and all(type(n) is int and n>=0 for n in shape),'array shape')
+    check(type(raw) is bytes and len(raw)>=10 and raw[:6]==b'\x93NUMPY'
+          and tuple(raw[6:8]) in ((1,0),(2,0),(3,0)),'invalid NPY signature')
+    size=2 if raw[6]==1 else 4;offset=8+size
+    check(len(raw)>=offset,'truncated NPY header length')
+    n=int.from_bytes(raw[8:offset],'little')
+    check(0<n<65536 and offset+n<=len(raw),'invalid NPY header')
+    try:h=ast.literal_eval(raw[offset:offset+n].decode('utf-8' if raw[6]==3 else 'latin1'))
+    except (SyntaxError,ValueError,TypeError,UnicodeError,RecursionError) as e:
+        raise ValueError('invalid NPY header syntax') from e
+    check(type(h) is dict and set(h)=={'descr','fortran_order','shape'}
+          and h['fortran_order'] is False,'unsupported array header/order')
+    shape=h['shape'];check(type(shape) is tuple and len(shape)<=8 and all(type(n) is int and n>=0 for n in shape),'array shape')
     formats={'|u1':'B','|b1':'?','<i8':'q','<u8':'Q','<i4':'i','<u2':'H','<i2':'h','<f8':'d','<f4':'f'}
-    check(h['descr'] in formats,'unsupported NPY dtype');fmt=formats[h['descr']];body=raw[offset+n:];count=math.prod(shape)
+    check(type(h['descr']) is str and h['descr'] in formats,'unsupported NPY dtype')
+    fmt=formats[h['descr']];body=raw[offset+n:];count=math.prod(shape)
     check(count<=16_000_000 and len(body)==struct.calcsize('<'+fmt)*count,'array inventory')
     return {'shape':shape,'values':list(struct.unpack('<'+str(count)+fmt,body)),'bytes':body}
+
 def arrays(path):
     with zipfile.ZipFile(path) as z:
         names=z.namelist();check(len(names)==len(set(names)) and len(names)<=128,'NPZ inventory')
+        check(sum(z.getinfo(n).file_size for n in names)<=256*1024**2,'NPZ aggregate cap')
         out={}
         for name in names:
-            check(name.endswith('.npy') and '/' not in name and z.getinfo(name).file_size<=128*1024**2,'NPZ member cap')
+            check(name.endswith('.npy') and '/' not in name and '\\' not in name and z.getinfo(name).file_size<=128*1024**2,'NPZ member cap')
             out[name[:-4]]=npy(z.read(name))
         return out
 
@@ -74,14 +87,22 @@ def quality(p,y):
         denom=sum(m[i])+sum(row[i] for row in m);f1.append(2*m[i][i]/denom if denom else 0.)
     correct=sum(a==b for a,b in zip(p,y))
     return {'correct':correct,'rows':len(y),'accuracy':correct/len(y),'macro_f1':statistics.mean(f1),'labels':labels,'confusion':m}
-def sources(record,folder):
+def hashes(record, required=()):
+    check(type(record) is dict and bool(record),'empty or invalid identity binding')
+    check(set(required)<=set(record),'incomplete required identity binding')
+    for name,h in record.items():
+        check(type(name) is str and type(h) is str and len(h)==64
+              and all(c in '0123456789abcdef' for c in h),'invalid digest binding')
+
+def sources(record,folder,required=()):
+    hashes(record,required)
     for name,h in record.items():check(sha(member(folder,name))==h,'source snapshot changed '+name)
 
 def audit(root):
     root=Path(root);initial=read(root/'selection/LOCK.json');amend=read(root/'selection_optical/LOCK.json')
     check(initial['split_seed_inventory']==[611,977] and len(initial['jobs'])==248,'initial selection inventory')
     check(len(amend['jobs'])==36 and amend['original_selection_sha256']==sha(root/'selection/LOCK.json'),'amendment inventory')
-    sources(initial['source'],root/'source_snapshots/selection');sources(amend['source'],root/'source_snapshots/optical')
+    sources(initial['source'],root/'source_snapshots/selection',('learning.py','study.py'));sources(amend['source'],root/'source_snapshots/optical',('learning.py','study.py'))
     training={t:arrays(data_path(root,t)) for t in TASKS};splits={};allrows=[]
     for t in TASKS:
         check(sha(data_path(root,t))==initial['inputs'][t],'training identity changed')
@@ -94,11 +115,13 @@ def audit(root):
             splits[t,seed]=(f,v)
     original_keys=set();amend_keys=set()
     for role,lock in [('selection',initial),('selection_optical',amend)]:
+        check(all(type(j.get('job')) is int for j in lock['jobs']) and [j['job'] for j in lock['jobs']]==list(range(len(lock['jobs']))),'invalid job index inventory')
         for job in lock['jobs']:
             folder=root/role/f'job-{job["job"]:03d}';r=read(folder/'record.json');same(r,job)
             task=r['task'];arm=r['arm'];seed=r['seed'];key=(task,arm,seed,tuple(sorted(r['choice'].items())))
             seen=original_keys if role=='selection' else amend_keys
             check(key not in seen,'duplicate selected candidate');seen.add(key)
+            hashes(r['files'],('validation.npz','training.json','model.npz' if arm in PROTO else 'model.pkl'))
             for file,h in r['files'].items():check(sha(member(folder,file))==h,'candidate artifact changed')
             p=arrays(folder/'validation.npz');f,v=splits[task,seed];wanted=[training[task]['y']['values'][i] for i in v]
             check(p['expected']['values']==wanted,'validation label mismatch')
@@ -132,12 +155,19 @@ def audit(root):
                 ranked.append((sum(r['correct'] for r in rr)/sum(r['validation_rows'] for r in rr),-i,c))
             best=max(ranked,key=lambda x:x[:2]);same(final_choices[t][arm],{'choice':best[2],'validation_accuracy':best[0]})
     lock=read(root/'models/FINAL_LOCK.json');opening=read(root/'evaluation/TEST_OPENING.json')
-    check(lock['models']==24 and len(lock['fits'])==24,'final model inventory')
+    check(type(lock['models']) is int and lock['models']==24 and type(lock['fits']) is list and len(lock['fits'])==24,'final model inventory')
+    expected_models={(t,a) for t in TASKS for a in FAMILIES}
+    check(all(type(f) is dict and type(f.get('task')) is str and type(f.get('arm')) is str for f in lock['fits']),'invalid final fit entry')
+    check({(f['task'],f['arm']) for f in lock['fits']}==expected_models,'duplicate or missing final fit')
+    required_files={f'{t}-{a}/model.'+('spp' if a in PROTO else 'srt' if a=='svc' else 'snn') for t,a in expected_models}
+    required_files|={f'{t}-{a}/fit.json' for t,a in expected_models}
+    hashes(lock['files'],required_files)
     check(opening['final_lock_sha256']==sha(root/'models/FINAL_LOCK.json'),'wrong evaluation lock')
     check(read(root/'models/FIT_LOCK.json')['selection_sha256']==sha(root/'selection_final/selected.json'),'wrong selected-model lock')
-    sources(lock['source'],root/'source_snapshots/final_fit');sources(opening['source'],root/'source_snapshots/evaluation')
+    sources(lock['source'],root/'source_snapshots/final_fit',('learning.py','study.py','export.py'));sources(opening['source'],root/'source_snapshots/evaluation',('evaluate.py',))
     for name,h in lock['files'].items():check(sha(member(root/'models',name))==h,'frozen model changed '+name)
     for fit in lock['fits']:
+        same(fit,{'training_rows':training[fit['task']]['q']['shape'][0],'features':training[fit['task']]['q']['shape'][1],'maximum':training[fit['task']]['maximum']['values'][0]})
         if fit['arm']!='linear':same(fit['choice'],final_choices[fit['task']][fit['arm']]['choice'])
     qreport=read(root/'evaluation/quality.json');predictions={};truth={}
     for t in TASKS:
@@ -161,7 +191,7 @@ def audit(root):
             raw=z.read(part);rows=[[int(v) for v in s.split(',')] for s in raw.decode().splitlines()]
             check([v for r in rows for v in r[:-1]]==t['q']['values'] and [r[-1] for r in rows]==t['y']['values'],'official optical data mismatch')
     check(sha(root/'new_data/optdigits.zip')==opening['optical_archive_sha256'],'official archive identity')
-    fp32=read(root/'models_fp32/LOCK.json');sources(fp32['source'],root/'source_snapshots/float_conversion')
+    fp32=read(root/'models_fp32/LOCK.json');sources(fp32['source'],root/'source_snapshots/float_conversion',('float_control.py',))
     fp32_report=read(root/'models_fp32/evaluation.json')
     for t in TASKS:
         a=arrays(root/f'models/{t}-mlp/weights.npz');entry=fp32['models'][t]
@@ -184,8 +214,12 @@ def audit(root):
         if folder=='benchmark_final':
             arms+=('mlp_float32',);check(p['fp32_lock_sha256']==sha(root/'models_fp32/LOCK.json'),'timing FP32 model lock')
         check(p['arms']==list(arms) and p['tasks']==list(TASKS) and p['chunks']==[1,32,256] and p['repeats']==7 and p['seed']==seed,'timing protocol inventory')
-        sources(p['source'],root/'source_snapshots'/snapshot)
+        sources(p['source'],root/'source_snapshots'/snapshot,('bench.py','runtime.cpp'))
         check(p['final_lock_sha256']==sha(root/'models/FINAL_LOCK.json') and p['quality_sha256']==sha(root/'evaluation/quality.json'),'timing model/quality lock')
+        hashes(p['libraries'])
+        library_paths=[(Path(name).parent.name,Path(name).name) for name in p['libraries']]
+        expected_library_count=7 if folder=='benchmark_final' else 6 if extra else 4
+        check(len(library_paths)==expected_library_count and len(set(library_paths))==len(library_paths),'missing or aliased native library binding')
         for name,h in p['libraries'].items():
             path=Path(name);check(sha(root/path.parent.name/path.name)==h,'native library bytes differ')
         wanted=[];rng=random.Random(seed)
@@ -211,7 +245,7 @@ def audit(root):
                 same(summary['tasks'][t],{'local_over_mlp_float32':v['local_register']/v['mlp_float32']})
         g=statistics.geometric_mean(ratios);same(summary,{'cells':len(observed),'checked_predictions':sum(r['rows'] for r in observed),'layout_ratio':g,'layout_gate':g<=1/1.10 and max(ratios)<=1.10,'primary_two_task_gate':passes>=2})
         reports[folder]={'cells':len(observed),'primary_two_task_gate':passes>=2,'layout_ratio':g,'layout_gate':g<=1/1.10 and max(ratios)<=1.10}
-    return {'status':'PASS','selection_cells':len(allrows),'final_models':24,'underlying_evaluation_rows':sum(map(len,truth.values())),
+    return {'status':'PASS','auditor_sha256':sha(__file__),'selection_cells':len(allrows),'final_models':24,'underlying_evaluation_rows':sum(map(len,truth.values())),
             'timing':reports,'scope':'recorded splits, identities, outcomes and arithmetic; no clock authentication or independent researcher replication'}
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args();result=audit(a.root)
