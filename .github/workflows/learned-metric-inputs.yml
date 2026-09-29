@@ -1,0 +1,36 @@
+name: learned-metric-inputs
+on:
+  push:
+    branches: [research/learned-integer-metric]
+    paths: [.github/workflows/learned-metric-inputs.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  official-data:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Acquire bounded official dataset bytes only
+        shell: python
+        run: |
+          import pathlib,urllib.request,hashlib,json,os,zipfile,io
+          out=pathlib.Path('input-receipt');out.mkdir()
+          url='https://archive.ics.uci.edu/static/public/146/statlog%2Blandsat%2Bsatellite.zip'
+          with urllib.request.urlopen(url,timeout=60) as r:data=r.read(4*1024*1024+1)
+          assert len(data)<=4*1024*1024 and data[:2]==b'PK'
+          with zipfile.ZipFile(io.BytesIO(data)) as z:
+              assert z.testzip() is None
+              names=z.namelist()
+              assert any(n.endswith('sat.trn') for n in names) and any(n.endswith('sat.tst') for n in names)
+          (out/'satellite.zip').write_bytes(data)
+          (out/'acquisition.json').write_text(json.dumps({'source_commit':os.environ['GITHUB_SHA'],'url':url,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'members':names,'scope':'official data acquisition only; no training or predictions'},indent=2))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: learned-metric-official-inputs-${{ github.sha }}
+          path: input-receipt/
+          if-no-files-found: error
+          retention-days: 30
