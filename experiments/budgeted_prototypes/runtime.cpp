@@ -30,6 +30,9 @@ struct Model {
  uint32_t d,p,c,maximum,quarter,units,bits;uint64_t bound,mask;double alpha;
  bool uniform=true,narrow=true;
  std::vector<uint16_t> centers,weights;
+#if defined(BP_PACKET) && defined(__AVX2__)
+ std::vector<uint16_t> packet_centers,packet_weights;
+#endif
  std::vector<double> head,bias,high,low;
  Model(const unsigned char*data,uint64_t size){
   environment();const uint16_t one=1;
@@ -59,6 +62,16 @@ struct Model {
   require(off+meta==size,"unused model bytes");
   for(uint32_t k=0;k<c;++k){double magnitude=std::abs(bias[k]),limit=std::numeric_limits<double>::max()/4;
    require(magnitude<limit,"output magnitude too large");for(uint32_t j=0;j<p;++j){double a=std::abs(head[size_t(j)*c+k]);require(a<limit-magnitude,"output magnitude too large");magnitude+=a;}}
+#if defined(BP_PACKET) && defined(__AVX2__)
+  if(narrow){
+   const size_t padded=(size_t(p)+7)/8*8;packet_centers.resize(padded*d,0);
+   if(!uniform)packet_weights.resize(padded*d,0);
+   for(uint32_t j=0;j<p;++j)for(uint32_t f=0;f<d;++f){
+    size_t slot=(size_t(j/8)*d+f)*8+j%8;packet_centers[slot]=centers[size_t(j)*d+f];
+    if(!uniform)packet_weights[slot]=weights[size_t(j)*d+f];
+   }
+  }
+#endif
   high.resize(size_t(bound>>bits)+1);low.resize(size_t(mask)+1);
   for(size_t i=0;i<high.size();++i)high[i]=std::exp(-alpha*double(uint64_t(i)<<bits));
   for(size_t i=0;i<low.size();++i)low[i]=std::exp(-alpha*double(i));
@@ -78,7 +91,7 @@ struct Model {
   for(;f<d;++f){int delta=int(x[f])-s[f];sum+=uint64_t(delta*delta)*(uniform?1:w[f]);}
   return uniform?sum*units:sum;
  }
- void score(const uint8_t*raw,int mode,double*out,uint16_t*x)const{
+ void score_original(const uint8_t*raw,int mode,double*out,uint16_t*x)const{
   for(uint32_t f=0;f<d;++f)x[f]=uint16_t(raw[f]*quarter);
   std::fill(out,out+c,0.);
   for(uint32_t j=0;j<p;++j){uint64_t S=distance(x,j,mode==1);require(S<=bound,"invalid native signature");
@@ -90,7 +103,72 @@ struct Model {
   }
   for(uint32_t k=0;k<c;++k){out[k]+=bias[k];require(std::isfinite(out[k]),"nonfinite class score");}
  }
- uint64_t storage()const{return sizeof(*this)+2ull*(centers.capacity()+weights.capacity())+8ull*(head.capacity()+bias.capacity()+high.capacity()+low.capacity());}
+#if defined(BP_PACKET) && defined(__AVX2__)
+ void packet(const uint16_t*x,uint32_t first,uint32_t count,uint64_t*out)const{
+  if(narrow&&count==8){auto sum=_mm256_setzero_si256();
+   const uint16_t*cp=packet_centers.data()+size_t(first/8)*d*8;
+   const uint16_t*wp=uniform?nullptr:packet_weights.data()+size_t(first/8)*d*8;
+   for(uint32_t f=0;f<d;++f){
+    auto center=_mm256_cvtepu16_epi32(_mm_loadu_si128(reinterpret_cast<const __m128i*>(cp+f*8)));
+    auto delta=_mm256_sub_epi32(_mm256_set1_epi32(x[f]),center);auto term=_mm256_mullo_epi32(delta,delta);
+    if(!uniform)term=_mm256_mullo_epi32(term,_mm256_cvtepu16_epi32(_mm_loadu_si128(reinterpret_cast<const __m128i*>(wp+f*8))));
+    sum=_mm256_add_epi32(sum,term);
+   }
+   uint32_t values[8];_mm256_storeu_si256(reinterpret_cast<__m256i*>(values),sum);
+   for(uint32_t i=0;i<8;++i)out[i]=uint64_t(values[i])*(uniform?units:1);
+  }else for(uint32_t i=0;i<count;++i)out[i]=distance(x,first+i,false);
+ }
+ double value(uint64_t S,int mode)const{
+  require(S<=bound,"packet signature outside bound");
+  return mode==2?std::exp(-alpha*double(S)):high[S>>bits]*low[S&mask];
+ }
+ void score_packet(const uint8_t*raw,int mode,double*out,uint16_t*x)const{
+  for(uint32_t f=0;f<d;++f)x[f]=uint16_t(raw[f]*quarter);std::fill(out,out+c,0.);
+  for(uint32_t first=0;first<p;first+=8){uint32_t count=std::min(8u,p-first);uint64_t S[8];packet(x,first,count,S);
+   for(uint32_t i=0;i<count;++i){double v=value(S[i],mode);uint32_t k=0;auto kernel=_mm256_set1_pd(v);
+    for(;k+4<=c;k+=4)_mm256_storeu_pd(out+k,_mm256_add_pd(_mm256_loadu_pd(out+k),_mm256_mul_pd(kernel,_mm256_loadu_pd(head.data()+size_t(first+i)*c+k))));
+    for(;k<c;++k)out[k]+=v*head[size_t(first+i)*c+k];
+   }
+  }
+  for(uint32_t k=0;k<c;++k){out[k]+=bias[k];require(std::isfinite(out[k]),"nonfinite class score");}
+ }
+#if defined(BP_REGISTERS)
+ template<int C>void score_registers(const uint8_t*raw,int mode,double*out,uint16_t*x)const{
+  constexpr int V=C/4,T=C%4;__m256d sums[V];double tails[T?T:1]={};
+  for(int k=0;k<V;++k)sums[k]=_mm256_setzero_pd();
+  for(uint32_t f=0;f<d;++f)x[f]=uint16_t(raw[f]*quarter);
+  for(uint32_t first=0;first<p;first+=8){uint32_t count=std::min(8u,p-first);uint64_t S[8];packet(x,first,count,S);
+   for(uint32_t i=0;i<count;++i){double v=value(S[i],mode);auto kernel=_mm256_set1_pd(v);const double*h=head.data()+size_t(first+i)*C;
+#pragma GCC unroll 8
+    for(int k=0;k<V;++k)sums[k]=_mm256_add_pd(sums[k],_mm256_mul_pd(kernel,_mm256_loadu_pd(h+4*k)));
+    for(int k=0;k<T;++k)tails[k]+=v*h[4*V+k];
+   }
+  }
+  for(int k=0;k<V;++k)_mm256_storeu_pd(out+4*k,sums[k]);for(int k=0;k<T;++k)out[4*V+k]=tails[k];
+  for(int k=0;k<C;++k){out[k]+=bias[k];require(std::isfinite(out[k]),"nonfinite class score");}
+ }
+#endif
+#endif
+ void score(const uint8_t*raw,int mode,double*out,uint16_t*x)const{
+#if defined(BP_PACKET) && defined(__AVX2__)
+  if(mode!=1){
+#if defined(BP_REGISTERS)
+   if(c==6){score_registers<6>(raw,mode,out,x);return;}
+   if(c==10){score_registers<10>(raw,mode,out,x);return;}
+   if(c==26){score_registers<26>(raw,mode,out,x);return;}
+#endif
+   score_packet(raw,mode,out,x);return;
+  }
+#endif
+  score_original(raw,mode,out,x);
+ }
+ uint64_t storage()const{
+  uint64_t n=sizeof(*this)+2ull*(centers.capacity()+weights.capacity())+8ull*(head.capacity()+bias.capacity()+high.capacity()+low.capacity());
+#if defined(BP_PACKET) && defined(__AVX2__)
+  n+=2ull*(packet_centers.capacity()+packet_weights.capacity());
+#endif
+  return n;
+ }
 };
 }
 extern "C" {

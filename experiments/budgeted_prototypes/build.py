@@ -2,12 +2,15 @@
 from pathlib import Path
 import hashlib,json,subprocess,time,platform,sys
 
-def build(out,target='portable',sanitize=False):
+def build(out,target='portable',sanitize=False,layout='original'):
     if target not in ('portable','avx2'):raise ValueError('bad target')
+    if layout not in ('original','packet','register'):raise ValueError('bad layout')
     if sys.platform!='linux' or platform.machine().lower() not in ('x86_64','amd64'):raise ValueError('tested scope Linux x86-64')
     out=Path(out).resolve();out.mkdir(parents=True,exist_ok=False);src=Path(__file__).with_name('runtime.cpp');lib=out/'prototypes.so'
     cmd=['g++','-std=c++17','-O3','-fno-fast-math','-ffp-contract=off','-shared','-fPIC']
     if target=='avx2':cmd+=['-mavx2']
+    if layout in ('packet','register'):cmd+=['-DBP_PACKET']
+    if layout=='register':cmd+=['-DBP_REGISTERS']
     if sanitize:cmd+=['-O1','-g','-fsanitize=undefined','-fno-sanitize-recover=all']
     cmd += [str(src),'-o',str(lib)];start=time.perf_counter();receipt={'command':cmd,'source_sha256':hashlib.sha256(src.read_bytes()).hexdigest()}
     try:
@@ -20,4 +23,4 @@ def build(out,target='portable',sanitize=False):
     return lib
 if __name__=='__main__':
     import argparse
-    p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);p.add_argument('--target',default='portable');p.add_argument('--ubsan',action='store_true');a=p.parse_args();print(build(a.out,a.target,a.ubsan))
+    p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);p.add_argument('--target',default='portable');p.add_argument('--ubsan',action='store_true');p.add_argument('--layout',default='original');a=p.parse_args();print(build(a.out,a.target,a.ubsan,a.layout))
