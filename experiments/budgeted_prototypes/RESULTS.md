@@ -1,77 +1,75 @@
-# Budgeted discriminative prototypes — September 29, 2026
+# Budgeted learned prototypes — completed result, September 29, 2026
 
 ## Decision
 
-The original two-task learning gate FAILS. The local-prototype model improves
-Letter by1.4 percentage points over the selected fixed-prototype control at roughly
-tied cost, but gains only0.4002 on Pendigits, loses0.05 on Satellite and gains0.1113
-on the newly opened optical-digit test. Do not turn a one-task success into a
-transferable learner or a default replacement.
+The original TWO-TASK LEARNING GATE FAILS. Letter improves by1.4 percentage points
+against the selected fixed-prototype control at roughly tied cost, but Pendigits
+improves only0.4002, Satellite loses0.05, and the newly opened optical test improves
+only0.1113. The threshold remains at least0.5 points on two tasks with at most1.25x
+native latency. A separate same-function execution-layout gate passes; it cannot
+convert the learning failure into success. No model or runtime becomes the default.
 
-There is a narrower useful deployment result. On Satellite,256 local prototypes
-score1817/2000 (90.85%) versus1790/2000 (89.5%) for the selected MLP, with2.315 versus
-4.065us/row using the stronger ordinary FP32 OpenBLAS MLP control. Serialized model
-sizes are49,280 versus307,588 bytes. However, prepared native storage is290,552
-versus307,840 bytes, so the6.24x FILE-size difference is NOT a6.24x RAM reduction.
-All tasks, stronger competitors, failed learning gates and extra table costs remain.
+A narrower deployment result is useful: Satellite's256 local prototypes obtain
+1817/2000 (90.85%) versus1790/2000 (89.5%) for the selected MLP, at2.315 versus4.065
+microseconds per row against the stronger ordinary FP32 OpenBLAS implementation.
+The model files are49,280 versus307,588 bytes. Prepared native state is290,552
+versus307,840 bytes: the6.24x FILE-size ratio is NOT a6.24x RAM reduction.
+Other tasks retain unfavorable comparisons, including clear optical transfer failure.
 
-## What changes and what is established
+## Architecture and limits
 
-This changes model family, not only execution of an old SVM. Class-balanced k-means
-initializes a fixed prototype budget. Fitting labels train a multiclass head and,
-depending on the arm, prototype locations and prototype-local diagonal metrics.
-Centers use quarter-grid codes; positive integer metric weights retain fixed mass.
-Training uses a straight-through float32 quantized-geometry proxy. After integer
-geometry is frozen, the head is refitted on the exact two-table product features.
-There is no teacher, pretrained network, distillation, label lookup or ensemble.
+This is a newly trained fixed-budget classifier, not faster execution of an old
+SVM. Fitting-only class-balanced k-means initializes a fixed number of prototypes.
+Labels then train a multiclass head and, in different arms, prototype locations
+and prototype-local diagonal metrics. Centers use quarter-grid codes; positive
+integer feature weights have mass4*d per prototype. Training uses a float32
+straight-through quantized-geometry proxy, not exact table derivatives. The final
+integer geometry is frozen before a float64 head refit on exact product-table
+features. There is no teacher, pretrained network, distillation or ensemble.
 
-A dedicated SPPRO001 format and framework-free C++ executor preserve the new
-function's ordered scores. The prototype count does not grow automatically with
-more training examples. The multiclass head evaluates every prototype, rather than
-retaining thousands of support vectors and changing one global metric. This is
-related to RBF networks and ProtoNN, not an invented general prototype-learning idea.
-A direct competitive ProtoNN implementation and INT8 MLP are NOT measured here.
-See CONTRACT.md for arithmetic, integer caps, ownership and unsupported platforms.
+The SPPRO001 executor computes bounded integer distances and a product of two
+exponential-table values. That product defines this model's numerical function;
+it is NOT bitwise equality to a single direct exp or the prior SVM. The multiclass
+head visits prototypes in original order. See CONTRACT.md for integer/float bounds,
+validation and owning-resource leases. ProtoNN and RBF networks are established
+prior art. No direct ProtoNN implementation, INT8 MLP or every compact architecture
+is measured; no first-invention or general-intelligence claim is made.
 
-## Training-only selection and official-test boundaries
+## Selection and data exposure
 
-Six pilot panels retain60 fits, including rejected affine heads, adaptive widths,
-normalized responses, finer quantization and late-iterate averaging. These did not
-use new official-test predictions. The locked full matrix has248 fits: three
-prototype families, SVC and scaled MLP over four tasks and two duplicate-grouped
-training splits. Fixed/centers/local each initially receive P256/512/1024 and two
-gamma values. Head penalty, epochs and quantization are common across these arms.
+Sixty training-only pilot fits retain unsuccessful affine heads, variable widths,
+normalization, finer quantization and averaging. Initial complete selection has248
+fits over fixed/centers/local prototypes, SVC and properly scaled MLP across four
+tasks and two duplicate-grouped training splits. Prototype choices are256/512/1024
+centers and two gamma values with common training settings. SVC has a nine-choice
+C/gamma grid; the MLP selects128x128/256x256 and alpha1e-5/1e-3 after fit-only
+StandardScaler, with early stopping inside the fitting role. Linear C10 is fixed.
 
-Optical fixed prototypes reached a lower-gamma boundary, exposing an unfair width
-range. A protocol committed before test opening added36 equal-opportunity cells:
-gamma0.125/0.5 for all optical families/budgets/splits. The original248 cells remain.
-The stronger fixed optical control then achieved99.08% validation, slightly above
-local98.95%; the initial apparent four-point advantage was not promoted. This is
-284 total selection fits, not a test-driven correction. Final source/model locks
-precede parsing the optical official test and all new-model official predictions.
+The optical fixed control reached the lowest gamma, exposing a width-range
+handicap. Before opening any official test, an explicit amendment added36 cells:
+gamma0.125/0.5 for every optical prototype family, budget and split. The complete
+248+36=284 cells remain. The corrected fixed control achieved99.08% validation,
+slightly above local98.95%, so the initial apparent four-point gain was not used.
 
-The MLP is not an untuned Python strawman. Fit-only StandardScaler plus128x128 or
-256x256 hidden layers and alpha1e-5/1e-3 are selected using the same outer splits.
-Its own early-stopping validation is inside the training role. SVC receives a
-nine-choice C/gamma grid; linear C10 is a fixed lower bound. Different families have
-different search/compute budgets and selected parameter counts. Do not claim equal
-training cost or fixed equal final capacity merely because data partitions match.
+Each selected family is refitted once on all original training rows:24 trained
+classifiers, not28. Four later FP32 files mechanically cast the same selected MLP
+and scaler without training. Search opportunities and actual CPU cost differ across
+model families. Final capacity is separately selected: comparisons are not all
+same-parameter-budget comparisons. Letter's three prototype families do share the
+same final1024 centers/gamma8; Pendigits and Satellite local models use256.
 
-Twenty-four classifiers (six per task) are refitted once on all original training
-rows. Four later FP32 MLP files are mechanical conversions, NOT four newly trained
-models. Every selected model and control is hashed before official evaluation.
-
-Letter, Pendigits and Satellite are previously consumed research benchmarks.
-OptDigits is newly acquired/test-opened in this continuation, not a new dataset
-in the literature. UCI describes30 training contributors and13 different test
-contributors, but the feature files do not contain per-row writer IDs. No raw-image
-feature extraction or real deployment is tested. Letter's380 exact development/test
-feature overlaps remain, with a separate nonoverlap report. Exact-feature grouping
-inside selection cannot establish writer/font/geographic independence.
+All24 final artifacts are locked before their official predictions and before the
+OptDigits test is parsed. Letter, Pendigits and Satellite were already exposed by
+earlier SPECTRA research. OptDigits is new to this continuation, not new in the
+literature; its source describes30 training contributors and13 different test
+contributors, but no per-row writer IDs are available. No raw-image or sensor
+feature-extraction cost, live deployment or broad writer/geographic independence
+is established. Letter's380 exact train/test feature overlaps and the nonoverlap
+stratum are retained. No model was retuned after these test predictions.
 
 ## All official correct counts
 
-| Model | Letter /4000 | Pendigits /3498 | Satellite /2000 | OptDigits /1797 |
+| Classifier | Letter /4000 | Pendigits /3498 | Satellite /2000 | OptDigits /1797 |
 |---|---:|---:|---:|---:|
 | Fixed prototypes |3832|3415|1818|1749|
 | Moving centers |3858|3434|1820|1756|
@@ -80,152 +78,131 @@ inside selection cannot establish writer/font/geographic independence.
 | Selected scaled MLP |3856|3384|1790|1737|
 | Fixed linear |2787|3145|1632|1701|
 
-The FP32 MLP retains every original MLP prediction on all11,295 rows. Its score
-arithmetic is not bitwise equivalent to float64. Local-versus-fixed Letter fixes85
-errors and introduces29:168 errors become112,33.3% fewer. Only Letter reaches the
-predeclared0.5-point quality condition. Local versus moving centers is worse on
-Pendigits, Satellite and OptDigits. All descriptive paired statistics are retained;
-no multiple-comparison-adjusted universal or writer-independent significance claim.
+The FP32 conversion preserves every selected MLP prediction on11,295 rows, though
+scores are not bitwise float64. Letter local versus fixed fixes85 errors and creates
+29:168 errors become112,33.3% fewer. Only Letter passes the task-specific learning
+condition. Local versus moving centers is worse on the other three tasks. Paired
+statistics are descriptive, not multiple-testing-adjusted or writer-cluster claims.
 
-Prior best exposed results are not erased: learned/interaction Letter3928/3929
-exceeds this local model3888; older Pendigits3444 exceeds3429; prior Satellite1836
-exceeds1817. The new model is not a best-ever accuracy improvement. Its value must
-come from a useful quality/resource operating point. Current Satellite SVC1814 is
-three below local1817, too small to claim established accuracy superiority and not
-the strongest historical classifier. No unseen competitor is declared defeated.
+Earlier best exposed models remain stronger in accuracy: Letter3928/3929 versus
+new local3888, Pendigits3444 versus3429, Satellite1836 versus1817. The three-example
+advantage over the current Satellite SVC1814 is not established accuracy superiority,
+and that SVC is not the strongest historical model. No unseen competitor is defeated.
 
-## Three complete native comparisons
+## Complete native comparison, strengthened twice
 
-Every warm job starts with original uint8 feature buffers and ends with new labels.
-Input checks, normalization/scaling, all kernels/layers, packing and allocation are
-charged. Loading, table preparation, compilation, fitting and original image/sensor
-feature extraction are excluded. One pinned AMD EPYC9V74 core, Python3.13.5,
-GCC14.2, strict noncontracted prototype arithmetic; OpenBLAS is fixed to one thread.
-These are whole-dataset jobs, not individual-service latency or production tails.
+Warm jobs start with original uint8 feature codes and end with fresh labels.
+Validation, normalization/scaling, kernels/layers, packing and allocation are timed.
+Fitting, loading, compilation, table preparation and original feature extraction
+are excluded. One pinned AMD EPYC9V74 core, CPython3.13.5 and GCC14.2; the prototype
+uses strict noncontracted arithmetic, and each OpenBLAS control uses one thread.
+Costs derive from whole-dataset jobs, not individual-service latency distributions.
 
-Run1 retains1176 cells and ordered native MLP/original SVC controls. Review then
-added batch OpenBLAS float64 MLP and the prior finite/adaptive SVM engine on the
-SAME selected models: run2 retains1344 cells. Review then added mechanical FP32
-MLP weights and SGEMM, leaving all classifiers and prototype implementations fixed:
-run3 retains1428 cells. Each full matrix includes every prior arm. No favorable
-cells are pooled, selectively retimed or substituted. Final claims use run3.
+Run1 has1176 cells with ordinary native MLP and SVC. Run2 has1344 cells, adding
+batch OpenBLAS float64 MLP and the prior finite/adaptive engine for the SAME SVC.
+Run3 has1428 cells, adding ordinary FP32 MLP/SGEMM. Every previous arm remains in
+each complete rerun. Models and candidate arithmetic do not change. No favorable
+cells are pooled, selectively rerun or substituted. Final claims use run3 only.
 
-FP32 conversion was locked before checking its outputs. An independent float32
-forward pass and all three batch scopes preserve every original MLP label. The
-same original fitted scaler, layers and class order remain, with normal roundoff.
-The shared OpenBLAS binary/config and build receipts are recorded. This is not an
-INT8 or quantization-aware trained MLP, and does not cover every efficient neural
-implementation. The finite SVC baseline retains its previously documented conditional
-numerical bounds. Every timed output matches its own frozen model.
+FP32 conversion is locked before its output checks and matches a separate float32
+forward calculation's labels. BLAS reduction order may differ from ordered loops.
+The old finite/adaptive SVC keeps its earlier conditional numerical assumptions.
+No candidate borrows another model's expected labels. All model-specific timed
+outputs match. External OpenBLAS binary/config/hash and all source snapshots remain.
 
-### Final batch32 costs in microseconds per row
+### Final batch32 cost: microseconds per row
 
-| Task | Fixed prototypes | Centers | Local | Same selected SVC, finite | FP64 BLAS MLP | FP32 BLAS MLP |
+| Task | Fixed | Centers | Local | Same SVC, finite | FP64 BLAS MLP | FP32 BLAS MLP |
 |---|---:|---:|---:|---:|---:|---:|
 |Letter|7.6918|8.1829|7.6867|21.7546|5.4109|4.0607|
 |Pendigits|5.4240|2.9240|1.6142|2.1541|1.7403|1.3849|
 |Satellite|7.9743|4.0695|2.3148|7.8239|5.4197|4.0653|
 |OptDigits|9.4628|11.3994|11.0519|3.9088|5.6336|4.2618|
 
-Satellite local is1.756x faster than FP32 MLP with27 more correct labels. Pendigits
-local is16.6% slower than FP32 MLP but45 more correct; it is faster/smaller than the
+Satellite local is1.756x faster than FP32 MLP with27 more correct predictions.
+Pendigits local is16.6% slower than FP32 MLP but45 more correct; it is faster than
 current SVC at six fewer correct. Letter is1.89x slower than FP32 MLP for32 more
-correct labels and below SVC quality. Optical local loses clearly to the accelerated
-SVC in both speed and accuracy. Do not present the four tasks as universal domination.
-Final run contains4,032,315 repeated prediction checks over11,295 underlying rows.
+correct, and less accurate than SVC. Optical local loses to accelerated SVC in both
+speed and accuracy. Final timing checks4,032,315 repeated predictions over11,295
+underlying rows; repetitions do not enlarge the independent evaluation set.
 
-## Same-function layout ablation
+## Exact-order layout ablation
 
-Original execution vectorized input coordinates. The packet layout transposes
-model geometry to evaluate eight independent prototypes; register accumulation
-keeps6/10/26 output classes live while preserving each class's prototype order.
-All twelve prototype full-score arrays match original/packet/register bit-for-bit.
-This is not a learning gain or a new invention of SIMD. The actual old source and
-binary remain the control, not a artificially slowed reconstructed baseline.
+The original implementation vectorizes coordinates. Packet layout transposes
+model geometry to process eight independent prototypes, and register accumulation
+keeps6/10/26 class scores live while preserving original prototype order. Other
+classes or wide signatures retain generic/scalar paths. Every full score across
+12 prototype models matches original/packet/register bit-for-bit. SIMD itself is
+not new research. The actual original source and binary remain the baseline.
 
-Final equal-model register/original cost ratio is0.68788045:31.21% lower cost, about
-1.45x speed. All12 model medians improve; the original >=1.10x/no>1.10-regression
-layout gate passes. That separate engineering gate cannot convert the FAILED
-two-task learning gate into success. Scalar/direct-exp diagnostics and all packet
-results remain. Direct exp happened to change no retained labels, but it computes
-a different rounding function and is not guaranteed equivalent on other inputs.
+Final register/original equal-model cost ratio is0.68788045:31.21% lower cost or
+about1.45x speed. All12 model medians improve. The separate >=1.10x/no>1.10-regression
+layout gate passes. Scalar, direct-exp and packet diagnostics remain. Direct exp
+changed no retained label but is a different rounding function, not guaranteed
+identical on other inputs. Additional packed model storage is explicitly counted.
 
-## Storage, preparation and process memory
+## Actual file and prepared-state inventories
 
-| Task | Local model bytes | SVC bytes | FP32 MLP bytes | Local prepared bytes | FP32 MLP prepared bytes |
+The byte counts below come from the frozen deployed files and runtime receipts,
+not from a size estimate or labels-excluded coefficient calculation.
+
+| Task | Local file bytes | SVC file bytes | FP32 MLP file bytes | Local prepared bytes | FP32 MLP prepared bytes |
 |---|---:|---:|---:|---:|---:|
-|Letter|278860|2595456|307564|352232|307760|
+|Letter|278872|2594680|307564|352232|307760|
 |Pendigits|37032|143272|80124|106360|80368|
-|Satellite|49280|407208|307588|290552|307840|
-|OptDigits|344232|548888|340604|627032|340848|
+|Satellite|49280|407256|307588|290552|307840|
+|OptDigits|344232|548848|340604|627032|340848|
 
-Counts include all prototype integer coordinates/local weights, head coefficients,
-biases and metadata; prepared counts add tables and transposed banks. Model bytes
-are not process RSS or total deployment size. The Satellite6.24x smaller file gives
-only about5.6% smaller counted prepared native state. Optical's local model is NOT
-smaller than the FP32 MLP even on disk, and its prepared state is substantially larger.
+The earlier draft's Letter/SVC file-byte entries were transcribed incorrectly and
+are corrected here; frozen files, model hashes, measurements and claims do not
+change. Prepared counts add tables and duplicate/transposed banks; they are not
+process RSS. Optical local is larger than FP32 MLP even on disk. Satellite's6.24x
+file advantage corresponds to only about5.6% less counted prepared native state.
 
-Seventy-two fresh processes cover all24 original deployments; twelve more cover
-FP32 MLP. Each reads its own Linux VmHWM, creates the full tables/model, validates
-one prediction and imports no numerical Python framework. Whole-process ranges:
+Seventy-two fresh processes cover24 original deployments; twelve more cover FP32
+MLP. Each builds the full prepared model/table, validates one row and reads its own
+Linux VmHWM without importing numerical Python frameworks. Filesystem caches may
+be warm. Three samples are not worst-case batch/service or cold-filesystem evidence.
 
-| Task | Local peak KiB | FP32 MLP peak KiB | Local median setup ms | FP32 MLP median setup ms |
+| Task | Local peak KiB | FP32 MLP peak KiB | Local setup median ms | FP32 setup median ms |
 |---|---:|---:|---:|---:|
 |Letter|17344-17348|18416-18424|4.968|6.883|
 |Pendigits|16592-16596|17948-17984|2.572|4.751|
 |Satellite|16800|18416-18580|2.980|6.499|
 |OptDigits|17788-17792|18548-18676|6.447|7.044|
 
-Library/interpreter mappings are part of process totals. Filesystem caches may be
-warm. Three samples per deployment do not prove universal memory/initialization
-advantages, and one-row memory is not a maximum batch-memory test. External BLAS
-is not a hidden dependency of prototype inference; it is a stronger neural baseline.
-
-## Training cost and validation
+## Cost, validation and preservation
 
 The60 pilots,284 selection fits and24 final fits total3891.872 recorded CPU seconds
-(about64.86 CPU minutes). A separate training-only Nyström diagnostic used55.323
-CPU seconds; imports, acquisition, compiler, tests, audits, measurements and packaging
-are additional. Up to three independent training workers ran concurrently, each
-with one numerical thread. No GPU was used. The prototype training uses bounded
-N-by-P features, not an N-by-N SVM Gram matrix; this is not linear-memory complexity
-for the entire comparison, which still includes ordinary SVC training.
+(64.86 CPU minutes); a separate training-only Nyström diagnostic used55.323 seconds.
+Imports, acquisition, compilation, tests, audits, timing and packaging are additional.
+Up to three independent workers ran concurrently, one numerical thread each. No GPU.
+Prototype fitting uses N-by-P features; the comparison's ordinary SVC still has its
+own training costs. Six of twelve final exact-feature heads hit the150-iteration
+limit; no convergence or globally optimal quantized geometry is claimed.
 
-Six of twelve final exact-feature head fits reached the150-iteration cap. Their
-recorded lack of convergence remains; no test-driven extension or retry is used.
-Fixed epoch training and approximate straight-through gradients do not establish
-optimal prototype locations. Failed pilot variants and all model files remain.
+All68 unique focused tests pass locally for original/packet/register, portable and
+AVX2 UBSan builds. The independent scalar observer matches506,850 prototype class
+scores across12 models. All67,770 decisions over24 selected models match their own
+references. These counts overlap across builds and observations, not independent
+samples. No historical full suite, Windows/ARM, ASan, free-threaded runtime, external
+researcher reproduction, production use or general reasoning capability is claimed.
 
-All68 unique focused tests pass locally for original/packet/register, portable,
-and AVX2 UBSan paths; repeated builds are not extra unique tests. The independent
-scalar observer matches506,850 original prototype class scores bit-for-bit across
-12 models. All67,770 model/input decisions across24 selected models preserve their
-own reference outputs. Four converted MLP deployments add no new training examples.
-The final standard-library auditor verifies284 selection cells,24 model locks,
-three complete timing grids, independent FP32 byte conversion and the failed gate.
-Sixteen deliberately corrupted disposable evidence copies are rejected by that
-final auditor. It does not authenticate clocks, unrecorded research behavior,
-statistical independence or a malicious replacement of the entire evidence set.
+The final standard-library auditor verifies all284 selection cells,24 artifact
+locks, three timing matrices, official optical rows, labels/confusions, mechanical
+FP32 bytes and failed gate. Sixteen corrupted disposable copies are rejected.
+Hashes do not authenticate clocks, researcher behavior, independence or a hostile
+wholesale replacement. Exact-final-head CI and extracted-kit checks are recorded
+separately, not inferred from earlier core success.
 
-Dedicated GitHub CI tests the prototype contracts. Exact-final-head acceptance is
-recorded separately; older core CI is not relabelled as final validation. No manual
-full historical SPECTRA suite, Windows/ARM, ASan, free-threaded runtime, external
-researcher reproduction or live application is claimed. Source changes are additive
-on the actual748-file interaction branch. Other previously delivered unmerged
-research versions remain separate; this source tree is not their silent replacement.
-
-## Interpretation
-
-The new architecture establishes a fixed inference budget and an actually trained
-local classifier with a useful observed Satellite operating point. It does not
-establish a broadly better learner, general reasoning, first invention or superiority
-to all compact baselines. The fresh-to-this-continuation optical test is a negative
-transfer result. Keep every model experimental and preserve earlier stronger SVMs.
+All changes are additive on the actual748-file interaction branch. Other historical
+or unmerged research deliveries remain separate. No default, release, model or
+prior negative result is replaced. The useful conclusion is a bounded learned
+architecture with a specific Satellite tradeoff, not a broadly superior learner.
 
 Primary references:
 - Gupta et al., ProtoNN, ICML2017: https://proceedings.mlr.press/v70/gupta17a.html
-- Alpaydin and Kaynak, UCI OptDigits1998, DOI10.24432/C50P49:
+- Alpaydin and Kaynak, OptDigits1998, DOI10.24432/C50P49:
   https://archive.ics.uci.edu/dataset/80/optical+recognition+of+handwritten+digits
-- Other official datasets: UCI Letter59, Pendigits81, Statlog Satellite146.
-Dataset attribution/license is retained separately from SPECTRA's implementation
-license. No upstream-maintainer or third-party publication was made by this work.
+- UCI Letter59, Pendigits81, Statlog Satellite146; dataset attribution and CC BY4.0
+  terms are separate from implementation licensing. No upstream submission occurred.
