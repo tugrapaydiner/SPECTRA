@@ -1,0 +1,62 @@
+name: total-tree-execution
+on:
+  push:
+    branches: [research/total-tree-execution]
+  pull_request:
+    branches: [research/tree-native-replay]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pytest==9.0.2
+      - name: Preserve exact tested source and ancestry
+        shell: python
+        run: |
+          import pathlib,subprocess,hashlib,json
+          out=pathlib.Path('.total-ci');out.mkdir()
+          base='20e36d4851ac37d33748c89ffbf496b8cd8358b5'
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          tree=subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip()
+          for name,ref in [('source','HEAD'),('base',base)]:
+              (out/(name+'.tar.gz')).write_bytes(subprocess.check_output(['git','archive','--format=tar.gz',ref]))
+          (out/'base.commit').write_bytes(subprocess.check_output(['git','cat-file','commit',base]))
+          (out/'update.patch').write_bytes(subprocess.check_output(['git','diff','--binary',base,'HEAD']))
+          subprocess.run(['git','bundle','create',str(out/'review.bundle'),'HEAD','^'+base],check=True)
+          (out/'source.json').write_text(json.dumps({'head':head,'tree':tree,'base':base,'files':{p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('experiments/tree_total').glob('*') if p.is_file()}},indent=2))
+      - name: Portable exact-source contracts
+        run: python -m pytest experiments/tree_total/test_total.py --import-mode=importlib --confcutdir=experiments/tree_total -q --junitxml=.total-ci/portable.xml
+      - name: Compile explicit AVX2 sanitizer variant
+        run: python -m experiments.tree_total.build --out .total-ci/ubsan --target avx2 --ubsan
+      - name: Execute the same contracts under UBSan
+        env:
+          TOTAL_LIBRARY: .total-ci/ubsan/total.so
+        run: python -m pytest experiments/tree_total/test_total.py --import-mode=importlib --confcutdir=experiments/tree_total -q --junitxml=.total-ci/ubsan.xml
+      - name: Retain evidence identities
+        if: always()
+        shell: python
+        run: |
+          import pathlib,hashlib,json
+          out=pathlib.Path('.total-ci');out.mkdir(exist_ok=True)
+          (out/'SHA256.json').write_text(json.dumps({p.relative_to(out).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in out.rglob('*') if p.is_file() and p.name!='SHA256.json'},indent=2))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: total-tree-${{ github.sha }}
+          path: .total-ci/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error
