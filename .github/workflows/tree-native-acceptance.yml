@@ -62,14 +62,14 @@ jobs:
       - name: Portable native, fallback, audit and stream contracts
         env:
           TREE_UPSTREAM: ${{ github.workspace }}/.tree-native-ci/official
-        run: python -m pytest experiments/certified_trees/test_native.py experiments/certified_trees/test_audit.py experiments/certified_trees/test_deployment.py --import-mode=importlib --confcutdir=experiments/certified_trees -q --junitxml=.tree-native-ci/portable.xml
+        run: python -m pytest experiments/certified_trees/test_native.py experiments/certified_trees/test_audit.py experiments/certified_trees/test_deployment.py experiments/certified_trees/test_bundle_output.py --import-mode=importlib --confcutdir=experiments/certified_trees -q --junitxml=.tree-native-ci/portable.xml
       - name: Instrument optimized native implementation
         run: python -m experiments.certified_trees.build --out .tree-native-ci/ubsan --target avx2 --layout register --ubsan
       - name: Same contracts on optimized AVX2 under UBSan
         env:
           TREE_LIBRARY: ${{ github.workspace }}/.tree-native-ci/ubsan/trees.so
           TREE_UPSTREAM: ${{ github.workspace }}/.tree-native-ci/official
-        run: python -m pytest experiments/certified_trees/test_native.py experiments/certified_trees/test_audit.py experiments/certified_trees/test_deployment.py --import-mode=importlib --confcutdir=experiments/certified_trees -q --junitxml=.tree-native-ci/ubsan.xml
+        run: python -m pytest experiments/certified_trees/test_native.py experiments/certified_trees/test_audit.py experiments/certified_trees/test_deployment.py experiments/certified_trees/test_bundle_output.py --import-mode=importlib --confcutdir=experiments/certified_trees -q --junitxml=.tree-native-ci/ubsan.xml
       - name: Verify source and actual test inventories
         shell: python
         run: |
@@ -83,8 +83,8 @@ jobs:
               root=ET.parse(out/(name+'.xml')).getroot()
               assert not any(root.findall('.//'+bad) for bad in ('failure','error','skipped'))
               cases.append(sorted((c.get('classname'),c.get('name')) for c in root.findall('.//testcase')))
-          assert cases[0]==cases[1] and len(cases[0])==101
-          (out/'acceptance.json').write_text(json.dumps({'status':'PASS','head':record['head'],'tree':record['tree'],'unique_pytest_cases':101,'reference_cases':13,'scope':'same tests on portable and AVX2 UBSan; not a benchmark or generalization result'},indent=2))
+          assert cases[0]==cases[1] and len(cases[0])==131
+          (out/'acceptance.json').write_text(json.dumps({'status':'PASS','head':record['head'],'tree':record['tree'],'unique_pytest_cases':131,'reference_cases':13,'scope':'same tests on portable and AVX2 UBSan; not a benchmark or generalization result'},indent=2))
       - name: Seal retained receipts, not dependency libraries
         if: always()
         shell: python
