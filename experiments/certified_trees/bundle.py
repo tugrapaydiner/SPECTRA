@@ -17,6 +17,7 @@ from typing import Any
 from .packed import verify, metadata, MAX_BYTES
 from .reference import certificate_oracle as oracle
 from .selftest import verify_manifest
+from .session import VerifiedCompact, TreeSession
 
 TASKS = ('letter', 'pendigits', 'satellite', 'optdigits')
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,6 +25,8 @@ RUNTIME_FILES = (
     'spectra/__init__.py', 'spectra/svm_lifetime.py',
     'experiments/certified_trees/session.py',
     'experiments/certified_trees/packed.py',
+    'experiments/certified_trees/dyadic.py',
+    'experiments/certified_trees/manifest.py',
     'experiments/certified_trees/reference/certificate_oracle.py',
     'experiments/certified_trees/reference/test_oracle.py',
     'experiments/certified_trees/selftest.py',
@@ -141,15 +144,19 @@ def make_sdk(models: Path, compiled: Path, evaluation: Path, replay: Path,
                 copy(models / task / name, f'models/{task}/{name}')
             for name in ('input.u8', 'indices.i32'):
                 copy(evaluation / task / name, f'models/{task}/{name}')
+            binding_record = {**binding, 'json_sha256': binding['source_sha256'],
+                              'classes': binding['labels']}
+            (out/'models'/task/'source_binding.json').write_bytes(oracle.canonical(binding_record))
             n, d = domain['rows'], domain['features']
             raw = (evaluation / task / 'input.u8').read_bytes()
             indices = (evaluation / task / 'indices.i32').read_bytes()
             if len(raw) != n*d or len(indices) != 4*n:
                 raise ValueError('reference input/output size differs')
             entry = {k: domain[k] for k in ('rows', 'features', 'maximum', 'classes')}
+            proofs = {}
             for bits in (8, 16):
                 data = read_model(compiled / f'{task}-{bits}.sct')
-                verify(read_model(source), data)
+                proofs[bits] = VerifiedCompact(read_model(source), data)
                 copy(compiled / f'{task}-{bits}.sct', f'models/{task}/model-{bits}.sct')
                 status_path = replay / task / f'{bits}-tiled-0.indices'
                 statuses = status_path.read_bytes()
@@ -160,6 +167,11 @@ def make_sdk(models: Path, compiled: Path, evaluation: Path, replay: Path,
                 if any(s != -1 and s != e for s, e in zip(statuses, expected)):
                     raise ValueError('wrong certified replay')
                 entry[f'certified_{bits}'] = sum(s >= 0 for s in statuses)
+            with TreeSession(native['portable'], first=proofs[8], second=proofs[16]) as engine:
+                refined = engine.inspect_buffer(bytearray(raw), refine=True)
+                if any(s != -1 and s != e for s, e in zip(refined['indices'], expected)):
+                    raise ValueError('wrong refined certified replay')
+                entry['certified_refined'] = sum(s >= 0 for s in refined['indices'])
             sample = b''.join((json.dumps(list(raw[i*d:(i+1)*d]))+'\n').encode()
                               for i in range(min(n, 32)))
             (out / 'models' / task / 'sample.jsonl').write_bytes(sample)
@@ -205,7 +217,7 @@ def make_sdk(models: Path, compiled: Path, evaluation: Path, replay: Path,
             'and OptDigits 80 (Ethem Alpaydin, Cevdet Kaynak). Preserve their CC BY 4.0 '
             'attribution; see https://archive.ics.uci.edu/. CatBoost is Apache-2.0; '
             'its license is included. System Python/C++ runtimes are not redistributed.\n')
-        manifest = {'format':'spectra.tree.sdk.v1','models':entries,
+        manifest = {'format':'spectra.tree.sdk.v2','models':entries,
                     'source_pair_validation':'SOURCE_BINDING.json',
                     'files':{p.relative_to(out).as_posix():{'bytes':p.stat().st_size,'sha256':sha(p)}
                         for p in sorted(out.rglob('*')) if p.is_file()}}

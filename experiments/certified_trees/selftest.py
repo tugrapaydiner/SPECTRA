@@ -24,28 +24,14 @@ def sha(path):
 
 
 def verify_manifest(root):
-    manifest_path = root / 'SDK_MANIFEST.json'
-    if manifest_path.is_symlink() or manifest_path.stat().st_size > 1024 * 1024:
-        raise ValueError('invalid SDK manifest')
-    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-    if manifest.get('format') != 'spectra.tree.sdk.v1' or not manifest.get('files'):
-        raise ValueError('unknown or empty SDK inventory')
-    actual = set()
-    for p in root.rglob('*'):
-        if p.is_symlink():
-            raise ValueError('symlink in SDK')
-        if p.is_file() and p != manifest_path:
-            actual.add(p.relative_to(root).as_posix())
-    if actual != set(manifest['files']):
-        raise ValueError('missing or extra SDK file; place output outside SDK')
-    for name, record in manifest['files'].items():
-        path = Path(name)
-        if path.is_absolute() or '..' in path.parts or '\\' in name:
-            raise ValueError('unsafe SDK path')
-        p = root / path
-        if p.stat().st_size != record['bytes'] or sha(p) != record['sha256']:
-            raise ValueError('changed SDK member: ' + name)
-    return manifest
+    # Keep the public entry point; validation now checks source-derived labels
+    # and required asset roles in addition to exact file closure.
+    if __package__:
+        from .manifest import verify_manifest as verify
+    else:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        from experiments.certified_trees.manifest import verify_manifest as verify
+    return verify(Path(root))
 
 
 def run(root, target):
@@ -89,7 +75,8 @@ def run(root, target):
                 result = runner.inspect_buffer(raw, refine=refine, fallback=True)
                 if result['indices'] != expected or result['work']['unresolved_rows']:
                     raise AssertionError('full-coverage source disagreement')
-                if result['work']['official_rows'] != n - entry['certified_16']:
+                accepted = entry['certified_refined'] if refine else entry['certified_16']
+                if result['work']['official_rows'] != n - accepted:
                     raise AssertionError('fallback count changed')
                 model_result['full_coverage'][name] = result['work']
                 # Actual new-label result, not just a receipt parser.

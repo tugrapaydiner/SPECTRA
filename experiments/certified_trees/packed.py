@@ -1,7 +1,8 @@
 """Source-verified packed integer tree certificates; no model fitting.
 
-Bounds come from the preserved exact-rational oracle. Loading a checksum-valid
-binary is not a mathematical proof: `verify` reconstructs it from trusted source.
+Bounds implement the preserved exact-rational oracle policy. The exact dyadic
+backend avoids per-leaf Fraction objects. A checksum-valid binary is not a proof:
+`verify` reconstructs every byte from source; the reference backend stays available.
 """
 from __future__ import annotations
 import argparse, hashlib, json, struct, time, zlib
@@ -63,17 +64,25 @@ def metadata(raw):
             'bound_fraction_bits':fine,'flags':flags,'predicates':npred,'splits':nsplit,'leaf_rows':nleaf,
             'source_sha256':source.hex(),'oracle_sha256':compact.hex(),'packed_sha256':sha(raw),'bytes':len(raw)}
 
-def compile_bytes(source, maximum, *, features=None, bits=16, pairwise=False):
-    obj=oracle.compile_source(source,maximum,features=features,bits=bits,pairwise=pairwise)
+def compile_bytes(source, maximum, *, features=None, bits=16, pairwise=False, backend='dyadic'):
+    if type(backend) is not str or backend not in ('dyadic', 'reference'):
+        raise ValueError('unknown exact verification backend')
+    if backend == 'dyadic':
+        from .dyadic import compile_source
+    else:
+        compile_source = oracle.compile_source
+    obj = compile_source(source, maximum, features=features, bits=bits, pairwise=pairwise)
     return pack(obj), obj
 
-def verify(source, raw):
+def verify(source, raw, *, backend='dyadic'):
     meta=metadata(raw)
     if sha(source)!=meta['source_sha256']: raise ValueError('original source identity mismatch')
-    expected,_=compile_bytes(source,meta['maximum'],features=meta['features'],bits=meta['bits'],pairwise=bool(meta['flags']&2))
+    expected,_=compile_bytes(source,meta['maximum'],features=meta['features'],bits=meta['bits'],pairwise=bool(meta['flags']&2),backend=backend)
     if raw!=expected: raise ValueError('packed tree/bounds differ from exact-rational reconstruction')
     return {'status':'PASS',**meta,'compiler_sha256':sha(Path(__file__).read_bytes()),
             'oracle_source_sha256':sha(Path(oracle.__file__).read_bytes()),
+            'verification_backend':backend,
+            'verification_source_sha256':sha(Path(__file__).with_name('dyadic.py').read_bytes()) if backend=='dyadic' else sha(Path(oracle.__file__).read_bytes()),
             'scope':'deterministic original-source reconstruction; not authentication or empirical label quality'}
 
 def compile_panel(models, out):
