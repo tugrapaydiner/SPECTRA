@@ -1,0 +1,87 @@
+name: certified-trees
+on:
+  pull_request:
+    branches: [main, research/budgeted-integer-prototypes]
+    paths: [experiments/certified_trees/**, .github/workflows/certified-trees.yml]
+  push:
+    branches: [research/certified-integer-trees]
+    paths: [experiments/certified_trees/**, .github/workflows/certified-trees.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 30
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install numpy==2.3.5 scipy==1.17.0 catboost==1.2.8 pytest==9.0.2
+      - name: Record exact source and acquire the pinned native comparator
+        shell: python
+        run: |
+          import pathlib,json,hashlib,subprocess,sys,urllib.request
+          out=pathlib.Path('.tree-ci');out.mkdir()
+          upstream=out/'upstream';upstream.mkdir()
+          urls={
+            'libcatboostmodel.so':('https://github.com/catboost/catboost/releases/download/v1.2.8/libcatboostmodel-linux-x86_64-1.2.8.so','5a0de49d0bc81e460fd983da0f0f9d819e804b4ae19c6c9451b31e4f57d06545'),
+            'c_api.h':('https://raw.githubusercontent.com/catboost/catboost/v1.2.8/catboost/libs/model_interface/c_api.h','ecc734868dcd485e2fa7434287ad1fe418a7e3be606ff16ce46a403fb0a7912a'),
+            'LICENSE':('https://raw.githubusercontent.com/catboost/catboost/v1.2.8/LICENSE','8362a19526dda0e75fab0466a4ce4c426f9e84f833bbf18406345643cad00e9d')}
+          for name,(url,wanted) in urls.items():
+              with urllib.request.urlopen(url,timeout=90) as response:data=response.read(32*1024*1024+1)
+              assert len(data)<=32*1024*1024 and hashlib.sha256(data).hexdigest()==wanted,name
+              (upstream/name).write_bytes(data)
+          files={p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('experiments/certified_trees').glob('*') if p.is_file()}
+          paths=['experiments/certified_trees','.github/workflows/certified-trees.yml','.github/workflows/tree-reference-inputs.yml']
+          (out/'source.tar.gz').write_bytes(subprocess.check_output(['git','archive','--format=tar.gz','HEAD',*paths]))
+          base='8c2458a0f64208d5a645ba5098de8d0f00511043'
+          subprocess.run(['git','bundle','create',str(out/'review.bundle'),'HEAD','^'+base],check=True)
+          (out/'update.patch').write_bytes(subprocess.check_output(['git','diff','--binary',base,'HEAD']))
+          (out/'source.json').write_text(json.dumps({'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'base':base,'files':files},indent=2))
+          (out/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
+      - name: Original exact-rational reference tests
+        working-directory: experiments/certified_trees
+        run: python -m unittest -v test_oracle
+      - name: Build the portable owning pipeline
+        run: |
+          python -m experiments.certified_trees.build --out .tree-ci/native --target portable
+          python -m experiments.certified_trees.controls --out .tree-ci/pipeline --upstream .tree-ci/upstream --tree-library .tree-ci/native/trees.so --target portable
+      - name: Actual native, pipeline and evidence contracts
+        env:
+          TREE_LIBRARY: .tree-ci/native/trees.so
+          TREE_PIPELINE_LIBRARY: .tree-ci/pipeline/control.so
+        run: python -m pytest experiments/certified_trees/test_native.py experiments/certified_trees/test_pipeline.py experiments/certified_trees/test_evidence.py --import-mode=importlib --confcutdir=experiments/certified_trees -q --junitxml=.tree-ci/portable.xml
+      - name: Instrument and retest the changed tree runtime
+        run: |
+          python -m experiments.certified_trees.build --out .tree-ci/ubsan --target avx2 --ubsan
+          python -m experiments.certified_trees.controls --out .tree-ci/pipeline-ubsan --upstream .tree-ci/upstream --tree-library .tree-ci/ubsan/trees.so --target avx2
+      - name: UBSan native contracts
+        env:
+          TREE_LIBRARY: .tree-ci/ubsan/trees.so
+          TREE_PIPELINE_LIBRARY: .tree-ci/pipeline-ubsan/control.so
+        run: python -m pytest experiments/certified_trees/test_native.py experiments/certified_trees/test_pipeline.py experiments/certified_trees/test_evidence.py --import-mode=importlib --confcutdir=experiments/certified_trees -q --junitxml=.tree-ci/ubsan.xml
+      - name: Check source after execution
+        shell: python
+        run: |
+          import pathlib,json,hashlib,subprocess
+          record=json.loads(pathlib.Path('.tree-ci/source.json').read_text())
+          for path,digest in record['files'].items():assert hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()==digest,path
+          subprocess.run(['git','diff','--exit-code','HEAD','--','experiments/certified_trees','.github/workflows/certified-trees.yml'],check=True)
+          pathlib.Path('.tree-ci/source-after.json').write_text(json.dumps({'status':'PASS','files':len(record['files']),'tree':record['tree']}))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: certified-trees-${{ github.sha }}
+          path: .tree-ci/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error
