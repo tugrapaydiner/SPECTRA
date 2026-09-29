@@ -99,7 +99,7 @@ library is12,579,096 bytes; runtime mappings and interpreter allocations are sep
 Actual fresh-process high-water memory and setup (3 processes per task/mode,36 total):
 
 |Task|Compact peak KiB|Official peak KiB|Full-coverage peak KiB|Compact setup ms|Full setup ms|
-|---|---:|---:|---:|---:|---:|---:|
+|---|---:|---:|---:|---:|---:|
 |letter|18996–19000|38376–38640|40076–40384|13.318|22.494|
 |pendigits|17332–17336|28432–28600|29028–29332|5.962|11.031|
 |satellite|17104–17268|25712–25972|26512–26620|4.055|7.858|
