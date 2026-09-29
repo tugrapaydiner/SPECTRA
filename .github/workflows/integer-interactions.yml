@@ -1,0 +1,56 @@
+name: integer-interactions
+on:
+  push:
+    branches: [research/integer-feature-interactions]
+    paths: [experiments/integer_interactions/**, .github/workflows/integer-interactions.yml]
+  pull_request:
+    branches: [main, research/learned-integer-metric]
+    paths: [experiments/integer_interactions/**, .github/workflows/integer-interactions.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  numerical-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install numpy==2.3.5 scipy==1.17.0 scikit-learn==1.8.0 pytest==9.0.2
+      - name: Record actual tested source
+        shell: python
+        run: |
+          import pathlib,subprocess,sys,json,hashlib
+          out=pathlib.Path('.interaction-ci');out.mkdir()
+          (out/'head.txt').write_bytes(subprocess.check_output(['git','rev-parse','HEAD']))
+          (out/'tree.txt').write_bytes(subprocess.check_output(['git','rev-parse','HEAD^{tree}']))
+          (out/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
+          (out/'source.json').write_text(json.dumps({p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('experiments/integer_interactions').glob('*') if p.is_file()},indent=2))
+      - name: Original-score, gradient, domain and lifetime contracts
+        run: python -m pytest experiments/integer_interactions/test_interactions.py --import-mode=importlib --confcutdir=experiments/integer_interactions -q --junitxml=.interaction-ci/portable.xml
+      - name: Instrument changed native code
+        run: python experiments/integer_interactions/build.py --out .interaction-ci/ubsan --target portable --ubsan
+      - name: Same contracts under undefined-behavior sanitizer
+        env:
+          INTERACTION_LIBRARY: .interaction-ci/ubsan/interaction.so
+        run: python -m pytest experiments/integer_interactions/test_interactions.py --import-mode=importlib --confcutdir=experiments/integer_interactions -q --junitxml=.interaction-ci/ubsan.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integer-interactions-${{ matrix.python }}-${{ github.sha }}
+          path: .interaction-ci/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error
