@@ -1,6 +1,7 @@
 # Source-verified compact tree execution
 
-Read `RESULTS.md` for completed measurements and limitations. This is an additive
+Read `COMPLETION.md` for the independently replayed delivery, file-I/O results and
+measured verification costs; `RESULTS.md` retains the earlier experiment. This is an additive
 experimental classifier executor, not a new learner or production default.
 It resumes the delivered exact-rational checkpoint with actual native code,
 frozen-model replay, two official CatBoost C API comparators and complete records.
@@ -108,3 +109,32 @@ Alpaydin and Fevzi Alimoglu), Statlog Satellite146 (Ashwin Srinivasan), and
 OptDigits80 (Ethem Alpaydin and Cevdet Kaynak). Preserve their separate data
 attribution and applicable CC BY4.0 terms. SPECTRA implementation licensing does
 not relicense external libraries or data. No third-party issue/PR was submitted.
+
+
+## Assemble and check the complete replay kit
+
+The new `bundle.py` command packages an existing frozen run; it does not fit models,
+download code or compile silently. It re-exports the actual CBM and compares every
+interpreted split, leaf, output scale/bias and class mapping with the source being
+certified. This closes the packaging risk of accidentally pairing a verified
+compact source with a different same-shaped fallback model.
+
+```bash
+python -m experiments.certified_trees.bundle \
+  --models /evidence/frozen_models --compiled /evidence/compiled \
+  --evaluation /evidence/evaluation --replay /evidence/replay \
+  --portable /evidence/native-portable/trees.so \
+  --avx2 /evidence/native-register-final/trees.so \
+  --official /evidence/official --out /new/sdk
+```
+
+The finished kit provides `selftest.py` and `run.py`, both usable with `python -I -S`.
+Place outputs outside its immutable manifest directory. `verify_output.py` checks
+complete output files against independently supplied indices, labels, input hash
+and identity without importing native or training code. It is an outcome/integrity
+check, not a replacement for the rational certificate proof.
+
+`application_replay.py` preserves an 84-cell full-file comparison; `preparation_probe.py`
+measures the separate cost of exact source verification. The several-second
+preparation and high verifier peak memory are real limitations. Do not use the
+warm native speedup as a claim about launching a new CLI for each input.

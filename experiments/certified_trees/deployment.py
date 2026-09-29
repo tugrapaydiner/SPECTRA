@@ -98,10 +98,11 @@ def stream_predict(engine: Any, labels: Sequence[int | str], source: BinaryIO,
                 missing = values.count(-1)
                 if not compact_only and missing:
                     raise ValueError('full-coverage execution left unresolved rows')
+                for field in ('certified_first', 'certified_second', 'official_rows', 'unresolved_rows'):
+                    if type(work[field]) is not int or work[field] < 0:
+                        raise ValueError('invalid native work counters')
                 certified = work['certified_first'] + work['certified_second']
                 official = work['official_rows']
-                if any(type(v) is not int or v < 0 for v in (certified, official, work['unresolved_rows'])):
-                    raise ValueError('invalid native work counters')
                 if work['unresolved_rows'] != missing or certified + official + missing != pending:
                     raise ValueError('native coverage counters disagree')
                 if compact_only and official:
@@ -135,7 +136,12 @@ def stream_predict(engine: Any, labels: Sequence[int | str], source: BinaryIO,
         os.link(temporary, target)
         return {**complete, 'output_bytes': size, 'output_sha256': output_hash.hexdigest()}
     finally:
-        temporary.unlink(missing_ok=True)
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            # Best-effort cleanup must not turn an already published complete
+            # result into an apparent inference failure. The directory is trusted.
+            pass
 
 
 def main() -> None:
