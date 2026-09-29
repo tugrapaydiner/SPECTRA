@@ -1,0 +1,56 @@
+name: learned-metric
+on:
+  push:
+    branches: [research/learned-integer-metric]
+    paths: [experiments/learned_metric/**, .github/workflows/learned-metric.yml]
+  pull_request:
+    branches: [main]
+    paths: [experiments/learned_metric/**, .github/workflows/learned-metric.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  numerical-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install pinned test tools, not pretrained models
+        run: python -m pip install numpy==2.3.5 scipy==1.17.0 scikit-learn==1.8.0 pytest==9.0.2
+      - name: Record tested source
+        shell: python
+        run: |
+          import pathlib,subprocess,sys,json,hashlib
+          out=pathlib.Path('.learned-metric');out.mkdir()
+          (out/'head.txt').write_bytes(subprocess.check_output(['git','rev-parse','HEAD']))
+          (out/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
+          (out/'sources.json').write_text(json.dumps({p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('experiments/learned_metric').glob('*') if p.is_file()},indent=2))
+      - name: Portable original-margin and learner-gradient contracts
+        run: python -m pytest experiments/learned_metric/test_metric.py experiments/learned_metric/test_learning.py --import-mode=importlib --confcutdir=experiments/learned_metric -q --junitxml=.learned-metric/portable.xml
+      - name: Build the changed native engine with undefined-behavior instrumentation
+        run: python experiments/learned_metric/build.py --out .learned-metric/ubsan --target portable --ubsan
+      - name: Execute the same contracts under UBSan
+        env:
+          METRIC_LIBRARY: .learned-metric/ubsan/metric.so
+        run: python -m pytest experiments/learned_metric/test_metric.py experiments/learned_metric/test_learning.py --import-mode=importlib --confcutdir=experiments/learned_metric -q --junitxml=.learned-metric/ubsan.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: learned-metric-${{ matrix.python }}-${{ github.sha }}
+          path: .learned-metric/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error
