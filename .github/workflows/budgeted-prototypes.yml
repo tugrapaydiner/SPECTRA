@@ -37,6 +37,7 @@ jobs:
           base='a118f571f96d4c26e29eaba4839941e9ce14fd05'
           (root/'source.tar.gz').write_bytes(subprocess.check_output(['git','archive','--format=tar.gz','HEAD']))
           (root/'parent.tar.gz').write_bytes(subprocess.check_output(['git','archive','--format=tar.gz',base]))
+          (root/'base.commit').write_bytes(subprocess.check_output(['git','cat-file','commit',base]))
           (root/'update.patch').write_bytes(subprocess.check_output(['git','diff','--binary',base,'HEAD']))
           subprocess.run(['git','bundle','create',str(root/'review.bundle'),'HEAD','^'+base],check=True)
           (root/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))

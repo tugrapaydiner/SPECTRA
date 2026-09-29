@@ -8,11 +8,12 @@ ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
 from experiments.budgeted_prototypes.session import PrototypeSession
 from experiments.budgeted_prototypes.controls import ControlSession
 from experiments.budgeted_prototypes.strong_controls import BlasSession
+from experiments.budgeted_prototypes.float_control import FloatSession
 from experiments.budgeted_prototypes.study import TASKS,sha,write,source_hashes
 LAYOUTS=('original','packet','register')
 FAMILIES=('fixed','centers','local')
-ARMS=tuple(f'{f}_{l}' for l in LAYOUTS for f in FAMILIES)+('local_scalar','local_direct_exp','svc','mlp','linear','mlp_blas','svc_finite')
-CHUNKS=(1,32,256);REPEATS=7;SEED=2026092912
+ARMS=tuple(f'{f}_{l}' for l in LAYOUTS for f in FAMILIES)+('local_scalar','local_direct_exp','svc','mlp','linear','mlp_blas','svc_finite','mlp_float32')
+CHUNKS=(1,32,256);REPEATS=7;SEED=2026092917
 
 def main(a):
     a.out.mkdir(parents=True,exist_ok=False);quality=json.loads((a.evaluation/'quality.json').read_text());lock=json.loads((a.models/'FINAL_LOCK.json').read_text())
@@ -21,7 +22,7 @@ def main(a):
     cpu=next(s.split(':',1)[1].strip() for s in Path('/proc/cpuinfo').read_text().splitlines() if s.startswith('model name'))
     write(a.out/'protocol.json',{'arms':ARMS,'chunks':CHUNKS,'repeats':REPEATS,'seed':SEED,'tasks':TASKS,
         'source':source_hashes(),'final_lock_sha256':sha(a.models/'FINAL_LOCK.json'),'quality_sha256':sha(a.evaluation/'quality.json'),
-        'libraries':{str(p):sha(p) for p in (a.original,a.packet,a.register,a.controls,a.blas,a.finite)},'cpu':cpu,'platform':platform.platform(),
+        'libraries':{str(p):sha(p) for p in (a.original,a.packet,a.register,a.controls,a.blas,a.finite,a.floatlib)},'fp32_lock_sha256':sha(a.fp32/'LOCK.json'),'cpu':cpu,'platform':platform.platform(),
         'python':sys.version,'affinity':sorted(os.sched_getaffinity(0)),
         'scope':'complete all-row jobs, original uint8 features to fresh labels; native normalization/scaling included; loading/fitting/table creation excluded'})
     records=[];randomizer=random.Random(SEED);direct_differences={}
@@ -34,8 +35,10 @@ def main(a):
                 controls={arm:stack.enter_context(ControlSession(a.models/f'{task}-{arm}'/('model.srt' if arm=='svc' else 'model.snn'),a.controls,maximum=D)) for arm in ('svc','mlp','linear')}
                 controls['mlp_blas']=stack.enter_context(BlasSession(a.models/f'{task}-mlp'/'model.snn',a.blas))
                 controls['svc_finite']=stack.enter_context(ControlSession(a.models/f'{task}-svc'/'model.srt',a.finite,maximum=D))
+                controls['mlp_float32']=stack.enter_context(FloatSession(a.fp32/f'{task}.sfn',a.floatlib))
                 expected={arm:np.load(a.evaluation/task/f'{arm}-predictions.npz')['prediction'].tolist() for arm in ('fixed','centers','local','svc','mlp','linear')}
                 expected['mlp_blas']=expected['mlp'];expected['svc_finite']=expected['svc']
+                expected['mlp_float32']=np.load(a.fp32/f'{task}-predictions.npz')['prediction'].tolist()
                 for family in FAMILIES:
                     for layout in LAYOUTS:expected[f'{family}_{layout}']=expected[family]
                 expected['local_scalar']=expected['local']
@@ -72,7 +75,8 @@ def main(a):
                          'local_over_mlp':med['32']['local_register']/med['32']['mlp'],
                          'local_over_svc':med['32']['local_register']/med['32']['svc'],
                          'local_over_mlp_blas':med['32']['local_register']/med['32']['mlp_blas'],
-                         'local_over_svc_finite':med['32']['local_register']/med['32']['svc_finite']}
+                         'local_over_svc_finite':med['32']['local_register']/med['32']['svc_finite'],
+                         'local_over_mlp_float32':med['32']['local_register']/med['32']['mlp_float32']}
     ratios=[v for task in summaries.values() for v in task['layout_ratios'].values()]
     layout_ratio=statistics.geometric_mean(ratios)
     write(a.out/'summary.json',{'layout_ratio':layout_ratio,'layout_gate':layout_ratio<=1/1.10 and max(ratios)<=1.10,'cells':len(records),'checked_predictions':sum(r['rows'] for r in records),
@@ -80,5 +84,5 @@ def main(a):
     print(json.dumps(summaries,indent=2))
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    for name in ('models','evaluation','original','packet','register','controls','blas','finite','out'):p.add_argument('--'+name,type=Path,required=True)
+    for name in ('models','evaluation','original','packet','register','controls','blas','finite','floatlib','fp32','out'):p.add_argument('--'+name,type=Path,required=True)
     main(p.parse_args())
