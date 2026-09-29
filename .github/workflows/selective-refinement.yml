@@ -1,0 +1,60 @@
+name: selective-refinement
+on:
+  push:
+    branches: [research/calibrated-selective-refinement]
+    paths: [experiments/selective_refinement/**, experiments/source_receipts/**, experiments/conditioned_heads/**, .github/workflows/selective-refinement.yml]
+  pull_request:
+    branches: [main, research/budgeted-integer-prototypes]
+    paths: [experiments/selective_refinement/**, experiments/source_receipts/**, experiments/conditioned_heads/**, .github/workflows/selective-refinement.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+      - run: python -m pip install numpy==2.3.5 scipy==1.17.0 scikit-learn==1.8.0 pytest==9.0.2
+      - name: Record actual source and environment
+        shell: python
+        run: |
+          import pathlib,subprocess,json,hashlib,sys
+          out=pathlib.Path('.refinement-ci');out.mkdir()
+          records={'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip()}
+          records['files']={p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for name in ('selective_refinement','source_receipts','conditioned_heads') for p in (pathlib.Path('experiments')/name).glob('*') if p.is_file()}
+          (out/'source.json').write_text(json.dumps(records,indent=2))
+          (out/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
+      - name: All new portable contracts
+        run: python -m pytest experiments/selective_refinement/test_refinement.py experiments/selective_refinement/test_deployment.py experiments/conditioned_heads/test_optimizer.py experiments/source_receipts/test_receipts.py --import-mode=importlib --confcutdir=experiments -q --junitxml=.refinement-ci/contracts.xml
+      - name: Build changed runtime with UBSan
+        run: python -m experiments.selective_refinement.build --out .refinement-ci/ubsan --target portable --ubsan
+      - name: Replay native and calibration contracts with UBSan
+        env:
+          REFINEMENT_LIBRARY: .refinement-ci/ubsan/refinement.so
+        run: python -m pytest experiments/selective_refinement/test_refinement.py --import-mode=importlib --confcutdir=experiments -q --junitxml=.refinement-ci/ubsan.xml
+      - name: Hash retained artifact files
+        if: always()
+        shell: python
+        run: |
+          import pathlib,hashlib,json
+          out=pathlib.Path('.refinement-ci');out.mkdir(exist_ok=True)
+          (out/'SHA256.json').write_text(json.dumps({p.relative_to(out).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in out.rglob('*') if p.is_file() and p.name!='SHA256.json'},indent=2))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selective-refinement-${{ github.sha }}
+          path: .refinement-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
