@@ -1,7 +1,8 @@
 # Source-verified compact tree execution
 
-Read `COMPLETION.md` for the independently replayed delivery, file-I/O results and
-measured verification costs; `RESULTS.md` retains the earlier experiment. This is an additive
+Read `EXACT_INTEGER_RESULTS.md` for the exact-integer verification improvement and
+reconciled SDK v2 boundary. `COMPLETION.md` and `RESULTS.md` retain their earlier
+source-specific measurements; they are not overwritten by this continuation. This is an additive
 experimental classifier executor, not a new learner or production default.
 It resumes the delivered exact-rational checkpoint with actual native code,
 frozen-model replay, two official CatBoost C API comparators and complete records.
@@ -138,3 +139,32 @@ check, not a replacement for the rational certificate proof.
 measures the separate cost of exact source verification. The several-second
 preparation and high verifier peak memory are real limitations. Do not use the
 warm native speedup as a claim about launching a new CLI for each input.
+
+
+## Exact reconstruction backends and SDK v2
+
+The experimental default reconstructs the original certificate with exact dyadic
+integer arithmetic. It does not reuse a trusted cache or relax the proof. To select
+the preserved rational implementation explicitly:
+
+```python
+proof = VerifiedCompact.from_files('model.json', 'model-16.sct', backend='reference')
+```
+
+`backend='dyadic'` and `backend='reference'` reconstruct every byte. All other backend
+names fail. The native engine and source model are unchanged; accuracy and warm
+inference speed do not increase because verification is cheaper. See
+`EXACT_INTEGER_CONTRACT.md` for the arithmetic and trust boundary.
+
+New kits use `spectra.tree.sdk.v2`, verify original source label order and required
+asset roles, and record observed refinement coverage. Old kit bytes are not silently
+rewritten; use the explicit builder on trusted frozen inputs. Its full CBM/source
+check remains separate from a manifest hash. Refinement acceptance is not assumed
+to equal the16-bit set for every possible model.
+
+Reproduction scripts added by this continuation: `verification_study.py` records
+the fixed fresh-process comparison, `audit_verification.py` independently rechecks
+it, `negative_verification_audit.py` tests copied-receipt corruptions,
+`replay_dyadic.py` checks both verifier objects against both official libraries,
+and `replay_verified_files.py` executes and audits the public CLI. Use `--help`
+for their explicit paths and always write into fresh directories.

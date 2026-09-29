@@ -15,17 +15,17 @@ from .packed import verify,metadata,MAX_BYTES
 class VerifiedCompact:
     raw: bytes
     info: object
-    def __init__(self,source:bytes,raw:bytes):
-        receipt=verify(source,raw)
+    def __init__(self,source:bytes,raw:bytes,*,backend='dyadic'):
+        receipt=verify(source,raw,backend=backend)
         object.__setattr__(self,'raw',bytes(raw))
         object.__setattr__(self,'info',MappingProxyType(receipt))
     @classmethod
-    def from_files(cls,source,packed):
+    def from_files(cls,source,packed,*,backend='dyadic'):
         def read(p):
             with Path(p).open('rb') as f:v=f.read(MAX_BYTES+1)
             if len(v)>MAX_BYTES:raise ValueError('model file cap')
             return v
-        return cls(read(source),read(packed))
+        return cls(read(source),read(packed),backend=backend)
 
 FIELDS=('certified_first','certified_second','official_rows','unresolved_rows',
         'first_leaf_vectors','second_leaf_vectors','routed_trees','compact_prepared_bytes')
