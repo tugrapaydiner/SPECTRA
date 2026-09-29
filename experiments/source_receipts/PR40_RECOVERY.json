@@ -1,0 +1,22 @@
+{
+  "prior_pr": 40,
+  "head": "c5af3032e1f9dd8908e922836dd7c06d4222b876",
+  "canonical_tree": "442f7c7d799b093b3c6dceb383e0e18fbd640206",
+  "archive_sha256": "f2ce27a92b9b8074debf897abd6fb5ab2933b91244e34842734745d4264d7ffd",
+  "canonical_auditor_sha256": "6d3c270cb02f54185a8b0c0e24f2a4dbc76ddd1c32aeaaeb766905ecf245ac27",
+  "recovered_old_local_auditor": false,
+  "recovered_old_24_models": false,
+  "prior_local_mismatch_classification": "UNRESOLVED: missing old local copy",
+  "old_full_scientific_audit_rerun": false,
+  "scope": "actual archive/source checks only; historical PASS not relabelled as a current replay",
+  "portable": {
+    "tests": 68,
+    "failures": 0,
+    "errors": 0
+  },
+  "ubsan": {
+    "tests": 68,
+    "failures": 0,
+    "errors": 0
+  }
+}
