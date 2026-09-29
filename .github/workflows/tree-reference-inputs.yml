@@ -1,0 +1,39 @@
+name: tree-reference-inputs
+on:
+  push:
+    branches: [research/certified-integer-trees]
+    paths: [.github/workflows/tree-reference-inputs.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  official-cpu-library:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Acquire pinned upstream comparator and source contract
+        shell: python
+        run: |
+          import urllib.request,pathlib,hashlib,json,os
+          out=pathlib.Path('tree-reference');out.mkdir()
+          urls={
+            'libcatboostmodel.so':'https://github.com/catboost/catboost/releases/download/v1.2.8/libcatboostmodel-linux-x86_64-1.2.8.so',
+            'c_api.h':'https://raw.githubusercontent.com/catboost/catboost/v1.2.8/catboost/libs/model_interface/c_api.h',
+            'LICENSE':'https://raw.githubusercontent.com/catboost/catboost/v1.2.8/LICENSE'}
+          receipts={}
+          for name,url in urls.items():
+              with urllib.request.urlopen(url,timeout=90) as f:data=f.read(32*1024*1024+1)
+              assert len(data)<=32*1024*1024
+              (out/name).write_bytes(data)
+              receipts[name]={'url':url,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
+          assert (out/'libcatboostmodel.so').read_bytes()[:4]==b'\x7fELF'
+          (out/'acquisition.json').write_text(json.dumps({'head':os.environ['GITHUB_SHA'],'files':receipts,'scope':'unexecuted pinned official comparator acquisition'},indent=2))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tree-reference-${{ github.sha }}
+          path: tree-reference/
+          retention-days: 30
+          if-no-files-found: error
