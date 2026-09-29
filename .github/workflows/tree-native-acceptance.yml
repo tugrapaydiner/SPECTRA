@@ -1,0 +1,135 @@
+name: tree-native-acceptance
+on:
+  push:
+    branches: [research/tree-native-replay]
+    paths: [maintenance/tree_native_transfer/**, .github/workflows/tree-native-acceptance.yml, experiments/certified_trees/**]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 64
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Import exact preverified source bytes on this review branch only
+        shell: python
+        run: |
+          import pathlib,hashlib,json,lzma,tarfile,io,subprocess,os
+          assert os.environ['GITHUB_REF']=='refs/heads/research/tree-native-replay'
+          out=pathlib.Path('.tree-native-ci');out.mkdir()
+          manifest=pathlib.Path('maintenance/tree_native_transfer/manifest.json')
+          if manifest.exists():
+              rec=json.loads(manifest.read_text())
+              assert rec['format']=='spectra.tree.source-import.v1'
+              assert len(rec['parts'])==4 and len(rec['files'])==22
+              blocks=[]
+              for i,p in enumerate(rec['parts']):
+                  assert p['path']==f'maintenance/tree_native_transfer/part-{i:02}.bin'
+                  raw=pathlib.Path(p['path']).read_bytes()
+                  assert len(raw)==p['bytes'] and hashlib.sha256(raw).hexdigest()==p['sha256']
+                  blocks.append(raw)
+              archive=b''.join(blocks)
+              assert len(archive)==42428 and hashlib.sha256(archive).hexdigest()=='73559670c101518aca50825361843e72be86de62bfb9d290e60423cedeebb810'
+              decoded=lzma.LZMADecompressor(memlimit=256*1024**2).decompress(archive,max_length=2*1024**2)
+              assert len(decoded)<2*1024**2
+              files={}
+              with tarfile.open(fileobj=io.BytesIO(decoded),mode='r:') as tar:
+                  for m in tar:
+                      assert m.isfile() and not m.issym() and not m.islnk() and m.name not in files
+                      p=pathlib.PurePosixPath(m.name)
+                      assert not p.is_absolute() and '..' not in p.parts and '\\' not in m.name
+                      assert m.name.startswith('experiments/certified_trees/') and p.suffix in ('.py','.cpp','.md')
+                      assert m.name in rec['files'] and 0<m.size<=500000
+                      raw=tar.extractfile(m).read()
+                      assert len(raw)==rec['files'][m.name]['bytes'] and hashlib.sha256(raw).hexdigest()==rec['files'][m.name]['sha256']
+                      target=pathlib.Path(m.name)
+                      assert not target.exists(),f'No overwrite allowed: {target}'
+                      files[m.name]=raw
+              assert set(files)==set(rec['files'])
+              for name,raw in files.items():
+                  p=pathlib.Path(name);p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(raw)
+              receipt=pathlib.Path('maintenance/tree_native_source_import.json')
+              receipt.write_text(json.dumps(rec,indent=2)+'\n')
+              for p in rec['parts']:pathlib.Path(p['path']).unlink()
+              manifest.unlink()
+              subprocess.run(['git','add','--','experiments/certified_trees','maintenance/tree_native_transfer','maintenance/tree_native_source_import.json'],check=True)
+              subprocess.run(['git','-c','user.name=SPECTRA source importer','-c','user.email=41898282+github-actions[bot]@users.noreply.github.com','commit','-m','Import byte-verified native tree executor, independent oracle, replay and complete comparisons'],check=True)
+              (out/'import.json').write_text(json.dumps({'status':'PASS','files':len(files),'archive_sha256':rec['archive_sha256'],'scope':'exact source transport, not new measurements'},indent=2))
+          record={'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip()}
+          record['sources']={p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('experiments/certified_trees').rglob('*') if p.is_file() and '__pycache__' not in p.parts}
+          (out/'source.json').write_text(json.dumps(record,indent=2))
+          subprocess.run(['git','bundle','create',str(out/'review.bundle'),'HEAD','^0d35521b05e155a7e1d589bb7147f5d9a0ee3b91'],check=True)
+          (out/'source.tar.gz').write_bytes(subprocess.check_output(['git','archive','--format=tar.gz','HEAD','experiments/certified_trees','.github/workflows/tree-native-acceptance.yml','maintenance/tree_native_source_import.json']))
+      - run: python -m pip install numpy==2.3.5 catboost==1.2.8 pytest==9.0.2
+      - name: Obtain pinned official libraries for real fallback tests
+        shell: python
+        run: |
+          import pathlib,urllib.request,hashlib,json,subprocess,sys
+          out=pathlib.Path('.tree-native-ci');libs=out/'official';libs.mkdir()
+          expected={'1.2.8':'5a0de49d0bc81e460fd983da0f0f9d819e804b4ae19c6c9451b31e4f57d06545','1.2.10':'de32f8e147ee8f969599a00b7145e8561b943e916b0132b811037f8f71952a0e'}
+          for version,h in expected.items():
+              name=f'libcatboostmodel-linux-x86_64-{version}.so'
+              with urllib.request.urlopen(f'https://github.com/catboost/catboost/releases/download/v{version}/{name}',timeout=60) as f:data=f.read(32*1024**2+1)
+              assert len(data)<=32*1024**2 and hashlib.sha256(data).hexdigest()==h
+              (libs/name).write_bytes(data)
+          (out/'official-identities.json').write_text(json.dumps(expected,indent=2))
+          (out/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
+      - name: Preserved exact-rational reference tests
+        shell: python
+        run: |
+          import pathlib,subprocess,sys
+          p=subprocess.run([sys.executable,'-m','unittest','-v','test_oracle.py'],cwd='experiments/certified_trees/reference',capture_output=True,text=True)
+          pathlib.Path('.tree-native-ci/reference.log').write_text(p.stdout+p.stderr)
+          assert p.returncode==0,p.stdout+p.stderr
+      - name: Portable native, actual fallback and independent-audit contracts
+        env:
+          TREE_UPSTREAM: ${{ github.workspace }}/.tree-native-ci/official
+        run: python -m pytest experiments/certified_trees/test_native.py experiments/certified_trees/test_audit.py --import-mode=importlib --confcutdir=experiments/certified_trees -q --junitxml=.tree-native-ci/portable.xml
+      - name: Instrument optimized native implementation
+        run: python -m experiments.certified_trees.build --out .tree-native-ci/ubsan --target avx2 --layout register --ubsan
+      - name: Same contracts on optimized AVX2 under UBSan
+        env:
+          TREE_LIBRARY: ${{ github.workspace }}/.tree-native-ci/ubsan/trees.so
+          TREE_UPSTREAM: ${{ github.workspace }}/.tree-native-ci/official
+        run: python -m pytest experiments/certified_trees/test_native.py experiments/certified_trees/test_audit.py --import-mode=importlib --confcutdir=experiments/certified_trees -q --junitxml=.tree-native-ci/ubsan.xml
+      - name: Verify source and publish only the tested review commit
+        shell: python
+        run: |
+          import pathlib,subprocess,json,hashlib,os
+          out=pathlib.Path('.tree-native-ci');record=json.loads((out/'source.json').read_text())
+          for name,h in record['sources'].items():assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()==h,name
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==record['head']
+          subprocess.run(['git','diff','--exit-code','HEAD'],check=True)
+          assert os.environ['GITHUB_REF']=='refs/heads/research/tree-native-replay'
+          subprocess.run(['git','push','origin','HEAD:refs/heads/research/tree-native-replay'],check=True)
+          (out/'acceptance.json').write_text(json.dumps({'status':'PASS','head':record['head'],'tree':record['tree'],'scope':'13 reference cases;73 native/audit cases repeated on portable and AVX2 UBSan; no benchmark or model training'},indent=2))
+      - name: Seal retained receipts, not dependency libraries
+        if: always()
+        shell: python
+        run: |
+          import pathlib,shutil,json,hashlib
+          out=pathlib.Path('.tree-native-ci');out.mkdir(exist_ok=True)
+          shutil.rmtree(out/'official',ignore_errors=True)
+          (out/'SHA256.json').write_text(json.dumps({p.relative_to(out).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in out.rglob('*') if p.is_file() and p.name!='SHA256.json'},indent=2))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tree-native-acceptance-${{ github.sha }}
+          path: .tree-native-ci/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error

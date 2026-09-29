@@ -1,0 +1,37 @@
+{
+  "format": "spectra.tree.source-import.v1",
+  "archive_sha256": "73559670c101518aca50825361843e72be86de62bfb9d290e60423cedeebb810",
+  "archive_bytes": 42428,
+  "parts": [
+    {"path":"maintenance/tree_native_transfer/part-00.bin","bytes":12000,"sha256":"151c3b0e2af20b9f0fe60ecfb2b3a4a5b5fd12e6e222836b9790dee554aeb1b0","git_blob":"2c741036709ecdfd7abd75d1df3f30773b6881a5"},
+    {"path":"maintenance/tree_native_transfer/part-01.bin","bytes":12000,"sha256":"2538a51bc9d9c9183ab96afe0e62a11990d32de37ed821d220ac1b0b8c3d8f91","git_blob":"b87179581599fe7d7f5c2c0bb73dcc41a9b18f2e"},
+    {"path":"maintenance/tree_native_transfer/part-02.bin","bytes":12000,"sha256":"09d3dd8b672a1e06eeac3e73dc7bef9614fb87d98945e0cf24fd85d31225eb3b","git_blob":"580c9a97501100e935ad46df886a7806cc5290fe"},
+    {"path":"maintenance/tree_native_transfer/part-03.bin","bytes":6428,"sha256":"5843b2019484f392434ed3583b65e281dbb633f787d8574e682b9c9b8e5833fb","git_blob":"7c15683f711a7f201a0c0612f99d5b63dd20cfb6"}
+  ],
+  "files": {
+    "experiments/certified_trees/CONTRACT.md":{"bytes":6235,"sha256":"b1986d91c844c342ce189aa2f89eb3f89d0a764b89cff900be3f860c7f619e89"},
+    "experiments/certified_trees/README.md":{"bytes":5808,"sha256":"8e2d44f1245e8555e96b3bf2089a9dd6aa05bdd1d1dbb15937ce8124158267f1"},
+    "experiments/certified_trees/RESULTS.md":{"bytes":11844,"sha256":"f59ec86879672124f08073fe7817eda59b9e784ac4c36eed375d4099793310ee"},
+    "experiments/certified_trees/audit.py":{"bytes":9667,"sha256":"13a41475de7c94488405dc7ab2454b4bb7e38af87b5ec4e07293e44553ab07e1"},
+    "experiments/certified_trees/benchmark.py":{"bytes":7395,"sha256":"d907ab6a939c55e2c4bbea678649d84ef0df77813b796dc27830fdd04c864a99"},
+    "experiments/certified_trees/benchmark_layouts.py":{"bytes":8708,"sha256":"30bc860b1264c8409d20f84e63bd31e33f5dd3884cab6834e92ca7780dd9f913"},
+    "experiments/certified_trees/build.py":{"bytes":1964,"sha256":"6c4fbc01014423927669172b67520495c5a8c6a0e7b5382f6eadb443deb17698"},
+    "experiments/certified_trees/corruptions.py":{"bytes":3254,"sha256":"c5e8627506521044cde16087b9b496bece00ce92af79c53a5b23c30a39a6a2e0"},
+    "experiments/certified_trees/export_control.py":{"bytes":4032,"sha256":"200d8271c8af875ee5630126456955bce73ce9cb086327787a4f7571794f2098"},
+    "experiments/certified_trees/packed.py":{"bytes":5892,"sha256":"bad64e0c266f379b08cdbcbe088478733bf45b72b209c17b65016984ca342532"},
+    "experiments/certified_trees/reference/certificate_oracle.py":{"bytes":21630,"sha256":"704556048f58844787a89c2079710abbce949cc7f5d427e821fcb25f64f5c6a5"},
+    "experiments/certified_trees/reference/test_oracle.py":{"bytes":10266,"sha256":"95de6a986c54d667cf3c6739e4ad4adad9ebbb03d985eb1ba4e8833f1a60586b"},
+    "experiments/certified_trees/replay.py":{"bytes":5348,"sha256":"a43d8aabd527099e97f747d0ac6ed1951515994c5dec3af3620a18fefd3517a2"},
+    "experiments/certified_trees/replay_layouts.py":{"bytes":2881,"sha256":"38b395c6b259644b2b589ced82040c08f6e2eb04af34e54d3d82040f65d486b2"},
+    "experiments/certified_trees/reproduce.py":{"bytes":4701,"sha256":"74a008816945d5365c52f7c4bfe0833793a05a8a75e731d1d199902bd9bdff62"},
+    "experiments/certified_trees/resume_fit.py":{"bytes":2387,"sha256":"6840cc71748ae0975374e28229bf7e470418dc5e7520c231a8743146beebd97d"},
+    "experiments/certified_trees/runtime.cpp":{"bytes":18431,"sha256":"6c28f87c813434f11f5f4edebb9b0c849648c78b2e45b22a2fe5d288e669c021"},
+    "experiments/certified_trees/selftest.py":{"bytes":6721,"sha256":"0cdd1f3d6c317be922e14fc20e6bda85f33f7d9ba05162c527a1d6bc48b46000"},
+    "experiments/certified_trees/session.py":{"bytes":6459,"sha256":"1506d479e50cad6b2fbc3abcc7750aae020eef359478ed29457582e89873597a"},
+    "experiments/certified_trees/source_binding.py":{"bytes":3252,"sha256":"b35b1b93f293c8e10a25897eb7a0fdbcc3756613f0fcfb1a4c66cfaad496083f"},
+    "experiments/certified_trees/test_audit.py":{"bytes":1265,"sha256":"470dad40e466946936bd45fa5de353425fcc8bc83af3fdd34fcfaa3568a86a12"},
+    "experiments/certified_trees/test_native.py":{"bytes":11244,"sha256":"32d86381ca3cd0b014a931f31998dd0bf3ef4fe167ead4a7b55fb7dc4adca8f2"}
+  },
+  "scope":"byte-exact transport of locally tested source, not empirical model evidence",
+  "base":"e0bfe9fd055346371c41ea408e936cf073a259e2"
+}
