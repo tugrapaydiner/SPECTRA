@@ -25,6 +25,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
@@ -36,6 +37,7 @@ jobs:
           out=pathlib.Path('.interaction-ci');out.mkdir()
           (out/'head.txt').write_bytes(subprocess.check_output(['git','rev-parse','HEAD']))
           (out/'tree.txt').write_bytes(subprocess.check_output(['git','rev-parse','HEAD^{tree}']))
+          subprocess.run(['git','bundle','create',str(out/'review.bundle'),'4a47618306940962f1b15a71f7879ada5b60cf43..HEAD'],check=True)
           (out/'environment.txt').write_bytes(subprocess.check_output([sys.executable,'-m','pip','freeze']))
           (out/'source.json').write_text(json.dumps({p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('experiments/integer_interactions').glob('*') if p.is_file()},indent=2))
       - name: Original-score, gradient, domain and lifetime contracts
