@@ -114,7 +114,8 @@ def evidence(tmp_path):
         for layout in ('flat', 'interned'):
             raw = (task + '/' + layout + ': inert fixture').encode()
             bind(f'results/replay/{task}/{layout}.sctt', raw)
-            proof.append({'task': task, 'layout': layout, 'bytes': len(raw), 'sha256': digest(raw)})
+            proof.append({'task': task, 'layout': layout, 'bytes': len(raw), 'sha256': digest(raw),
+                          'source_sha256': replay_models[task]['source']})
             models[layout] = {'sha256': digest(raw), 'info': {'features': 1, 'maximum': 1, 'classes': 2},
                               'work': {'total': {'unresolved': 0, 'coarse_certified': 2,
                                                  'exact_completed': 0}}}

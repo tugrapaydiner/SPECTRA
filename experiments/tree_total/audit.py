@@ -159,6 +159,17 @@ def artifact_bindings(files):
     return roles
 
 
+def replay_model_bindings(replay, files, bindings):
+    """The fixed-corpus replay must identify the benchmark's source and inputs."""
+    models=replay.get('models')
+    require(type(models) is dict and set(models)==set(TASKS),'incomplete replay model inventory')
+    for task in TASKS:
+        expected={field:files[bindings[task+'/'+name]] for field,name in
+                  (('source','model.json'),('inputs','input.u8'),('expected','indices.i32'))}
+        require(type(models[task]) is dict and all(models[task].get(k)==v for k,v in expected.items()),
+                'replay source or corpus binding differs')
+
+
 def audit(root):
     root=Path(root);results=root/'results';run=results/'benchmark';lock=read(run/'LOCK.json')
     paths=read(root/'PATHS.json');sources=read(root/'SOURCES.json')
@@ -213,6 +224,7 @@ def audit(root):
     replay=read(results/'replay/LOCK.json')
     compare(replay,{'stress_rows_per_kind':2048,'seed_rule':'2026092961+d+D'})
     inventory(replay.get('source_files'),set(TOTAL_SOURCES),'incomplete replay source inventory')
+    replay_model_bindings(replay,lock['files'],bindings)
     for name,digest in replay['source_files'].items():require(sha(member(root,'source/experiments/tree_total/'+name))==digest,'replay source changed')
     total_scores=stress_rows=stress_exact=0
     for task in TASKS:
@@ -229,7 +241,9 @@ def audit(root):
         require(n*d<=8000000,'recorded input geometry exceeds call bound')
         for layout in ('flat','interned'):
             artifact=results/'replay'/task/(layout+'.sctt');entry=next(x for x in proof['files'] if (x['task'],x['layout'])==(task,layout))
-            require(sha(artifact)==entry['sha256']==r['models'][layout]['sha256'] and artifact.stat().st_size==entry['bytes'],'reconstructed proof differs')
+            require(sha(artifact)==entry['sha256']==r['models'][layout]['sha256']==lock['files'][bindings[task+'/'+layout+'.sctt']] and artifact.stat().st_size==entry['bytes'],'reconstructed proof differs')
+            require(entry.get('source_sha256')==lock['files'][bindings[task+'/model.json']],
+                    'reconstructed proof source differs')
             compare(r['models'][layout]['info'],{'features':d,'maximum':D,'classes':c})
             w=r['models'][layout]['work']['total']
             coverage(w,n)

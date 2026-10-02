@@ -108,8 +108,15 @@ The seven original total-tree execution/build sources and both baseline C++
 runtimes must be bound in the timing lock; replay must bind those seven total-tree
 sources. Extra bound artifacts and sources remain allowed and hash-checked.
 These source minima do not certify the full transitive Python dependency closure
-or require tests/docs added after the original run. Replay-versus-timing identity
-relationships beyond these inventories are not established by this check.
+or require tests/docs added after the original run.
+
+Replay must bind all four tasks to the benchmark's source JSON, input bytes and
+expected indices. Every independently reconstructed flat/interned model must
+identify that same source and match the timed model's bytes. Matching class labels
+alone cannot establish that two receipts concern the same model or corpus.
+Relocation may use separate files with identical contents. Native-library identity
+is a separate provenance question: replay and timing may use different valid
+builds, and this recorded-data check does not require equal library digests.
 
 The resource auditor requires the complete four-task, four-policy matrix with
 three distinct repeats per cell. It rejects empty, shortened, extended or duplicated
