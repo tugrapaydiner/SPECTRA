@@ -1,7 +1,7 @@
 name: certified-svm
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'maintenance/**']
   push:
     branches: [main]
     paths: ['spectra/svm*.py', 'spectra/_native/ovo/**', 'tests/svm/**', 'scripts/check_svm_installation.py', '.github/workflows/certified-svm.yml', 'pyproject.toml', 'MANIFEST.in']
