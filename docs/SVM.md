@@ -4,8 +4,10 @@ The optional `spectra.svm` module executes dense RBF SVC exports without NumPy,
 scikit-learn or PyTorch at inference. It includes exact feature dictionaries,
 sparse coefficients, request-local kernel reuse and certified pairwise voting.
 This is an integration of the previously delivered SVM engines, not another model.
-Only Linux native builds have been tested. Import and package installation do not
-compile code; compilation is an explicit operation requiring a C++17 compiler.
+The builders support Linux x86-64/ARM64 and Windows x64 under the explicit
+[native-platform contract](SVM_PORTABILITY.md); acceptance depends on completed
+platform checks, not just builder support. Import and package installation do
+not compile code. Compilation is explicit and requires a suitable C++17 compiler.
 
 ## Build and run
 

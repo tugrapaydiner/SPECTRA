@@ -65,8 +65,9 @@ The default witness/manifest limit is **16 MiB**, measured before decoding:
 spectra cnf check examples/tiny.cnf answer.json --max-json-bytes 1048576
 ```
 
-`--max-json-bytes` must be positive. It bounds input bytes, not all decoder
-allocations, CPU time or filesystem access. Excessive nesting is reported as an
+`--max-json-bytes` must be an integer from 1 through `sys.maxsize - 1`.
+Reads use chunks of at most 64 KiB; a large cap does not preallocate the cap.
+The limit bounds input bytes, not all decoder allocations, CPU time or filesystem access. Excessive nesting is reported as an
 input error. `--out` uses exclusive creation; use a new path for each solve.
 
 ## Evidence integrity
