@@ -119,6 +119,13 @@ def analyze(cases: list[dict[str, Any]], rows: list[dict[str, Any]],
                 same = all(aa[k] == bb[k] for k in ("y_sha256", "z_sha256", "logits_sha256"))
                 if aa["bitwise"] != same:
                     raise ValueError("step bit flag differs from hashes")
+                if same and not aa["finite"]:
+                    raise ValueError("identical finite reference tensors reported as nonfinite")
+                if aa["finite"]:
+                    for tensor in ("y", "z", "logits"):
+                        if (aa[tensor + "_sha256"] == bb[tensor + "_sha256"]
+                                and aa["max_abs_" + tensor] != 0):
+                            raise ValueError("identical tensor digest has nonzero difference")
     totals = {a: sum(med[(c["case_id"], a)] for c in cases) for a in ARMS}
     summary = {"scope": "fixed development cases; warm complete solve; not a generalization claim",
                "cases": len(cases), "unique_problems": len(problems), "observations": len(rows),
