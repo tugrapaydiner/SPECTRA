@@ -38,7 +38,34 @@ def evidence(tmp_path):
     source.parent.mkdir(parents=True)
     source.write_bytes(after)
     sources = {'experiments/tree_total/benchmark.py': 'results/benchmark/benchmark_initial.py'}
-    paths, files, proof = {}, {}, []
+    source_digests = {'experiments/tree_total/benchmark.py': digest(before)}
+    replay_sources = {'benchmark.py': digest(after)}
+    for name in ('build.py', 'compiler.py', 'exact.py', 'replay.py', 'runtime.cpp', 'session.py'):
+        relative = 'experiments/tree_total/' + name
+        target = root / 'source' / relative
+        target.write_bytes(('inert source: ' + name).encode())
+        sources[relative] = 'source/' + relative
+        source_digests[relative] = digest(target.read_bytes())
+        replay_sources[name] = source_digests[relative]
+    for name in ('tree_residual', 'certified_trees'):
+        relative = f'experiments/{name}/runtime.cpp'
+        target = root / 'source' / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(('inert source: ' + relative).encode())
+        sources[relative] = 'source/' + relative
+        source_digests[relative] = digest(target.read_bytes())
+    paths, files, proof, replay_models = {}, {}, [], {}
+    def bind(mapped, raw):
+        original = '/synthetic/' + mapped
+        target = root / mapped
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+        paths[original], files[original] = mapped, digest(raw)
+        return digest(raw)
+    for mapped in ('native/total.so', 'residual/residual.so', 'baseline_evidence/native-register/trees.so',
+                   'baseline_evidence/official/libcatboostmodel-linux-x86_64-1.2.8.so',
+                   'baseline_evidence/official/libcatboostmodel-linux-x86_64-1.2.10.so'):
+        bind(mapped, ('inert library: ' + mapped).encode())
     rng, jobs = random.Random(2026092967), []
     for task in TASKS:
         for repeat in range(7):
@@ -50,12 +77,16 @@ def evidence(tmp_path):
                'tasks': {}}
     for task in TASKS:
         indices = struct.pack('<ii', 0, 1)
-        mapped = f'baseline_sdk/models/{task}/indices.i32'
-        original = '/synthetic/' + mapped
-        paths[original], files[original] = mapped, digest(indices)
-        file = root / mapped
-        file.parent.mkdir(parents=True)
-        file.write_bytes(indices)
+        replay_models[task] = {}
+        for name, raw in (('model.json', b'inert source model'), ('model-16.sct', b'inert compact'),
+                          ('model.cbm', b'inert official'), ('input.u8', b'\x00\x01'),
+                          ('indices.i32', indices)):
+            identity = bind(f'baseline_sdk/models/{task}/{name}', raw)
+            field = {'model.json': 'source', 'input.u8': 'inputs', 'indices.i32': 'expected'}.get(name)
+            if field:
+                replay_models[task][field] = identity
+        bind(f'residual_sdk/models/{task}/model.scr', b'inert residual')
+        bind(f'baseline_evidence/replay/{task}/cpp/export.so', b'inert exported library')
         records = [{'task': t, 'repeat': rep, 'chunk': chunk, 'arm': arm,
                     'rows': 2, 'cycles': 10, 'wall_ns': 20000, 'cpu_ns': 20000,
                     'indices_sha256': digest(indices)}
@@ -82,7 +113,7 @@ def evidence(tmp_path):
         models = {}
         for layout in ('flat', 'interned'):
             raw = (task + '/' + layout + ': inert fixture').encode()
-            (folder / (layout + '.sctt')).write_bytes(raw)
+            bind(f'results/replay/{task}/{layout}.sctt', raw)
             proof.append({'task': task, 'layout': layout, 'bytes': len(raw), 'sha256': digest(raw)})
             models[layout] = {'sha256': digest(raw), 'info': {'features': 1, 'maximum': 1, 'classes': 2},
                               'work': {'total': {'unresolved': 0, 'coarse_certified': 2,
@@ -102,12 +133,14 @@ def evidence(tmp_path):
     write_json(root / 'SOURCES.json', sources)
     write_json(run / 'LOCK.json', {'tasks': list(TASKS), 'arms': list(ARMS), 'chunks': [1, 32, 256],
                                   'repeats': 7, 'cycles': 10, 'seed': 2026092967, 'jobs': jobs,
-                                  'files': files, 'source': {'experiments/tree_total/benchmark.py': digest(before)},
+                                  'files': files, 'source': source_digests,
                                   'gate': {'batch32_geometric_ratio_limit': 1.10,
                                            'batch32_max_task_ratio_limit': 1.25, 'baseline': 'full16'}})
     write_json(run / 'SUMMARY.json', summary)
     write_json(root / 'results/independent.json', {'status': 'PASS', 'files': proof})
-    write_json(root / 'results/replay/LOCK.json', {'source_files': {'benchmark.py': digest(after)},
+    write_json(root / 'results/replay/LOCK.json', {'source_files': replay_sources,
+                                                  'models': replay_models,
+                                                  'library_sha256': files['/synthetic/native/total.so'],
                                                   'stress_rows_per_kind': 2048,
                                                   'seed_rule': '2026092961+d+D'})
     resource_jobs = list(itertools.product(TASKS, ('flat', 'interned', 'residual', 'official'), range(3)))

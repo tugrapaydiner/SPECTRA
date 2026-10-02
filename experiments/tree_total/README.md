@@ -99,6 +99,18 @@ resource records and every derived timing ratio without loading a native library
 clocks or proves outside reproduction. The independent mathematical constructor
 is separate from the recorded-data auditor.
 
+The auditor requires all 41 benchmark artifact roles: nine per task and five
+shared libraries, using the delivered model/library filename conventions and the
+`baseline_sdk` path component. Each role must have a unique binding; deleting an
+entry from both the lock and relocation map cannot remove the requirement.
+Retained indices are selected from verified bindings, not arbitrary map entries.
+The seven original total-tree execution/build sources and both baseline C++
+runtimes must be bound in the timing lock; replay must bind those seven total-tree
+sources. Extra bound artifacts and sources remain allowed and hash-checked.
+These source minima do not certify the full transitive Python dependency closure
+or require tests/docs added after the original run. Replay-versus-timing identity
+relationships beyond these inventories are not established by this check.
+
 The resource auditor requires the complete four-task, four-policy matrix with
 three distinct repeats per cell. It rejects empty, shortened, extended or duplicated
 schedules before comparing all 48 literal process receipts. Each receipt must

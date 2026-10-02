@@ -19,6 +19,11 @@ import xml.etree.ElementTree as ET
 TASKS=('letter','pendigits','satellite','optdigits')
 ARMS=('official128','official1210','exported_cpp','full16','residual_adaptive','total_flat','total_interned','exact_flat','exact_interned')
 RESOURCE_POLICIES=('flat','interned','residual','official')
+# Execution/build files present in the frozen protocol. Do not derive this from
+# today's checkout: later tests/docs must not invalidate older source snapshots.
+TOTAL_SOURCES=('benchmark.py','build.py','compiler.py','exact.py','replay.py','runtime.cpp','session.py')
+TIMED_SOURCES={f'experiments/tree_total/{name}' for name in TOTAL_SOURCES}|{
+    'experiments/tree_residual/runtime.cpp','experiments/certified_trees/runtime.cpp'}
 
 
 def require(ok, message):
@@ -122,11 +127,45 @@ def coverage(work, rows):
             'coverage summary differs')
 
 
+def inventory(value, required, message):
+    require(type(value) is dict and required<=value.keys(),message)
+    for key,digest in value.items():
+        require(type(key) is str and type(digest) is str and len(digest)==64 and
+                all(c in '0123456789abcdef' for c in digest),'invalid inventory identity')
+    return value
+
+
+def artifact_bindings(files):
+    """Resolve every artifact role emitted by benchmark.initialize, uniquely."""
+    inventory(files,set(),'invalid artifact inventory')
+    roles={}
+    def select(role,suffix,baseline=False):
+        matches=[p for p in files if p.endswith('/'+suffix) and
+                 (not baseline or 'baseline_sdk' in Path(p).parts)]
+        require(len(matches)==1,'missing or ambiguous benchmark artifact: '+role)
+        roles[role]=matches[0]
+    for task in TASKS:
+        for name in ('model.json','model-16.sct','model.cbm','input.u8','indices.i32'):
+            select(task+'/'+name,f'models/{task}/{name}',baseline=True)
+        for name in ('flat.sctt','interned.sctt'):
+            select(task+'/'+name,f'{task}/{name}')
+        select(task+'/model.scr',f'models/{task}/model.scr')
+        select(task+'/export.so',f'replay/{task}/cpp/export.so')
+    for name in ('total.so','residual.so','native-register/trees.so',
+                 'official/libcatboostmodel-linux-x86_64-1.2.8.so',
+                 'official/libcatboostmodel-linux-x86_64-1.2.10.so'):
+        select(name,name)
+    require(len(set(roles.values()))==41,'benchmark artifact roles overlap')
+    return roles
+
+
 def audit(root):
     root=Path(root);results=root/'results';run=results/'benchmark';lock=read(run/'LOCK.json')
     paths=read(root/'PATHS.json');sources=read(root/'SOURCES.json')
     compare(lock,{'tasks':list(TASKS),'arms':list(ARMS),'chunks':[1,32,256],'repeats':7,'cycles':10,'seed':2026092967,
                   'gate':{'batch32_geometric_ratio_limit':1.10,'batch32_max_task_ratio_limit':1.25,'baseline':'full16'}})
+    bindings=artifact_bindings(lock.get('files'))
+    inventory(lock.get('source'),TIMED_SOURCES,'incomplete timed source inventory')
     for path,digest in lock['files'].items():
         require(path in paths and sha(member(root,paths[path]))==digest,'artifact bytes changed')
     for path,digest in lock['source'].items():
@@ -139,7 +178,7 @@ def audit(root):
     require(lock['jobs']==jobs,'fixed schedule differs')
     records=[];ratios=[];summary=read(run/'SUMMARY.json');expected_by_task={}
     for task in TASKS:
-        original=next(p for p in paths if p.endswith('/models/'+task+'/indices.i32') and 'baseline_sdk' in p)
+        original=bindings[task+'/indices.i32']
         with member(root,paths[original]).open('rb') as stream:index_bytes=stream.read(4*65536+1)
         require(0<len(index_bytes)<=4*65536 and len(index_bytes)%4==0,'index bytes invalid')
         indices=struct.unpack('<'+'i'*(len(index_bytes)//4),index_bytes);expected_by_task[task]=indices
@@ -173,6 +212,7 @@ def audit(root):
     proof=read(results/'independent.json');require(proof['status']=='PASS' and len(proof['files'])==8,'incomplete proof reconstruction')
     replay=read(results/'replay/LOCK.json')
     compare(replay,{'stress_rows_per_kind':2048,'seed_rule':'2026092961+d+D'})
+    inventory(replay.get('source_files'),set(TOTAL_SOURCES),'incomplete replay source inventory')
     for name,digest in replay['source_files'].items():require(sha(member(root,'source/experiments/tree_total/'+name))==digest,'replay source changed')
     total_scores=stress_rows=stress_exact=0
     for task in TASKS:
