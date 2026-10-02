@@ -166,6 +166,14 @@ def target_library(root,target):
     return root/'native'/target/'total.so'
 
 
+def _verified_model(root,task,meta):
+    folder=root/'models'/task
+    proof=VerifiedTotal.from_files(folder/'model.json',folder/'model.sctt')
+    if any(proof.info[key]!=meta[key] for key in ('features','maximum')) or proof.info['classes']!=len(meta['classes']):
+        raise ValueError('source and replay metadata differ')
+    return proof
+
+
 def selftest_main(root):
     root=Path(root).resolve(strict=True)
     p=argparse.ArgumentParser();p.add_argument('--target',choices=['portable','avx2'],default='portable');p.add_argument('--out',type=Path,required=True)
@@ -173,9 +181,7 @@ def selftest_main(root):
     if a.out.resolve().is_relative_to(root) or os.path.lexists(a.out):p.error('new output outside immutable bundle required')
     manifest=verify(root);records=[]
     for task,meta in manifest['models'].items():
-        folder=root/'models'/task;proof=VerifiedTotal.from_files(folder/'model.json',folder/'model.sctt')
-        if any(proof.info[key]!=meta[key] for key in ('features','maximum')) or proof.info['classes']!=len(meta['classes']):
-            raise ValueError('source and replay metadata differ')
+        folder=root/'models'/task;proof=_verified_model(root,task,meta)
         q=bytearray((folder/'input.u8').read_bytes());expected=list(struct.unpack('<'+'i'*meta['rows'],(folder/'indices.i32').read_bytes()))
         with TotalSession(proof,target_library(root,a.target)) as engine:
             for policy in ('total','exact','audit'):
@@ -197,8 +203,8 @@ def run_main(root):
     p.add_argument('--input',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
     a=p.parse_args()
     if a.output.resolve().is_relative_to(root) or os.path.lexists(a.output):p.error('new output outside immutable bundle required')
-    verify(root);folder=root/'models'/a.model
-    proof=VerifiedTotal.from_files(folder/'model.json',folder/'model.sctt')
+    manifest=verify(root)
+    proof=_verified_model(root,a.model,manifest['models'][a.model])
     with TotalSession(proof,target_library(root,a.target)) as engine,a.input.open('rb') as src:
         result=stream(engine,src,a.output)
     print(json.dumps(result,indent=2))

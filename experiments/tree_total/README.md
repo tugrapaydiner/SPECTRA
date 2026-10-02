@@ -49,6 +49,9 @@ unlisted, changed or symlinked members are rejected. The UTF-8 manifest is limit
 to 1 MiB, rejects duplicate fields and nonfinite numbers, and validates replay
 dimensions and class mappings. Self-test reports must also be new files outside
 the kit. An empty or incomplete kit cannot report a successful replay.
+Both entry points compare the selected model's feature width, input maximum and
+class count with its reconstructed source proof before loading the native model.
+A syntactically valid manifest cannot override these source-defined dimensions.
 
 The kit tests include an isolated-Python replay of four tiny synthetic fixtures.
 They check assembly, both native targets when supported, prediction output and

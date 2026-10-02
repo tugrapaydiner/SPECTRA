@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import sys
@@ -184,12 +185,14 @@ def test_selftest_refuses_output_inside_immutable_bundle(bundle, monkeypatch):
     assert not destination.exists()
 
 
-def test_assembled_synthetic_kit_runs_without_frameworks(tmp_path):
+@pytest.fixture(scope='module')
+def assembled_kit(tmp_path_factory):
     # These four tiny fixtures test packaging and replay, not retained-model quality.
     from ..certified_trees.test_native import source
     from .build import build
     from .compiler import compile_bytes
 
+    tmp_path = tmp_path_factory.mktemp('assembled-kit')
     checkout = Path(__file__).resolve().parents[2]
     parent, models, native, root = (tmp_path / name for name in ('parent', 'models', 'native', 'kit'))
     parent.mkdir()
@@ -213,6 +216,11 @@ def test_assembled_synthetic_kit_runs_without_frameworks(tmp_path):
         build(native / ('native-' + target), target=target)
     manifest = kit.assemble(checkout, models, parent, native, root)
     assert set(manifest['files']) == inventory()
+    return root, manifest
+
+
+def test_assembled_synthetic_kit_runs_without_frameworks(tmp_path, assembled_kit):
+    root, manifest = assembled_kit
     targets = ['portable']
     if 'avx2' in Path('/proc/cpuinfo').read_text().lower():
         targets.append('avx2')
@@ -234,3 +242,27 @@ def test_assembled_synthetic_kit_runs_without_frameworks(tmp_path):
     assert [row['class_index'] for row in records if row['type'] == 'prediction'] == [0, 1, 0, 1]
     assert records[-1]['type'] == 'complete' and records[-1]['rows'] == 4
     assert kit.verify(root) == manifest
+
+
+@pytest.mark.parametrize('entrypoint', ['run.py', 'selftest.py'])
+@pytest.mark.parametrize('field,value', [('maximum', 2), ('classes', [0, 1, 2])])
+def test_entrypoints_reject_metadata_that_conflicts_with_source(
+        tmp_path, assembled_kit, entrypoint, field, value):
+    original, _ = assembled_kit
+    root = tmp_path / 'kit'
+    shutil.copytree(original, root)
+    manifest = json.loads((root / 'MANIFEST.json').read_text())
+    manifest['models']['letter'][field] = value
+    write_manifest(root, manifest)
+    # This is valid manifest syntax with an intact byte inventory. Its declared
+    # geometry contradicts the independently reconstructed source proof.
+    assert kit.verify(root) == manifest
+    destination = tmp_path / 'output.jsonl'
+    args = (['--model', 'letter', '--input', str(root / 'models/letter/input.jsonl'),
+             '--output', str(destination)] if entrypoint == 'run.py' else
+            ['--out', str(destination)])
+    result = subprocess.run([sys.executable, '-I', '-S', str(root / entrypoint), *args],
+                            cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode != 0, result.stdout
+    assert 'source and replay metadata differ' in result.stderr
+    assert not destination.exists()
