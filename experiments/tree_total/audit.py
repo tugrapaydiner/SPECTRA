@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 
 TASKS=('letter','pendigits','satellite','optdigits')
 ARMS=('official128','official1210','exported_cpp','full16','residual_adaptive','total_flat','total_interned','exact_flat','exact_interned')
+RESOURCE_POLICIES=('flat','interned','residual','official')
 
 
 def require(ok, message):
@@ -55,6 +56,48 @@ def compare(a,b):
     elif type(b) is float:
         require(type(a) in (int,float) and math.isfinite(a) and math.isclose(a,b,rel_tol=1e-12,abs_tol=1e-12),'wrong numeric aggregate')
     else:require(type(a) is type(b) and a==b,'wrong aggregate')
+
+
+def resource_schedule(resource, observed):
+    """Require the whole recorded matrix before any zip can truncate validation."""
+    require(type(resource) is dict and resource.get('isolated') is True,
+            'resource run not isolated')
+    jobs=resource.get('jobs')
+    require(type(jobs) is list and len(jobs)==48 and len(observed)==48,
+            'resource schedule or observations incomplete')
+    for job in jobs:
+        require(type(job) is list and len(job)==3,'invalid resource job')
+        task,policy,repeat=job
+        require(type(task) is str and task in TASKS and
+                type(policy) is str and policy in RESOURCE_POLICIES and
+                type(repeat) is int and repeat>=0,'invalid resource job identity')
+    repeats={job[2] for job in jobs}
+    require(len(repeats)==3,'resource matrix needs three distinct repeats')
+    expected={(task,policy,repeat) for task in TASKS for policy in RESOURCE_POLICIES for repeat in repeats}
+    require({tuple(job) for job in jobs}==expected,'resource matrix missing or duplicated jobs')
+    return jobs
+
+
+def resource_output(literal):
+    require(type(literal) is dict and type(literal.get('returncode')) is int and
+            literal['returncode']==0,'resource process failed')
+    require(type(literal.get('stdout')) is str,'missing resource process output')
+    output=decode(literal['stdout'])
+    fields={'task','policy','setup_ns','memory_kib','runtime_info','model_bytes',
+            'model_sha256','library_sha256','matched','numerical_frameworks','scope'}
+    require(type(output) is dict and fields<=output.keys(),'incomplete resource process output')
+    for name in ('setup_ns','model_bytes'):
+        require(type(output[name]) is int and output[name]>0,'invalid resource measurement')
+    memory=output['memory_kib']
+    require(type(memory) is dict and all(type(memory.get(key)) is int and memory[key]>0
+                                       for key in ('VmHWM','VmRSS')),'invalid resource memory')
+    require(type(output['runtime_info']) is dict and type(output['scope']) is str and
+            bool(output['scope']),'invalid resource context')
+    for key in ('model_sha256','library_sha256'):
+        value=output[key]
+        require(type(value) is str and len(value)==64 and all(c in '0123456789abcdef' for c in value),
+                'invalid resource identity')
+    return output
 
 
 def audit(root):
@@ -130,15 +173,16 @@ def audit(root):
             require(stress['work']['unresolved']==0,'stress unresolved')
             stress_rows+=stress['rows'];stress_exact+=stress['work']['exact_completed'];total_scores+=len(scores)//8
     resource=read(results/'resources/LOCK.json');observed=[decode(l) for l in (results/'resources/rows.jsonl').read_text().splitlines()]
-    require(len(observed)==48 and resource['isolated'] is True,'resource run incomplete/not isolated')
-    for i,(r,job) in enumerate(zip(observed,resource['jobs'])):
-        require([r['task'],r['policy'],r['repeat']]==job and r['matched'] is True and r['numerical_frameworks']==[],'resource context differs')
+    jobs=resource_schedule(resource,observed)
+    for i,(r,job) in enumerate(zip(observed,jobs)):
+        require(type(r) is dict and type(r.get('repeat')) is int and
+                [r.get(k) for k in ('task','policy','repeat')]==job and
+                r.get('matched') is True and r.get('numerical_frameworks')==[],'resource context differs')
         literal=read(results/'resources'/f'process-{i}.json')
-        require(literal['returncode']==0,'resource process failed')
-        compare(r,decode(literal['stdout']))
+        compare(r,resource_output(literal))
     return {'status':'PASS','timing_cells':len(records),'repeated_predictions':sum(r['rows']*10 for r in records),
             'retained_rows':sum(map(len,expected_by_task.values())),'stress_rows':stress_rows,'stress_exact_fallbacks':stress_exact,
-            'recorded_source_score_values':total_scores,'independent_reconstructed_files':8,'isolated_resource_processes':48,
+            'recorded_source_score_values':total_scores,'independent_reconstructed_files':8,'isolated_resource_processes':len(observed),
             'geometric_ratio':g,'performance_gate':g<=1.10 and max(ratios)<=1.25,
             'scope':'recorded bytes, scopes, outcomes, preserved interruptions and arithmetic; not authenticated clocks or universal backend equivalence'}
 

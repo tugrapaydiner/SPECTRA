@@ -91,6 +91,14 @@ resource records and every derived timing ratio without loading a native library
 clocks or proves outside reproduction. The independent mathematical constructor
 is separate from the recorded-data auditor.
 
+The resource auditor requires the complete four-task, four-policy matrix with
+three distinct repeats per cell. It rejects empty, shortened, extended or duplicated
+schedules before comparing all 48 literal process receipts. Each receipt must
+contain the expected identities and valid setup/memory measurements; empty output
+is not a successful measurement. Synthetic regression fixtures exercise this
+bookkeeping and the 16 current corruption cases; they are
+separate from the 12 historical damaged-copy checks reported in RESULTS.md.
+
 No new learning, world-first mechanism, Windows/ARM, historical full-suite,
 production release or external researcher acceptance is claimed. Earlier
 classifiers with higher task accuracy remain unchanged.
