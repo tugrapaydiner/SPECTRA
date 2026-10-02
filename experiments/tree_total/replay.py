@@ -23,6 +23,10 @@ def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def write(path,value):
     with Path(path).open('x',encoding='utf-8') as f:json.dump(value,f,indent=2,allow_nan=False)
 
+def require(condition,message):
+    # Replay acceptance must remain active under python -O / PYTHONOPTIMIZE.
+    if not condition:raise ValueError(message)
+
 class ScalarSource:
     def __init__(self,raw,maximum):
         doc=json.loads(raw);fs=doc['features_info']['float_features']
@@ -77,7 +81,8 @@ def run(a):
         raw=(folder/'model.json').read_bytes();x=(folder/'input.u8').read_bytes();n=len(x)//d
         rows=[x[i*d:(i+1)*d] for i in range(n)];expected=list(struct.unpack('<'+'i'*n,(folder/'indices.i32').read_bytes()))
         source=ScalarSource(raw,D);start=time.perf_counter();scores=source.scores(rows);elapsed=time.perf_counter()-start
-        (dest/'reference_scores.f64').write_bytes(scores);assert source.indices(scores)==expected
+        (dest/'reference_scores.f64').write_bytes(scores)
+        require(source.indices(scores)==expected,task+': source/reference labels differ')
         exported=ExportSession(a.exports/task/'cpp');cpp=exported.scores(bytearray(x))
         old=array('d');old.frombytes(cpp);new=array('d');new.frombytes(scores)
         differences=sum(cpp[i:i+8]!=scores[i:i+8] for i in range(0,len(scores),8));models={}
@@ -85,20 +90,24 @@ def run(a):
             start=time.perf_counter();binary=compile_bytes(raw,D,layout=layout);compile_time=time.perf_counter()-start
             (dest/(layout+'.sctt')).write_bytes(binary);proof=VerifiedTotal(raw,binary)
             with TotalSession(proof,a.library) as engine:
-                assert engine.scores(bytearray(x))==scores,(task,layout,'source scores')
+                require(engine.scores(bytearray(x))==scores,task+'/'+layout+': source scores differ')
                 work={}
                 for policy in ('total','exact','audit','certificate_only'):
                     got=engine.inspect_buffer(bytearray(x),policy=policy)
-                    assert all(i==j or (policy=='certificate_only' and i==-1) for i,j in zip(got['indices'],expected))
+                    require(len(got['indices'])==len(expected) and
+                            all(i==j or (policy=='certificate_only' and i==-1) for i,j in zip(got['indices'],expected)),
+                            task+'/'+layout+'/'+policy+': prediction inventory or labels differ')
                     work[policy]=got['work']
-                assert engine.scores(bytearray(x),traversal='scalar')==scores
+                require(engine.scores(bytearray(x),traversal='scalar')==scores,
+                        task+'/'+layout+': scalar source scores differ')
                 models[layout]={'bytes':len(binary),'sha256':sha(dest/(layout+'.sctt')),'compile_seconds':compile_time,'info':engine.info,'work':work}
         st={};proof=VerifiedTotal(raw,(dest/'interned.sctt').read_bytes())
         with TotalSession(proof,a.library) as engine:
             for kind,queries in zip(('uniform','boundary'),stress(source,d,D)):
                 buf=bytearray(b''.join(queries));wanted=source.scores(queries)
-                assert engine.scores(buf)==wanted,(task,kind,'source scores')
-                got=engine.inspect_buffer(buf,policy='audit');indices=source.indices(wanted);assert got['indices']==indices
+                require(engine.scores(buf)==wanted,task+'/'+kind+': stress source scores differ')
+                got=engine.inspect_buffer(buf,policy='audit');indices=source.indices(wanted)
+                require(got['indices']==indices,task+'/'+kind+': stress labels differ')
                 cpp_indices=exported.predict_buffer(buf)
                 packed=struct.pack('<'+'i'*len(indices),*indices)
                 st[kind]={'rows':len(queries),'work':got['work'],'source_scores_sha256':hashlib.sha256(wanted).hexdigest(),

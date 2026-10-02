@@ -10,8 +10,7 @@ pipeline; the main change is that an external CatBoost runtime is unnecessary.
 
 ```bash
 python -m experiments.tree_total.build --out /new/native --target portable
-python -m pytest experiments/tree_total/test_total.py \
-  experiments/tree_total/test_deployment.py --import-mode=importlib \
+python -m pytest experiments/tree_total --import-mode=importlib \
   --confcutdir=experiments/tree_total
 ```
 
@@ -43,11 +42,32 @@ and -S. The kit loads neither CatBoost nor numerical Python frameworks. Its run.
 publishes a new complete JSONL result outside the immutable bundle. Source proof
 verification takes substantial startup work, included in separate measurements.
 
+Before loading a model or library, the runner and self-test check the complete
+four-model inventory and every required source, native library, build receipt and
+replay file. The files on disk must exactly match the manifest inventory; missing,
+unlisted, changed or symlinked members are rejected. The UTF-8 manifest is limited
+to 1 MiB, rejects duplicate fields and nonfinite numbers, and validates replay
+dimensions and class mappings. Self-test reports must also be new files outside
+the kit. An empty or incomplete kit cannot report a successful replay.
+Both entry points compare the selected model's feature width, input maximum and
+class count with its reconstructed source proof before loading the native model.
+A syntactically valid manifest cannot override these source-defined dimensions.
+
+The kit tests include an isolated-Python replay of four tiny synthetic fixtures.
+They check assembly, both native targets when supported, prediction output and
+unchanged bundle contents. These fixtures do not reproduce the retained benchmark
+or establish dataset accuracy.
+
 `independent.py` reconstructs all eight flat/interned artifacts with the preserved
 Fraction oracle, independently of the fast dyadic analyzer copied unchanged from
 the previous local delivery. `replay.py` compares full source scores with a separate
 scalar source reader, preserves any exported-C++ score differences, and executes
 a fixed uniform/boundary stress set without model fitting.
+
+Replay acceptance uses explicit errors, so `python -O` cannot disable source-score
+or label checks. Prediction counts must match the complete reference inventory;
+a matching prefix is insufficient. Failed replay leaves diagnostic partial files
+but does not publish its final `report.json` success record.
 
 ## Reproducing the comparison
 
@@ -78,6 +98,40 @@ resource records and every derived timing ratio without loading a native library
 `negative_audit.py` damages disposable copies only. Neither tool authenticates
 clocks or proves outside reproduction. The independent mathematical constructor
 is separate from the recorded-data auditor.
+
+The auditor requires all 41 benchmark artifact roles: nine per task and five
+shared libraries, using the delivered model/library filename conventions and the
+`baseline_sdk` path component. Each role must have a unique binding; deleting an
+entry from both the lock and relocation map cannot remove the requirement.
+Retained indices are selected from verified bindings, not arbitrary map entries.
+The seven original total-tree execution/build sources and both baseline C++
+runtimes must be bound in the timing lock; replay must bind those seven total-tree
+sources. Extra bound artifacts and sources remain allowed and hash-checked.
+These source minima do not certify the full transitive Python dependency closure
+or require tests/docs added after the original run.
+
+Replay must bind all four tasks to the benchmark's source JSON, input bytes and
+expected indices. Every independently reconstructed flat/interned model must
+identify that same source and match the timed model's bytes. Matching class labels
+alone cannot establish that two receipts concern the same model or corpus.
+Relocation may use separate files with identical contents. Native-library identity
+is a separate provenance question: replay and timing may use different valid
+builds, and this recorded-data check does not require equal library digests.
+
+The resource auditor requires the complete four-task, four-policy matrix with
+three distinct repeats per cell. It rejects empty, shortened, extended or duplicated
+schedules before comparing all 48 literal process receipts. Each receipt must
+contain the expected identities and valid setup/memory measurements; empty output
+is not a successful measurement. Synthetic regression fixtures exercise this
+bookkeeping and the 16 current corruption cases; they are
+separate from the 12 historical damaged-copy checks reported in RESULTS.md.
+
+Recorded retained and stress score arrays must contain finite values with exact
+declared dimensions. The auditor independently derives first-index argmax labels
+and compares them with every stored stress label, in addition to checking hashes.
+It also checks integer coverage totals, input domains and the declared fixed
+stress settings. These are consistency checks on recorded evidence; the auditor
+does not rerun native inference or prove that a recorded score came from its model.
 
 No new learning, world-first mechanism, Windows/ARM, historical full-suite,
 production release or external researcher acceptance is claimed. Earlier

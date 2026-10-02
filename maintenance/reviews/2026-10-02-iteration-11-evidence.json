@@ -1,0 +1,228 @@
+{
+  "base_commit": "8295624fd7a63b1e50e33aa1911cc4270f979cff",
+  "scope": "synthetic fixed-model/corpus receipt regressions plus read-only checks of existing iteration-06 retained identities; no new timing, native replay or accuracy result",
+  "before": {
+    "counts": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "33",
+      "skipped": "0",
+      "tests": "35",
+      "time": "1.322",
+      "timestamp": "2026-10-02T14:37:31.955966-04:00",
+      "hostname": "317302ae3054"
+    },
+    "failures": [
+      {
+        "case": "test_replay_identity_mismatch_rejected[source-letter]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[source-pendigits]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[source-satellite]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[source-optdigits]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[inputs-letter]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[inputs-pendigits]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[inputs-satellite]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[inputs-optdigits]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[expected-letter]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[expected-pendigits]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[expected-satellite]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_replay_identity_mismatch_rejected[expected-optdigits]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_incomplete_replay_identities_rejected[missing-models]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_incomplete_replay_identities_rejected[empty-models]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_incomplete_replay_identities_rejected[missing-task]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_incomplete_replay_identities_rejected[missing-field]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[wrong-source-0]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[wrong-source-1]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[wrong-source-2]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[wrong-source-3]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[wrong-source-4]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[wrong-source-5]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[wrong-source-6]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[wrong-source-7]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[missing-source-0]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[missing-source-1]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[missing-source-2]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[missing-source-3]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[missing-source-4]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[missing-source-5]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[missing-source-6]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_proof_source_binding_rejected[missing-source-7]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_timed_model_cannot_differ_from_reconstructed_model",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      }
+    ]
+  },
+  "after": {
+    "counts": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "313",
+      "time": "18.555",
+      "timestamp": "2026-10-02T14:38:11.263666-04:00",
+      "hostname": "317302ae3054"
+    }
+  },
+  "retained_identity_check": {
+    "status": "PASS",
+    "replay_tasks": 4,
+    "proof_files": 8,
+    "files": [
+      {
+        "task": "letter",
+        "layout": "flat",
+        "source_sha256": "2ad99498381c96b7f3f2471d631eb341a6db6ca76eea723b63d38ef3b843e2ac",
+        "sha256": "6e0aa0d10ac6ba035e58857e72251bd5f4b6019ceac2bf53a6fe34532c9458ee"
+      },
+      {
+        "task": "letter",
+        "layout": "interned",
+        "source_sha256": "2ad99498381c96b7f3f2471d631eb341a6db6ca76eea723b63d38ef3b843e2ac",
+        "sha256": "2a1af324116ca3feaf1188d2480a040780d5eb49c379a1314212014c65f381b6"
+      },
+      {
+        "task": "pendigits",
+        "layout": "flat",
+        "source_sha256": "facb7302a9f4f397ebd5b0d1c7dd8e53de82dc7a5c4e3c955be17b8885c93654",
+        "sha256": "58288aac0e8c13be24e7bc6975db65110491b94e748c8c3b3f44703385797819"
+      },
+      {
+        "task": "pendigits",
+        "layout": "interned",
+        "source_sha256": "facb7302a9f4f397ebd5b0d1c7dd8e53de82dc7a5c4e3c955be17b8885c93654",
+        "sha256": "d5da4dce07f5a3a2dffd6a07035c2f2358eeb31a139aba265b7b373299124f25"
+      },
+      {
+        "task": "satellite",
+        "layout": "flat",
+        "source_sha256": "af63f5a744830bbf15e67b37a1c0cac03333190d3beeb0fe31cc1c4b5ff5ef50",
+        "sha256": "4a7827c96e1f16e1fddcc54b583d40a7837c2588b81f045cd853b6954d50736c"
+      },
+      {
+        "task": "satellite",
+        "layout": "interned",
+        "source_sha256": "af63f5a744830bbf15e67b37a1c0cac03333190d3beeb0fe31cc1c4b5ff5ef50",
+        "sha256": "35a35e8b8ea1c53d929294dcf209067e88bc807184f539133d293a16a76c2ad9"
+      },
+      {
+        "task": "optdigits",
+        "layout": "flat",
+        "source_sha256": "264fe5694b2e7bee8cc40c3dc4f76c72ef08f47484be3c2268c8b5439db0584b",
+        "sha256": "063fbb4f9e9f6f1108073757220f08aeef4fe12e123784620f3d2a95ac2849b6"
+      },
+      {
+        "task": "optdigits",
+        "layout": "interned",
+        "source_sha256": "264fe5694b2e7bee8cc40c3dc4f76c72ef08f47484be3c2268c8b5439db0584b",
+        "sha256": "46a01e6b2b7b8f3852a7058fb2e5fc26f5d8048b220fe736166e632ddd3160e0"
+      }
+    ],
+    "scope": "identity comparison of existing iteration-06 receipts and current retained bytes; no new inference, timing or full historical audit"
+  },
+  "retained_check_recipe": "\"\"\"Read-only identity check of iteration-06 receipts; not a benchmark re-audit.\"\"\"\nimport hashlib\nimport json\nfrom pathlib import Path\n\nfrom experiments.tree_total.audit import TASKS, replay_model_bindings\n\nbase = Path('.review/06-retained')\nsdk = base / 'original/SPECTRA-residual-evidence/baseline_sdk'\nmodels = base / 'replay-portable'\nreplay = json.loads((models / 'LOCK.json').read_text())\nproof = json.loads((base / 'independent.json').read_text())\nfiles, bindings = {}, {}\nfor task in TASKS:\n    for name in ('model.json', 'input.u8', 'indices.i32', 'flat.sctt', 'interned.sctt'):\n        path = (models / task / name if name.endswith('.sctt') else sdk / 'models' / task / name)\n        bindings[task + '/' + name] = str(path)\n        files[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()\nreplay_model_bindings(replay, files, bindings)\nchecked = []\nfor entry in proof['files']:\n    task, layout = entry['task'], entry['layout']\n    source_hash = files[bindings[task + '/model.json']]\n    model_hash = files[bindings[task + '/' + layout + '.sctt']]\n    if entry['source_sha256'] != source_hash or entry['sha256'] != model_hash:\n        raise ValueError('retained proof identity mismatch')\n    checked.append({'task': task, 'layout': layout, 'source_sha256': source_hash, 'sha256': model_hash})\nresult = {'status': 'PASS', 'replay_tasks': len(TASKS), 'proof_files': len(checked),\n          'files': checked, 'scope': 'identity comparison of existing iteration-06 receipts and current retained bytes; no new inference, timing or full historical audit'}\nout = Path('.review/11-replay-bindings/retained-identities.json')\nwith out.open('x') as stream:\n    json.dump(result, stream, indent=2)\nprint(json.dumps({k:v for k,v in result.items() if k != 'files'}))\n",
+  "sources": {
+    "experiments/tree_total/audit.py": "24f59f97d52d0c680c1b04ef7e2d66a5d10d210e689d1f009b81eceef58b3c29",
+    "experiments/tree_total/test_audit.py": "672cc5cd1a6e6491582cb605a264f0b62fa24ca724205182b431c401f8c0ca6f",
+    "experiments/tree_total/test_audit_bindings.py": "e805403b6ef01e9d39b6189ef142bff6ec70c38f15f2126c564e91c359203935"
+  },
+  "log_sha256": {
+    "before.log": "d39a9805185931a7e09682f6358fc063fe7126e21b33b4c9e5bb7c5476e15b60",
+    "tree.log": "87a7678191c836cb4386eac491f9dfe821eebf73a010e2df072aa7cea2411b3e"
+  }
+}

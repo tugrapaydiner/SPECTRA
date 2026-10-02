@@ -1,0 +1,303 @@
+{
+  "base_commit": "b99c1f359aaeee8b9033cedc9cbf681afd3ab52e",
+  "scope": "synthetic recorded-data inventory regressions; no measured performance or numerical claims",
+  "before": {
+    "counts": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "65",
+      "skipped": "0",
+      "tests": "69",
+      "time": "2.721",
+      "timestamp": "2026-10-02T14:29:52.358917-04:00",
+      "hostname": "317302ae3054"
+    },
+    "failures": [
+      {
+        "case": "test_inventory_omissions_rejected[empty-results/benchmark/LOCK.json-files]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_inventory_omissions_rejected[empty-results/benchmark/LOCK.json-source]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_inventory_omissions_rejected[empty-results/replay/LOCK.json-source_files]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_inventory_omissions_rejected[omit-one-results/benchmark/LOCK.json-files]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_inventory_omissions_rejected[omit-one-results/benchmark/LOCK.json-source]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_inventory_omissions_rejected[omit-one-results/replay/LOCK.json-source_files]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_inventory_omissions_rejected[omit-and-corrupt-results/benchmark/LOCK.json-files]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/letter/model.json]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/letter/model-16.sct]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/letter/model.cbm]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/letter/input.u8]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/letter/indices.i32]",
+        "reason": "StopIteration"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/pendigits/model.json]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/pendigits/model-16.sct]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/pendigits/model.cbm]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/pendigits/input.u8]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/pendigits/indices.i32]",
+        "reason": "StopIteration"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/satellite/model.json]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/satellite/model-16.sct]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/satellite/model.cbm]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/satellite/input.u8]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/satellite/indices.i32]",
+        "reason": "StopIteration"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/optdigits/model.json]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/optdigits/model-16.sct]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/optdigits/model.cbm]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/optdigits/input.u8]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_sdk/models/optdigits/indices.i32]",
+        "reason": "StopIteration"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[results/replay/letter/flat.sctt]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[results/replay/letter/interned.sctt]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[results/replay/pendigits/flat.sctt]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[results/replay/pendigits/interned.sctt]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[results/replay/satellite/flat.sctt]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[results/replay/satellite/interned.sctt]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[results/replay/optdigits/flat.sctt]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[results/replay/optdigits/interned.sctt]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[residual_sdk/models/letter/model.scr]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[residual_sdk/models/pendigits/model.scr]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[residual_sdk/models/satellite/model.scr]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[residual_sdk/models/optdigits/model.scr]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_evidence/replay/letter/cpp/export.so]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_evidence/replay/pendigits/cpp/export.so]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_evidence/replay/satellite/cpp/export.so]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_evidence/replay/optdigits/cpp/export.so]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[native/total.so]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[residual/residual.so]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_evidence/native-register/trees.so]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_evidence/official/libcatboostmodel-linux-x86_64-1.2.8.so]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_artifact_rejected_even_when_mapping_also_removed[baseline_evidence/official/libcatboostmodel-linux-x86_64-1.2.10.so]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_timed_source_rejected[experiments/tree_total/benchmark.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_timed_source_rejected[experiments/tree_total/build.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_timed_source_rejected[experiments/tree_total/compiler.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_timed_source_rejected[experiments/tree_total/exact.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_timed_source_rejected[experiments/tree_total/replay.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_timed_source_rejected[experiments/tree_total/runtime.cpp]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_timed_source_rejected[experiments/tree_total/session.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_timed_source_rejected[experiments/tree_residual/runtime.cpp]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_timed_source_rejected[experiments/certified_trees/runtime.cpp]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_replay_source_rejected[benchmark.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_replay_source_rejected[build.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_replay_source_rejected[compiler.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_replay_source_rejected[exact.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_replay_source_rejected[replay.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_replay_source_rejected[runtime.cpp]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_each_required_replay_source_rejected[session.py]",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      },
+      {
+        "case": "test_ambiguous_artifact_role_rejected",
+        "reason": "Failed: DID NOT RAISE <class 'ValueError'>"
+      }
+    ]
+  },
+  "after": {
+    "counts": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "278",
+      "time": "16.814",
+      "timestamp": "2026-10-02T14:29:55.380435-04:00",
+      "hostname": "317302ae3054"
+    }
+  },
+  "sources": {
+    "experiments/tree_total/audit.py": "e3bf9a8dcbb44ca51f727abaf982abca7df304508df6219186934829014d05d6",
+    "experiments/tree_total/test_audit.py": "8460d0c04928557976116fda0e69f2ddac08cf0fb946b4c99e76be2dbf63e3e7",
+    "experiments/tree_total/test_audit_inventory.py": "02be7db5fcb07c5cb055c294a9bd2b9677507aa77de1eba48483177a028b3ec3"
+  },
+  "log_sha256": {
+    "before.log": "2bc2467d24cddf8d35a702cb31d747051cdd26d01ff187a7d419cb24a5d0cd16",
+    "tree-final.log": "a1b3775a0c82450612b5686ec1fe724796068ccc4054bc673c95778796bf34f7",
+    "before-complete.log": "37e261177f48eeed26709182de69c5826a4615ca52ef8a910e49a5603b750670",
+    "focused.log": "f7a77cb7b99b814b6095d61956e7c020905a8cb44c103be537115b3fe6c2e1da",
+    "before-final.log": "42d674ddf7ac9e1ceefac4a89e64006af149c2dcba93583151a2487df250883f",
+    "tree.log": "7816e754aaed69f02b7c5d883dd7c0dd1c91dc57093e3f5a708a2b904489a8e0"
+  }
+}

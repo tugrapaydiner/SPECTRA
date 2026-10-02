@@ -25,6 +25,10 @@ def run(root,out):
         ('changed-stress-score','results/replay/letter/uniform-scores.f64',lambda p:p.read_bytes()[:-1]+bytes([p.read_bytes()[-1]^1])),
         ('missing-proof','results/independent.json',lambda p:change_json(p,lambda x:x['files'].pop())),
         ('nonisolated-resource','results/resources/LOCK.json',lambda p:change_json(p,lambda x:x.update(isolated=False))),
+        ('empty-resource-schedule','results/resources/LOCK.json',lambda p:change_json(p,lambda x:x.update(jobs=[]))),
+        ('short-resource-schedule','results/resources/LOCK.json',lambda p:change_json(p,lambda x:x['jobs'].pop())),
+        ('long-resource-schedule','results/resources/LOCK.json',lambda p:change_json(p,lambda x:x['jobs'].append(x['jobs'][0]))),
+        ('empty-resource-output','results/resources/process-0.json',lambda p:change_json(p,lambda x:x.update(stdout='{}'))),
     ]
     results=[]
     for name,file,mutate in cases:

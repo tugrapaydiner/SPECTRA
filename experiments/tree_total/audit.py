@@ -18,6 +18,12 @@ import xml.etree.ElementTree as ET
 
 TASKS=('letter','pendigits','satellite','optdigits')
 ARMS=('official128','official1210','exported_cpp','full16','residual_adaptive','total_flat','total_interned','exact_flat','exact_interned')
+RESOURCE_POLICIES=('flat','interned','residual','official')
+# Execution/build files present in the frozen protocol. Do not derive this from
+# today's checkout: later tests/docs must not invalidate older source snapshots.
+TOTAL_SOURCES=('benchmark.py','build.py','compiler.py','exact.py','replay.py','runtime.cpp','session.py')
+TIMED_SOURCES={f'experiments/tree_total/{name}' for name in TOTAL_SOURCES}|{
+    'experiments/tree_residual/runtime.cpp','experiments/certified_trees/runtime.cpp'}
 
 
 def require(ok, message):
@@ -57,11 +63,120 @@ def compare(a,b):
     else:require(type(a) is type(b) and a==b,'wrong aggregate')
 
 
+def resource_schedule(resource, observed):
+    """Require the whole recorded matrix before any zip can truncate validation."""
+    require(type(resource) is dict and resource.get('isolated') is True,
+            'resource run not isolated')
+    jobs=resource.get('jobs')
+    require(type(jobs) is list and len(jobs)==48 and len(observed)==48,
+            'resource schedule or observations incomplete')
+    for job in jobs:
+        require(type(job) is list and len(job)==3,'invalid resource job')
+        task,policy,repeat=job
+        require(type(task) is str and task in TASKS and
+                type(policy) is str and policy in RESOURCE_POLICIES and
+                type(repeat) is int and repeat>=0,'invalid resource job identity')
+    repeats={job[2] for job in jobs}
+    require(len(repeats)==3,'resource matrix needs three distinct repeats')
+    expected={(task,policy,repeat) for task in TASKS for policy in RESOURCE_POLICIES for repeat in repeats}
+    require({tuple(job) for job in jobs}==expected,'resource matrix missing or duplicated jobs')
+    return jobs
+
+
+def resource_output(literal):
+    require(type(literal) is dict and type(literal.get('returncode')) is int and
+            literal['returncode']==0,'resource process failed')
+    require(type(literal.get('stdout')) is str,'missing resource process output')
+    output=decode(literal['stdout'])
+    fields={'task','policy','setup_ns','memory_kib','runtime_info','model_bytes',
+            'model_sha256','library_sha256','matched','numerical_frameworks','scope'}
+    require(type(output) is dict and fields<=output.keys(),'incomplete resource process output')
+    for name in ('setup_ns','model_bytes'):
+        require(type(output[name]) is int and output[name]>0,'invalid resource measurement')
+    memory=output['memory_kib']
+    require(type(memory) is dict and all(type(memory.get(key)) is int and memory[key]>0
+                                       for key in ('VmHWM','VmRSS')),'invalid resource memory')
+    require(type(output['runtime_info']) is dict and type(output['scope']) is str and
+            bool(output['scope']),'invalid resource context')
+    for key in ('model_sha256','library_sha256'):
+        value=output[key]
+        require(type(value) is str and len(value)==64 and all(c in '0123456789abcdef' for c in value),
+                'invalid resource identity')
+    return output
+
+
+def exact_bytes(path, size):
+    with Path(path).open('rb') as stream:raw=stream.read(size+1)
+    require(len(raw)==size,'recorded payload size differs')
+    return raw
+
+
+def score_indices(raw, rows, classes):
+    require(type(rows) is int and 1<=rows<=65536 and
+            type(classes) is int and 2<=classes<=64,'invalid score geometry')
+    require(len(raw)==rows*classes*8,'recorded score inventory differs')
+    values=struct.unpack('<'+'d'*(rows*classes),raw)
+    require(all(math.isfinite(v) for v in values),'nonfinite recorded score')
+    return [max(range(classes),key=lambda j:values[i*classes+j]) for i in range(rows)]
+
+
+def coverage(work, rows):
+    require(type(work) is dict and all(type(work.get(key)) is int and 0<=work[key]<=rows
+            for key in ('coarse_certified','exact_completed','unresolved')),'invalid coverage counters')
+    require(work['unresolved']==0 and work['coarse_certified']+work['exact_completed']==rows,
+            'coverage summary differs')
+
+
+def inventory(value, required, message):
+    require(type(value) is dict and required<=value.keys(),message)
+    for key,digest in value.items():
+        require(type(key) is str and type(digest) is str and len(digest)==64 and
+                all(c in '0123456789abcdef' for c in digest),'invalid inventory identity')
+    return value
+
+
+def artifact_bindings(files):
+    """Resolve every artifact role emitted by benchmark.initialize, uniquely."""
+    inventory(files,set(),'invalid artifact inventory')
+    roles={}
+    def select(role,suffix,baseline=False):
+        matches=[p for p in files if p.endswith('/'+suffix) and
+                 (not baseline or 'baseline_sdk' in Path(p).parts)]
+        require(len(matches)==1,'missing or ambiguous benchmark artifact: '+role)
+        roles[role]=matches[0]
+    for task in TASKS:
+        for name in ('model.json','model-16.sct','model.cbm','input.u8','indices.i32'):
+            select(task+'/'+name,f'models/{task}/{name}',baseline=True)
+        for name in ('flat.sctt','interned.sctt'):
+            select(task+'/'+name,f'{task}/{name}')
+        select(task+'/model.scr',f'models/{task}/model.scr')
+        select(task+'/export.so',f'replay/{task}/cpp/export.so')
+    for name in ('total.so','residual.so','native-register/trees.so',
+                 'official/libcatboostmodel-linux-x86_64-1.2.8.so',
+                 'official/libcatboostmodel-linux-x86_64-1.2.10.so'):
+        select(name,name)
+    require(len(set(roles.values()))==41,'benchmark artifact roles overlap')
+    return roles
+
+
+def replay_model_bindings(replay, files, bindings):
+    """The fixed-corpus replay must identify the benchmark's source and inputs."""
+    models=replay.get('models')
+    require(type(models) is dict and set(models)==set(TASKS),'incomplete replay model inventory')
+    for task in TASKS:
+        expected={field:files[bindings[task+'/'+name]] for field,name in
+                  (('source','model.json'),('inputs','input.u8'),('expected','indices.i32'))}
+        require(type(models[task]) is dict and all(models[task].get(k)==v for k,v in expected.items()),
+                'replay source or corpus binding differs')
+
+
 def audit(root):
     root=Path(root);results=root/'results';run=results/'benchmark';lock=read(run/'LOCK.json')
     paths=read(root/'PATHS.json');sources=read(root/'SOURCES.json')
     compare(lock,{'tasks':list(TASKS),'arms':list(ARMS),'chunks':[1,32,256],'repeats':7,'cycles':10,'seed':2026092967,
                   'gate':{'batch32_geometric_ratio_limit':1.10,'batch32_max_task_ratio_limit':1.25,'baseline':'full16'}})
+    bindings=artifact_bindings(lock.get('files'))
+    inventory(lock.get('source'),TIMED_SOURCES,'incomplete timed source inventory')
     for path,digest in lock['files'].items():
         require(path in paths and sha(member(root,paths[path]))==digest,'artifact bytes changed')
     for path,digest in lock['source'].items():
@@ -74,9 +189,9 @@ def audit(root):
     require(lock['jobs']==jobs,'fixed schedule differs')
     records=[];ratios=[];summary=read(run/'SUMMARY.json');expected_by_task={}
     for task in TASKS:
-        original=next(p for p in paths if p.endswith('/models/'+task+'/indices.i32') and 'baseline_sdk' in p)
-        index_bytes=member(root,paths[original]).read_bytes()
-        require(len(index_bytes)%4==0,'index bytes invalid')
+        original=bindings[task+'/indices.i32']
+        with member(root,paths[original]).open('rb') as stream:index_bytes=stream.read(4*65536+1)
+        require(0<len(index_bytes)<=4*65536 and len(index_bytes)%4==0,'index bytes invalid')
         indices=struct.unpack('<'+'i'*(len(index_bytes)//4),index_bytes);expected_by_task[task]=indices
         observations=[decode(s) for s in (run/(task+'.jsonl')).read_text().splitlines()]
         require(len(observations)==189,'missing timing cells')
@@ -107,38 +222,53 @@ def audit(root):
         require(full.startswith(prefix) and len(prefix.splitlines())==count and hashlib.sha256(prefix).hexdigest()==digest,'completed prefix replaced')
     proof=read(results/'independent.json');require(proof['status']=='PASS' and len(proof['files'])==8,'incomplete proof reconstruction')
     replay=read(results/'replay/LOCK.json')
+    compare(replay,{'stress_rows_per_kind':2048,'seed_rule':'2026092961+d+D'})
+    inventory(replay.get('source_files'),set(TOTAL_SOURCES),'incomplete replay source inventory')
+    replay_model_bindings(replay,lock['files'],bindings)
     for name,digest in replay['source_files'].items():require(sha(member(root,'source/experiments/tree_total/'+name))==digest,'replay source changed')
     total_scores=stress_rows=stress_exact=0
     for task in TASKS:
         r=read(results/'replay'/task/'result.json');n=len(expected_by_task[task]);c=r['classes']
-        require(r['rows']==n and r['score_values']==n*c,'score inventory differs')
-        data=(results/'replay'/task/'reference_scores.f64').read_bytes()
-        require(len(data)==n*c*8,'missing source scores');values=struct.unpack('<'+'d'*(n*c),data)
-        predicted=[max(range(c),key=lambda j:values[i*c+j]) for i in range(n)]
+        require(type(c) is int and 2<=c<=64,'invalid recorded class count')
+        compare(r,{'rows':n,'score_values':n*c})
+        data=exact_bytes(results/'replay'/task/'reference_scores.f64',n*c*8)
+        predicted=score_indices(data,n,c)
         require(predicted==list(expected_by_task[task]),'source score labels differ')
         total_scores+=n*c
+        info=r['models']['interned']['info'];d,D=info['features'],info['maximum']
+        require(type(d) is int and 1<=d<=256 and type(D) is int and 1<=D<=255,
+                'invalid recorded input domain')
+        require(n*d<=8000000,'recorded input geometry exceeds call bound')
         for layout in ('flat','interned'):
             artifact=results/'replay'/task/(layout+'.sctt');entry=next(x for x in proof['files'] if (x['task'],x['layout'])==(task,layout))
-            require(sha(artifact)==entry['sha256']==r['models'][layout]['sha256'] and artifact.stat().st_size==entry['bytes'],'reconstructed proof differs')
+            require(sha(artifact)==entry['sha256']==r['models'][layout]['sha256']==lock['files'][bindings[task+'/'+layout+'.sctt']] and artifact.stat().st_size==entry['bytes'],'reconstructed proof differs')
+            require(entry.get('source_sha256')==lock['files'][bindings[task+'/model.json']],
+                    'reconstructed proof source differs')
+            compare(r['models'][layout]['info'],{'features':d,'maximum':D,'classes':c})
             w=r['models'][layout]['work']['total']
-            require(w['unresolved']==0 and w['coarse_certified']+w['exact_completed']==n,'coverage summary differs')
+            coverage(w,n)
         for kind in ('uniform','boundary'):
-            stress=r['stress'][kind];q=(results/'replay'/task/(kind+'.u8')).read_bytes();d=r['models']['interned']['info']['features']
-            require(len(q)==stress['rows']*d,'stress input size')
-            scores=(results/'replay'/task/(kind+'-scores.f64')).read_bytes();ids=(results/'replay'/task/(kind+'-indices.i32')).read_bytes()
+            stress=r['stress'][kind];compare(stress,{'rows':2048});rows=stress['rows']
+            q=exact_bytes(results/'replay'/task/(kind+'.u8'),rows*d)
+            require(all(v<=D for v in q),'stress input outside declared domain')
+            scores=exact_bytes(results/'replay'/task/(kind+'-scores.f64'),rows*c*8)
+            ids=exact_bytes(results/'replay'/task/(kind+'-indices.i32'),rows*4)
             require(hashlib.sha256(scores).hexdigest()==stress['source_scores_sha256'] and hashlib.sha256(ids).hexdigest()==stress['indices_sha256'],'stress observation differs')
-            require(stress['work']['unresolved']==0,'stress unresolved')
-            stress_rows+=stress['rows'];stress_exact+=stress['work']['exact_completed'];total_scores+=len(scores)//8
+            require(score_indices(scores,rows,c)==list(struct.unpack('<'+'i'*rows,ids)),
+                    'stress score labels differ')
+            coverage(stress['work'],rows)
+            stress_rows+=rows;stress_exact+=stress['work']['exact_completed'];total_scores+=rows*c
     resource=read(results/'resources/LOCK.json');observed=[decode(l) for l in (results/'resources/rows.jsonl').read_text().splitlines()]
-    require(len(observed)==48 and resource['isolated'] is True,'resource run incomplete/not isolated')
-    for i,(r,job) in enumerate(zip(observed,resource['jobs'])):
-        require([r['task'],r['policy'],r['repeat']]==job and r['matched'] is True and r['numerical_frameworks']==[],'resource context differs')
+    jobs=resource_schedule(resource,observed)
+    for i,(r,job) in enumerate(zip(observed,jobs)):
+        require(type(r) is dict and type(r.get('repeat')) is int and
+                [r.get(k) for k in ('task','policy','repeat')]==job and
+                r.get('matched') is True and r.get('numerical_frameworks')==[],'resource context differs')
         literal=read(results/'resources'/f'process-{i}.json')
-        require(literal['returncode']==0,'resource process failed')
-        compare(r,decode(literal['stdout']))
+        compare(r,resource_output(literal))
     return {'status':'PASS','timing_cells':len(records),'repeated_predictions':sum(r['rows']*10 for r in records),
             'retained_rows':sum(map(len,expected_by_task.values())),'stress_rows':stress_rows,'stress_exact_fallbacks':stress_exact,
-            'recorded_source_score_values':total_scores,'independent_reconstructed_files':8,'isolated_resource_processes':48,
+            'recorded_source_score_values':total_scores,'independent_reconstructed_files':8,'isolated_resource_processes':len(observed),
             'geometric_ratio':g,'performance_gate':g<=1.10 and max(ratios)<=1.25,
             'scope':'recorded bytes, scopes, outcomes, preserved interruptions and arithmetic; not authenticated clocks or universal backend equivalence'}
 

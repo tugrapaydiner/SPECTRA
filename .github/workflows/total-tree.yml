@@ -3,7 +3,7 @@ on:
   push:
     branches: [research/total-tree-execution]
   pull_request:
-    branches: [research/tree-native-replay]
+    branches: [research/tree-native-replay, research/total-tree-execution]
   workflow_dispatch:
 permissions:
   contents: read
@@ -38,13 +38,13 @@ jobs:
           subprocess.run(['git','bundle','create',str(out/'review.bundle'),'HEAD','^'+base],check=True)
           (out/'source.json').write_text(json.dumps({'head':head,'tree':tree,'base':base,'files':{p.as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('experiments/tree_total').glob('*') if p.is_file()}},indent=2))
       - name: Portable exact-source contracts
-        run: python -m pytest experiments/tree_total/test_total.py experiments/tree_total/test_deployment.py --import-mode=importlib --confcutdir=experiments/tree_total -q --junitxml=.total-ci/portable.xml
+        run: python -m pytest experiments/tree_total --import-mode=importlib --confcutdir=experiments/tree_total -q --junitxml=.total-ci/portable.xml
       - name: Compile explicit AVX2 sanitizer variant
         run: python -m experiments.tree_total.build --out .total-ci/ubsan --target avx2 --ubsan
       - name: Execute the same contracts under UBSan
         env:
           TOTAL_LIBRARY: .total-ci/ubsan/total.so
-        run: python -m pytest experiments/tree_total/test_total.py experiments/tree_total/test_deployment.py --import-mode=importlib --confcutdir=experiments/tree_total -q --junitxml=.total-ci/ubsan.xml
+        run: python -m pytest experiments/tree_total --import-mode=importlib --confcutdir=experiments/tree_total -q --junitxml=.total-ci/ubsan.xml
       - name: Retain evidence identities
         if: always()
         shell: python
