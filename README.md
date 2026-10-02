@@ -76,6 +76,14 @@ python -m spectra cnf solve examples/tiny.cnf --backend indexed --seed 7 --max-f
 The historical `compact` backend remains the default. See [API and CLI](docs/API.md)
 for strict Boolean witnesses, input limits, formats and exit codes.
 
+An unreleased [optional deductive backend](docs/DEDUCTIVE_GUIDE.md) solves forced
+and binary constraints before bounded search. On a fresh synthetic panel it solves
+124/160 formula/seed cases versus indexed search's 97/160, with 31.4% lower mean
+complete solve time. Gains are concentrated in structured constraints; general
+3-SAT quality is unchanged and some time/memory costs increase. The
+[full comparison](experiments/deductive_search/RESULTS.md) retains the native
+Glucose4 baseline, failures and measurement limitations.
+
 ## Measured results
 
 These figures visualize **preserved published summaries, not new measurements

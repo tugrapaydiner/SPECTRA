@@ -1,0 +1,215 @@
+{
+  "archive": "evidence-20261002.zip",
+  "sha256": "d0f15fa685ccb69d926ae37134fe2e162d2fe233bc2b7113422e16964e526c92",
+  "bytes": 944654,
+  "members": {
+    "FROZEN.json": {
+      "sha256": "b08821590a7691b227d191d7b4a854a750dddfe583027bf105cd22bdc1d333ae",
+      "bytes": 673
+    },
+    "development/LOCK.json": {
+      "sha256": "1632367162e71898b9e5561d906baa8ed0e111d931733925da9a3b44b62780a1",
+      "bytes": 994
+    },
+    "development/SUMMARY.json": {
+      "sha256": "d03b4b5e7658da6c24b192e1c4f27b3657d280451c781f3d22047e8a948e15da",
+      "bytes": 3923
+    },
+    "development/bench.py": {
+      "sha256": "6383b78cc364838bbc6603b486d728b40d58bb6781f42c888447b52df4748202",
+      "bytes": 9905
+    },
+    "development/candidate.py": {
+      "sha256": "5780a9a75eb80c376e587006fd6e728511e2d74bec167b8556c788ba592a28d3",
+      "bytes": 7268
+    },
+    "development/cases.jsonl": {
+      "sha256": "beada0f0906bffe08fe4207764767a67e0d47bb91092786e73917619ba2f2156",
+      "bytes": 187973
+    },
+    "development/rows.jsonl": {
+      "sha256": "43a122f624150e6f07861e23418511094fabfe9d2c55bd0c932f79e0d1b7f6bd",
+      "bytes": 547039
+    },
+    "development/sources/data/cnf.py": {
+      "sha256": "c2b6efa0fa645a1f7ff78c30612a0a7fdb1980841090dd1536ad5810617f4f4d",
+      "bytes": 5279
+    },
+    "development/sources/experiments/deductive_search/PROTOCOL.md": {
+      "sha256": "7d7ddaaec6c8f41b78fe5d2481cf8eb1aac81f28e6d1b998accf88199bd0de6e",
+      "bytes": 3778
+    },
+    "development/sources/experiments/deductive_search/bench.py": {
+      "sha256": "6383b78cc364838bbc6603b486d728b40d58bb6781f42c888447b52df4748202",
+      "bytes": 9905
+    },
+    "development/sources/spectra/cnf/deductive.py": {
+      "sha256": "5780a9a75eb80c376e587006fd6e728511e2d74bec167b8556c788ba592a28d3",
+      "bytes": 7268
+    },
+    "development/sources/spectra/cnf/indexed.py": {
+      "sha256": "52e0610591d97556602915da1d8fd84287c778cf6c620857f4d1f3bc3a0c625e",
+      "bytes": 9168
+    },
+    "development/sources/spectra/cnf/ranked.py": {
+      "sha256": "f8befc3130e3594a03d0db87355baeb2dd6030350f072206906808dbe68af2c2",
+      "bytes": 4281
+    },
+    "development-02/LOCK.json": {
+      "sha256": "24578a14633574b65f3f32f3b15f47a3f81bc1ac7747c4e82a8062c5debe2ef1",
+      "bytes": 1114
+    },
+    "development-02/SUMMARY.json": {
+      "sha256": "fb0d068aa43708db56ac75b705ae6bc5387f3e708399bc010d8e6769beea81f9",
+      "bytes": 4886
+    },
+    "development-02/bench.py": {
+      "sha256": "212dabbccf04291f76786154457a17535491292c97cd5d1c77bee20eba9d0e24",
+      "bytes": 10324
+    },
+    "development-02/candidate.py": {
+      "sha256": "5780a9a75eb80c376e587006fd6e728511e2d74bec167b8556c788ba592a28d3",
+      "bytes": 7268
+    },
+    "development-02/cases.jsonl": {
+      "sha256": "8280c300111338531a4824da6116721e2e978c9c37c004c6d0537fc0f0e28829",
+      "bytes": 206507
+    },
+    "development-02/rows.jsonl": {
+      "sha256": "24bd922bdf3b8e86f1e3b9bc2c1c09d1c8a25657dccd51d276033f63f4827da7",
+      "bytes": 725447
+    },
+    "development-02/sources/data/cnf.py": {
+      "sha256": "c2b6efa0fa645a1f7ff78c30612a0a7fdb1980841090dd1536ad5810617f4f4d",
+      "bytes": 5279
+    },
+    "development-02/sources/experiments/deductive_search/AMENDMENT-01.md": {
+      "sha256": "1074cdd7a8a64cdaf3a4e37153ebddc6630e9c63140e5427fed658a9ceb86178",
+      "bytes": 1702
+    },
+    "development-02/sources/experiments/deductive_search/PROTOCOL.md": {
+      "sha256": "7d7ddaaec6c8f41b78fe5d2481cf8eb1aac81f28e6d1b998accf88199bd0de6e",
+      "bytes": 3778
+    },
+    "development-02/sources/experiments/deductive_search/bench.py": {
+      "sha256": "212dabbccf04291f76786154457a17535491292c97cd5d1c77bee20eba9d0e24",
+      "bytes": 10324
+    },
+    "development-02/sources/spectra/cnf/deductive.py": {
+      "sha256": "5780a9a75eb80c376e587006fd6e728511e2d74bec167b8556c788ba592a28d3",
+      "bytes": 7268
+    },
+    "development-02/sources/spectra/cnf/indexed.py": {
+      "sha256": "52e0610591d97556602915da1d8fd84287c778cf6c620857f4d1f3bc3a0c625e",
+      "bytes": 9168
+    },
+    "development-02/sources/spectra/cnf/ranked.py": {
+      "sha256": "f8befc3130e3594a03d0db87355baeb2dd6030350f072206906808dbe68af2c2",
+      "bytes": 4281
+    },
+    "development-03/LOCK.json": {
+      "sha256": "1d1f2a9f80ded55489ee1c6ff6ed1f9232b23fa4fd5dabf39b8cb9c440678b68",
+      "bytes": 1114
+    },
+    "development-03/SUMMARY.json": {
+      "sha256": "eb664af227b9579d564765e574556b9575f872691ed50a4948768328593a4a82",
+      "bytes": 4902
+    },
+    "development-03/cases.jsonl": {
+      "sha256": "8280c300111338531a4824da6116721e2e978c9c37c004c6d0537fc0f0e28829",
+      "bytes": 206507
+    },
+    "development-03/rows.jsonl": {
+      "sha256": "5e7b8f1c1dd84b7a5850561e38d60203b5bd6345db6f60962b268dea5bf011fa",
+      "bytes": 725441
+    },
+    "development-03/sources/data/cnf.py": {
+      "sha256": "c2b6efa0fa645a1f7ff78c30612a0a7fdb1980841090dd1536ad5810617f4f4d",
+      "bytes": 5279
+    },
+    "development-03/sources/experiments/deductive_search/AMENDMENT-01.md": {
+      "sha256": "1074cdd7a8a64cdaf3a4e37153ebddc6630e9c63140e5427fed658a9ceb86178",
+      "bytes": 1702
+    },
+    "development-03/sources/experiments/deductive_search/PROTOCOL.md": {
+      "sha256": "7d7ddaaec6c8f41b78fe5d2481cf8eb1aac81f28e6d1b998accf88199bd0de6e",
+      "bytes": 3778
+    },
+    "development-03/sources/experiments/deductive_search/bench.py": {
+      "sha256": "212dabbccf04291f76786154457a17535491292c97cd5d1c77bee20eba9d0e24",
+      "bytes": 10324
+    },
+    "development-03/sources/spectra/cnf/deductive.py": {
+      "sha256": "5ed89280028aaec793a1892902417a7446851f52e2842199e5b77c6c068a4350",
+      "bytes": 7645
+    },
+    "development-03/sources/spectra/cnf/indexed.py": {
+      "sha256": "52e0610591d97556602915da1d8fd84287c778cf6c620857f4d1f3bc3a0c625e",
+      "bytes": 9168
+    },
+    "development-03/sources/spectra/cnf/ranked.py": {
+      "sha256": "f8befc3130e3594a03d0db87355baeb2dd6030350f072206906808dbe68af2c2",
+      "bytes": 4281
+    },
+    "evaluation/LOCK.json": {
+      "sha256": "e2fe6407afe30d5456f2a55a5aa8ef65e57c8bb2132e91ad864294a713b9e077",
+      "bytes": 1113
+    },
+    "evaluation/SUMMARY.json": {
+      "sha256": "1bbeaaf861ca47ac87b19f34b9a0155140f309ce4ca0e68104b8fc82950739b5",
+      "bytes": 9729
+    },
+    "evaluation/cases.jsonl": {
+      "sha256": "4206023d548ceb0722abdc61f1f1c06a16d01ff6fe13035a11541303ce78b6b4",
+      "bytes": 1478029
+    },
+    "evaluation/memory.jsonl": {
+      "sha256": "94ddec9369ab1bd22eff47158b280de5a11038626385b2887ae44fa60d5baa70",
+      "bytes": 36642
+    },
+    "evaluation/rows.jsonl": {
+      "sha256": "4535752a5da810e66630552d953d87ce9868443e596a8e97937cd04fc470b5b9",
+      "bytes": 3461560
+    },
+    "evaluation/rss-corrected.jsonl": {
+      "sha256": "4d3ab639691373b4a2170cf3867f4bee4bd2df8c37cf78f99de1cf08ebee24e3",
+      "bytes": 21626
+    },
+    "evaluation/sources/data/cnf.py": {
+      "sha256": "c2b6efa0fa645a1f7ff78c30612a0a7fdb1980841090dd1536ad5810617f4f4d",
+      "bytes": 5279
+    },
+    "evaluation/sources/experiments/deductive_search/AMENDMENT-01.md": {
+      "sha256": "e08baba0161d78895306a77daa031c5e7060e2b6e65bfe33ed4fa60208e5ea4b",
+      "bytes": 2645
+    },
+    "evaluation/sources/experiments/deductive_search/PROTOCOL.md": {
+      "sha256": "7d7ddaaec6c8f41b78fe5d2481cf8eb1aac81f28e6d1b998accf88199bd0de6e",
+      "bytes": 3778
+    },
+    "evaluation/sources/experiments/deductive_search/bench.py": {
+      "sha256": "212dabbccf04291f76786154457a17535491292c97cd5d1c77bee20eba9d0e24",
+      "bytes": 10324
+    },
+    "evaluation/sources/spectra/cnf/deductive.py": {
+      "sha256": "5ed89280028aaec793a1892902417a7446851f52e2842199e5b77c6c068a4350",
+      "bytes": 7645
+    },
+    "evaluation/sources/spectra/cnf/indexed.py": {
+      "sha256": "52e0610591d97556602915da1d8fd84287c778cf6c620857f4d1f3bc3a0c625e",
+      "bytes": 9168
+    },
+    "evaluation/sources/spectra/cnf/ranked.py": {
+      "sha256": "f8befc3130e3594a03d0db87355baeb2dd6030350f072206906808dbe68af2c2",
+      "bytes": 4281
+    },
+    "rss_check.py": {
+      "sha256": "278f2319e2db28cad37f31d0161fc38e0e488fbecb3f25c2a51bb914382cba2b",
+      "bytes": 1982
+    }
+  },
+  "scope": "byte retention and independent SAT-witness checks; not a timing replay or authenticity certificate",
+  "known_incomplete": [
+    "development/rows.jsonl contains 407 of 432 expected observations; original SUMMARY.json reports a complete run. Missing raw observations cannot be reconstructed and the first development summary is not fully replayable."
+  ]
+}

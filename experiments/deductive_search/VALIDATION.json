@@ -1,0 +1,167 @@
+{
+  "archive": "validation-20261002.zip",
+  "bytes": 32845,
+  "sha256": "3180a7f51a34fd51ce7f617fd26ef476f30f690569b5b3a7c926f119ecba1051",
+  "members": {
+    "build-final.log": {
+      "bytes": 52467,
+      "sha256": "e8ec92665c073753b37fd3c0124b6ebbefed726d5495cd4f1c95d4f86df8aa7c"
+    },
+    "build.log": {
+      "bytes": 52486,
+      "sha256": "70ddff968ef512cd84aadf666a5f2a83906ef961b2d4db3fe5821f8218ef665a"
+    },
+    "contracts-02.log": {
+      "bytes": 99,
+      "sha256": "8b30a9a37a9ca88e96c03888f2df6716eff19acaa042f4df894695ec6ac5d357"
+    },
+    "contracts-02.xml": {
+      "bytes": 2328,
+      "sha256": "6f4f9a78cf36d311dc1f77d2bba163c47f8f909f4731cbc457e210396d10b078"
+    },
+    "contracts.log": {
+      "bytes": 99,
+      "sha256": "a78ca61dfdb9f3a442450088feb624888428e7d9d06cc4c61290fe708f66033c"
+    },
+    "contracts.xml": {
+      "bytes": 2328,
+      "sha256": "8a24299388ac705a3a4cc6062322f56e1446d5a91a905ed095f1cdbad5c7755a"
+    },
+    "development-02.log": {
+      "bytes": 4937,
+      "sha256": "da3c6b329d6371932442bcbaa8dc6fabec4c67475426d4c270ca847ea1bac567"
+    },
+    "development-03.log": {
+      "bytes": 4953,
+      "sha256": "56776cc506635dd69a3d4bbd7d3925fda5946633b905433ece9b05669a244e8a"
+    },
+    "development.log": {
+      "bytes": 3974,
+      "sha256": "541356637a042e430df8ce2e2b0fba130dac471aa270781e8cc6cbb271ac9b22"
+    },
+    "evaluation.log": {
+      "bytes": 9780,
+      "sha256": "1637591dffbcf6b5477ca4e2db40334127bf86c358dfde7daeb1bfd010580e9b"
+    },
+    "evidence-check.json": {
+      "bytes": 5329,
+      "sha256": "f86eca9cab1a4af12a0e14e34a8753faeb92fe2e42c671e5878c003d94adce10"
+    },
+    "install/calls.json": {
+      "bytes": 4046,
+      "sha256": "c611e593462778ce40ea687a9ef1350289a7d65dbbd1b495a15b39d4d3263660"
+    },
+    "install/indexed_calls.json": {
+      "bytes": 1822,
+      "sha256": "43c9aac3cff3140abbc19a572419b42b60edfdd92fd826698e487601adac5fdf"
+    },
+    "install/indexed_report.json": {
+      "bytes": 165,
+      "sha256": "468107791098dbdadfdfc37f8616dc0d16097ab92f3752e2bc148febfd4b679e"
+    },
+    "install/outside_checkout/deductive.json": {
+      "bytes": 610,
+      "sha256": "3b8ad1e4db4efb62706059f1fca8cd295d865d053bf6e0c9102fbc706f71d78c"
+    },
+    "install/report.json": {
+      "bytes": 931,
+      "sha256": "7216a82160062d929bb9a5367c2560c31177a5c67b49846a4b607a109c7779c0"
+    },
+    "install/source_report.json": {
+      "bytes": 63,
+      "sha256": "d94abd06df56cf1a8101b1e59bf829e9c1872ec95ab31092fef5cbc1f8d6c33f"
+    },
+    "install-final/calls.json": {
+      "bytes": 4136,
+      "sha256": "6303649b39eef66ef1328c429fecb68abd292b789ad4190b1fc716992bc5c3d4"
+    },
+    "install-final/indexed_calls.json": {
+      "bytes": 1840,
+      "sha256": "577b87d98fd21d87fef975a264ea359f327fa32c8f97ea6a858546450f21e0c7"
+    },
+    "install-final/indexed_report.json": {
+      "bytes": 165,
+      "sha256": "468107791098dbdadfdfc37f8616dc0d16097ab92f3752e2bc148febfd4b679e"
+    },
+    "install-final/outside_checkout/deductive-final.json": {
+      "bytes": 607,
+      "sha256": "b5869fed1e4ea83d50809295f654f88b9f2fac355946c1b3e4ae41e0f8b3cef5"
+    },
+    "install-final/report.json": {
+      "bytes": 937,
+      "sha256": "009a2e61f23c6cc3fd69123b8865175ec6e02fc19455645da42b9e41457c431f"
+    },
+    "install-final/source_report.json": {
+      "bytes": 63,
+      "sha256": "d94abd06df56cf1a8101b1e59bf829e9c1872ec95ab31092fef5cbc1f8d6c33f"
+    },
+    "install-final.log": {
+      "bytes": 372,
+      "sha256": "aa205ece16dcdbde7691219baffd907d093af952a3a39ddbd3a160fb7f405e80"
+    },
+    "install.log": {
+      "bytes": 366,
+      "sha256": "ad89a58265c15387492b98f362993b9fdc54fb5673336a84623a87225f6d1859"
+    },
+    "installed-deductive-final.json": {
+      "bytes": 131,
+      "sha256": "961118d4aee6d869134109f791d57d58fbdcce94b9f3b20a1ee0e9d96705cec1"
+    },
+    "installed-deductive.json": {
+      "bytes": 131,
+      "sha256": "961118d4aee6d869134109f791d57d58fbdcce94b9f3b20a1ee0e9d96705cec1"
+    },
+    "installed-probe.py": {
+      "bytes": 772,
+      "sha256": "b8fbaf9e068788c314b09138413cdf23e1fec43ac2d650d71e4dbd77c34ec90a"
+    },
+    "navigation-final.json": {
+      "bytes": 219,
+      "sha256": "72a3a9310efd86e55ac68a5ba030baac7b846a900fb080c97e79216f1a81a2a2"
+    },
+    "navigation.json": {
+      "bytes": 219,
+      "sha256": "1dd6343ced160f135491c561c480183c6372034eafba1b9fdca12a296e37ce71"
+    },
+    "public.log": {
+      "bytes": 420,
+      "sha256": "480eb018c9b8270bbb467039ed891183d15c5ba0af31b99cd5a8bc2fa7e02b22"
+    },
+    "public.xml": {
+      "bytes": 64716,
+      "sha256": "a259bde46261f43a7c7f3f3685611d0fbc0ab3e6dbd6a852de1117c09c6eb80b"
+    },
+    "rss-corrected.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "workspace-final.json": {
+      "bytes": 248,
+      "sha256": "a499a1e9041d42fd2de80f8559517cc5892c1f866cff4de0807384d84fa369fe"
+    },
+    "workspace.json": {
+      "bytes": 248,
+      "sha256": "686f1fcd24731888a8d1694587e2971183bfcc5907da8d9df38c48282f4dc241"
+    }
+  },
+  "built_distribution_identities": {
+    "dist/spectra-0.7.1-py3-none-any.whl": {
+      "bytes": 362537,
+      "sha256": "eb0fbb11a7e54a1d711c7d6e1faea78e0dbdedd8db364ffffd229c88b1848b21"
+    },
+    "dist/spectra-0.7.1.tar.gz": {
+      "bytes": 601620,
+      "sha256": "323edfdda18be624edaf8eb195bc6d0bb5254a7769747d2f3f3794e9d598d4e6"
+    },
+    "dist-final/spectra-0.7.1-py3-none-any.whl": {
+      "bytes": 362762,
+      "sha256": "7c9e3a606fedfa6ae4a3ed0fca4cdb0e973a1c0f3fe0435d2b365b0b2a4780af"
+    },
+    "dist-final/spectra-0.7.1.tar.gz": {
+      "bytes": 603267,
+      "sha256": "5dba823875ddafdba2d76f19bf82e51b645c05a25ff0fab6b3530fdb5bb33170"
+    }
+  },
+  "frozen_implementation_commit": "9fd2265bac0c2aa18fd711b47dc75dbc75a6248f",
+  "scope": "local commands and receipts; final docs package uses unchanged frozen Python sources; not a substitute for final-head CI"
+}

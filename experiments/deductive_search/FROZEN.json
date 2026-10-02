@@ -1,0 +1,11 @@
+{
+  "commit": "9fd2265bac0c2aa18fd711b47dc75dbc75a6248f",
+  "tree": "b01b2791f9605d7c906e7ab5fce2559c87fe19e6",
+  "sources": {
+    "spectra/cnf/deductive.py": "5ed89280028aaec793a1892902417a7446851f52e2842199e5b77c6c068a4350",
+    "experiments/deductive_search/bench.py": "212dabbccf04291f76786154457a17535491292c97cd5d1c77bee20eba9d0e24",
+    "experiments/deductive_search/PROTOCOL.md": "7d7ddaaec6c8f41b78fe5d2481cf8eb1aac81f28e6d1b998accf88199bd0de6e",
+    "experiments/deductive_search/AMENDMENT-01.md": "e08baba0161d78895306a77daa031c5e7060e2b6e65bfe33ed4fa60208e5ea4b"
+  },
+  "scope": "published before first evaluation generation; development iterations retained"
+}
