@@ -1,7 +1,7 @@
 name: public-package
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "maintenance/**"]
   workflow_dispatch:
 permissions:
   contents: read

@@ -40,6 +40,13 @@ witness, unsatisfied-clause IDs, flips, queries, path hash and elapsed nanosecon
 The witness on `UNKNOWN` is only the final candidate. Neither backend supplies
 an UNSAT proof or a hard wall-clock deadline.
 
+`solve_deductive` is an optional classical backend that propagates forced literals,
+solves binary residuals by an implication graph, then uses indexed search for
+general residuals. Select `--backend deductive` from the CLI. Its flip cap bounds
+only residual search, and its trajectory can differ from the original formula's
+walk. See [deductive solving](DEDUCTIVE_GUIDE.md) for costs, result fields and
+measured scope. The historical default is unchanged.
+
 ## Commands and exit codes
 
 ```bash
