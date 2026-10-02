@@ -71,6 +71,15 @@ prediction cache or cross-input reuse of answers.
 
 ## Storage and publication
 
+The standalone kit requires all four named model entries and a complete inventory
+of its sources, wrappers, native targets, receipts and replay assets. Before native
+loading, verification checks strict bounded manifest JSON, metadata, regular files,
+exact inventory closure, sizes and hashes. Replay rows must be nonempty and fit
+the native call bounds. The self-test additionally checks source/replay dimensions
+and writes its report only to a new file outside the kit. A valid manifest is a
+trusted byte inventory, not authentication or a substitute for source proof
+reconstruction. The bundle must not change concurrently with verification or use.
+
 Interning uses whole-vector binary64 bytes, with the first occurrence as canonical.
 Every source leaf keeps an index. It neither prunes trees nor skips additions.
 The proof, original bank, index and source JSON for verification all consume space;

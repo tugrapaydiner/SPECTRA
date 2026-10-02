@@ -10,8 +10,7 @@ pipeline; the main change is that an external CatBoost runtime is unnecessary.
 
 ```bash
 python -m experiments.tree_total.build --out /new/native --target portable
-python -m pytest experiments/tree_total/test_total.py \
-  experiments/tree_total/test_deployment.py --import-mode=importlib \
+python -m pytest experiments/tree_total --import-mode=importlib \
   --confcutdir=experiments/tree_total
 ```
 
@@ -42,6 +41,19 @@ interned models and both Linux libraries. Run its selftest.py under isolated Pyt
 and -S. The kit loads neither CatBoost nor numerical Python frameworks. Its run.py
 publishes a new complete JSONL result outside the immutable bundle. Source proof
 verification takes substantial startup work, included in separate measurements.
+
+Before loading a model or library, the runner and self-test check the complete
+four-model inventory and every required source, native library, build receipt and
+replay file. The files on disk must exactly match the manifest inventory; missing,
+unlisted, changed or symlinked members are rejected. The UTF-8 manifest is limited
+to 1 MiB, rejects duplicate fields and nonfinite numbers, and validates replay
+dimensions and class mappings. Self-test reports must also be new files outside
+the kit. An empty or incomplete kit cannot report a successful replay.
+
+The kit tests include an isolated-Python replay of four tiny synthetic fixtures.
+They check assembly, both native targets when supported, prediction output and
+unchanged bundle contents. These fixtures do not reproduce the retained benchmark
+or establish dataset accuracy.
 
 `independent.py` reconstructs all eight flat/interned artifacts with the preserved
 Fraction oracle, independently of the fast dyadic analyzer copied unchanged from
