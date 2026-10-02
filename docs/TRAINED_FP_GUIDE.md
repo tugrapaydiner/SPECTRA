@@ -88,6 +88,12 @@ Independent NumPy and standard-library checks validate the original clues and
 complete Sudoku constraints. Execution replay checks all four arms; full-budget
 recurrent-state and logit bit comparisons check the graph separately.
 
+The recorded-data auditor requires integer schedule positions and model seeds,
+positive integer block counts, and consistent original inputs for each problem
+identity used in the paired analysis. A failed neural solve must consume the
+declared four-step budget. Complete unsuccessful attempts remain in the analysis;
+malformed receipts are rejected rather than counted as valid timing observations.
+
 A separately declared **matched-preparation eager ablation** gives the historical
 Python graph its own immutable copied model and fixed positions without repeated
 eval setup. It tests whether native dispatch elimination adds value beyond just

@@ -43,6 +43,15 @@ def analyze(cases: list[dict[str, Any]], rows: list[dict[str, Any]]) -> dict[str
     by_id = {case["case_id"]: case for case in cases}
     if len(by_id) != len(cases) or not cases:
         raise ValueError("empty or duplicated case manifest")
+    problems = {}
+    for case in cases:
+        correct(case["input"], case["input"])
+        if type(case["seed"]) is not int or type(case["blocks"]) is not int or case["blocks"] < 1:
+            raise ValueError("invalid model identity")
+        key = (case["family"], case["problem_id"])
+        if key in problems and problems[key] != case["input"]:
+            raise ValueError("one problem identity has different inputs")
+        problems[key] = case["input"]
     expected_rows = len(cases)*ROUNDS*len(ARMS)
     if len(rows) != expected_rows:
         raise ValueError("incomplete timing matrix")
@@ -54,6 +63,8 @@ def analyze(cases: list[dict[str, Any]], rows: list[dict[str, Any]]) -> dict[str
             order = list(ARMS); rng.shuffle(order)
             for position, arm in enumerate(order):
                 row = rows[cursor]; cursor += 1
+                if any(type(row.get(key)) is not int for key in ("round", "order")):
+                    raise ValueError("schedule indices must be integers, not booleans")
                 if (row.get("case_id"), row.get("round"), row.get("order"), row.get("arm")) != (
                         case["case_id"], round_id, position, arm):
                     raise ValueError("case/arm/round/order mismatch")
@@ -65,6 +76,8 @@ def analyze(cases: list[dict[str, Any]], rows: list[dict[str, Any]]) -> dict[str
                 if type(steps) is not int or (arm == "symbolic" and steps != 0) or (
                         arm != "symbolic" and not 1 <= steps <= 4):
                     raise ValueError("invalid executed depth")
+                if arm != "symbolic" and not row["valid"] and steps != 4:
+                    raise ValueError("failed neural solve did not exhaust the four-step budget")
                 work = row.get("work", {})
                 if (work.get("executed_steps") != steps or work.get("final_semantic") is not row["valid"] or
                         work.get("target_used") is not False or work.get("semantic_checks") != max(steps, 1) or

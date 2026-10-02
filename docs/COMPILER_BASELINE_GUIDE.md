@@ -81,6 +81,14 @@ lookup occurs. A separate full-budget trace covers 2,048 arm executions and
 8,192 recurrent steps. Each returned answer is checked independently against
 its original clues and complete Sudoku constraints.
 
+The recorded-data auditor checks that tensor identities and numerical difference
+fields agree. Equal digests require zero reported difference for finite tensors;
+an entire step identical to the finite reference cannot be reported as nonfinite.
+Different digests can still have zero numerical difference, as with signed zero.
+Consistent nonfinite compiler results remain recorded failures. These checks
+reject contradictory records without executing the compiler or authenticating
+the recorded timings.
+
 ## Final local observation
 
 Single pinned AMD EPYC 9V74 core, Python 3.13.5, Torch 2.10.0+cpu, GCC 14.2.
