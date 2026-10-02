@@ -58,7 +58,13 @@ there is no cross-input answer cache or claimed batched-matrix optimization.
 Batching amortizes Python/native dispatch and returns a fresh list of class indices.
 It does not implicitly expose a certificate for its final row.
 
-Batches are limited to 65,536 rows. The native bridge checks all finite inputs
+Batches are limited to 65,536 rows. Each legacy input row is read through at most
+17 values to enforce its 16-feature width; excess iterators are rejected without
+exhausting them. The certificate checker similarly consumes at most one more
+outcome than the class count permits. These are consumption bounds, not deadlines
+for an individual iterator step.
+
+The native bridge checks all finite inputs
 before any output write. On an unexpected execution failure, raw C output buffers
 are unspecified; the Python API raises and returns no partial result. Native
 pointers must be valid, correctly sized and nonoverlapping. The interface is not

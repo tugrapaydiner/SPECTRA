@@ -9,6 +9,7 @@ from array import array
 from dataclasses import dataclass
 import ctypes as C
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -47,8 +48,11 @@ def verify_certificate(classes: int, winner: int, outcomes: Iterable[int]) -> bo
         return False
     if type(winner) is not int or not 0 <= winner < classes:
         return False
-    entries = list(outcomes)
-    if len(entries) != classes * (classes - 1) // 2:
+    count = classes * (classes - 1) // 2
+    # The tournament geometry determines the entire inventory. One extra item
+    # detects excess input without exhausting an arbitrary caller iterator.
+    entries = list(itertools.islice(iter(outcomes), count + 1))
+    if len(entries) != count:
         return False
     wins = [0] * classes
     remaining = [classes - 1] * classes
@@ -77,7 +81,8 @@ class Prediction:
 
 
 def _input(values: Iterable[float]) -> array:
-    row = list(values)
+    # Preserve the legacy 16-feature contract without unbounded materialization.
+    row = list(itertools.islice(iter(values), 17))
     if len(row) != 16:
         raise ValueError('exactly sixteen features required')
     try:
