@@ -100,6 +100,28 @@ def resource_output(literal):
     return output
 
 
+def exact_bytes(path, size):
+    with Path(path).open('rb') as stream:raw=stream.read(size+1)
+    require(len(raw)==size,'recorded payload size differs')
+    return raw
+
+
+def score_indices(raw, rows, classes):
+    require(type(rows) is int and 1<=rows<=65536 and
+            type(classes) is int and 2<=classes<=64,'invalid score geometry')
+    require(len(raw)==rows*classes*8,'recorded score inventory differs')
+    values=struct.unpack('<'+'d'*(rows*classes),raw)
+    require(all(math.isfinite(v) for v in values),'nonfinite recorded score')
+    return [max(range(classes),key=lambda j:values[i*classes+j]) for i in range(rows)]
+
+
+def coverage(work, rows):
+    require(type(work) is dict and all(type(work.get(key)) is int and 0<=work[key]<=rows
+            for key in ('coarse_certified','exact_completed','unresolved')),'invalid coverage counters')
+    require(work['unresolved']==0 and work['coarse_certified']+work['exact_completed']==rows,
+            'coverage summary differs')
+
+
 def audit(root):
     root=Path(root);results=root/'results';run=results/'benchmark';lock=read(run/'LOCK.json')
     paths=read(root/'PATHS.json');sources=read(root/'SOURCES.json')
@@ -118,8 +140,8 @@ def audit(root):
     records=[];ratios=[];summary=read(run/'SUMMARY.json');expected_by_task={}
     for task in TASKS:
         original=next(p for p in paths if p.endswith('/models/'+task+'/indices.i32') and 'baseline_sdk' in p)
-        index_bytes=member(root,paths[original]).read_bytes()
-        require(len(index_bytes)%4==0,'index bytes invalid')
+        with member(root,paths[original]).open('rb') as stream:index_bytes=stream.read(4*65536+1)
+        require(0<len(index_bytes)<=4*65536 and len(index_bytes)%4==0,'index bytes invalid')
         indices=struct.unpack('<'+'i'*(len(index_bytes)//4),index_bytes);expected_by_task[task]=indices
         observations=[decode(s) for s in (run/(task+'.jsonl')).read_text().splitlines()]
         require(len(observations)==189,'missing timing cells')
@@ -150,28 +172,38 @@ def audit(root):
         require(full.startswith(prefix) and len(prefix.splitlines())==count and hashlib.sha256(prefix).hexdigest()==digest,'completed prefix replaced')
     proof=read(results/'independent.json');require(proof['status']=='PASS' and len(proof['files'])==8,'incomplete proof reconstruction')
     replay=read(results/'replay/LOCK.json')
+    compare(replay,{'stress_rows_per_kind':2048,'seed_rule':'2026092961+d+D'})
     for name,digest in replay['source_files'].items():require(sha(member(root,'source/experiments/tree_total/'+name))==digest,'replay source changed')
     total_scores=stress_rows=stress_exact=0
     for task in TASKS:
         r=read(results/'replay'/task/'result.json');n=len(expected_by_task[task]);c=r['classes']
-        require(r['rows']==n and r['score_values']==n*c,'score inventory differs')
-        data=(results/'replay'/task/'reference_scores.f64').read_bytes()
-        require(len(data)==n*c*8,'missing source scores');values=struct.unpack('<'+'d'*(n*c),data)
-        predicted=[max(range(c),key=lambda j:values[i*c+j]) for i in range(n)]
+        require(type(c) is int and 2<=c<=64,'invalid recorded class count')
+        compare(r,{'rows':n,'score_values':n*c})
+        data=exact_bytes(results/'replay'/task/'reference_scores.f64',n*c*8)
+        predicted=score_indices(data,n,c)
         require(predicted==list(expected_by_task[task]),'source score labels differ')
         total_scores+=n*c
+        info=r['models']['interned']['info'];d,D=info['features'],info['maximum']
+        require(type(d) is int and 1<=d<=256 and type(D) is int and 1<=D<=255,
+                'invalid recorded input domain')
+        require(n*d<=8000000,'recorded input geometry exceeds call bound')
         for layout in ('flat','interned'):
             artifact=results/'replay'/task/(layout+'.sctt');entry=next(x for x in proof['files'] if (x['task'],x['layout'])==(task,layout))
             require(sha(artifact)==entry['sha256']==r['models'][layout]['sha256'] and artifact.stat().st_size==entry['bytes'],'reconstructed proof differs')
+            compare(r['models'][layout]['info'],{'features':d,'maximum':D,'classes':c})
             w=r['models'][layout]['work']['total']
-            require(w['unresolved']==0 and w['coarse_certified']+w['exact_completed']==n,'coverage summary differs')
+            coverage(w,n)
         for kind in ('uniform','boundary'):
-            stress=r['stress'][kind];q=(results/'replay'/task/(kind+'.u8')).read_bytes();d=r['models']['interned']['info']['features']
-            require(len(q)==stress['rows']*d,'stress input size')
-            scores=(results/'replay'/task/(kind+'-scores.f64')).read_bytes();ids=(results/'replay'/task/(kind+'-indices.i32')).read_bytes()
+            stress=r['stress'][kind];compare(stress,{'rows':2048});rows=stress['rows']
+            q=exact_bytes(results/'replay'/task/(kind+'.u8'),rows*d)
+            require(all(v<=D for v in q),'stress input outside declared domain')
+            scores=exact_bytes(results/'replay'/task/(kind+'-scores.f64'),rows*c*8)
+            ids=exact_bytes(results/'replay'/task/(kind+'-indices.i32'),rows*4)
             require(hashlib.sha256(scores).hexdigest()==stress['source_scores_sha256'] and hashlib.sha256(ids).hexdigest()==stress['indices_sha256'],'stress observation differs')
-            require(stress['work']['unresolved']==0,'stress unresolved')
-            stress_rows+=stress['rows'];stress_exact+=stress['work']['exact_completed'];total_scores+=len(scores)//8
+            require(score_indices(scores,rows,c)==list(struct.unpack('<'+'i'*rows,ids)),
+                    'stress score labels differ')
+            coverage(stress['work'],rows)
+            stress_rows+=rows;stress_exact+=stress['work']['exact_completed'];total_scores+=rows*c
     resource=read(results/'resources/LOCK.json');observed=[decode(l) for l in (results/'resources/rows.jsonl').read_text().splitlines()]
     jobs=resource_schedule(resource,observed)
     for i,(r,job) in enumerate(zip(observed,jobs)):

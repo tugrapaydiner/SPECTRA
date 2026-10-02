@@ -99,6 +99,13 @@ is not a successful measurement. Synthetic regression fixtures exercise this
 bookkeeping and the 16 current corruption cases; they are
 separate from the 12 historical damaged-copy checks reported in RESULTS.md.
 
+Recorded retained and stress score arrays must contain finite values with exact
+declared dimensions. The auditor independently derives first-index argmax labels
+and compares them with every stored stress label, in addition to checking hashes.
+It also checks integer coverage totals, input domains and the declared fixed
+stress settings. These are consistency checks on recorded evidence; the auditor
+does not rerun native inference or prove that a recorded score came from its model.
+
 No new learning, world-first mechanism, Windows/ARM, historical full-suite,
 production release or external researcher acceptance is claimed. Earlier
 classifiers with higher task accuracy remain unchanged.

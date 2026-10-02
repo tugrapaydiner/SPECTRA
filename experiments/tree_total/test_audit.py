@@ -84,17 +84,18 @@ def evidence(tmp_path):
             raw = (task + '/' + layout + ': inert fixture').encode()
             (folder / (layout + '.sctt')).write_bytes(raw)
             proof.append({'task': task, 'layout': layout, 'bytes': len(raw), 'sha256': digest(raw)})
-            models[layout] = {'sha256': digest(raw), 'info': {'features': 1},
+            models[layout] = {'sha256': digest(raw), 'info': {'features': 1, 'maximum': 1, 'classes': 2},
                               'work': {'total': {'unresolved': 0, 'coarse_certified': 2,
                                                  'exact_completed': 0}}}
         stress = {}
         for kind in ('uniform', 'boundary'):
-            (folder / (kind + '.u8')).write_bytes(b'\x00\x01')
-            (folder / (kind + '-scores.f64')).write_bytes(scores)
-            (folder / (kind + '-indices.i32')).write_bytes(indices)
-            stress[kind] = {'rows': 2, 'source_scores_sha256': digest(scores),
-                            'indices_sha256': digest(indices),
-                            'work': {'unresolved': 0, 'coarse_certified': 2, 'exact_completed': 0}}
+            stress_scores, stress_indices = scores * 1024, indices * 1024
+            (folder / (kind + '.u8')).write_bytes(b'\x00\x01' * 1024)
+            (folder / (kind + '-scores.f64')).write_bytes(stress_scores)
+            (folder / (kind + '-indices.i32')).write_bytes(stress_indices)
+            stress[kind] = {'rows': 2048, 'source_scores_sha256': digest(stress_scores),
+                            'indices_sha256': digest(stress_indices),
+                            'work': {'unresolved': 0, 'coarse_certified': 2048, 'exact_completed': 0}}
         write_json(folder / 'result.json', {'rows': 2, 'classes': 2, 'score_values': 4,
                                             'models': models, 'stress': stress})
     write_json(root / 'PATHS.json', paths)
@@ -106,7 +107,9 @@ def evidence(tmp_path):
                                            'batch32_max_task_ratio_limit': 1.25, 'baseline': 'full16'}})
     write_json(run / 'SUMMARY.json', summary)
     write_json(root / 'results/independent.json', {'status': 'PASS', 'files': proof})
-    write_json(root / 'results/replay/LOCK.json', {'source_files': {'benchmark.py': digest(after)}})
+    write_json(root / 'results/replay/LOCK.json', {'source_files': {'benchmark.py': digest(after)},
+                                                  'stress_rows_per_kind': 2048,
+                                                  'seed_rule': '2026092961+d+D'})
     resource_jobs = list(itertools.product(TASKS, ('flat', 'interned', 'residual', 'official'), range(3)))
     records = [{'task': task, 'policy': policy, 'repeat': repeat, 'matched': True,
                 'numerical_frameworks': [], 'setup_ns': 100, 'model_bytes': 32,
