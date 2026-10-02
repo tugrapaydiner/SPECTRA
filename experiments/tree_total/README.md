@@ -61,6 +61,11 @@ the previous local delivery. `replay.py` compares full source scores with a sepa
 scalar source reader, preserves any exported-C++ score differences, and executes
 a fixed uniform/boundary stress set without model fitting.
 
+Replay acceptance uses explicit errors, so `python -O` cannot disable source-score
+or label checks. Prediction counts must match the complete reference inventory;
+a matching prefix is insufficient. Failed replay leaves diagnostic partial files
+but does not publish its final `report.json` success record.
+
 ## Reproducing the comparison
 
 The evidence contains all original model/native-library bytes, original licenses,
