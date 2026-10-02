@@ -1,0 +1,4 @@
+# Preserve the literal bytes used by the README chart provenance contract.
+/docs/EFFICIENCY_GUIDE.md text eol=lf
+/experiments/native_baselines/RESULTS.md text eol=lf
+/assets/readme/* text eol=lf

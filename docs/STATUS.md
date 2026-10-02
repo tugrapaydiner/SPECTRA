@@ -5,19 +5,25 @@ Repository maintenance does not turn a failed scientific gate into a pass.
 
 ## Delivery state
 
-Checked on 2026-09-26: the latest published GitHub release is
+Checked on 2026-10-01: the latest published GitHub release remains
 [v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1), from
-`9fd6682345b34e992b3cab7e55750e9ef4b04e87` (2026-09-12). The cleanup described in
-[the changelog](../CHANGELOG.md) is an unreleased maintenance change, not a new
-model, version tag or PyPI publication.
+`9fd6682345b34e992b3cab7e55750e9ef4b04e87` (2026-09-12).
+The reviewed main source is `b9d9f90d28a3e7071080be38555cd6ca09afcccf`
+(tree `d0a26ed8acf859332a4592338e2686edeca293a2`). Later source is **unreleased**;
+the shared package version does not make it identical to the release wheel.
 
-Two later changes remain open and unmerged: [PR27](https://github.com/tugrapaydiner/SPECTRA/pull/27)
-(`b28e01b85bd95b78f291e466c25c13bfa2fc5b46`) contains optional prepared execution;
-[PR28](https://github.com/tugrapaydiner/SPECTRA/pull/28)
-(`4cb091653bd720d36f36bccecdae7781824f4985`) is its stacked compiler comparison.
-They are included in this local integration candidate, not in the published main release. Their reported speedups must not be
-mixed with v0.7.1's classical CNF or untrained output-only fixtures.
-Only PR27's isolated package-version publication guard is reused in this cleanup.
+[PR27](https://github.com/tugrapaydiner/SPECTRA/pull/27) and
+[PR28](https://github.com/tugrapaydiner/SPECTRA/pull/28) were both merged on
+2026-09-26. Optional prepared FP execution and compiler controls are therefore
+in main, not merely an unmerged local candidate. Their results remain separate
+from v0.7.1's classical CNF and untrained output-only fixtures.
+
+Main also contains the native SVM, raw-input pipeline, bounded JSONL runner and
+[matched native comparison](../experiments/native_baselines/RESULTS.md).
+That comparison leaves native-speed admission incomplete and task-usefulness
+admission failed. Subsequent open research PRs are not integrated by this review.
+The [changelog](../CHANGELOG.md) records maintenance only: no new model, default,
+version tag, PyPI publication or replacement release asset.
 
 Use [Development](DEVELOPMENT.md) for current commands and
 [Releasing](RELEASING.md) for final acceptance. Test counts below are dated
@@ -105,12 +111,11 @@ Its CI development witness rate was 42.97%, below the 47.22% greedy repair contr
 The earlier Sudoku/maze results, symmetry overlap and much stronger classical
 comparators remain described in [the research review](RESEARCH_REVIEW_20260911.md).
 
-The next capability experiment is the neighborhood-repair protocol on
-`research/neighborhood-repair`. Its neighborhood component is not implemented by
-this cleanup. Establish cross-fitted useful repair headroom before training a
-larger selector; then compare full execution cost, classical baselines and
-proposal/selector factorial controls on untouched cases. Another packaging or
-cache improvement is not a substitute for that learned result.
+At the earlier PR25 checkpoint, neighborhood repair was the next proposed
+capability experiment. That historical proposal is not a current delivery claim.
+Later execution and learning work must retain its own protocol, stronger controls,
+held-out-data boundary and promotion decision. Packaging or cache improvements
+do not by themselves establish improved learned capability.
 
 ## Earlier repository cleanup — PR25
 

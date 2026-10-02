@@ -2,6 +2,20 @@
 
 ## Unreleased — release maintenance
 
+### Final review and README
+
+- Bound JSON read requests to 64 KiB chunks; reject unrepresentable byte caps as
+  settings errors instead of exposing an OverflowError traceback. Preserve the
+  byte limit, strict decoding rules and solver/model arithmetic.
+- Add regression tests for extreme caps, exact multichunk boundaries, Unicode,
+  duplicate keys and at-most-limit-plus-one consumption.
+- Rebuild the README around current interfaces and source-bound, reproducible
+  SVG charts. Retain regressions, missing controls and failed research gates.
+- Correct stale merged/unmerged status for PR27/28 and native-platform guidance.
+  Include README figure assets in the source distribution.
+
+### Earlier maintenance
+
 - Reject ambiguous or nonfinite witness/manifest JSON, invalid UTF-8, excessive
   nesting and input above an explicit byte limit; preserve solver trajectories.
 - Select and validate one current compiler-free wheel rather than hard-coding a

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="728" viewBox="0 0 1000 728" role="img" aria-labelledby="title desc">
+<title id="title">Indexed CNF search: cold-call cost versus reference</title><desc id="desc">All six size/family cells, at 128 and 4096 flips. Values above one are regressions. Large cases return UNKNOWN. Retained measurements, not new benchmarks.</desc>
+<rect x="0.5" y="0.5" width="999" height="727" rx="20" fill="#faf8f3" stroke="#e2dfd6"/>
+<text x="40" y="38" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#686b64" text-anchor="start" font-weight="700">SPECTRA  /  BOUNDED SEARCH</text>
+<text x="40" y="83" font-family="Georgia, serif" font-size="32" fill="#292c29" text-anchor="start" font-weight="400">The gain depends on workload size.</text>
+<text x="40" y="117" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#686b64" text-anchor="start" font-weight="400">Indexed / reference cold-call time. Lower is better.</text>
+<rect x="40" y="141" width="14.000" height="14" rx="3" fill="#8a9f98"/>
+<text x="64" y="154" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#292c29" text-anchor="start" font-weight="400">128-flip budget</text>
+<rect x="245" y="141" width="14.000" height="14" rx="3" fill="#c67b61"/>
+<text x="269" y="154" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#292c29" text-anchor="start" font-weight="400">4,096-flip budget</text>
+<text x="945" y="148" font-family="Arial, Helvetica, sans-serif" font-size="27" fill="#292c29" text-anchor="end" font-weight="700">4.21x</text>
+<text x="945" y="172" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#686b64" text-anchor="end" font-weight="400">pooled large-case speedup at 4,096 flips</text>
+<line x1="236" y1="198" x2="236" y2="603" stroke="#e2dfd6"/>
+<text x="236" y="632" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">0.00</text>
+<line x1="373.5" y1="198" x2="373.5" y2="603" stroke="#e2dfd6"/>
+<text x="373.5" y="632" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">0.25</text>
+<line x1="511.0" y1="198" x2="511.0" y2="603" stroke="#e2dfd6"/>
+<text x="511.0" y="632" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">0.50</text>
+<line x1="648.5" y1="198" x2="648.5" y2="603" stroke="#e2dfd6"/>
+<text x="648.5" y="632" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">0.75</text>
+<line x1="786" y1="198" x2="786" y2="603" stroke="#686b64" stroke-dasharray="4 5"/>
+<text x="786" y="632" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">1.00</text>
+<line x1="923.5" y1="198" x2="923.5" y2="603" stroke="#e2dfd6"/>
+<text x="923.5" y="632" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">1.25</text>
+<text x="40" y="231" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#292c29" text-anchor="start" font-weight="400">512 variables</text>
+<text x="40" y="253" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="start" font-weight="400">planted</text>
+<rect x="236" y="215" width="554.400" height="18" rx="3" fill="#8a9f98"/>
+<text x="799.4" y="230" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">1.008</text>
+<rect x="236" y="240" width="582.450" height="18" rx="3" fill="#c67b61"/>
+<text x="827.4499999999999" y="255" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">1.059</text>
+<text x="40" y="297" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#292c29" text-anchor="start" font-weight="400">512 variables</text>
+<text x="40" y="319" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="start" font-weight="400">uniform</text>
+<rect x="236" y="281" width="551.650" height="18" rx="3" fill="#8a9f98"/>
+<text x="796.65" y="296" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">1.003</text>
+<rect x="236" y="306" width="584.650" height="18" rx="3" fill="#c67b61"/>
+<text x="829.65" y="321" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">1.063</text>
+<text x="40" y="363" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#292c29" text-anchor="start" font-weight="400">4,096 variables</text>
+<text x="40" y="385" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="start" font-weight="400">planted</text>
+<rect x="236" y="347" width="448.800" height="18" rx="3" fill="#8a9f98"/>
+<text x="693.8" y="362" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.816</text>
+<rect x="236" y="372" width="267.850" height="18" rx="3" fill="#c67b61"/>
+<text x="512.8499999999999" y="387" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.487</text>
+<text x="40" y="429" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#292c29" text-anchor="start" font-weight="400">4,096 variables</text>
+<text x="40" y="451" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="start" font-weight="400">uniform</text>
+<rect x="236" y="413" width="498.300" height="18" rx="3" fill="#8a9f98"/>
+<text x="743.3" y="428" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.906</text>
+<rect x="236" y="438" width="244.750" height="18" rx="3" fill="#c67b61"/>
+<text x="489.75" y="453" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.445</text>
+<text x="40" y="495" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#292c29" text-anchor="start" font-weight="400">16,384 variables</text>
+<text x="40" y="517" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="start" font-weight="400">planted</text>
+<rect x="236" y="479" width="521.400" height="18" rx="3" fill="#8a9f98"/>
+<text x="766.4" y="494" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.948</text>
+<rect x="236" y="504" width="115.500" height="18" rx="3" fill="#c67b61"/>
+<text x="360.5" y="519" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.210</text>
+<text x="40" y="561" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#292c29" text-anchor="start" font-weight="400">16,384 variables</text>
+<text x="40" y="583" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="start" font-weight="400">uniform</text>
+<rect x="236" y="545" width="488.400" height="18" rx="3" fill="#8a9f98"/>
+<text x="733.4000000000001" y="560" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.888</text>
+<rect x="236" y="570" width="109.450" height="18" rx="3" fill="#c67b61"/>
+<text x="354.45" y="585" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.199</text>
+<line x1="40" y1="659" x2="960" y2="659" stroke="#e2dfd6"/>
+<text x="40" y="686" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">Includes preparation. Large cases: UNKNOWN, not improved SAT success.</text>
+<text x="40" y="709" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#686b64" text-anchor="start" font-weight="400">Retained local summary | 24 formulas, 3 rounds | CPython 3.13.5 | Reference = 1.00</text>
+</svg>

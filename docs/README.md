@@ -9,6 +9,8 @@
 | Run optional framework-free certified SVM inference | [SVM runtime](SVM.md) |
 | Export fitted raw-input preprocessing and SVM inference | [Pipeline deployment](SVM_PIPELINE.md) |
 | Share prepared SVM data and use other feature dimensions | [Shared SVM](SVM_SHARED.md) |
+| Stream raw JSONL inputs into complete new result files | [Offline streaming](SVM_STREAM.md) |
+| Build and validate native SVM code on a target platform | [Platform contract](SVM_PORTABILITY.md) |
 | Independently replay a model/input-bound SVM decision | [Decision receipts](SVM_RECEIPTS.md) |
 | Check what is released, measured or experimental | [Current status](STATUS.md) |
 | Run tests, build a wheel or reproduce experiments | [Development](DEVELOPMENT.md) |
@@ -25,6 +27,11 @@ Its [frozen protocol](INDEXED_SEARCH_PROTOCOL.md), the
 [cached-residual protocol](CACHED_RESIDUAL_PROTOCOL.md) describe separate
 experiments. Do not multiply their speedups or replace their original results
 with measurements from a different implementation or host.
+
+[Matched native alternatives](../experiments/native_baselines/RESULTS.md) retains
+generated-C wins, the missing HAR export and the failed task-usefulness gate.
+[README chart provenance](../assets/readme/README.md) explains the visual summaries;
+regenerating a figure does not regenerate a benchmark.
 
 ## Research evidence
 

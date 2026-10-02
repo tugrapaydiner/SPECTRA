@@ -1,0 +1,106 @@
+{
+  "evidence_scope": "Preserved published summaries; rounded table values. No new timing or raw-data re-audit.",
+  "format": "spectra.readme-charts.v1",
+  "indexed": {
+    "cells": [
+      {
+        "family": "planted",
+        "long_ratio": 1.059,
+        "short_ratio": 1.008,
+        "variables": 512
+      },
+      {
+        "family": "uniform",
+        "long_ratio": 1.063,
+        "short_ratio": 1.003,
+        "variables": 512
+      },
+      {
+        "family": "planted",
+        "long_ratio": 0.487,
+        "short_ratio": 0.816,
+        "variables": 4096
+      },
+      {
+        "family": "uniform",
+        "long_ratio": 0.445,
+        "short_ratio": 0.906,
+        "variables": 4096
+      },
+      {
+        "family": "planted",
+        "long_ratio": 0.21,
+        "short_ratio": 0.948,
+        "variables": 16384
+      },
+      {
+        "family": "uniform",
+        "long_ratio": 0.199,
+        "short_ratio": 0.888,
+        "variables": 16384
+      }
+    ],
+    "cold_reference_primary_ratio": 0.237505
+  },
+  "native": {
+    "batch_rows": 32,
+    "cells": [
+      {
+        "generated_us": 0.77,
+        "libsvm_us": 1.056,
+        "model": "Wine",
+        "spectra_binary_stream_us": 1.047,
+        "spectra_default_us": 1.011
+      },
+      {
+        "generated_us": 2.172,
+        "libsvm_us": 2.571,
+        "model": "WDBC",
+        "spectra_binary_stream_us": 1.242,
+        "spectra_default_us": 1.574
+      },
+      {
+        "generated_us": 7.64,
+        "libsvm_us": 38.01,
+        "model": "Chess",
+        "spectra_binary_stream_us": 8.552,
+        "spectra_default_us": 10.021
+      },
+      {
+        "generated_us": 0.504,
+        "libsvm_us": 0.716,
+        "model": "Penguins",
+        "spectra_binary_stream_us": 0.773,
+        "spectra_default_us": 0.778
+      },
+      {
+        "generated_us": 3.27,
+        "libsvm_us": 6.359,
+        "model": "Titanic",
+        "spectra_binary_stream_us": 4.021,
+        "spectra_default_us": 5.403
+      },
+      {
+        "generated_us": 0.787,
+        "libsvm_us": 1.999,
+        "model": "Zoo",
+        "spectra_binary_stream_us": 1.463,
+        "spectra_default_us": 1.419
+      },
+      {
+        "generated_us": null,
+        "libsvm_us": 615.398,
+        "model": "HAR",
+        "spectra_binary_stream_us": 72.663,
+        "spectra_default_us": 74.412
+      }
+    ],
+    "har_different_linear_model_us": 3.079,
+    "unit": "microseconds per row"
+  },
+  "source_commit": "b9d9f90d28a3e7071080be38555cd6ca09afcccf",
+  "source_sha256": {
+    "docs/EFFICIENCY_GUIDE.md": "98d049b94d7b68a09e112b1f6d5c2b22457865cc782aa1fe3d3454444644292f",
+    "experiments/native_baselines/RESULTS.md": "df69bf9b0cc8d0d798c5160d9341755525de2054eb2663fbb8092ef7cadf6b9f"
+  }
+}

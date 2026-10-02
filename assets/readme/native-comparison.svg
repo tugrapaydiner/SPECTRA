@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="806" viewBox="0 0 1000 806" role="img" aria-labelledby="title desc">
+<title id="title">Same-model native SVM cost, relative to LIBSVM</title><desc id="desc">All seven retained models; fixed default SPECTRA and generated C relative to native LIBSVM. Generated C is faster than SPECTRA on five of six available small models. The missing HAR export is not a loss.</desc>
+<rect x="0.5" y="0.5" width="999" height="805" rx="20" fill="#faf8f3" stroke="#e2dfd6"/>
+<text x="40" y="38" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#686b64" text-anchor="start" font-weight="700">SPECTRA  /  SAME-MODEL CPU INFERENCE</text>
+<text x="40" y="83" font-family="Georgia, serif" font-size="32" fill="#292c29" text-anchor="start" font-weight="400">Native acceleration is not universal.</text>
+<text x="40" y="117" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#686b64" text-anchor="start" font-weight="400">Prepared-input job cost / native LIBSVM. Lower is better.</text>
+<rect x="40" y="141" width="14.000" height="14" rx="3" fill="#c67b61"/>
+<text x="64" y="154" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#292c29" text-anchor="start" font-weight="400">SPECTRA default</text>
+<rect x="265" y="141" width="14.000" height="14" rx="3" fill="#8a9f98"/>
+<text x="289" y="154" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#292c29" text-anchor="start" font-weight="400">Generated C</text>
+<text x="945" y="148" font-family="Arial, Helvetica, sans-serif" font-size="27" fill="#292c29" text-anchor="end" font-weight="700">5/6</text>
+<text x="945" y="172" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#686b64" text-anchor="end" font-weight="400">small models favor generated C</text>
+<line x1="205" y1="198" x2="205" y2="662" stroke="#e2dfd6"/>
+<text x="205" y="691" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">0.00</text>
+<line x1="344.0" y1="198" x2="344.0" y2="662" stroke="#e2dfd6"/>
+<text x="344.0" y="691" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">0.25</text>
+<line x1="483.0" y1="198" x2="483.0" y2="662" stroke="#e2dfd6"/>
+<text x="483.0" y="691" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">0.50</text>
+<line x1="622.0" y1="198" x2="622.0" y2="662" stroke="#e2dfd6"/>
+<text x="622.0" y="691" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">0.75</text>
+<line x1="761" y1="198" x2="761" y2="662" stroke="#686b64" stroke-dasharray="4 5"/>
+<text x="761" y="691" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">1.00</text>
+<line x1="900.0" y1="198" x2="900.0" y2="662" stroke="#e2dfd6"/>
+<text x="900.0" y="691" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#686b64" text-anchor="middle" font-weight="400">1.25</text>
+<text x="40" y="241" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#292c29" text-anchor="start" font-weight="400">Wine</text>
+<rect x="205" y="215" width="532.307" height="18" rx="3" fill="#c67b61"/>
+<text x="746.3068181818181" y="230" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.957</text>
+<rect x="205" y="240" width="405.417" height="18" rx="3" fill="#8a9f98"/>
+<text x="619.4166666666666" y="255" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.729</text>
+<text x="40" y="306" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#292c29" text-anchor="start" font-weight="400">WDBC</text>
+<rect x="205" y="280" width="340.391" height="18" rx="3" fill="#c67b61"/>
+<text x="554.390509529366" y="295" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.612</text>
+<rect x="205" y="305" width="469.713" height="18" rx="3" fill="#8a9f98"/>
+<text x="683.712952158693" y="320" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.845</text>
+<text x="40" y="371" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#292c29" text-anchor="start" font-weight="400">Chess</text>
+<rect x="205" y="345" width="146.584" height="18" rx="3" fill="#c67b61"/>
+<text x="360.5844777690082" y="360" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.264</text>
+<rect x="205" y="370" width="111.756" height="18" rx="3" fill="#8a9f98"/>
+<text x="325.75585372270456" y="385" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.201</text>
+<text x="40" y="436" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#292c29" text-anchor="start" font-weight="400">Penguins</text>
+<rect x="205" y="410" width="604.145" height="18" rx="3" fill="#c67b61"/>
+<text x="818.1452513966481" y="425" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">1.087</text>
+<rect x="205" y="435" width="391.374" height="18" rx="3" fill="#8a9f98"/>
+<text x="605.3743016759777" y="450" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.704</text>
+<text x="40" y="501" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#292c29" text-anchor="start" font-weight="400">Titanic</text>
+<rect x="205" y="475" width="472.412" height="18" rx="3" fill="#c67b61"/>
+<text x="686.4120144676835" y="490" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.850</text>
+<rect x="205" y="500" width="285.913" height="18" rx="3" fill="#8a9f98"/>
+<text x="499.9128793835509" y="515" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.514</text>
+<text x="40" y="566" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#292c29" text-anchor="start" font-weight="400">Zoo</text>
+<rect x="205" y="540" width="394.679" height="18" rx="3" fill="#c67b61"/>
+<text x="608.6793396698349" y="555" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.710</text>
+<rect x="205" y="565" width="218.895" height="18" rx="3" fill="#8a9f98"/>
+<text x="432.89544772386193" y="580" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.394</text>
+<text x="40" y="631" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#292c29" text-anchor="start" font-weight="400">HAR</text>
+<rect x="205" y="605" width="67.230" height="18" rx="3" fill="#c67b61"/>
+<text x="281.22977975229037" y="620" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">0.121</text>
+<text x="213" y="645" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#686b64" text-anchor="start" font-weight="400">Not available: generation timed out</text>
+<line x1="40" y1="719" x2="960" y2="719" stroke="#e2dfd6"/>
+<text x="40" y="748" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#292c29" text-anchor="start" font-weight="400">HAR: a different linear model is faster still, with higher observed accuracy.</text>
+<text x="40" y="773" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#686b64" text-anchor="start" font-weight="400">Retained 2026-09-27 summary | EPYC 9V74, matched AVX2 | Batch 32, 7 rounds</text>
+<text x="40" y="794" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#686b64" text-anchor="start" font-weight="400">Includes validation, conversion and fresh labels; excludes loading and raw preprocessing.</text>
+</svg>
