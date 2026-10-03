@@ -5,7 +5,8 @@ from .state import CompactCNFRepairState
 from .search import SolveResult, solve
 from .indexed import PreparedCNF, solve_indexed
 from .deductive import DeductiveResult, solve_deductive
+from .focused import FocusedResult, solve_focused
 
 __all__ = ["CNF", "SplitMix64", "CompactCNFRepairState", "SolveResult", "solve",
            "read_dimacs", "write_dimacs", "PreparedCNF", "solve_indexed",
-           "DeductiveResult", "solve_deductive"]
+           "DeductiveResult", "solve_deductive", "FocusedResult", "solve_focused"]

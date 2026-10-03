@@ -1,0 +1,128 @@
+{
+  "kind": "recovery_correctness_validation_not_benchmark",
+  "base_commit": "037c20b11465f0031f66b157757f01badcfb0d64",
+  "archive": "validation-20261003.zip",
+  "bytes": 16622,
+  "sha256": "5d41b23708fd0dd34802f2de2d42c3d16c1a1afa1ca1f55b96aed907e92748e0",
+  "members": {
+    "public.txt": {
+      "bytes": 1865,
+      "sha256": "197b7debbad218af784be6d263b732425314e7848ffa2b3bc8241385e46eea7d"
+    },
+    "public.xml": {
+      "bytes": 67268,
+      "sha256": "26d74749d03c85c754ee5baa6212797081f4cc050e12b686ceb6d0295a0d0c4e"
+    },
+    "build.txt": {
+      "bytes": 52823,
+      "sha256": "6586efa7c3ba6c698a780279c7b197d2953422d3951b31b0e7af9a217a7b659a"
+    },
+    "install.txt": {
+      "bytes": 360,
+      "sha256": "a5a7d43f222087d2b8f6d3db93521567603112722b9869bc145f97c48b5cef36"
+    },
+    "focused-install.json": {
+      "bytes": 184,
+      "sha256": "c03db6f6a3e496a5b93f30311ef5478d2bdca8ceb9bd6219c091caa429a19787"
+    },
+    "workspace.json": {
+      "bytes": 248,
+      "sha256": "3a9fd601d4f961c2434962937c79c685dcc8364f6aee7a9f484c6e6aa4f4e40e"
+    },
+    "workspace.txt": {
+      "bytes": 248,
+      "sha256": "3a9fd601d4f961c2434962937c79c685dcc8364f6aee7a9f484c6e6aa4f4e40e"
+    },
+    "navigation.json": {
+      "bytes": 219,
+      "sha256": "797bddc16dbab1c2e073dd410d1ec62e7a871cff2eafd34158294b0289e65c10"
+    },
+    "navigation.txt": {
+      "bytes": 219,
+      "sha256": "797bddc16dbab1c2e073dd410d1ec62e7a871cff2eafd34158294b0289e65c10"
+    },
+    "deductive-retained.json": {
+      "bytes": 5329,
+      "sha256": "f86eca9cab1a4af12a0e14e34a8753faeb92fe2e42c671e5878c003d94adce10"
+    },
+    "patch-context-failure.txt": {
+      "bytes": 326,
+      "sha256": "3eba3926d171c78901091b81d33674ba75b0e43ba1f9613095cc6d1f502fa046"
+    },
+    "environment.json": {
+      "bytes": 292,
+      "sha256": "0c8aeed9849a083335f53e247c0bb7f73db5d5f67385ced30b5e50e1f6e649fb"
+    },
+    "install/source_report.json": {
+      "bytes": 63,
+      "sha256": "aad901747df2c87df026bfbcaf2620e873e7c323e41768827bda66b2d64fce74"
+    },
+    "install/indexed_report.json": {
+      "bytes": 165,
+      "sha256": "468107791098dbdadfdfc37f8616dc0d16097ab92f3752e2bc148febfd4b679e"
+    },
+    "install/indexed_calls.json": {
+      "bytes": 1804,
+      "sha256": "1bd4829207d4e38e4eb5020732e0d51ce15ffd209a9be17d1897bffd3abc71a1"
+    }
+  },
+  "tested_sources": {
+    "spectra/cnf/focused.py": {
+      "bytes": 5830,
+      "sha256": "e5ea12eed15317f4c686c1b1d021876122b8c224921950f392fea59073e5fd7c"
+    },
+    "spectra/cnf/__init__.py": {
+      "bytes": 636,
+      "sha256": "80541f1374919d670c392ec290fcc5a94ef317a56d85ce47f63497fec47e6a9f"
+    },
+    "spectra/cli.py": {
+      "bytes": 4847,
+      "sha256": "428eba86e3221c7adaea257a9810ee9e9aded4d5ed01dae272eaec3c00ffc815"
+    },
+    "spectra/cnf/indexed.py": {
+      "bytes": 9168,
+      "sha256": "52e0610591d97556602915da1d8fd84287c778cf6c620857f4d1f3bc3a0c625e"
+    },
+    "spectra/cnf/search.py": {
+      "bytes": 3693,
+      "sha256": "872733b2ad694b30bdd3f96e84147dc752a7f17096273e66864bc03fa68d06c9"
+    },
+    "data/cnf.py": {
+      "bytes": 5279,
+      "sha256": "c2b6efa0fa645a1f7ff78c30612a0a7fdb1980841090dd1536ad5810617f4f4d"
+    },
+    "tests/public/test_focused_search.py": {
+      "bytes": 4823,
+      "sha256": "5b405dddacc0ae75b25748b0d436c167e1635330279787f2c256202c5c04f5fa"
+    },
+    "scripts/check_focused_installation.py": {
+      "bytes": 3008,
+      "sha256": "6a2cdb317f5fe96e2b382b4176c75c4aad3d324b5b3a1b4b8ada29897e99903e"
+    },
+    ".github/workflows/public-package.yml": {
+      "bytes": 3477,
+      "sha256": "4ca3e72aa744fb1060f0033560c77bd8ac7af6c7d4fcc645bf82b473b10fa148"
+    }
+  },
+  "distributions": {
+    "spectra-0.7.1-py3-none-any.whl": {
+      "bytes": 365077,
+      "sha256": "986042505d493e944e3d003ebcf45aa1f44022ac760b319334eb670b46d2a31c"
+    },
+    "spectra-0.7.1.tar.gz": {
+      "bytes": 605925,
+      "sha256": "0dd65e42b9c399da18a49a6640f2253cb6d7be581617acb3d929bc9c6c277cec"
+    }
+  },
+  "public_tests": 370,
+  "existing_installed_checks": 11,
+  "focused_installed_formulas": 512,
+  "focused_installed_cli_checks": 2,
+  "historical_files_preserved": 449,
+  "focused_benchmark_status": "NO_RETAINED_FRESH_EVALUATION",
+  "limitations": [
+    "Original focused development raw rows and memory measurements are missing.",
+    "No new benchmark or model/native suite was run.",
+    "Known incomplete first deductive development corpus remains disclosed."
+  ]
+}
