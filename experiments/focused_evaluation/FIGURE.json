@@ -1,0 +1,22 @@
+{
+  "renderer": "matplotlib",
+  "version": "3.10.8",
+  "command": "python experiments/focused_evaluation/plot.py",
+  "inputs": {
+    "experiments/focused_evaluation/SUMMARY.json": {
+      "bytes": 18159,
+      "sha256": "c5373218ee28e980a86975c7702d7bfd193139e7d2b69e7e10b7d95f34db99f2"
+    },
+    "experiments/focused_evaluation/plot.py": {
+      "bytes": 3145,
+      "sha256": "8d0b5136a4ba03906146063943ddd0d4a0fd2cda97be4aae4a1af4e4884e3385"
+    }
+  },
+  "outputs": {
+    "quality-cost.svg": {
+      "bytes": 29007,
+      "sha256": "ab0a77d81581d6e9454a7d11458873a8082386d66296cac25ee78821e5f807be"
+    }
+  },
+  "scope": "Retained summary only; no solver execution or new measurements."
+}

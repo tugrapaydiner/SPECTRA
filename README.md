@@ -11,6 +11,10 @@ optional build; neural training and historical experiments live in a separate la
 [Native deployment](#native-deployment) · [Development](docs/DEVELOPMENT.md) ·
 [Documentation](docs/README.md)
 
+**Technical review:** [Research engineering case study](docs/RESEARCH_ENGINEERING.md)
+— a focused path through the hypothesis, algorithm, ablations, complete CPU costs,
+independent checks and reproducible evidence.
+
 **Python 3.10+ · MIT-licensed code · CPU-first · Explicit verification boundaries**
 
 ## What is in the project?
@@ -83,6 +87,15 @@ complete solve time. Gains are concentrated in structured constraints; general
 3-SAT quality is unchanged and some time/memory costs increase. The
 [full comparison](experiments/deductive_search/RESULTS.md) retains the native
 Glucose4 baseline, failures and measurement limitations.
+
+The [focused-search study](experiments/focused_evaluation/RESULTS.md) evaluates the
+recovered break/age policy on a separate, freshly declared 96-formula panel:
+**102/192 verified SAT cases versus indexed search's 60/192**, with complete mean
+wall time **18.80 versus 26.70 ms**. All 2,880 timing rows and 36 memory observations
+are retained, along with policy controls and native Glucose4. Gains are concentrated
+in planted formulas; large uniform formulas remain difficult. This is an optional
+classical backend with a scoped result, unchanged defaults and no neural-learning
+claim. [Reproduce the evidence and inspect the engineering decisions →](docs/RESEARCH_ENGINEERING.md)
 
 ## Measured results
 

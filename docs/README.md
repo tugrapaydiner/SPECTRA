@@ -6,8 +6,9 @@
 |---|---|
 | Install and run the public tools | [Quick start](../README.md#quick-start) |
 | Understand API, input formats and return values | [API and CLI](API.md) |
+| Review one complete research engineering investigation | [Technical case study](RESEARCH_ENGINEERING.md) |
 | Solve forced/binary constraints before bounded search | [Optional deductive CNF](DEDUCTIVE_GUIDE.md) |
-| Try the unpromoted break/age local-search candidate | [Experimental focused CNF](FOCUSED_GUIDE.md) |
+| Inspect the measured optional break/age local-search policy | [Experimental focused CNF](FOCUSED_GUIDE.md) |
 | Run optional framework-free certified SVM inference | [SVM runtime](SVM.md) |
 | Export fitted raw-input preprocessing and SVM inference | [Pipeline deployment](SVM_PIPELINE.md) |
 | Share prepared SVM data and use other feature dimensions | [Shared SVM](SVM_SHARED.md) |

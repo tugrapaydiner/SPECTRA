@@ -48,9 +48,9 @@ walk. See [deductive solving](DEDUCTIVE_GUIDE.md) for costs, result fields and
 measured scope. The historical default is unchanged.
 
 `solve_focused` and CLI `--backend focused` expose an experimental dense-clause
-pool and break/age move policy. This classical candidate has correctness checks
-but no retained fresh benchmark establishing a quality or speed advantage.
-See [focused search](FOCUSED_GUIDE.md) for budget semantics and recovery limitations.
+pool and break/age move policy. This classical candidate has a retained fresh
+synthetic evaluation and independent witness checks. See [focused search](FOCUSED_GUIDE.md)
+for its measured scope, budget semantics and recovery limitations.
 
 ## Commands and exit codes
 

@@ -57,6 +57,11 @@ jobs:
           report=json.loads(Path('.public-package/compact/summary.json').read_text())
           assert report['gate']=='PASS',report
           PY
+      - name: Verify retained focused evaluation and replay every local path
+        run: |
+          set -o pipefail
+          python -I -S experiments/focused_evaluation/analyse.py experiments/focused_evaluation/evidence-20261005.zip --out .public-package/focused-summary.json > .public-package/focused-analysis.txt
+          python -I -S experiments/focused_evaluation/replay.py experiments/focused_evaluation/evidence-20261005.zip | tee .public-package/focused-replay.txt
       - name: Retain small receipts and hashes, not the disposable venv
         if: always()
         run: |

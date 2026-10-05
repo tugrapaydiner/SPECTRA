@@ -3,8 +3,13 @@
 `solve_focused` is an opt-in classical local-search candidate. It uses a dense
 swap-delete pool of unsatisfied clauses and a break-count/last-flip-age move
 policy. It does not train a model, prove UNSAT, or replace the historical default.
-Its quality, time and memory advantage has **not** been established by a retained
-fresh evaluation. See the [recovery record](../experiments/focused_search/RECOVERY.md).
+A [fresh frozen evaluation](../experiments/focused_evaluation/RESULTS.md) verifies
+102/192 synthetic formula/seed cases versus indexed search's 60/192, with 29.6%
+lower mean complete solve time and no meaningful measured memory saving. The
+predeclared optional-backend gate passes; large uniform cases remain mostly
+unresolved. This is a single-host synthetic result, with unequal native budgets.
+The earlier [recovery record](../experiments/focused_search/RECOVERY.md) retains
+the separate lost-run limitations; the new study does not recover those raw rows.
 
 ```python
 from spectra.cnf import CNF, solve_focused
@@ -45,4 +50,4 @@ literals retain the original CNF semantics.
 `elapsed_ns` covers per-call index/state preparation, search, original-clause
 verification and state disposal. It excludes import and input parsing; there is
 no hard time or memory cap. Flip counts are not comparable to native conflict
-budgets. No new neural, general-intelligence or benchmark speed claim is made.
+budgets. No neural or general-intelligence claim is made.
