@@ -9,6 +9,7 @@
 | Review one complete research engineering investigation | [Technical case study](RESEARCH_ENGINEERING.md) |
 | Solve forced/binary constraints before bounded search | [Optional deductive CNF](DEDUCTIVE_GUIDE.md) |
 | Inspect the measured optional break/age local-search policy | [Experimental focused CNF](FOCUSED_GUIDE.md) |
+| Use optional bounded propagation and backtracking | [Watched DPLL](DPLL_GUIDE.md) |
 | Run optional framework-free certified SVM inference | [SVM runtime](SVM.md) |
 | Export fitted raw-input preprocessing and SVM inference | [Pipeline deployment](SVM_PIPELINE.md) |
 | Share prepared SVM data and use other feature dimensions | [Shared SVM](SVM_SHARED.md) |

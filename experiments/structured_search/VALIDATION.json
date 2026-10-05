@@ -1,0 +1,132 @@
+{
+  "source_payload_tree": "8634ddbe2f33a7f96388c667793d09decfe67aa5",
+  "candidate_commit": "a0d7efaafd0573a4655d1e3965bbc1e7560f72ec",
+  "python": "Python 3.12.14",
+  "status": "PASS",
+  "public_tests": 403,
+  "new_python_replays": 340,
+  "previous_focused_replays": 768,
+  "installed_source_files": 149,
+  "installed_contracts": 11,
+  "installed_dpll_formulas": 512,
+  "installed_focused_formulas": 512,
+  "installed_focused_cli_checks": 2,
+  "historical_files_preserved": 449,
+  "commands": [
+    "python -m pytest tests/public --confcutdir=tests/public -ra",
+    "python -I -S experiments/structured_search/analyse.py experiments/structured_search/evidence-20261005.zip --replay",
+    "python -m build --outdir NEW_DIST",
+    "python scripts/check_current_installation.py --dist NEW_DIST --out NEW_INSTALL",
+    "NEW_INSTALL/venv/bin/python -I scripts/check_dpll_installation.py",
+    "NEW_INSTALL/venv/bin/python -I scripts/check_focused_installation.py",
+    "python -I -S experiments/focused_evaluation/replay.py experiments/focused_evaluation/evidence-20261005.zip",
+    "python -I -S experiments/deductive_search/check_evidence.py",
+    "python scripts/audit_workspace.py --out NEW_AUDIT",
+    "python scripts/check_release_readiness.py --out NEW_NAVIGATION",
+    "python scripts/render_readme_charts.py --check"
+  ],
+  "exclusions": [
+    "historical neural training and slow tests",
+    "native SVM/model suite",
+    "multi-host performance",
+    "independent scientific replication"
+  ],
+  "scope": "source payload tree precedes this receipt/archive; no runtime or evidence edits between validation and saving",
+  "distributions": {
+    "spectra-0.7.1-py3-none-any.whl": {
+      "bytes": 368333,
+      "sha256": "49a3ff2d23627d97528994c92c48bef5c2b1e4c8ac0b34206cb5e93925675cc8"
+    },
+    "spectra-0.7.1.tar.gz": {
+      "bytes": 612980,
+      "sha256": "2f1fdd16e76aea5683c21455c4a999b10a0121a969c01c146585653d5f135e38"
+    }
+  },
+  "logs": {
+    "public-tests.txt": {
+      "bytes": 2137,
+      "sha256": "a15504b5024dc56bff07aabc7d0fec7101350464f032060821643416cf627cf7"
+    },
+    "public-tests.xml": {
+      "bytes": 71473,
+      "sha256": "00aed686032d83db5f529df6d73312d6645948abeb44576361ac466a18296394"
+    },
+    "prefreeze-tests.txt": {
+      "bytes": 99,
+      "sha256": "e799d6ba2230201e46a4cee5b8f1e0c8c1fc602bda6e80c8574160563509c182"
+    },
+    "evaluation-run.txt": {
+      "bytes": 117,
+      "sha256": "779974cb4a5f4bcf0b1ec317c8af0257f2ab7a8d69963e1e4d8337ce7fd4bd16"
+    },
+    "analysis-replay.txt": {
+      "bytes": 6849,
+      "sha256": "4f9f905a2bd2c0e8b105e6fca6db80eea0c0610074b3281d2102359f3ade9c9b"
+    },
+    "archive-verify.txt": {
+      "bytes": 6847,
+      "sha256": "ee6ed9145096c6bf2aa60822a6c43dd17fd8e7440a8ff21de552fe21b3a6492f"
+    },
+    "previous-focused-analysis.txt": {
+      "bytes": 18160,
+      "sha256": "c78be2119718d5b5cd6e99d16d0930dd7eeccbba2701d94de3784598810f05f7"
+    },
+    "previous-focused-replay.txt": {
+      "bytes": 140,
+      "sha256": "90502f3c261eda328049f53be9e88b98d228ac5b14a50e9cb5c72450fe630e40"
+    },
+    "previous-deductive.txt": {
+      "bytes": 5329,
+      "sha256": "f86eca9cab1a4af12a0e14e34a8753faeb92fe2e42c671e5878c003d94adce10"
+    },
+    "build.txt": {
+      "bytes": 53392,
+      "sha256": "98563b27c87622014be14a7a0edbaddb416219de77a2d2d3481a70782efe6ea8"
+    },
+    "install.txt": {
+      "bytes": 374,
+      "sha256": "2dacce64f8c6bfca6c248acc35a4d0d7a165d65fc27d67d07933f8b921969db4"
+    },
+    "focused-install.txt": {
+      "bytes": 184,
+      "sha256": "c03db6f6a3e496a5b93f30311ef5478d2bdca8ceb9bd6219c091caa429a19787"
+    },
+    "dpll-install.txt": {
+      "bytes": 159,
+      "sha256": "fa01f1d12545100d875d45771f1753284072532549aed94fa4f8727498c82465"
+    },
+    "release-readiness.json": {
+      "bytes": 219,
+      "sha256": "b6ad2fdb277df6f10728707e0e684fbbf4aa1037f0ecffb6be62728ae986dae3"
+    },
+    "workspace-audit.json": {
+      "bytes": 248,
+      "sha256": "c17aa793f3bbd017c90865e85117e5396b6d2467bb9cfcd6663bb95221b4ad4b"
+    },
+    "install/source_report.json": {
+      "bytes": 63,
+      "sha256": "386cc5fbc58232ea89a11189a5de1bbc6c2707ab04b48442b9428617bd83817f"
+    },
+    "install/report.json": {
+      "bytes": 939,
+      "sha256": "9865f17002e7071c0d261b77865fdd0af4bc78b1daa64407e55b3e97fc027b3e"
+    },
+    "install/indexed_report.json": {
+      "bytes": 165,
+      "sha256": "468107791098dbdadfdfc37f8616dc0d16097ab92f3752e2bc148febfd4b679e"
+    },
+    "install/calls.json": {
+      "bytes": 4166,
+      "sha256": "404330cd8b41093c1158ad3b7c3c7d4c0c9965c3ba67369d92cfb99fe277f613"
+    },
+    "install/indexed_calls.json": {
+      "bytes": 1846,
+      "sha256": "c1e7651dc7a40c58d811605b40a9c00f1c9df5ab22ccfd10a3a8feb5f70ffef7"
+    }
+  },
+  "archive": {
+    "file": "validation-20261005.zip",
+    "bytes": 27293,
+    "sha256": "bc3ab1dc80594621873594ae9b7f0e134969b25cb31e1d7b3288bb8f008eefe4"
+  }
+}

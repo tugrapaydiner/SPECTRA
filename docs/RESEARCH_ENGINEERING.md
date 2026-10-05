@@ -73,6 +73,16 @@ retained raw evidence are available for independent technical review.
 
 ## Scope as an AI research engineering sample
 
+The [structured-task follow-up](../experiments/structured_search/RESULTS.md)
+addresses the external-input gap with public 9×9 Sudoku. A new optional watched
+DPLL implementation solves 85/85 evaluation tasks, versus focused's 0/85 and
+deductive's 1/85. Mean complete wall cost falls from focused's 64.53 ms to 40.54 ms.
+The independent native SAT and original direct-domain controls solve all 85 faster
+(16.11 and 6.09 ms). The follow-up retains development attempts, source publication
+before evaluation, full-cost timing, separate memory observations and 340 exact
+Python replays. It demonstrates a bounded algorithmic capability addition;
+it does not imply neural learning or competitive general-purpose SAT performance.
+
 This investigation demonstrates hypothesis definition, algorithm implementation,
 measurement, failure analysis, regression tests and reproducible delivery on a
 small CPU workload. These are relevant parts of research engineering: current
@@ -82,7 +92,7 @@ emphasize experimental design, trustworthy measurement and engineering execution
 (reviewed 2026-10-05). Those roles also involve model/production work beyond this
 study; this mapping is an interpretation, not an employer assessment of SPECTRA.
 
-The next substantive gaps are externally sourced task workloads, demonstrated
-training/generalization improvements, profiling beyond this CPU host and evidence
-of production-scale operation. This study supplies none of those by implication.
+The next substantive gaps are diversity beyond this one external task family,
+demonstrated training/generalization improvements, profiling beyond this CPU host
+and evidence of production-scale operation. These studies supply none of those by implication.
 Any follow-up should declare a new question and fresh evaluation before tuning.

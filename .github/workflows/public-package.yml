@@ -1,7 +1,7 @@
 name: public-package
 on:
   pull_request:
-    branches: [main, "maintenance/**", "research/deductive-search-*", "research/focused-search-*"]
+    branches: [main, "maintenance/**", "research/deductive-search-*", "research/focused-search-*", "research/research-engineering-*"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -46,6 +46,7 @@ jobs:
           python -m build --outdir .public-package/dist | tee .public-package/build.txt
           python scripts/check_current_installation.py --dist .public-package/dist --out .public-package/install | tee .public-package/install.txt
           .public-package/install/venv/bin/python -I scripts/check_focused_installation.py | tee .public-package/focused-install.txt
+          .public-package/install/venv/bin/python -I scripts/check_dpll_installation.py | tee .public-package/dpll-install.txt
       - name: Run and replay frozen compact-state comparison
         run: |
           set -o pipefail
@@ -62,6 +63,10 @@ jobs:
           set -o pipefail
           python -I -S experiments/focused_evaluation/analyse.py experiments/focused_evaluation/evidence-20261005.zip --out .public-package/focused-summary.json > .public-package/focused-analysis.txt
           python -I -S experiments/focused_evaluation/replay.py experiments/focused_evaluation/evidence-20261005.zip | tee .public-package/focused-replay.txt
+      - name: Verify structured-task evidence and replay every Python arm
+        run: |
+          set -o pipefail
+          python -I -S experiments/structured_search/analyse.py experiments/structured_search/evidence-20261005.zip --replay --out .public-package/structured-summary.json > .public-package/structured-replay.txt
       - name: Retain small receipts and hashes, not the disposable venv
         if: always()
         run: |

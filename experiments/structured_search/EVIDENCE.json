@@ -1,0 +1,13 @@
+{
+  "files": {
+    "development-20261005.zip": {
+      "bytes": 91059,
+      "sha256": "489bd39d1bb191b0c4345d70797315a22af9b35774cbceba2b55a8ff149e1de2"
+    },
+    "evidence-20261005.zip": {
+      "bytes": 248201,
+      "sha256": "976dee2082c81f42cab4f9a13436a757581ef6ea9eb2c5cfb9cacb3b42ffb729"
+    }
+  },
+  "scope": "development attempts and frozen public-task evaluation; no generated timings replace originals"
+}

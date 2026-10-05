@@ -97,6 +97,14 @@ in planted formulas; large uniform formulas remain difficult. This is an optiona
 classical backend with a scoped result, unchanged defaults and no neural-learning
 claim. [Reproduce the evidence and inspect the engineering decisions →](docs/RESEARCH_ENGINEERING.md)
 
+The [public structured-task study](experiments/structured_search/RESULTS.md) adds
+optional watched-literal DPLL: **85/85 verified 9×9 Sudoku solutions**, versus
+focused search's 0/85 and deductive search's 1/85. Complete mean wall cost is
+**40.54 ms versus focused's 64.53 ms**. Native SAT and the direct Sudoku control
+also solve all 85 and are faster (16.11 and 6.09 ms). This is one public task
+family, different search budgets and an opt-in classical solver; models and
+defaults are unchanged. [API and limits →](docs/DPLL_GUIDE.md)
+
 ## Measured results
 
 These figures visualize **preserved published summaries, not new measurements
