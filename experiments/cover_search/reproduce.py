@@ -32,7 +32,9 @@ def ensure_baseline():
             content = subprocess.run(['git','show',study.BASE_COMMIT+':'+name],
                 cwd=ROOT, check=True, capture_output=True).stdout
             manifest[name] = hashlib.sha256(content).hexdigest()
-        payload = (json.dumps(manifest, sort_keys=True, indent=2)+'\n').encode()
+        # The original frozen inventory has no final newline. Preserve its exact
+        # bytes rather than replacing the trust anchor to accommodate formatting.
+        payload = json.dumps(manifest, sort_keys=True, indent=2).encode()
         study.require(hashlib.sha256(payload).hexdigest()==expected, 'reconstructed base inventory differs')
         with target.open('xb') as stream:
             stream.write(payload)
