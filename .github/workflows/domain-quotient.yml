@@ -1,0 +1,61 @@
+name: Domain quotient contracts
+on:
+  push:
+    branches: [research/sparse-incidence-20261007]
+    paths:
+      - .github/workflows/domain-quotient.yml
+      - spectra/cnf/coloring.py
+      - spectra/_native/coloring.cpp
+      - tests/public/test_domain_coloring.py
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Exact source and dependencies
+        run: |
+          mkdir -p delivery
+          git bundle create delivery/source-history.bundle --all
+          git rev-parse HEAD > delivery/commit.txt
+          git rev-parse HEAD^{tree} > delivery/tree.txt
+          python -m pip install pytest==9.0.2
+          python -m pip freeze > delivery/environment.txt
+      - name: Complete public contract suite
+        run: |
+          python -m pytest tests/public --confcutdir=tests/public --junitxml=delivery/public.xml > delivery/public.txt 2>&1
+      - name: Undefined-behaviour sanitizer
+        run: |
+          python -c "from spectra.cnf.coloring import build_coloring_runtime; print(build_coloring_runtime('delivery/ubsan',sanitize=True))" > delivery/ubsan-path.txt
+          SPECTRA_COLORING_LIBRARY="$(cat delivery/ubsan-path.txt)" python -m pytest tests/public/test_domain_coloring.py --confcutdir=tests/public --junitxml=delivery/ubsan.xml > delivery/ubsan.txt 2>&1
+      - name: Receipt integrity
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          p=Path('delivery');p.mkdir(exist_ok=True)
+          (p/'SHA256.json').write_text(json.dumps({str(f.relative_to(p)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.rglob('*')) if f.is_file()},indent=2,sort_keys=True)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: domain-contracts-${{ matrix.python }}-${{ github.run_id }}
+          path: delivery
+          include-hidden-files: true
+          retention-days: 90
