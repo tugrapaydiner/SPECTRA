@@ -87,16 +87,17 @@ class SparseRuntime:
         spec=importlib.util.spec_from_file_location('_spectra_sparse',Path(library).resolve())
         if spec is None or spec.loader is None:raise ValueError('invalid extension location')
         self._module=importlib.util.module_from_spec(spec);spec.loader.exec_module(self._module)
+        if not hasattr(self._module,"abi") or self._module.abi()!=3:raise ValueError("unsupported sparse native ABI; explicitly rebuild the runtime")
 
     def prepare(self,nvars: int,covers: tuple,exclusive: tuple, *,max_build_bytes: int=64*1024*1024):
         return PreparedSparse(self,nvars,covers,exclusive,max_build_bytes=max_build_bytes)
 
     def solve(self,nvars: int,covers: tuple,exclusive: tuple, *,max_work: int=1000000,
               max_build_bytes: int=64*1024*1024,max_state_bytes: int=64*1024*1024,
-              heap: bool=False,assumptions: tuple=()) -> SparseResult:
+              heap: bool=False,active: bool=False,xor_units: bool=True,degree: bool=False,lcv: bool=False,assumptions: tuple=()) -> SparseResult:
         start=time.perf_counter_ns()
         with self.prepare(nvars,covers,exclusive,max_build_bytes=max_build_bytes) as p:
-            r=p.solve(max_work=max_work,max_state_bytes=max_state_bytes,heap=heap,assumptions=assumptions)
+            r=p.solve(max_work=max_work,max_state_bytes=max_state_bytes,heap=heap,active=active,xor_units=xor_units,degree=degree,lcv=lcv,assumptions=assumptions)
         return SparseResult(r.status,r.witness,r.reason,r.work,r.nodes,r.assignments,r.backtracks,
                             r.index_bytes,r.state_payload_bytes,r.trace,time.perf_counter_ns()-start)
 
@@ -110,11 +111,14 @@ class PreparedSparse:
         self._original=(nvars,covers,exclusive)
 
     def solve(self, *,max_work: int=1000000,max_state_bytes: int=64*1024*1024,
-              heap: bool=False,assumptions: tuple=()) -> SparseResult:
+              heap: bool=False,active: bool=False,xor_units: bool=True,degree: bool=False,lcv: bool=False,assumptions: tuple=()) -> SparseResult:
         start=time.perf_counter_ns()
         with self._lock:
             if self._handle is None:raise RuntimeError('sparse index is closed')
-            values=self._module.solve(self._handle,max_work,max_state_bytes,heap,assumptions)
+            if any(type(flag) is not bool for flag in (heap,active,xor_units,degree,lcv)):raise ValueError('search flags must be bool')
+            if heap and active:raise ValueError('heap and active strategies cannot be combined')
+            flags=int(heap)+2*int(active)+4*int(xor_units)+8*int(degree)+16*int(lcv)
+            values=self._module.solve(self._handle,max_work,max_state_bytes,flags,assumptions)
             witness,reason,work,nodes,assigned,backtracks,index_bytes,state_bytes,trace=values
             original_ok=valid_witness(*self._original,witness,assumptions)
             if reason==0 and not original_ok:raise AssertionError('native SAT fails original constraints')

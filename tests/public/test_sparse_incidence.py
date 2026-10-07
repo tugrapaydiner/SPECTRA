@@ -149,3 +149,61 @@ def test_build_cannot_replace_outputs(tmp_path):
 
 def test_missing_compiler_has_no_hidden_fallback(tmp_path):
     with pytest.raises(FileNotFoundError):build_sparse_runtime(tmp_path,compiler='nonexistent-sparse-compiler')
+
+
+def test_active_and_xor_modes_preserve_exact_search(sparse_runtime):
+    rng=random.Random(590022)
+    for _ in range(1200):
+        n=rng.randrange(1,14)
+        rows=[tuple(v+1 for v in range(n) if rng.randrange(3)==0) for __ in range(rng.randrange(2,24))]
+        k=rng.randrange(len(rows)+1);c=tuple(rows[:k]);e=tuple(rows[k:])
+        ref=sparse_runtime.solve(n,c,e,xor_units=False)
+        for options in ({'xor_units':True},{'active':True,'xor_units':False},
+                        {'active':True,'xor_units':True},{'heap':True,'xor_units':True}):
+            assert stable(ref)==stable(sparse_runtime.solve(n,c,e,**options))
+
+
+def test_assumption_conversion_is_charged(sparse_runtime):
+    with sparse_runtime.prepare(10,(),()) as p:
+        empty=p.solve(max_work=0)
+        r=p.solve(assumptions=(-1,-2,-3))
+        assert r.state_payload_bytes==empty.state_payload_bytes+12
+        with pytest.raises(MemoryError):p.solve(assumptions=(-1,-2,-3),max_state_bytes=empty.state_payload_bytes+11)
+
+
+@pytest.mark.parametrize('field',['heap','active','xor_units'])
+def test_strategy_flags_are_not_numeric_aliases(sparse_runtime,field):
+    with pytest.raises(ValueError):sparse_runtime.solve(2,((1,2),),(),**{field:1})
+
+
+def test_incompatible_priority_structures_refused(sparse_runtime):
+    with pytest.raises(ValueError):sparse_runtime.solve(2,((1,2),),(),heap=True,active=True)
+
+
+def test_valid_budget_exit_does_not_lose_an_independently_valid_incumbent(sparse_runtime):
+    # Even without search, the all-false assignment satisfies this particular input.
+    r=sparse_runtime.solve(4,(),((1,2,3,4),),max_work=0,assumptions=(-1,))
+    assert r.status=='SAT_VERIFIED' and r.reason=='budget'
+    assert valid_witness(4,(),((1,2,3,4),),r.witness,(-1,))
+
+
+def test_degree_and_lcv_preserve_truth_and_priority_agreement(sparse_runtime):
+    rng=random.Random(271003)
+    for i in range(1500):
+        n=rng.randrange(1,9)
+        rows=[tuple(v+1 for v in range(n) if rng.randrange(3)==0) for _ in range(rng.randrange(3,22))]
+        split=rng.randrange(len(rows)+1);c,e=tuple(rows[:split]),tuple(rows[split:])
+        assumptions=tuple((v+1)*rng.choice((-1,1)) for v in range(n) if rng.randrange(4)==0)
+        truth=satisfiable(n,c,e,assumptions)
+        for degree,lcv in ((True,False),(False,True),(True,True)):
+            a=sparse_runtime.solve(n,c,e,degree=degree,lcv=lcv,assumptions=assumptions)
+            assert (a.status=='SAT_VERIFIED')==truth,(i,degree,lcv,a)
+            # Data structures may not change the configured decision rule.
+            for priority in ({'heap':True},{'active':True}):
+                b=sparse_runtime.solve(n,c,e,degree=degree,lcv=lcv,assumptions=assumptions,**priority)
+                assert stable(a)==stable(b),(i,degree,lcv,priority)
+
+
+@pytest.mark.parametrize('field',['degree','lcv'])
+def test_branching_flags_exact_bool(sparse_runtime,field):
+    with pytest.raises(ValueError):sparse_runtime.solve(2,((1,2),),(),**{field:1})

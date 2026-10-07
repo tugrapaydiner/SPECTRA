@@ -25,6 +25,7 @@ uint64_t integer(PyObject* obj,const char* label,uint64_t cap=UINT64_MAX) {
 struct Index {
     U n,p,g;
     std::vector<U> offsets, vars, voff, groups;
+    std::vector<uint64_t> weight;
     uint64_t bytes=0;
     Index(PyObject* nv,PyObject* positive,PyObject* exclusive,uint64_t budget) {
         n=static_cast<U>(integer(nv,"nvars",MAX_VARS));
@@ -40,8 +41,8 @@ struct Index {
             if (count>MAX_ENTRIES) throw Resource("too many incidences");
         }
         // Persistent compressed adjacency plus one temporary last-seen/cursor array.
-        bytes=4*(uint64_t(g)+1+uint64_t(n)+1+2*count);
-        if (bytes+8*uint64_t(n)>budget) throw Resource("index plus temporary input validation exceeds build payload cap");
+        bytes=4*(uint64_t(g)+1+uint64_t(n)+1+2*count)+8*uint64_t(p);
+        if (bytes+4*uint64_t(n)>budget) throw Resource("index plus temporary input validation exceeds build payload cap");
         offsets.resize(size_t(g)+1);voff.assign(size_t(n)+1,0);vars.resize(count);groups.resize(count);
         std::vector<U> seen(n,NONE);
         U at=0;
@@ -61,6 +62,14 @@ struct Index {
         for (U v=0;v<n;++v) voff[v+1]+=voff[v];
         std::copy(voff.begin(),voff.begin()+n,seen.begin());
         for (U i=0;i<g;++i) for (U j=offsets[i];j<offsets[i+1];++j) groups[seen[vars[j]]++]=i;
+        // Reuse the temporary bank for static exclusion incidence degree.
+        // Each variable's degree is at most the total input incidence inventory.
+        std::fill(seen.begin(),seen.end(),0);weight.assign(p,0);
+        for(U i=p;i<g;++i) {
+            const U width=offsets[i+1]-offsets[i];
+            if(width>1) for(U j=offsets[i];j<offsets[i+1];++j) seen[vars[j]]+=width-1;
+        }
+        for(U i=0;i<p;++i) for(U j=offsets[i];j<offsets[i+1];++j) weight[i]+=seen[vars[j]];
     }
 };
 struct Frame {size_t mark;U v;bool second;};
@@ -71,9 +80,10 @@ struct Answer {
 };
 // Every mutable bank is allocated once from a closed-form linear payload bound.
 struct Search {
-    const Index& x; bool heap_mode; uint64_t limit;
+    const Index& x; bool heap_mode,active_mode,xor_mode,degree_mode,lcv_mode; uint64_t limit;
     Answer result;
-    std::vector<U> left,covered,heap,pos,trail;
+    std::vector<U> left,covered,heap,pos,trail,xor_left;
+    U active_count=0;
     std::vector<int32_t> queue;
     std::vector<int8_t> pending;
     std::vector<Frame> frames;
@@ -81,26 +91,40 @@ struct Search {
     U unsatisfied;
     bool conflict=false;
     uint64_t work=0,nodes=0,forced=0,backtracks=0,trace=14695981039346656037ULL;
-    Search(const Index& index,bool use_heap,uint64_t cap,uint64_t memory):x(index),heap_mode(use_heap),limit(cap),unsatisfied(x.p) {
+    Search(const Index& index,U flags,uint64_t cap,uint64_t memory):x(index),heap_mode(flags&1),active_mode(flags&2),xor_mode(flags&4),degree_mode(flags&8),lcv_mode(flags&16),limit(cap),unsatisfied(x.p) {
         result.index_bytes=x.bytes;
-        result.state_bytes=uint64_t(x.n)*(2+4+4+sizeof(Frame))+uint64_t(x.p)*(heap_mode?16:8);
+        result.state_bytes=uint64_t(x.n)*(2+4+4+sizeof(Frame))+uint64_t(x.p)*(8+((heap_mode||active_mode)?8:0)+(xor_mode?4:0));
         if (result.state_bytes>memory) throw Resource("linear search state exceeds payload cap");
         result.value.assign(x.n,0);pending.assign(x.n,0);
         left.resize(x.p);covered.assign(x.p,0);
-        if (heap_mode) {heap.resize(x.p);pos.resize(x.p);}
+        if (heap_mode||active_mode) {heap.resize(x.p);pos.resize(x.p);active_count=x.p;}
+        if (xor_mode) xor_left.assign(x.p,0);
         trail.reserve(x.n);queue.reserve(x.n);frames.reserve(x.n);
         for (U g=0;g<x.p;++g) {
             left[g]=x.offsets[g+1]-x.offsets[g];
-            if (heap_mode) heap[g]=pos[g]=g;
+            if (heap_mode||active_mode) heap[g]=pos[g]=g;
+            if (xor_mode) for(U j=x.offsets[g];j<x.offsets[g+1];++j) xor_left[g]^=x.vars[j];
         }
         if (heap_mode) for (size_t i=heap.size()/2;i>0;--i) down(static_cast<U>(i-1));
     }
     U key(U g) const {return covered[g]?NONE:left[g];}
-    bool before(U a,U b)const {return key(a)<key(b)||(key(a)==key(b)&&a<b);}
+    bool before(U a,U b)const {
+        if(key(a)!=key(b))return key(a)<key(b);
+        if(degree_mode&&x.weight[a]!=x.weight[b])return x.weight[a]>x.weight[b];
+        return a<b;
+    }
     void swapheap(U a,U b) {std::swap(heap[a],heap[b]);pos[heap[a]]=a;pos[heap[b]]=b;}
     void up(U i) {while(i) {U par=(i-1)/2;if(!before(heap[i],heap[par]))break;swapheap(i,par);i=par;}}
     void down(U i) {while(2*uint64_t(i)+1<heap.size()) {U j=2*i+1;if(j+1<heap.size()&&before(heap[j+1],heap[j]))++j;if(!before(heap[j],heap[i]))break;swapheap(i,j);i=j;}}
-    void changed(U g) {if(heap_mode){up(pos[g]);down(pos[g]);}}
+    void changed(U g) {
+        if(heap_mode) {up(pos[g]);down(pos[g]);}
+        else if(active_mode) {
+            // Sparse-set membership only; MRV still breaks ties by original group id.
+            const bool present=pos[g]<active_count;
+            if(covered[g]&&present) {--active_count;swapheap(pos[g],active_count);}
+            else if(!covered[g]&&!present) {swapheap(pos[g],active_count);++active_count;}
+        }
+    }
     void enqueue(U v,int8_t value) {
         if (result.value[v]) {conflict|=result.value[v]!=value;return;}
         if (pending[v]) {conflict|=pending[v]!=value;return;}
@@ -109,7 +133,10 @@ struct Search {
     void force_unit(U g) {
         if(covered[g])return;
         if(!left[g]) {conflict=true;return;}
-        if(left[g]==1) for(U i=x.offsets[g];i<x.offsets[g+1];++i) if(!result.value[x.vars[i]]) {enqueue(x.vars[i],1);return;}
+        if(left[g]==1) {
+            if(xor_mode) {enqueue(xor_left[g],1);return;}
+            for(U i=x.offsets[g];i<x.offsets[g+1];++i) if(!result.value[x.vars[i]]) {enqueue(x.vars[i],1);return;}
+        }
     }
     void clear_queue() {
         for(size_t i=head;i<queue.size();++i) {const int64_t lit=queue[i];pending[static_cast<U>((lit<0?-lit:lit)-1)]=0;}
@@ -126,7 +153,8 @@ struct Search {
             trace=(trace^static_cast<uint64_t>(static_cast<int64_t>(lit)))*1099511628211ULL;
             for(U j=x.voff[v];j<x.voff[v+1];++j) {
                 const U g=x.groups[j];if(g>=x.p)continue;
-                --left[g];if(val>0 && covered[g]++==0)--unsatisfied;
+                --left[g];if(xor_mode)xor_left[g]^=v;
+                if(val>0 && covered[g]++==0)--unsatisfied;
                 changed(g);
             }
             // Counters have been changed completely and can always be rolled back.
@@ -145,7 +173,8 @@ struct Search {
             const U v=trail.back();trail.pop_back();const int8_t val=result.value[v];result.value[v]=0;
             for(U j=x.voff[v];j<x.voff[v+1];++j) {
                 const U g=x.groups[j];if(g>=x.p)continue;
-                ++left[g];if(val>0 && --covered[g]==0)++unsatisfied;
+                ++left[g];if(xor_mode)xor_left[g]^=v;
+                if(val>0 && --covered[g]==0)++unsatisfied;
                 changed(g);
             }
         }
@@ -154,7 +183,30 @@ struct Search {
     U choose()const {
         if(heap_mode)return heap.empty()?NONE:heap[0];
         U best=NONE;
-        for(U g=0;g<x.p;++g)if(!covered[g]&&(best==NONE||left[g]<left[best]))best=g;
+        if(active_mode) {
+            for(U i=0;i<active_count;++i) {
+                const U g=heap[i];
+                if(best==NONE||before(g,best))best=g;
+            }
+        } else for(U g=0;g<x.p;++g)if(!covered[g]&&(best==NONE||before(g,best)))best=g;
+        return best;
+    }
+    U choose_variable(U g)const {
+        U first=NONE,best=NONE,best_impact=NONE,visits=0;
+        for(U i=x.offsets[g];i<x.offsets[g+1];++i) {
+            const U v=x.vars[i];if(result.value[v])continue;
+            if(first==NONE)first=v;
+            if(!lcv_mode||left[g]>8)return first;
+            U impact=0;
+            for(U j=x.voff[v];j<x.voff[v+1];++j) {
+                const U e=x.groups[j];if(e<x.p)continue;
+                for(U k=x.offsets[e];k<x.offsets[e+1];++k) {
+                    if(++visits>4096)return first; // explicit per-decision heuristic scan cap
+                    const U u=x.vars[k];impact+=u!=v&&!result.value[u];
+                }
+            }
+            if(best==NONE||impact<best_impact) {best=v;best_impact=impact;}
+        }
         return best;
     }
     Answer run(const std::vector<int32_t>& assumptions) {
@@ -177,8 +229,7 @@ struct Search {
             if(work==limit) {result.reason=1;break;}
             const U g=choose();
             if(g==NONE||!left[g]) {conflict=true;continue;}
-            U v=NONE;
-            for(U i=x.offsets[g];i<x.offsets[g+1];++i) if(!result.value[x.vars[i]]) {v=x.vars[i];break;}
+            const U v=choose_variable(g);
             if(v==NONE)throw std::logic_error("remaining count disagrees with incidence");
             ++work;++nodes;frames.push_back({trail.size(),v,false});enqueue(v,1);
         }
@@ -214,10 +265,13 @@ PyObject* solve(PyObject*,PyObject* args) {
     Index* index=static_cast<Index*>(PyCapsule_GetPointer(capsule,TAG));if(!index)return nullptr;
     try {
         const auto limit=integer(w,"max_work"),budget=integer(memory,"max_state_bytes");
-        if(!PyBool_Check(mode))throw Invalid("heap must be bool");
+        const U flags=static_cast<U>(integer(mode,"search flags",31));
+        if((flags&3)==3)throw Invalid("heap and active strategies cannot be combined");
         if(!PyTuple_CheckExact(assumptions))throw Invalid("assumptions must be an exact tuple");
         const Py_ssize_t ac=PyTuple_GET_SIZE(assumptions);
         if(static_cast<uint64_t>(ac)>2*uint64_t(index->n))throw Invalid("too many assumptions");
+        const uint64_t assumption_bytes=4*static_cast<uint64_t>(ac);
+        if(assumption_bytes>budget)throw Resource("assumption conversion exceeds state payload cap");
         std::vector<int32_t> signed_vars; signed_vars.reserve(ac);
         for(Py_ssize_t i=0;i<ac;++i) {
             PyObject* a=PyTuple_GET_ITEM(assumptions,i);
@@ -228,13 +282,18 @@ PyObject* solve(PyObject*,PyObject* args) {
             signed_vars.push_back(static_cast<int32_t>(value));
         }
         Answer r;
-        {GilRelease release; Search search(*index,mode==Py_True,limit,budget);r=search.run(signed_vars);}
+        {GilRelease release; Search search(*index,flags,limit,budget-assumption_bytes);r=search.run(signed_vars);r.state_bytes+=assumption_bytes;}
         PyObject* witness=PyTuple_New(index->n);if(!witness)return nullptr;
         for(U v=0;v<index->n;++v) {PyObject* bit=r.value[v]>0?Py_True:Py_False;Py_INCREF(bit);PyTuple_SET_ITEM(witness,v,bit);}
-        return Py_BuildValue("(NIKKKKKKK)",witness,r.reason,r.work,r.nodes,r.forced,r.backtracks,r.index_bytes,r.state_bytes,r.trace);
+        return Py_BuildValue("(NIKKKKKKK)",witness,static_cast<unsigned int>(r.reason),
+            static_cast<unsigned long long>(r.work),static_cast<unsigned long long>(r.nodes),
+            static_cast<unsigned long long>(r.forced),static_cast<unsigned long long>(r.backtracks),
+            static_cast<unsigned long long>(r.index_bytes),static_cast<unsigned long long>(r.state_bytes),
+            static_cast<unsigned long long>(r.trace));
     }catch(...){return error();}
 }
-PyMethodDef methods[]={{"create",create,METH_VARARGS,"Create immutable sparse constraint index."},{"solve",solve,METH_VARARGS,"Solve with an independent reversible state."},{nullptr,nullptr,0,nullptr}};
+PyObject* abi(PyObject*,PyObject*) {return PyLong_FromLong(3);}
+PyMethodDef methods[]={{"abi",abi,METH_NOARGS,"Native API version."},{"create",create,METH_VARARGS,"Create immutable sparse constraint index."},{"solve",solve,METH_VARARGS,"Solve with an independent reversible state."},{nullptr,nullptr,0,nullptr}};
 PyModuleDef module={PyModuleDef_HEAD_INIT,"_spectra_sparse",nullptr,-1,methods,nullptr,nullptr,nullptr,nullptr};
 }
 PyMODINIT_FUNC PyInit__spectra_sparse(){return PyModule_Create(&module);}
