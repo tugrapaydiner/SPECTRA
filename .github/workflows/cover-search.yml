@@ -1,0 +1,38 @@
+name: Cover search research
+on:
+  push:
+    branches: [research/cover-search-20261007]
+  pull_request:
+    branches: [research/structured-search-20261005]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Pinned research dependencies
+        run: |
+          python -m pip install pytest 'python-sat==1.9.dev15' build
+          mkdir -p delivery/wheels
+          python -m pip download --no-deps --only-binary=:all: --dest delivery/wheels 'python-sat==1.9.dev15'
+          python -m pip freeze > delivery/environment.txt
+          git rev-parse HEAD > delivery/commit.txt
+          git rev-parse HEAD^{tree} > delivery/tree.txt
+      - name: Research contracts when implemented
+        run: |
+          if [ -f tests/public/test_cover_search.py ]; then
+            python -m pytest tests/public --confcutdir=tests/public --junitxml=delivery/tests.xml > delivery/tests.txt
+          else
+            echo 'Dependency acquisition only; candidate contracts not implemented yet.' > delivery/NOT_VALIDATED.txt
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cover-search-${{ github.run_id }}
+          path: delivery
+          retention-days: 90
