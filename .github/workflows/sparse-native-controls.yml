@@ -1,0 +1,38 @@
+name: Sparse native controls
+on:
+  push:
+    branches: [research/sparse-incidence-20261007]
+    paths: [.github/workflows/sparse-native-controls.yml]
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Acquire pinned original sources
+        run: |
+          mkdir -p delivery
+          curl --fail --location --retry 2 https://codeload.github.com/liffiton/minicard/tar.gz/79776615ddc8803dd86803ea6f00838fc74349b1 -o delivery/minicard.tar.gz
+          curl --fail --location --retry 2 https://codeload.github.com/marijnheule/drat-trim/tar.gz/2e3b2dc0ecf938addbd779d42877b6ed69d9a985 -o delivery/drat-trim.tar.gz
+          tar xzf delivery/minicard.tar.gz -C delivery
+          tar xzf delivery/drat-trim.tar.gz -C delivery
+          gcc -O3 delivery/drat-trim-2e3b2dc0ecf938addbd779d42877b6ed69d9a985/drat-trim.c -o delivery/drat-trim
+          git rev-parse HEAD > delivery/source-commit.txt
+          gcc --version > delivery/compiler.txt
+          python3 - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          p=Path('delivery')
+          (p/'SHA256.json').write_text(json.dumps({str(f.relative_to(p)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.rglob('*')) if f.is_file()},indent=2,sort_keys=True)+'\n')
+          PY
+          echo 'Pinned source acquisition and checker compilation only. No candidate result, benchmark, independent replication or upstream adoption is established here.' > delivery/SCOPE.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sparse-native-controls-${{ github.run_id }}
+          path: delivery
+          retention-days: 90
