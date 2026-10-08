@@ -1,6 +1,11 @@
 name: Quotient WAP development
 
 on:
+  push:
+    branches:
+      - research/quotient-application-20261008
+    paths:
+      - .github/workflows/quotient-wap-development.yml
   workflow_dispatch:
 
 permissions:
