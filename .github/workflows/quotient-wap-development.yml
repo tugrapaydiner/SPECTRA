@@ -48,7 +48,7 @@ jobs:
 
           archive = Path('/tmp/resume_payload.json.gz')
           payload = json.loads(gzip.decompress(archive.read_bytes()))
-          assert payload['schema'] == 'spectra.quotient.resume_payload.v1'
+          assert payload['schema'] == 'spectra.resume.payload.v1'
           assert payload['base_commit'] == 'ad3efe269c6a81df394dcf01ce01f407621769a0'
           assert len(payload['files']) == 32
           written = {}
