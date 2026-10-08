@@ -1,0 +1,142 @@
+name: WAP pinned data acquisition
+on:
+  push:
+    branches: [research/quotient-application-20261008]
+    paths: [.github/workflows/wap-data-acquire.yml]
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Acquire exact upstream graph bytes and validate DIMACS inventories
+        env:
+          UPSTREAM_COMMIT: 4932048642da2144f387961b595112277afff82f
+        run: |
+          mkdir -p delivery/graphs
+          git rev-parse HEAD > delivery/spectra_commit.txt
+          git rev-parse HEAD^{tree} > delivery/spectra_tree.txt
+          python - <<'PY'
+          from __future__ import annotations
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import urllib.request
+
+          commit = os.environ['UPSTREAM_COMMIT']
+          root = Path('delivery')
+          graph_dir = root / 'graphs'
+          manifest = {
+              'schema': 'spectra.wap.data.v1',
+              'upstream_repository': 'marijnheule/clicolcom',
+              'upstream_commit': commit,
+              'role': 'pinned data acquisition only; no solver or performance claim',
+              'graphs': {},
+          }
+
+          def parse_dimacs(data: bytes) -> dict:
+              try:
+                  text = data.decode('ascii')
+              except UnicodeDecodeError as exc:
+                  raise ValueError('non-ASCII DIMACS data') from exc
+              declared = None
+              edges = []
+              comments = 0
+              for number, raw in enumerate(text.splitlines(), start=1):
+                  line = raw.strip()
+                  if not line:
+                      continue
+                  fields = line.split()
+                  if fields[0] == 'c':
+                      comments += 1
+                      continue
+                  if fields[0] == 'p':
+                      if declared is not None or len(fields) != 4 or fields[1] not in ('edge', 'edges'):
+                          raise ValueError(f'invalid problem line at {number}')
+                      declared = (int(fields[2]), int(fields[3]))
+                      continue
+                  if fields[0] == 'e':
+                      if len(fields) != 3:
+                          raise ValueError(f'invalid edge line at {number}')
+                      edges.append((int(fields[1]), int(fields[2])))
+                      continue
+                  raise ValueError(f'unsupported DIMACS record at {number}: {fields[0]}')
+              if declared is None:
+                  raise ValueError('missing DIMACS problem line')
+              n, m = declared
+              if n < 0 or m < 0 or len(edges) != m:
+                  raise ValueError(f'declared/parsed edge mismatch: {m} != {len(edges)}')
+              canonical = set()
+              loops = 0
+              for a, b in edges:
+                  if not (1 <= a <= n and 1 <= b <= n):
+                      raise ValueError('edge endpoint outside declared vertices')
+                  if a == b:
+                      loops += 1
+                  canonical.add((a, b) if a <= b else (b, a))
+              return {
+                  'vertices': n,
+                  'declared_edges': m,
+                  'parsed_edges': len(edges),
+                  'unique_undirected_edges': len(canonical),
+                  'duplicate_undirected_edges': len(edges) - len(canonical),
+                  'self_loops': loops,
+                  'comment_lines': comments,
+              }
+
+          opener = urllib.request.build_opener()
+          opener.addheaders = [('User-Agent', 'SPECTRA-pinned-research-acquisition/1')]
+          for index in range(1, 9):
+              for family in ('a', 'b'):
+                  name = f'wap{index:02d}{family}.col'
+                  url = f'https://raw.githubusercontent.com/marijnheule/clicolcom/{commit}/graphs/{name}'
+                  with opener.open(url, timeout=45) as response:
+                      data = response.read()
+                  if not data:
+                      raise ValueError(f'empty upstream graph: {name}')
+                  path = graph_dir / name
+                  path.write_bytes(data)
+                  blob_header = f'blob {len(data)}\0'.encode('ascii')
+                  manifest['graphs'][name] = {
+                      'path': f'graphs/{name}',
+                      'url': url,
+                      'bytes': len(data),
+                      'sha256': hashlib.sha256(data).hexdigest(),
+                      'git_blob_sha1': hashlib.sha1(blob_header + data).hexdigest(),
+                      **parse_dimacs(data),
+                  }
+
+          (root / 'graphs_manifest.json').write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          (root / 'ROLE.txt').write_text(
+              'DATA ACQUISITION AND FORMAT AUDIT ONLY. No solver was run; this is not a performance, correctness, novelty, replication, or flagship result.\n',
+              encoding='utf-8')
+          hashes = {
+              str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(root.rglob('*'))
+              if path.is_file() and path.name != 'SHA256.json'
+          }
+          (root / 'SHA256.json').write_text(
+              json.dumps(hashes, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps({
+              'graphs': len(manifest['graphs']),
+              'bytes': sum(item['bytes'] for item in manifest['graphs'].values()),
+              'upstream_commit': commit,
+          }, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wap-pinned-data-${{ github.run_id }}
+          path: delivery
+          include-hidden-files: true
+          retention-days: 90
