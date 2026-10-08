@@ -1,0 +1,8 @@
+{
+  "bootstrap_commit.txt": "1ce2a369955d2be955ea072fa379152db020cd4e2c49b17bff453d906e5d50b7",
+  "bootstrap_tree.txt": "5ea9cc6e6ef528f2aa5acd63f59e0bc5f4cb3d77b5c9b313b83df48481ae6929",
+  "environment.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "lscpu.txt": "d0dd6780542a3d2ea158ed9e641ca0620e0cce241ad4605dfe94eb8cbf816fd2",
+  "python.txt": "8a078b480fefb612930032cc46f81bc6d76b152bac4903485d0c5771f32219ad",
+  "uname.txt": "13f109c96ec64fefcb66a09f876d5aab3f3352e13e8dc2a576692891bc902aa1"
+}
