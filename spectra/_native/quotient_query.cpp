@@ -190,16 +190,53 @@ struct Search{
   }return std::move(r);
  }
 };
+struct Observer{
+ U n,k;W bytes=0;std::vector<W> masks;std::vector<std::pair<U,U>> edges;
+ Observer(PyObject* nv,PyObject* kv,PyObject* es,PyObject* ms,W cap){
+  n=static_cast<U>(number(nv,"invalid n",MAX_N));k=static_cast<U>(number(kv,"invalid k",64));
+  if(!PyTuple_CheckExact(es)||!PyTuple_CheckExact(ms))throw Invalid("observer exact tuples required");
+  W m=static_cast<W>(PyTuple_GET_SIZE(es));if(m>MAX_E)throw Resource("too many observer edges");
+  if(PyTuple_GET_SIZE(ms)&&static_cast<W>(PyTuple_GET_SIZE(ms))!=n)throw Invalid("observer mask count differs");
+  W bound=8*W(n)+8*m+4096;if(bound>cap)throw Resource("observer payload exceeds cap");
+  masks.assign(n,full(k));
+  for(U v=0;v<n;++v)if(PyTuple_GET_SIZE(ms)){masks[v]=number(PyTuple_GET_ITEM(ms,v),"invalid observer mask");if(masks[v]&~full(k))throw Invalid("observer mask outside k");}
+  edges.reserve(static_cast<size_t>(m));
+  for(Py_ssize_t i=0;i<PyTuple_GET_SIZE(es);++i){auto* e=PyTuple_GET_ITEM(es,i);if(!PyTuple_CheckExact(e)||PyTuple_GET_SIZE(e)!=2)throw Invalid("observer edge must be pair");
+   U a=static_cast<U>(number(PyTuple_GET_ITEM(e,0),"bad observer endpoint",MAX_N)),b=static_cast<U>(number(PyTuple_GET_ITEM(e,1),"bad observer endpoint",MAX_N));
+   if(a>=n||b>=n)throw Invalid("observer endpoint outside n");
+   edges.emplace_back(a,b);
+  }
+  bytes=8*W(masks.capacity())+sizeof(std::pair<U,U>)*W(edges.capacity());if(bytes>bound)throw std::logic_error("observer bound underestimated");
+ }
+ bool check(PyObject* query,PyObject* answer)const{
+  if(!PyTuple_CheckExact(query)||!PyBytes_CheckExact(answer)||static_cast<W>(PyBytes_GET_SIZE(answer))!=n)return false;
+  auto* a=reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(answer));
+  for(U v=0;v<n;++v)if(a[v]>=k||!(masks[v]&(W(1)<<a[v])))return false;
+  for(auto e:edges)if(e.first==e.second||a[e.first]==a[e.second])return false;
+  for(Py_ssize_t i=0;i<PyTuple_GET_SIZE(query);++i){auto* e=PyTuple_GET_ITEM(query,i);if(!PyTuple_CheckExact(e)||PyTuple_GET_SIZE(e)!=2)return false;
+   U v=static_cast<U>(number(PyTuple_GET_ITEM(e,0),"bad observer restriction",MAX_N));W d=number(PyTuple_GET_ITEM(e,1),"bad observer restriction");
+   if(v>=n||(d&~full(k))||!(d&(W(1)<<a[v])))return false;
+  }
+  return true;
+ }
+};
+PyObject* list_w(const std::vector<W>& values){PyObject* out=PyList_New(static_cast<Py_ssize_t>(values.size()));if(!out)return nullptr;for(size_t i=0;i<values.size();++i){PyObject* value=PyLong_FromUnsignedLongLong(values[i]);if(!value){Py_DECREF(out);return nullptr;}PyList_SET_ITEM(out,static_cast<Py_ssize_t>(i),value);}return out;}
+PyObject* list_u(const std::vector<U>& values){PyObject* out=PyList_New(static_cast<Py_ssize_t>(values.size()));if(!out)return nullptr;for(size_t i=0;i<values.size();++i){PyObject* value=PyLong_FromUnsignedLong(values[i]);if(!value){Py_DECREF(out);return nullptr;}PyList_SET_ITEM(out,static_cast<Py_ssize_t>(i),value);}return out;}
+PyObject* list_b(const std::vector<uint8_t>& values){PyObject* out=PyList_New(static_cast<Py_ssize_t>(values.size()));if(!out)return nullptr;for(size_t i=0;i<values.size();++i){PyObject* value=PyLong_FromUnsignedLong(values[i]);if(!value){Py_DECREF(out);return nullptr;}PyList_SET_ITEM(out,static_cast<Py_ssize_t>(i),value);}return out;}
+bool put(PyObject* d,const char* key,PyObject* value){if(!value)return false;int ok=PyDict_SetItemString(d,key,value);Py_DECREF(value);return ok==0;}
 constexpr const char* TAG="spectra.quotient.query.v1";
+constexpr const char* OBS_TAG="spectra.quotient.observer.v1";
 void destroy(PyObject* p){void* x=PyCapsule_GetPointer(p,TAG);if(x)delete static_cast<Index*>(x);else PyErr_Clear();}
+void observer_destroy(PyObject* p){void* x=PyCapsule_GetPointer(p,OBS_TAG);if(x)delete static_cast<Observer*>(x);else PyErr_Clear();}
 PyObject* fail(){try{throw;}catch(const Invalid& e){PyErr_SetString(PyExc_ValueError,e.what());}catch(const Resource& e){PyErr_SetString(PyExc_MemoryError,e.what());}catch(const std::bad_alloc&){PyErr_NoMemory();}catch(const std::exception& e){PyErr_SetString(PyExc_RuntimeError,e.what());}catch(...){PyErr_SetString(PyExc_RuntimeError,"unknown native error");}return nullptr;}
 PyObject* create(PyObject*,PyObject* args){PyObject *n,*k,*e,*m,*mode,*cap;if(!PyArg_ParseTuple(args,"OOOOOO",&n,&k,&e,&m,&mode,&cap))return nullptr;
  try{auto x=std::make_unique<Index>(n,k,e,m,static_cast<U>(number(mode,"mode outside 0..3",3)),number(cap,"invalid build cap"));auto c=PyCapsule_New(x.get(),TAG,destroy);if(c)x.release();return c;}catch(...){return fail();}}
 PyObject* solve(PyObject*,PyObject* args){PyObject *cap,*qs,*work,*mem,*core;if(!PyArg_ParseTuple(args,"OOOOO",&cap,&qs,&work,&mem,&core))return nullptr;
  auto* x=static_cast<Index*>(PyCapsule_GetPointer(cap,TAG));if(!x)return nullptr;
  try{if(!PyBool_Check(core))throw Invalid("core_first must be bool");Search s(*x,number(work,"invalid work cap"),number(mem,"invalid state cap"),core==Py_True);Result r=s.run(qs);
-  PyObject* labels=PyBytes_FromStringAndSize(nullptr,r.reason==0?x->n:0);if(!labels)return nullptr;
-  if(r.reason==0){auto* data=reinterpret_cast<uint8_t*>(PyBytes_AS_STRING(labels));for(U v=0;v<x->n;++v){U c=first(r.d[x->node[v]]);data[v]=x->wide[v]?static_cast<uint8_t>(c):(c==0?x->colour0[v]:x->colour1[v]);if(data[v]>=x->k){Py_DECREF(labels);throw std::logic_error("invalid lifted colour");}}}
+  std::vector<char> materialized(r.reason==0?x->n:0);
+  if(r.reason==0){for(U v=0;v<x->n;++v){U c=first(r.d[x->node[v]]);U value=x->wide[v]?c:(c==0?x->colour0[v]:x->colour1[v]);if(value>=x->k)throw std::logic_error("invalid lifted colour");materialized[v]=static_cast<char>(value);}}
+  PyObject* labels=PyBytes_FromStringAndSize(materialized.data(),static_cast<Py_ssize_t>(materialized.size()));if(!labels)return nullptr;
   return Py_BuildValue("(NIKKKKKKKKKK)",labels,static_cast<unsigned>(r.reason),
    static_cast<unsigned long long>(r.work),static_cast<unsigned long long>(r.branches),static_cast<unsigned long long>(r.backtracks),static_cast<unsigned long long>(r.reductions),static_cast<unsigned long long>(r.peak),static_cast<unsigned long long>(r.state),static_cast<unsigned long long>(r.trace),static_cast<unsigned long long>(x->qn),static_cast<unsigned long long>(x->bytes),static_cast<unsigned long long>(x->arcs.size()));
  }catch(...){return fail();}}
@@ -213,7 +250,46 @@ PyObject* check(PyObject*,PyObject* args){PyObject *nv,*kv,*edges,*masks,*query,
   for(Py_ssize_t i=0;i<PyTuple_GET_SIZE(query);++i){auto* e=PyTuple_GET_ITEM(query,i);if(!PyTuple_CheckExact(e)||PyTuple_GET_SIZE(e)!=2)Py_RETURN_FALSE;W v=number(PyTuple_GET_ITEM(e,0),"bad restriction"),d=number(PyTuple_GET_ITEM(e,1),"bad restriction");if(v>=n||(d&~full(k))||!(d&(W(1)<<a[v])))Py_RETURN_FALSE;}
   Py_RETURN_TRUE;
  }catch(const Invalid&){Py_RETURN_FALSE;}catch(...){return fail();}}
-PyMethodDef methods[]={{"create",create,METH_VARARGS,"Compile an exact quotient."},{"solve",solve,METH_VARARGS,"Solve restrictions and lift a full answer."},{"check",check,METH_VARARGS,"Check original graph and query independently."},{"info",info,METH_O,"Index resource and geometry information."},{nullptr,nullptr,0,nullptr}};
+PyObject* abi(PyObject*,PyObject*){return PyLong_FromLong(3);}
+PyObject* certificate(PyObject*,PyObject* cap){auto* x=static_cast<Index*>(PyCapsule_GetPointer(cap,TAG));if(!x)return nullptr;
+ PyObject* d=PyDict_New();if(!d)return nullptr;PyObject* arcs=PyList_New(static_cast<Py_ssize_t>(x->arcs.size()));if(!arcs){Py_DECREF(d);return nullptr;}
+ Py_ssize_t row=0;for(U a=0;a<x->atoms;++a)for(U j=x->off[a];j<x->off[a+1];++j){PyObject* item=Py_BuildValue("(IIK)",a,x->arcs[j].target,static_cast<unsigned long long>(x->arcs[j].forbidden));if(!item){Py_DECREF(arcs);Py_DECREF(d);return nullptr;}PyList_SET_ITEM(arcs,row++,item);}
+ if(!put(d,"schema",PyUnicode_FromString("spectra.quotient.certificate.v1"))||
+    !put(d,"n",PyLong_FromUnsignedLong(x->n))||!put(d,"k",PyLong_FromUnsignedLong(x->k))||
+    !put(d,"impossible",PyBool_FromLong(x->impossible))||!put(d,"palettes",list_w(x->palette))||
+    !put(d,"initial",list_w(x->initial))||!put(d,"node",list_u(x->node))||
+    !put(d,"colour0",list_b(x->colour0))||!put(d,"colour1",list_b(x->colour1))||
+    !put(d,"wide",list_b(x->wide))||!put(d,"offsets",list_u(x->off))||!put(d,"arcs",arcs)){
+   Py_DECREF(d);return nullptr;
+ }
+ return d;
+}
+PyObject* support_solve(PyObject*,PyObject* args){PyObject *cap,*query;if(!PyArg_ParseTuple(args,"OO",&cap,&query))return nullptr;auto* x=static_cast<Index*>(PyCapsule_GetPointer(cap,TAG));if(!x)return nullptr;
+ try{if(!PyTuple_CheckExact(query))throw Invalid("query restrictions must be tuple");if(!x->arcs.empty())throw Invalid("support specialization requires an arc-free quotient");
+  if(static_cast<W>(PyTuple_GET_SIZE(query))>2*W(x->n)+1)throw Invalid("too many restrictions");
+  std::vector<W> d=x->initial;std::vector<uint8_t> touched(x->qn,0);W ntouched=0;
+  for(Py_ssize_t i=0;i<PyTuple_GET_SIZE(query);++i){auto* pair=PyTuple_GET_ITEM(query,i);if(!PyTuple_CheckExact(pair)||PyTuple_GET_SIZE(pair)!=2)throw Invalid("restriction must be (vertex,mask)");
+   U v=static_cast<U>(number(PyTuple_GET_ITEM(pair,0),"invalid restriction vertex",MAX_N));W mask=number(PyTuple_GET_ITEM(pair,1),"invalid restriction mask");
+   if(v>=x->n||(mask&~full(x->k)))throw Invalid("restriction outside graph");
+   U q=x->node[v];W translated=mask&x->original[v];
+   if(!x->wide[v])translated=((x->colour0[v]!=255&&(mask&(W(1)<<x->colour0[v])))?1:0)|((x->colour1[v]!=255&&(mask&(W(1)<<x->colour1[v])))?2:0);
+   d[q]&=translated;if(!touched[q]){touched[q]=1;++ntouched;}
+  }
+  U reason=x->impossible?3:0;for(W value:d)if(!value){reason=4;break;}
+  W changed=0;std::vector<char> materialized(reason==0?x->n:0);
+  if(reason==0){for(U q=0;q<x->qn;++q)if(touched[q]&&first(d[q])!=first(x->initial[q]))++changed;
+   for(U v=0;v<x->n;++v){U c=first(d[x->node[v]]);U value=x->wide[v]?c:(c==0?x->colour0[v]:x->colour1[v]);if(value>=x->k)throw std::logic_error("invalid support lift");materialized[v]=static_cast<char>(value);}}
+  PyObject* labels=PyBytes_FromStringAndSize(materialized.data(),static_cast<Py_ssize_t>(materialized.size()));if(!labels)return nullptr;
+  return Py_BuildValue("(NIKK)",labels,static_cast<unsigned>(reason),static_cast<unsigned long long>(ntouched),static_cast<unsigned long long>(changed));
+ }catch(...){return fail();}}
+PyObject* observer_create(PyObject*,PyObject* args){PyObject *n,*k,*e,*m,*cap;if(!PyArg_ParseTuple(args,"OOOOO",&n,&k,&e,&m,&cap))return nullptr;
+ try{auto x=std::make_unique<Observer>(n,k,e,m,number(cap,"invalid observer cap"));auto c=PyCapsule_New(x.get(),OBS_TAG,observer_destroy);if(c)x.release();return c;}catch(...){return fail();}}
+PyObject* observer_size(PyObject*,PyObject* cap){auto* x=static_cast<Observer*>(PyCapsule_GetPointer(cap,OBS_TAG));if(!x)return nullptr;return PyLong_FromUnsignedLongLong(x->bytes);}
+PyObject* observer_check(PyObject*,PyObject* args){PyObject *cap,*query,*answer;if(!PyArg_ParseTuple(args,"OOO",&cap,&query,&answer))return nullptr;auto* x=static_cast<Observer*>(PyCapsule_GetPointer(cap,OBS_TAG));if(!x)return nullptr;
+ try{if(x->check(query,answer))Py_RETURN_TRUE;Py_RETURN_FALSE;}catch(const Invalid&){Py_RETURN_FALSE;}catch(...){return fail();}}
+PyObject* observer_cache_probe(PyObject*,PyObject* args){PyObject *cap,*query,*models;if(!PyArg_ParseTuple(args,"OOO",&cap,&query,&models))return nullptr;auto* x=static_cast<Observer*>(PyCapsule_GetPointer(cap,OBS_TAG));if(!x)return nullptr;
+ try{if(!PyTuple_CheckExact(models))throw Invalid("models must be tuple");for(Py_ssize_t i=0;i<PyTuple_GET_SIZE(models);++i)if(x->check(query,PyTuple_GET_ITEM(models,i)))Py_RETURN_TRUE;Py_RETURN_FALSE;}catch(const Invalid&){Py_RETURN_FALSE;}catch(...){return fail();}}
+PyMethodDef methods[]={{"abi",abi,METH_NOARGS,"Return native ABI version."},{"create",create,METH_VARARGS,"Compile an exact quotient."},{"solve",solve,METH_VARARGS,"Solve restrictions and lift a full answer."},{"support_solve",support_solve,METH_VARARGS,"Solve an arc-free quotient without search."},{"certificate",certificate,METH_O,"Export integer-only quotient evidence."},{"observer_create",observer_create,METH_VARARGS,"Create an independently owned original checker."},{"observer_size",observer_size,METH_O,"Return observer payload bytes."},{"observer_check",observer_check,METH_VARARGS,"Check a complete answer against original data."},{"observer_cache_probe",observer_cache_probe,METH_VARARGS,"Find an original-valid cached answer."},{"check",check,METH_VARARGS,"Check original graph and query independently."},{"info",info,METH_O,"Index resource and geometry information."},{nullptr,nullptr,0,nullptr}};
 PyModuleDef module={PyModuleDef_HEAD_INIT,"_spectra_quotient_query",nullptr,-1,methods,nullptr,nullptr,nullptr,nullptr};
 }
 PyMODINIT_FUNC PyInit__spectra_quotient_query(){return PyModule_Create(&module);}

@@ -23,7 +23,7 @@ def build_quotient_runtime(directory: str|Path, *, compiler: str='g++', sanitize
     library=dest/('_spectra_quotient_query'+sysconfig.get_config_var('EXT_SUFFIX'))
     receipt=dest/'build.json'
     if library.exists() or receipt.exists():raise FileExistsError('build outputs already exist')
-    flags=['-std=c++17','-shared','-fPIC','-Wall','-Wextra','-Werror','-fno-fast-math','-ffp-contract=off']
+    flags=['-std=c++17','-shared','-fPIC','-Wall','-Wextra','-Werror','-Wno-free-nonheap-object','-fno-fast-math','-ffp-contract=off']
     flags+=['-O1','-g','-fsanitize=undefined','-fno-sanitize-recover=all'] if sanitize else ['-O3','-DNDEBUG']
     start=time.perf_counter_ns()
     with tempfile.TemporaryDirectory(dir=dest,prefix='.coloring-') as tmp:
@@ -122,6 +122,17 @@ class PreparedQuotient:
         with self._lock:
             if self._handle is None:raise RuntimeError('quotient is closed')
             return self._module.certificate(self._handle)
+
+    def solve_support(self, restrictions: tuple = ()) -> tuple[bytes, int, int, int]:
+        """Solve an arc-free quotient natively and independently check the witness."""
+        with self._lock:
+            if self._handle is None:
+                raise RuntimeError('quotient is closed')
+            labels, reason, touched, changed = self._module.support_solve(
+                self._handle, restrictions)
+            if reason == 0 and not self.check(labels, restrictions):
+                raise AssertionError('support-table answer fails original constraints')
+            return labels, reason, touched, changed
 
     def solve(self,restrictions:tuple=(),*,max_work:int=1000000,
               max_state_bytes:int=DEFAULT_BYTES,core_first:bool=True) -> QueryResult:
