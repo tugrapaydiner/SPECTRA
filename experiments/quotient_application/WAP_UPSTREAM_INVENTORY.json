@@ -1,0 +1,16 @@
+{
+  "schema": "spectra.wap.upstream_inventory.v2",
+  "repository": "marijnheule/clicolcom",
+  "commit": "4932048642da2144f387961b595112277afff82f",
+  "correction": "The pinned tree contains eight WAP-A files and no WAP-B files.",
+  "graphs": {
+    "wap01a.col": {"git_blob_sha1": "28cd85912439c3dc27e3af644f42fb2ed7c37561", "bytes": 1271413, "role": "development_consumed"},
+    "wap02a.col": {"git_blob_sha1": "59f47e143c9632585507e0ff2ee2817f98f32cd7", "bytes": 1285380, "role": "prospective_holdout"},
+    "wap03a.col": {"git_blob_sha1": "e2e561d4f4fd537ff56b6cfb8fc4ee2510f9eadf", "bytes": 3361202, "role": "prospective_holdout"},
+    "wap04a.col": {"git_blob_sha1": "7a77ef0b318d6cfc3a24bd0600320bd2f54438f7", "bytes": 3461261, "role": "prospective_holdout"},
+    "wap05a.col": {"git_blob_sha1": "327cc0c6b1abbc4a9ee31c14f3357136e5b186ec", "bytes": 426775, "role": "development"},
+    "wap06a.col": {"git_blob_sha1": "60ca46d3198c02176be8812d8f53357e3b9f4114", "bytes": 431449, "role": "development"},
+    "wap07a.col": {"git_blob_sha1": "2637c147c1efaff6574e813cb89c118d1ddbc81a", "bytes": 1149367, "role": "prospective_holdout"},
+    "wap08a.col": {"git_blob_sha1": "fbf5ef3fa64ef6a79941ea72e1e95f81739dcad0", "bytes": 1161256, "role": "prospective_holdout"}
+  }
+}
