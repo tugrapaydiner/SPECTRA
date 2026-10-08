@@ -1,0 +1,207 @@
+name: Apply certified critical-clique compiler v2
+on:
+  push:
+    branches: [research/quotient-application-v2-20261008]
+    paths:
+      - .github/workflows/apply-critical-clique-v2.yml
+permissions:
+  contents: write
+jobs:
+  validate-and-commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Guard ancestry and apply exact patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf cc_delivery
+          mkdir -p cc_delivery
+          git merge-base --is-ancestor 4424940e3c35e5fcfe6bec46915a306001d64ca4 HEAD
+          test ! -e experiments/critical_clique_coloring/core.py
+          test ! -e tests/public/test_critical_clique_coloring.py
+          test ! -e tests/public/test_critical_clique_encodings.py
+          test "$(sha256sum maintenance/critical-clique-v1.patch.gz.b64 | cut -d' ' -f1)" = 'dbe43173d1c3bd07cbdba2cf9ba40cbfcf30015a0ea1683ea4cde98607ea67c7'
+          { cat maintenance/critical-clique-v1.patch.gz.b64; printf '='; } > /tmp/critical-clique.patch.gz.b64
+          test "$(sha256sum /tmp/critical-clique.patch.gz.b64 | cut -d' ' -f1)" = 'f01d0ad596672a71b490e2b64ea24f318903204f3f36062364d707803f9918ae'
+          base64 -d /tmp/critical-clique.patch.gz.b64 > /tmp/critical-clique.patch.gz
+          test "$(sha256sum /tmp/critical-clique.patch.gz | cut -d' ' -f1)" = 'd1440bb3907ff71ea2566d3e787d38e449dfc848ae284680b26959ee89ab8bd4'
+          gzip -dc /tmp/critical-clique.patch.gz > /tmp/critical-clique.patch
+          test "$(sha256sum /tmp/critical-clique.patch | cut -d' ' -f1)" = '8e9227632625551aa4063bfc646cccef1c7f5ed32e52c0be85fa935a08230faf'
+          git apply --check /tmp/critical-clique.patch
+          git apply /tmp/critical-clique.patch
+          PYTHONDONTWRITEBYTECODE=1 python -m py_compile \
+            experiments/critical_clique_coloring/core.py \
+            experiments/critical_clique_coloring/benchmark.py \
+            experiments/critical_clique_coloring/audit_wap.py
+          find experiments/critical_clique_coloring -type d -name __pycache__ -prune -exec rm -rf {} +
+          sha256sum \
+            experiments/critical_clique_coloring/*.py \
+            experiments/critical_clique_coloring/*.json \
+            experiments/critical_clique_coloring/*.md \
+            experiments/critical_clique_coloring/requirements.txt \
+            tests/public/test_critical_clique_coloring.py \
+            tests/public/test_critical_clique_encodings.py \
+            > cc_delivery/source_sha256.txt
+      - name: Install pinned SAT backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -q pytest==9.0.2
+          rm -rf /tmp/cc-wheels && mkdir -p /tmp/cc-wheels
+          python -m pip download --disable-pip-version-check --only-binary=:all: --no-deps \
+            python-sat==1.9.dev15 -d /tmp/cc-wheels
+          WHEEL=$(find /tmp/cc-wheels -maxdepth 1 -type f -name 'python_sat-1.9.dev15-*.whl' -print -quit)
+          test -n "$WHEEL"
+          test "$(sha256sum "$WHEEL" | cut -d' ' -f1)" = 'fd55285f4ef679aaa62699660121423ec35b97324095ae34db4edb0356422a45'
+          cp "$WHEEL" cc_delivery/
+          python -m pip install --disable-pip-version-check --no-deps "$WHEEL"
+          python - <<'PY' | tee cc_delivery/solver_inventory.json
+          import json, pysat
+          from pysat.solvers import Solver
+          available = {}
+          for name in ('cadical195', 'minicard'):
+              try:
+                  with Solver(name=name):
+                      available[name] = True
+              except Exception as error:
+                  available[name] = {'error': repr(error)}
+          if available != {'cadical195': True, 'minicard': True}:
+              raise RuntimeError(available)
+          print(json.dumps({'python_sat': pysat.__version__, 'solvers': available}, sort_keys=True))
+          PY
+      - name: Prove compiler and encoding equivalence
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python -m pytest -q --confcutdir=tests/public \
+            tests/public/test_critical_clique_coloring.py \
+            tests/public/test_critical_clique_encodings.py \
+            | tee cc_delivery/pytest_critical_clique.txt
+      - name: Acquire and audit development graphs only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p cc_delivery/graphs
+          python - <<'PY'
+          from __future__ import annotations
+          import hashlib, json, urllib.request
+          from pathlib import Path
+          inventory_path = Path('experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json')
+          inventory = json.loads(inventory_path.read_text(encoding='utf-8'))
+          selected = {name: record for name, record in inventory['graphs'].items()
+                      if record['role'] in ('development', 'development_consumed')}
+          expected = {'wap01a.col', 'wap05a.col', 'wap06a.col'}
+          if set(selected) != expected:
+              raise RuntimeError(f'development split drift: {sorted(selected)}')
+          if any('holdout' in record['role'] for record in selected.values()):
+              raise RuntimeError('prospective holdout selected')
+          opener = urllib.request.build_opener()
+          opener.addheaders = [('User-Agent', 'SPECTRA-critical-clique-development/2')]
+          root = Path('cc_delivery/graphs')
+          receipt = {
+              'schema': 'spectra.critical_clique.development_data.v1',
+              'repository': inventory['repository'], 'commit': inventory['commit'],
+              'inventory_sha256': hashlib.sha256(inventory_path.read_bytes()).hexdigest(),
+              'holdouts_opened': False, 'graphs': {},
+          }
+          for name, record in sorted(selected.items()):
+              url = f"https://raw.githubusercontent.com/{inventory['repository']}/{inventory['commit']}/graphs/{name}"
+              with opener.open(url, timeout=60) as response:
+                  data = response.read()
+              blob = hashlib.sha1(f'blob {len(data)}\0'.encode('ascii') + data).hexdigest()
+              if len(data) != int(record['bytes']) or blob != record['git_blob_sha1']:
+                  raise RuntimeError(f'identity mismatch: {name}')
+              (root / name).write_bytes(data)
+              receipt['graphs'][name] = {
+                  'role': record['role'], 'bytes': len(data), 'git_blob_sha1': blob,
+                  'sha256': hashlib.sha256(data).hexdigest(),
+              }
+          Path('cc_delivery/development_data.json').write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+          PYTHONDONTWRITEBYTECODE=1 python experiments/critical_clique_coloring/audit_wap.py \
+            --data-dir cc_delivery/graphs \
+            --metadata experiments/critical_clique_coloring/KNOWN_WAP_OPTIMA.json \
+            --inventory experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json \
+            --out cc_delivery/critical_clique_audit.json \
+            | tee cc_delivery/critical_clique_audit_stdout.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('cc_delivery/critical_clique_audit.json').read_text())
+          expected = {
+              'wap01a.col': (2368, 110871, 1581, 72571, 787, 288, 29, '1149bcdf0dcc396cc9aa2c303cf6a7d716ffdb624f2cca3f41c5b327d0df0b76'),
+              'wap05a.col': (905, 43081, 748, 34980, 157, 62, 12, '80da12426961086bc3687bb9c6f5565018787b692384b68472d9fa457ce89b60'),
+              'wap06a.col': (947, 43571, 730, 33340, 217, 86, 12, '9e622b624dac1efce84ceb6ee4069b12948becb8a01921fc52739a673f5c02c3'),
+          }
+          if {row['name'] for row in report['instances']} != set(expected):
+              raise RuntimeError('audit graph set drift')
+          for row in report['instances']:
+              observed = (row['vertices'], row['edges'], row['quotient_vertices'], row['quotient_edges'],
+                          row['vertices_removed'], row['nontrivial_classes'], row['largest_class'],
+                          row['critical_clique_certificate_sha256'])
+              if observed != expected[row['name']]:
+                  raise RuntimeError((row['name'], observed, expected[row['name']]))
+          PY
+      - name: Create receipt and commit validated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, platform, subprocess, sys
+          from pathlib import Path
+          def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+          wheel = next(Path('cc_delivery').glob('python_sat-1.9.dev15-*.whl'))
+          receipt = {
+              'schema': 'spectra.critical_clique.validation.v1',
+              'github_run_id': os.environ['GITHUB_RUN_ID'],
+              'validated_parent_commit': subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+              'required_ancestor': '4424940e3c35e5fcfe6bec46915a306001d64ca4',
+              'patch_sha256': '8e9227632625551aa4063bfc646cccef1c7f5ed32e52c0be85fa935a08230faf',
+              'python_sat_wheel': wheel.name,
+              'python_sat_wheel_sha256': sha(wheel),
+              'python': sys.version, 'platform': platform.platform(),
+              'tests_sha256': sha('cc_delivery/pytest_critical_clique.txt'),
+              'audit_sha256': sha('cc_delivery/critical_clique_audit.json'),
+              'development_data_sha256': sha('cc_delivery/development_data.json'),
+              'source_sha256_manifest': sha('cc_delivery/source_sha256.txt'),
+              'holdouts_opened': False,
+              'verdict': 'compiler and encodings validated; no performance or flagship claim',
+          }
+          Path('experiments/critical_clique_coloring/CI_VALIDATION_20261008.json').write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          Path('cc_delivery/validation_receipt.json').write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+          rm maintenance/critical-clique-v1.patch.gz.b64 \
+             .github/workflows/apply-critical-clique-v1.yml \
+             .github/workflows/apply-critical-clique-v2.yml
+          find experiments/critical_clique_coloring -type d -name __pycache__ -prune -exec rm -rf {} +
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- \
+            experiments/critical_clique_coloring \
+            tests/public/test_critical_clique_coloring.py \
+            tests/public/test_critical_clique_encodings.py \
+            maintenance/critical-clique-v1.patch.gz.b64 \
+            .github/workflows/apply-critical-clique-v1.yml \
+            .github/workflows/apply-critical-clique-v2.yml
+          git diff --cached --check
+          git commit -m 'Add certified critical-clique coloring compiler and exact controls'
+          git rev-parse HEAD | tee cc_delivery/source_commit.txt
+          git push origin HEAD:research/quotient-application-v2-20261008
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: critical-clique-validation-v2-${{ github.run_id }}
+          path: cc_delivery
+          include-hidden-files: true
+          retention-days: 90
