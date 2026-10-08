@@ -1,0 +1,25 @@
+{
+  "schema": "spectra.wap.critical_clique_optima.v1",
+  "upstream_repository": "marijnheule/clicolcom",
+  "upstream_commit": "4932048642da2144f387961b595112277afff82f",
+  "instances": {
+    "wap01a.col": {
+      "chromatic_number": 41,
+      "maximum_clique_1based": [1507,1508,1223,1224,1666,1667,1649,1650,1988,1989,1727,1634,1946,1947,2120,2121,1513,1726,1514,2174,1342,1343,1346,1347,1635,1850,1851,1106,2305,2295,1898,2306,2331,2332,2362,1897,2361,2308,2296,2307,2160],
+      "source_path": "results/10m_incmaxclq_results/wap01a.col.out",
+      "source_git_blob_sha1": "bcb92ca0de7df8b19284a48e696bdc60b748588a"
+    },
+    "wap05a.col": {
+      "chromatic_number": 50,
+      "maximum_clique_1based": [192,241,294,269,298,340,359,360,361,362,363,295,403,346,380,397,334,401,509,510,511,296,640,641,761,456,559,406,550,520,461,678,647,648,649,774,457,166,787,407,408,733,862,590,888,684,671,800,833,871],
+      "source_path": "results/10m_incmaxclq_results/wap05a.col.out",
+      "source_git_blob_sha1": "e49ba3e25f650a053f49be7a76ae051278e2f9aa"
+    },
+    "wap06a.col": {
+      "chromatic_number": 40,
+      "maximum_clique_1based": [606,521,583,482,662,769,864,519,782,763,860,440,602,628,668,674,712,731,754,760,785,830,891,690,557,677,757,803,824,829,854,870,876,882,883,896,899,900,902,905],
+      "source_path": "results/10m_incmaxclq_results/wap06a.col.out",
+      "source_git_blob_sha1": "1a1ea1279e257ee9288aefe2c7d4690a092073af"
+    }
+  }
+}
