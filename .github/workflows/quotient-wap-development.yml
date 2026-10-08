@@ -1,0 +1,230 @@
+name: Quotient WAP development
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  development:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      NUMEXPR_NUM_THREADS: '1'
+      PYTHONHASHSEED: '0'
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Reconstruct exact preserved source
+        shell: bash
+        run: |
+          set -euo pipefail
+          BOOT=experiments/quotient_query/.bootstrap
+          cat "$BOOT"/part-* > /tmp/resume_payload.json.gz.b64
+          test "$(wc -c < /tmp/resume_payload.json.gz.b64)" = "87201"
+          echo "57d3d12aa7dbfedb0a927d22240abdc77fc5f133c2ce59b3860e258b5135cd59  /tmp/resume_payload.json.gz.b64" | sha256sum -c -
+          base64 -d /tmp/resume_payload.json.gz.b64 > /tmp/resume_payload.json.gz
+          echo "c8896f721feebc3dcbfc66e9d177f4c0e16cb46fb099341cb86966d22c185a8c  /tmp/resume_payload.json.gz" | sha256sum -c -
+          git merge-base --is-ancestor ad3efe269c6a81df394dcf01ce01f407621769a0 HEAD
+          python - <<'PY'
+          import gzip, hashlib, json
+          from pathlib import Path
+
+          archive = Path('/tmp/resume_payload.json.gz')
+          payload = json.loads(gzip.decompress(archive.read_bytes()))
+          assert payload['schema'] == 'spectra.quotient.resume_payload.v1'
+          assert payload['base_commit'] == 'ad3efe269c6a81df394dcf01ce01f407621769a0'
+          assert len(payload['files']) == 32
+          written = {}
+          for name, record in sorted(payload['files'].items()):
+              path = Path(name)
+              assert not path.is_absolute() and '..' not in path.parts
+              data = record['text'].encode()
+              digest = hashlib.sha256(data).hexdigest()
+              assert digest == record['sha256'], (name, digest, record['sha256'])
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(data)
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+              written[name] = digest
+          receipt = Path('experiments/quotient_query/application_receipts/wap_development_20261008')
+          receipt.mkdir(parents=True, exist_ok=True)
+          (receipt / 'bootstrap_identity.json').write_text(json.dumps({
+              'schema': payload['schema'],
+              'base_commit': payload['base_commit'],
+              'file_count': len(written),
+              'files': written,
+              'base64_bytes': 87201,
+              'base64_sha256': '57d3d12aa7dbfedb0a927d22240abdc77fc5f133c2ce59b3860e258b5135cd59',
+              'gzip_bytes': archive.stat().st_size,
+              'gzip_sha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
+          }, sort_keys=True, indent=2) + '\n')
+          PY
+          rm -rf "$BOOT"
+
+      - name: Install test dependency
+        run: python -m pip install --disable-pip-version-check pytest==9.0.2
+
+      - name: Verify quotient contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          RECEIPT=experiments/quotient_query/application_receipts/wap_development_20261008
+          python -m pytest \
+            tests/public/test_quotient_query.py \
+            tests/public/test_quotient_certificate.py \
+            tests/public/test_quotient_study_tasks.py \
+            tests/public/test_quotient_audit.py \
+            tests/public/test_quotient_application_tasks.py \
+            --confcutdir=tests/public \
+            --junitxml="$RECEIPT/tests.xml" \
+            > "$RECEIPT/tests.txt" 2>&1
+
+      - name: Build pinned exact competitors
+        shell: bash
+        run: |
+          set -euo pipefail
+          RECEIPT=experiments/quotient_query/application_receipts/wap_development_20261008
+          python experiments/quotient_query/build_all.py --out /tmp/quotient-build \
+            > "$RECEIPT/build.stdout.txt" 2> "$RECEIPT/build.stderr.txt"
+          cp /tmp/quotient-build/config.json "$RECEIPT/build_config.json"
+          cp /tmp/quotient-build/upstream.json "$RECEIPT/upstream.json"
+          cp /tmp/quotient-build/*.txt "$RECEIPT/" || true
+          cp /tmp/quotient-build/*.json "$RECEIPT/" || true
+
+      - name: Fetch and verify exposed WAP development graphs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wap
+          ROOT=https://raw.githubusercontent.com/marijnheule/clicolcom/4932048642da2144f387961b595112277afff82f/graphs
+          curl --fail --location --retry 4 --retry-all-errors "$ROOT/wap05a.col" -o /tmp/wap/wap05a.col
+          curl --fail --location --retry 4 --retry-all-errors "$ROOT/wap06a.col" -o /tmp/wap/wap06a.col
+          test "$(git hash-object /tmp/wap/wap05a.col)" = "327cc0c6b1abbc4a9ee31c14f3357136e5b186ec"
+          test "$(git hash-object /tmp/wap/wap06a.col)" = "60ca46d3198c02176be8812d8f53357e3b9f4114"
+          test "$(head -n 1 /tmp/wap/wap05a.col)" = "p edge 905 43081"
+          test "$(head -n 1 /tmp/wap/wap06a.col)" = "p edge 947 43571"
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          receipt = Path('experiments/quotient_query/application_receipts/wap_development_20261008')
+          rows = []
+          for name, blob, header in (
+              ('wap05a.col', '327cc0c6b1abbc4a9ee31c14f3357136e5b186ec', 'p edge 905 43081'),
+              ('wap06a.col', '60ca46d3198c02176be8812d8f53357e3b9f4114', 'p edge 947 43571'),
+          ):
+              path = Path('/tmp/wap') / name
+              rows.append({
+                  'name': name,
+                  'upstream_repository': 'marijnheule/clicolcom',
+                  'upstream_commit': '4932048642da2144f387961b595112277afff82f',
+                  'git_blob_sha1': blob,
+                  'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                  'bytes': path.stat().st_size,
+                  'header': header,
+                  'role': 'development',
+              })
+          (receipt / 'input_identity.json').write_text(json.dumps(rows, sort_keys=True, indent=2) + '\n')
+          PY
+
+      - name: Run complete WAP development panel
+        id: probe
+        shell: bash
+        run: |
+          set -uo pipefail
+          RECEIPT=experiments/quotient_query/application_receipts/wap_development_20261008
+          rm -rf /tmp/wap-results
+          python experiments/quotient_query/wap_probe.py \
+            /tmp/wap/wap05a.col /tmp/wap/wap06a.col \
+            --config /tmp/quotient-build/config.json \
+            --out /tmp/wap-results \
+            --policies edge,size,hash \
+            --rounds 3 \
+            --queries 64 \
+            > "$RECEIPT/probe.stdout.txt" 2> "$RECEIPT/probe.stderr.txt"
+          status=$?
+          echo "$status" > "$RECEIPT/probe.exit_code.txt"
+          if [ "$status" -eq 0 ]; then
+            cp /tmp/wap-results/summary.json "$RECEIPT/summary.json"
+            cp /tmp/wap-results/cases.json "$RECEIPT/cases.json"
+            cp /tmp/wap-results/raw.jsonl "$RECEIPT/raw.jsonl"
+            python experiments/quotient_query/wap_report.py \
+              "$RECEIPT/summary.json" --out "$RECEIPT/REPORT.md"
+          fi
+          exit 0
+
+      - name: Record environment and receipt hashes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          RECEIPT=experiments/quotient_query/application_receipts/wap_development_20261008
+          mkdir -p "$RECEIPT"
+          git rev-parse HEAD > "$RECEIPT/bootstrap_commit.txt"
+          git rev-parse HEAD^{tree} > "$RECEIPT/bootstrap_tree.txt"
+          uname -a > "$RECEIPT/uname.txt"
+          lscpu > "$RECEIPT/lscpu.txt"
+          python --version > "$RECEIPT/python.txt" 2>&1
+          python -m pip freeze > "$RECEIPT/environment.txt"
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path('experiments/quotient_query/application_receipts/wap_development_20261008')
+          values = {}
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name != 'SHA256.json':
+                  values[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+          (root / 'SHA256.json').write_text(json.dumps(values, sort_keys=True, indent=2) + '\n')
+          PY
+
+      - name: Commit exact source and development receipt
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish exact quotient source and WAP development receipt [skip ci]"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+      - name: Upload immutable development receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quotient-wap-development-${{ github.run_id }}
+          path: experiments/quotient_query/application_receipts/wap_development_20261008
+          include-hidden-files: true
+          retention-days: 90
+
+      - name: Enforce scientific completion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          RECEIPT=experiments/quotient_query/application_receipts/wap_development_20261008
+          test -f "$RECEIPT/probe.exit_code.txt"
+          test "$(cat "$RECEIPT/probe.exit_code.txt")" = "0"
+          test -f "$RECEIPT/summary.json"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('experiments/quotient_query/application_receipts/wap_development_20261008/summary.json').read_text())
+          assert result['role'] == 'development'
+          assert result['all_answers_originally_verified'] is True
+          assert len(result['graphs']) == 6
+          assert result['raw_sessions'] == 180
+          assert result['queries_verified'] == 11520
+          PY
