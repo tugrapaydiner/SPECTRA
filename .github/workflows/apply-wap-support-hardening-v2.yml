@@ -35,9 +35,9 @@ jobs:
             'f8c0cab6dcc333a484852607b52a0ab6d047ae0a952eddcaa33c4ff24f64e09e'
           )
           : > /tmp/wap-hardening.b64
-          for index in $(seq -w 0 6); do
+          for position in "${!expected[@]}"; do
+            index="$(printf '%02d' "$position")"
             file="maintenance/wap-support-hardening-v2/chunk-${index}.b64"
-            position=$((10#$index))
             actual="$(sha256sum "$file" | cut -d' ' -f1)"
             test "$actual" = "${expected[$position]}"
             cat "$file" >> /tmp/wap-hardening.b64
