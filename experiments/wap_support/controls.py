@@ -3,11 +3,10 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import hashlib
-import statistics
 import time
 from typing import Sequence
 
-from spectra.cnf.quotient_query import DEFAULT_BYTES, QuotientRuntime
+from spectra.cnf.quotient_query import QuotientRuntime
 from experiments.wap_support.workload import (
     WorkloadCase, compact_binary_clauses, model_to_labels,
     restrictions_to_assumptions,

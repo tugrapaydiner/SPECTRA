@@ -11,7 +11,6 @@ import random
 import resource
 import sys
 import time
-import traceback
 import subprocess
 import zlib
 
@@ -197,11 +196,81 @@ def run_matrix(cases_dir: Path, runtime_path: Path, output: Path, *, max_new: in
                    "--runtime", str(runtime_path), "--order", order,
                    "--order-seed", str(seed), "--destination", str(destination)]
         cold_start = time.perf_counter_ns()
-        completed_process = subprocess.run(command, capture_output=True, text=True,
-                                           timeout=SESSION_DEADLINE_SECONDS)
+        try:
+            completed_process = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=SESSION_DEADLINE_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
+            cold_wall_ns = time.perf_counter_ns() - cold_start
+            failure = {
+                "schema": "spectra.wap_support.failure.v1",
+                "status": "TIMEOUT",
+                "session_id": session_id,
+                "case_file": case_name,
+                "arm": arm,
+                "order": order,
+                "order_seed": seed,
+                "cold_wall_ns": cold_wall_ns,
+                "deadline_seconds": SESSION_DEADLINE_SECONDS,
+                "stdout": exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or ""),
+                "stderr": exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or ""),
+            }
+            atomic_json(destination / "failure.json", failure)
+            row = {
+                "session_id": session_id,
+                "case_file": case_name,
+                "arm": arm,
+                "order": order,
+                "order_seed": seed,
+                "status": "TIMEOUT",
+                "cold_wall_ns": cold_wall_ns,
+                "failure_sha256": sha256(destination / "failure.json"),
+            }
+            atomic_json(destination / "outer.json", row)
+            _append_jsonl(rows_path, row)
+            rows.append(row)
+            atomic_json(output / "progress.json", {"complete": False, "rows": len(rows),
+                                                     "scheduled": len(jobs), "last": row})
+            write_manifest(output)
+            raise RuntimeError(f"session timed out: {session_id}") from exc
         cold_wall_ns = time.perf_counter_ns() - cold_start
         if completed_process.returncode:
-            raise RuntimeError(f"session failed {session_id}:\n{completed_process.stdout}\n{completed_process.stderr}")
+            failure = {
+                "schema": "spectra.wap_support.failure.v1",
+                "status": "ERROR",
+                "session_id": session_id,
+                "case_file": case_name,
+                "arm": arm,
+                "order": order,
+                "order_seed": seed,
+                "cold_wall_ns": cold_wall_ns,
+                "returncode": completed_process.returncode,
+                "stdout": completed_process.stdout,
+                "stderr": completed_process.stderr,
+            }
+            atomic_json(destination / "failure.json", failure)
+            row = {
+                "session_id": session_id,
+                "case_file": case_name,
+                "arm": arm,
+                "order": order,
+                "order_seed": seed,
+                "status": "ERROR",
+                "cold_wall_ns": cold_wall_ns,
+                "failure_sha256": sha256(destination / "failure.json"),
+            }
+            atomic_json(destination / "outer.json", row)
+            _append_jsonl(rows_path, row)
+            rows.append(row)
+            atomic_json(output / "progress.json", {"complete": False, "rows": len(rows),
+                                                     "scheduled": len(jobs), "last": row})
+            write_manifest(output)
+            raise RuntimeError(
+                f"session failed {session_id}:\n{completed_process.stdout}\n{completed_process.stderr}"
+            )
         metadata_path = destination / "session.json"
         if not metadata_path.is_file():
             raise RuntimeError("worker did not publish session metadata")
@@ -216,6 +285,8 @@ def run_matrix(cases_dir: Path, runtime_path: Path, output: Path, *, max_new: in
         atomic_json(destination / "outer.json", row)
         _append_jsonl(rows_path, row)
         rows.append(row); completed.add(session_id); added += 1
+        atomic_json(output / "progress.json", {"complete": False, "rows": len(rows),
+                                                 "scheduled": len(jobs), "last": row})
         print(f"{len(rows)}/{len(jobs)} {session_id} {row['complete_ns']/1e6:.3f} ms", flush=True)
         if max_new is not None and added >= max_new:
             break
@@ -228,6 +299,8 @@ def run_matrix(cases_dir: Path, runtime_path: Path, output: Path, *, max_new: in
     ordered = [by_id[f"{i:04d}-{case.removesuffix('.json')}-{arm}-{order}"]
                for i, (case, arm, order, _seed) in enumerate(jobs)]
     atomic_json(output / "sessions.json", ordered)
+    atomic_json(output / "progress.json", {"complete": True, "rows": len(ordered),
+                                             "scheduled": len(jobs), "last": ordered[-1]})
     write_manifest(output)
 
 def write_manifest(root: Path) -> None:

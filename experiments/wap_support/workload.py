@@ -14,7 +14,7 @@ import heapq
 import json
 from pathlib import Path
 import random
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from experiments.critical_clique_coloring.core import Graph, parse_dimacs_col, verify_coloring
 
@@ -184,12 +184,71 @@ class WorkloadCase:
         return data
 
     def validate(self) -> None:
-        if self.schema != SCHEMA or self.n != len(self.masks) or self.n != len(self.dsatur_coloring):
+        if self.schema != SCHEMA:
+            raise ValueError("unsupported case schema")
+        if type(self.n) is not int or self.n < 1:
+            raise ValueError("invalid vertex count")
+        if type(self.palette) is not int or not 1 <= self.palette <= 63:
+            raise ValueError("invalid palette")
+        if type(self.dsatur_colors) is not int or not 1 <= self.dsatur_colors <= self.palette:
+            raise ValueError("invalid DSATUR colour count")
+        if type(self.edges) is not tuple or type(self.masks) is not tuple or type(self.queries) is not tuple:
+            raise ValueError("case banks must be immutable tuples")
+        if self.n != len(self.masks) or self.n != len(self.dsatur_coloring):
             raise ValueError("invalid case geometry")
-        if self.query_count != len(self.queries) or self.query_width != QUERY_WIDTH:
-            raise ValueError("invalid query inventory")
+        if (type(self.graph_sha256) is not str or len(self.graph_sha256) != 64
+                or type(self.graph_git_blob_sha1) is not str or len(self.graph_git_blob_sha1) != 40):
+            raise ValueError("invalid graph identity")
+        seen_edges: set[tuple[int, int]] = set()
+        for edge in self.edges:
+            if (type(edge) is not tuple or len(edge) != 2
+                    or any(type(v) is not int or not 0 <= v < self.n for v in edge)):
+                raise ValueError("invalid edge")
+            left, right = edge
+            if left >= right or edge in seen_edges:
+                raise ValueError("edges must be distinct canonical nonloops")
+            seen_edges.add(edge)
+        if any(type(c) is not int or not 0 <= c < self.dsatur_colors
+               for c in self.dsatur_coloring):
+            raise ValueError("invalid DSATUR colouring")
+        for vertex, mask in enumerate(self.masks):
+            if (type(mask) is not int or mask <= 0 or mask.bit_count() != 2
+                    or mask >> self.palette):
+                raise ValueError("invalid binary list")
+            if not ((mask >> self.dsatur_coloring[vertex]) & 1):
+                raise ValueError("DSATUR witness is outside a vertex list")
+        if type(self.query_count) is not int or self.query_count < 1 or self.query_count != len(self.queries):
+            raise ValueError("invalid query count")
+        if (type(self.query_width) is not int or self.query_width != QUERY_WIDTH
+                or not 1 <= self.query_width <= self.n):
+            raise ValueError("invalid query width")
         if len(set(self.queries)) != len(self.queries):
             raise ValueError("duplicate generated query")
+        for query in self.queries:
+            if type(query) is not tuple or len(query) != self.query_width:
+                raise ValueError("invalid query geometry")
+            previous = -1
+            for item in query:
+                if type(item) is not tuple or len(item) != 2:
+                    raise ValueError("invalid query restriction")
+                vertex, allowed = item
+                if (type(vertex) is not int or vertex <= previous or vertex >= self.n
+                        or type(allowed) is not int or allowed <= 0
+                        or allowed.bit_count() != 1 or not (allowed & self.masks[vertex])):
+                    raise ValueError("invalid query restriction")
+                previous = vertex
+        for value, name in ((self.generator_attempts, "attempts"),
+                            (self.generator_rejections, "rejections"),
+                            (self.generator_unique_model_hashes, "model diversity"),
+                            (self.generator_seed, "seed"), (self.clauses, "clauses")):
+            if type(value) is not int or value < 0:
+                raise ValueError("invalid generator " + name)
+        if (self.generator_attempts < self.query_count
+                or self.generator_rejections > self.generator_attempts
+                or not 1 <= self.generator_unique_model_hashes <= self.query_count):
+            raise ValueError("inconsistent generator counters")
+        if type(self.case_sha256) is not str or len(self.case_sha256) != 64:
+            raise ValueError("invalid case identity")
         if self.case_sha256 != _sha_json(self.canonical_without_hash()):
             raise ValueError("case digest mismatch")
 
@@ -220,12 +279,20 @@ def build_case(graph_path: str | Path, *, graph_name: str | None = None,
     """Construct a fixed case; MiniCard filters only satisfiable random queries."""
     from pysat.solvers import Solver  # optional research dependency
 
+    if type(query_count) is not int or query_count < 1:
+        raise ValueError("query_count must be a positive exact integer")
+    if type(query_width) is not int or query_width != QUERY_WIDTH:
+        raise ValueError(f"query_width must equal the frozen width {QUERY_WIDTH}")
+    if type(master_seed) is not int or not 0 <= master_seed < 1 << 64:
+        raise ValueError("master_seed must be an unsigned 64-bit exact integer")
     source = Path(graph_path)
     graph_bytes = source.read_bytes()
     blob = _git_blob_sha1(graph_bytes)
     if expected_git_blob_sha1 is not None and blob != expected_git_blob_sha1:
         raise ValueError("graph Git-blob identity mismatch")
     graph = parse_dimacs_col(source, name=graph_name or source.name)
+    if graph.n < query_width:
+        raise ValueError("graph is smaller than the frozen query width")
     coloring = deterministic_dsatur(graph)
     palette, masks = rotating_triple_masks(coloring)
     clauses = compact_binary_clauses(graph, masks)
