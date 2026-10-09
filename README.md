@@ -1,188 +1,229 @@
 # SPECTRA
 
-### Checked search. Faithful CPU execution.
+### Certified repeated-query compilation on CPU
 
-SPECTRA is a CPU-first research toolkit for **bounded Boolean search, same-model
-SVM inference, and reproducible reasoning experiments**. The public Python API
-and command line require no third-party packages. Native execution is an explicit,
-optional build; neural training and historical experiments live in a separate layer.
+SPECTRA is a CPU-first research toolkit. Its flagship research result is a
+**certified original-address compiler for repeated list-colouring support
+queries**: compile a fixed conflict graph once, then answer many restrictions
+addressed to the original vertices while returning and independently checking a
+complete original-graph witness.
 
-[Quick start](#quick-start) · [Measured results](#measured-results) ·
-[Native deployment](#native-deployment) · [Development](docs/DEVELOPMENT.md) ·
-[Documentation](docs/README.md)
+On five prospectively unopened WAP optical-conflict graphs, SPECTRA used
+**36.35% of persistent native MiniCard’s mean complete 1,024-query session time**
+(approximately **2.75× lower latency**). The exact whole-graph 95% ratio interval
+was **34.68–37.29%**, the p95 ratio was **36.47%**, all **107,520 full answers**
+passed original graph/list/query checks, and SPECTRA won on every holdout graph.
 
-**Technical review:** [Research engineering case study](docs/RESEARCH_ENGINEERING.md)
-— a focused path through the hypothesis, algorithm, ablations, complete CPU costs,
-independent checks and reproducible evidence.
+This is a narrow result—not a claim that SPECTRA beats SAT solvers or graph-colouring
+systems generally, not an ordinary chromatic-number result, and not evidence for
+historical “general reasoner,” MCTS, low-bit, or neural claims.
 
-**Python 3.10+ · MIT-licensed code · CPU-first · Explicit verification boundaries**
+[Confirmed result](experiments/wap_support/HOLDOUT_RESULTS_20261009.md) ·
+[Paper draft](experiments/wap_support/PAPER_DRAFT.md) ·
+[Exact protocol](experiments/wap_support/PROTOCOL.md) ·
+[Gate ledger](experiments/wap_support/FLAGSHIP_GATE_LEDGER.md) ·
+[Novelty boundary](experiments/wap_support/NOVELTY_AND_CLAIM_BOUNDARY.md) ·
+[Replication guide](experiments/wap_support/REPLICATION.md)
 
-## What is in the project?
+**Python 3.10+ · MIT-licensed project code · CPU-first · explicit verification boundaries**
 
-| Track | What it does | What it does not establish |
+## Flagship result
+
+### Problem
+
+A fixed graph represents conflicts between lightpaths. Each original vertex has a
+small allowed-colour list. A sequence of queries further restricts arbitrary
+original vertices. Every successful query must return a complete colouring that
+satisfies all original edges, lists, and current restrictions.
+
+### Contribution
+
+SPECTRA:
+
+1. builds the binary implication relation;
+2. merges strongly connected, implication-equivalent choices;
+3. retains an exact mapping from every original vertex and colour to the quotient;
+4. answers restrictions expressed in the original address space;
+5. lifts every answer back to a complete immutable original-vertex colouring;
+6. checks every answer with a separately owned original-input observer; and
+7. optionally exports an integer-only whole-relation certificate for an independent
+   standard-library verifier.
+
+Strongly connected components, equivalent-literal substitution, incremental SAT,
+and offline/online knowledge compilation are established foundations. SPECTRA’s
+claim is the exact end-to-end compiler/runtime/certificate contract and its frozen
+complete-cost result—not invention of those individual techniques.
+
+### Frozen holdout
+
+| Quantity | Result |
+|---|---:|
+| Prospectively unopened graphs | 5 WAP-A graphs |
+| Complete persistent sessions | 105 |
+| Full answers audited | 107,520 |
+| Queries per session | 1,024 |
+| SPECTRA mean complete session | 569.290 ms |
+| Native MiniCard mean complete session | 1,566.119 ms |
+| Mean ratio | **0.363503** |
+| Exact graph-clustered 95% interval | **[0.346789, 0.372944]** |
+| p95 ratio | **0.364735** |
+| Exact graph-clustered 95% interval | **[0.338157, 0.383226]** |
+| Per-graph candidate wins | **5 / 5** |
+| Frozen verdict | **PASS** |
+
+Complete session time includes immutable case decoding and validation, fresh
+formula/index and solver construction, all 1,024 queries, full answer
+materialisation, independent original checking, diagnostics, and disposal.
+Process launch/import is retained separately as cold wall time. Graph acquisition,
+case generation, native build, evidence transport, and the optional independent
+compiler-certificate audit are disclosed separately.
+
+The availability lists and query restrictions are synthetic. The topologies are
+public WAP optical-conflict graphs from the pinned upstream commit. Five graphs are
+five independent clusters—not 5,120 independent query problems.
+
+### Immutable evidence
+
+```text
+Freeze commit:
+0af6fda36c60a110584e7db836ee5724e530fbd4
+
+Freeze SHA-256:
+31997d38cced5e5611f3f17dc6bc3929b21dcc92a6b7bc81a78db31aab949020
+
+One-shot open commit:
+b7bca7fb7f62fcb0a43e6b33705cb834cd64494c
+
+GitHub Actions run:
+37883619073
+
+Artifact ID:
+11595284861
+
+Artifact ZIP SHA-256:
+5410db4d5832544c3ec55b19c1449395020319516d20823038de66216b45527c
+```
+
+The artifact retains the frozen source archive, exact upstream graph bytes,
+deterministic generated cases, schedule, all complete outputs, original-check
+receipts, compiler certificates, build/environment metadata, analysis, and complete
+SHA-256 manifests. A separate post-run audit verified every delivery-manifest entry
+and independently recomputed the headline statistics.
+
+## Reproduction
+
+The one-shot run is the confirmation result. Later executions use exposed data and
+are reproduction only; they cannot become a second confirmation or justify post-hoc
+algorithm changes.
+
+Use exact source commit:
+
+```text
+0af6fda36c60a110584e7db836ee5724e530fbd4
+```
+
+Acquire the five graph blobs listed in
+`experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json` from:
+
+```text
+marijnheule/clicolcom@4932048642da2144f387961b595112277afff82f
+```
+
+Then follow [REPLICATION.md](experiments/wap_support/REPLICATION.md). The results
+branch includes an exposed-data matrix for Ubuntu 22.04/Python 3.11 and Ubuntu
+24.04/Python 3.13. Project-owned CI is cross-environment reproduction, not
+independent-team replication.
+
+Independent replication is tracked in
+[issue #55](https://github.com/tugrapaydiner/SPECTRA/issues/55). Negative or
+conflicting replications are explicitly welcome.
+
+## Exact API boundary
+
+The experimental quotient runtime is opt-in. It does not compile during import and
+does not silently fall back to another solver.
+
+```python
+from spectra.cnf.quotient_query import (
+    QuotientRuntime,
+    build_quotient_runtime,
+)
+
+library = build_quotient_runtime("native-quotient-build")
+runtime = QuotientRuntime(library)
+
+# edges use zero-based original vertex IDs.
+# each mask has one bit per allowed colour.
+prepared = runtime.prepare(
+    n=4,
+    k=3,
+    edges=((0, 1), (1, 2), (2, 3)),
+    masks=(0b011, 0b110, 0b101, 0b011),
+    mode="scc",
+)
+
+try:
+    result = prepared.solve(
+        restrictions=((0, 0b001), (3, 0b010)),
+        max_work=1_000_000,
+    )
+    if result.status == "SAT_VERIFIED":
+        assert len(result.labels) == 4
+finally:
+    prepared.close()
+```
+
+A successful call returns a full original-vertex byte witness only after the
+original observer accepts it. Exhaustion or contradiction returns an honest
+non-solution status; it is not published as proof-certified UNSAT.
+
+## What remains open
+
+- independent reproduction by a person or team outside this project;
+- authentic operator or simulator availability/restriction traces;
+- external adoption in a maintained application;
+- ordinary laptop and non-x86 measurements;
+- exhaustive prior-art review for an equivalent original-address repeated-query
+  compiler contract;
+- formal machine-checked correspondence between native implementation and theorem.
+
+These limitations constrain generality and impact. They do not change the frozen
+PASS, but they determine how broadly the result may be advertised.
+
+## Other project tracks
+
+The repository also preserves bounded Boolean-search, CPU SVM, neural, low-bit,
+compiler, and deployment experiments. Each has its own evidence and limitations.
+**None inherits the WAP result.** In particular:
+
+| Track | Retained value | Not established |
 |---|---|---|
-| **CNF search** | Bounded classical search, reusable indexes and independent checks against original clauses | A complete SAT solver, an UNSAT proof, or improved learned reasoning |
-| **CPU SVM execution** | Explicit native builds, reusable model state, raw-input pipelines and decision-receipt replay | Perfect ground-truth labels, universal speedups, or cross-platform bitwise equality |
-| **Research and evidence** | Retained models, protocols, negative results, replay tools and byte-integrity manifests | Scientific validity or authenticity merely because a hash matches |
+| Bounded CNF search | reproducible paths, reusable indexes, original-clause checks | general SAT superiority or UNSAT proofs |
+| Native SVM execution | faithful same-model CPU execution and pipeline receipts | best task accuracy or universal speedups |
+| Neural/low-bit history | retained hypotheses, models, failures, and controls | a flagship learned-reasoning result |
+| Cover/domain experiments | exact structured execution and negative competitor results | universal graph-colouring advantage |
 
-The latest published release is [v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1).
-**This checkout also includes unreleased work**, notably native SVM deployment and
-prepared/compiler experiments. A source installation is not identical to the
-published v0.7.1 wheel. [Delivery status](docs/STATUS.md#delivery-state) separates
-released artifacts, merged source and unmerged research. No release is published
-by this review.
+The latest published package release remains
+[v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1). The WAP
+flagship source is unreleased research until a separately audited release is made.
 
-## Quick start
-
-From a checkout, create a virtual environment and install the base package:
+## Base toolkit quick start
 
 ```bash
 git clone https://github.com/tugrapaydiner/SPECTRA.git
 cd SPECTRA
 python -m venv .venv
-```
-
-Activate it with `source .venv/bin/activate` on Linux/macOS, or
-`.venv\Scripts\Activate.ps1` in Windows PowerShell. Then:
-
-```bash
+# Linux/macOS: source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install .
 python -m spectra doctor
 python -m spectra cnf solve examples/tiny.cnf --seed 7 --max-flips 1024 --out answer.json
 python -m spectra cnf check examples/tiny.cnf answer.json
 ```
 
-`spectra` and `python -m spectra` are equivalent. The base installation needs
-neither PyTorch nor a compiler. Output paths must be new: existing files are not
-replaced. A completed search reports **`SAT_VERIFIED` or `UNKNOWN`**; exit code 0
-alone is not a solved problem. `UNKNOWN` means the budget ended without a verified
-solution, not that the formula is unsatisfiable.
-
-```python
-from spectra.cnf import CNF, PreparedCNF, solve
-
-problem = CNF(2, ((1, 2), (-1, 2)))
-reference = solve(problem, seed=7, max_flips=128)
-prepared = PreparedCNF(problem)  # build a reusable index once
-indexed = prepared.solve(seed=7, max_flips=128)
-
-assert reference.path_sha256 == indexed.path_sha256
-if indexed.status == "SAT_VERIFIED":
-    assert problem.satisfied(indexed.witness)
-```
-
-For an indexed cold call from the CLI:
-
-```bash
-python -m spectra cnf solve examples/tiny.cnf --backend indexed --seed 7 --max-flips 4096 --out indexed.json
-```
-
-The historical `compact` backend remains the default. See [API and CLI](docs/API.md)
-for strict Boolean witnesses, input limits, formats and exit codes.
-
-An unreleased [optional deductive backend](docs/DEDUCTIVE_GUIDE.md) solves forced
-and binary constraints before bounded search. On a fresh synthetic panel it solves
-124/160 formula/seed cases versus indexed search's 97/160, with 31.4% lower mean
-complete solve time. Gains are concentrated in structured constraints; general
-3-SAT quality is unchanged and some time/memory costs increase. The
-[full comparison](experiments/deductive_search/RESULTS.md) retains the native
-Glucose4 baseline, failures and measurement limitations.
-
-The [focused-search study](experiments/focused_evaluation/RESULTS.md) evaluates the
-recovered break/age policy on a separate, freshly declared 96-formula panel:
-**102/192 verified SAT cases versus indexed search's 60/192**, with complete mean
-wall time **18.80 versus 26.70 ms**. All 2,880 timing rows and 36 memory observations
-are retained, along with policy controls and native Glucose4. Gains are concentrated
-in planted formulas; large uniform formulas remain difficult. This is an optional
-classical backend with a scoped result, unchanged defaults and no neural-learning
-claim. [Reproduce the evidence and inspect the engineering decisions →](docs/RESEARCH_ENGINEERING.md)
-
-The [public structured-task study](experiments/structured_search/RESULTS.md) adds
-optional watched-literal DPLL: **85/85 verified 9×9 Sudoku solutions**, versus
-focused search's 0/85 and deductive search's 1/85. Complete mean wall cost is
-**40.54 ms versus focused's 64.53 ms**. Native SAT and the direct Sudoku control
-also solve all 85 and are faster (16.11 and 6.09 ms). This is one public task
-family, different search budgets and an opt-in classical solver; models and
-defaults are unchanged. [API and limits →](docs/DPLL_GUIDE.md)
-
-## Measured results
-
-These figures visualize **preserved published summaries, not new measurements
-from this review**. Each experiment keeps its own models, host, timing boundary
-and limitations. The numerical inputs, immutable source hashes and regeneration
-command are in [chart provenance](assets/readme/README.md).
-
-### Identical bounded search, less work spent on bookkeeping
-
-![Indexed search cold-call ratios for all six published size/family cells at two flip budgets. Larger long runs improve; smaller runs regress.](assets/readme/indexed-search.svg)
-
-On the frozen local primary comparison, the indexed backend takes **238.881 ms
-versus 1,005.795 ms** for the reference: a cold-call ratio of **0.237505**
-(95% formula-bootstrap interval **0.216128–0.281891**). The comparison checks
-1,152 measured calls and 384 distinct backend paths over 24 formulas.
-
-The large timed cases return **`UNKNOWN`**. This is cheaper execution of the same
-bounded search, **not more SAT successes**. Small cases regress, and cold Python
-allocation increases. Preparation is included; parsing and serialization are not.
-[Protocol, all cells and memory tradeoffs →](docs/EFFICIENCY_GUIDE.md)
-
-### Compare against native alternatives, not only Python overhead
-
-![Default SPECTRA and generated-C costs relative to native LIBSVM across all seven retained models. Generated C wins five of six small-model comparisons; its HAR export is missing.](assets/readme/native-comparison.svg)
-
-The matched-AVX2 comparison preserves each fitted SVM's labels while testing
-native LIBSVM, generated C and fixed SPECTRA profiles. **Generated C is faster
-than default SPECTRA on five of the six smaller models.** HAR's generated-C export
-timed out, so that comparison remains missing—not a SPECTRA win.
-
-On HAR, default SPECTRA takes **74.412 μs/row versus 615.398 μs/row** for native
-LIBSVM. But the separately fitted native linear model takes **3.079 μs/row** and
-has higher observed accuracy: **2,849/2,947 versus 2,835/2,947** correct. Its
-subject-bootstrap accuracy interval includes zero; this is not established
-statistical superiority. **The task-usefulness gate remains failed.** Faster
-execution of an SVM is not proof that the SVM is the right model for the task.
-[Full controls, accuracy, missing comparison and timing boundaries →](experiments/native_baselines/RESULTS.md)
-
-The historical neural/compiler experiments remain separate. Reduced returned
-tensor storage is not reduced peak RAM; preserving a model's outputs is not
-improving its accuracy. Start with [the research review](docs/RESEARCH_REVIEW_20260911.md),
-[prepared FP execution](docs/TRAINED_FP_GUIDE.md) and
-[compiler controls](docs/COMPILER_BASELINE_GUIDE.md).
-
-## Native deployment
-
-For supported fitted pipelines, export the model and preprocessing plan, then
-compile explicitly on the execution machine. This example builds libraries;
-it does not train or download a classifier:
-
-```python
-from spectra.svm import build_runtime
-from spectra.svm_preprocess_native import build_preprocessor
-
-library = build_runtime("native-build")
-preprocessor = build_preprocessor("preprocessor-build")
-print(library)
-print(preprocessor)
-```
-
-Use the printed paths and a real exported bundle with the offline JSONL runner:
-
-```bash
-spectra svm run exported-model --library /path/to/runtime-library \
-  --preprocessor /path/to/preprocessing-extension \
-  --input rows.jsonl --output predictions.jsonl
-```
-
-Each input line is a feature array in the fitted plan's column order. The runner
-uses bounded chunks and publishes a complete new output file only after clean
-EOF and successful inference. A late invalid row does not publish a partial final
-result. Completion records bind the input/output bytes and model identity; they
-are not independent proofs of true labels.
-
-[Export a pipeline](docs/SVM_PIPELINE.md) ·
-[Build/platform boundaries](docs/SVM_PORTABILITY.md) ·
-[Streaming and failure handling](docs/SVM_STREAM.md) ·
-[Independent decision receipts](docs/SVM_RECEIPTS.md)
+The base installation does not require PyTorch or a compiler. Native runtimes are
+explicit builds. Bounded search returns `SAT_VERIFIED` or `UNKNOWN`; process success
+alone never means the problem was solved.
 
 ## Verify and develop
 
@@ -190,36 +231,13 @@ are not independent proofs of true labels.
 python -m pip install ".[test]"
 python -m pytest tests/public --confcutdir=tests/public
 python scripts/check_release_readiness.py
-python scripts/render_readme_charts.py --check
 ```
 
-For the pinned CPU research environment, full regressions, retained-checkpoint
-replay, explicit native builds and **sdist-to-wheel testing outside the checkout**,
-follow [Development](docs/DEVELOPMENT.md). Historical slow retraining tests are
-separate and can require substantially more memory. Test passes are not evidence
-of generalization or a guarantee that every platform/input works.
+Historical slow retraining and large evidence replays remain separate. Test passes
+are implementation evidence, not proof of generalization or support for every
+platform/input. Read [SECURITY.md](SECURITY.md) before accepting external inputs,
+native libraries, or checkpoints, and [CONTRIBUTING.md](CONTRIBUTING.md) before
+changing numerical code or retained experiments.
 
-Read [Security](SECURITY.md) before accepting external inputs, native libraries or
-checkpoints. Read [Contributing](CONTRIBUTING.md) before changing numerical code,
-benchmarks or retained evidence. Release operators should use
-[Releasing](docs/RELEASING.md), not old experiment logs.
-
-```text
-spectra/        public APIs, CLI and optional native runtime sources
-examples/       runnable CNF inputs
-model/ train/   historical neural implementation
-common/ data/ eval/ deploy/  evidence-bound compatibility modules
-scripts/       reproducible checks, experiments and maintenance commands
-tests/         regression contracts; public/ requires only pytest
-experiments/   separately scoped native and research comparisons
-results/       retained evidence, including negative outcomes
-assets/readme/ source-bound charts and their machine-readable inputs
-docs/          current guides, protocols and history index
-maintenance/   historical byte-retention receipts
-```
-
-Unmerged research is available through the repository's pull requests; it is not
-silently incorporated into these installation instructions. The
-[history index](docs/history/README.md) preserves older work. Code is distributed
-under [MIT](LICENSE); upstream datasets and third-party components retain their
-own attribution and license terms.
+Code is distributed under [MIT](LICENSE). Upstream datasets and third-party
+components retain their own licenses and attribution requirements.
