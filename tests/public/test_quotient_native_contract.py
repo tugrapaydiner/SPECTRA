@@ -12,6 +12,7 @@ import os
 import pytest
 
 from spectra.cnf.arcfree_support import ArcFreeSupportTable
+from spectra.cnf.quotient_certificate import verify_quotient
 from spectra.cnf.quotient_query import QuotientRuntime, build_quotient_runtime
 
 
@@ -50,11 +51,15 @@ def test_abi_certificate_and_independent_lifts(runtime):
         assert len(certificate["colour0"]) == 4
         assert len(certificate["colour1"]) == 4
         assert len(certificate["wide"]) == 4
-        assert len(certificate["offsets"]) == sum(
+        assert certificate["start"][0] == 0
+        assert certificate["start"][-1] == sum(
             domain.bit_count() for domain in certificate["palettes"]
-        ) + 1
+        )
+        assert len(certificate["offsets"]) == certificate["start"][-1] + 1
         assert certificate["arcs"] == []
         assert all(value == 0 for value in certificate["offsets"])
+        audit = verify_quotient(4, 2, edges, masks, certificate)
+        assert audit["valid"] and audit["mapping_verified"]
         for side in (0, 1):
             answer = _lift_side(certificate, side)
             assert prepared.check(answer)
@@ -66,6 +71,22 @@ def test_abi_certificate_and_independent_lifts(runtime):
         result = prepared.solve()
         assert result.status == "SAT_VERIFIED"
         assert prepared.check(result.labels)
+
+
+def test_residual_arc_certificate_passes_independent_relation_audit(runtime):
+    # Different binary palettes share colour 1.  The quotient retains residual
+    # implications, so this exercises canonical CSR transport rather than only
+    # the arc-free WAP specialization.
+    edges = ((0, 1),)
+    masks = (0b011, 0b110)
+    with runtime.prepare(2, 3, edges, masks=masks, mode="scc") as prepared:
+        certificate = prepared.certificate()
+        assert prepared.info["quotient_arcs"] > 0
+        assert certificate["offsets"][-1] == len(certificate["arcs"])
+        assert all(type(row) is list and len(row) == 2 for row in certificate["arcs"])
+        audit = verify_quotient(2, 3, edges, masks, certificate)
+        assert audit["valid"] and audit["mapping_verified"]
+        assert audit["quotient_arcs"] == len(certificate["arcs"])
 
 
 def test_observer_owns_original_inputs_and_checks_every_constraint(runtime):
