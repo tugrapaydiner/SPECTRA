@@ -1,5 +1,5 @@
 {
-  "schema": "spectra.wap_support.cross_environment_reproduction.v1",
+  "schema": "spectra.wap_support.cross_environment_reproduction.v2",
   "frozen_source_commit": "0af6fda36c60a110584e7db836ee5724e530fbd4",
   "freeze_sha256": "31997d38cced5e5611f3f17dc6bc3929b21dcc92a6b7bc81a78db31aab949020",
   "queries_per_session": 1024,
@@ -31,7 +31,8 @@
       "frozen_performance_gate": "PASS",
       "workflow_run": 37883619073,
       "artifact_id": 11595284861,
-      "artifact_zip_sha256": "5410db4d5832544c3ec55b19c1449395020319516d20823038de66216b45527c"
+      "artifact_zip_sha256": "5410db4d5832544c3ec55b19c1449395020319516d20823038de66216b45527c",
+      "manifest_entries_verified": 382
     },
     {
       "label": "reproduction_ubuntu24_python313",
@@ -55,6 +56,67 @@
       "artifact_id": 11621951388,
       "artifact_zip_sha256": "81b36015bcbd86cf6c96a2f42184157b829962b315b9e150489fd951dab98ccb",
       "internal_manifest_entries_verified": 359
+    },
+    {
+      "label": "diagnostic_ubuntu22_python313",
+      "role": "project_owned_exposed_data_portability_diagnostic",
+      "cpu": "AMD EPYC 7763 64-Core Processor",
+      "python": "3.13.16",
+      "candidate_complete_mean_ms": 1155.5450778666666,
+      "baseline_complete_mean_ms": 3175.3448301999997,
+      "complete_mean_ratio": 0.36391168193026907,
+      "complete_mean_ratio_graph_clustered_95": [0.34495524204286854, 0.37387169855274044],
+      "complete_p95_ratio": 0.37789439067817693,
+      "complete_p95_ratio_graph_clustered_95": [0.3390551117891568, 0.3782636957003302],
+      "per_graph_complete_mean_ratios": {
+        "wap02a.col.json": 0.3393031200220248,
+        "wap03a.col.json": 0.370867978835345,
+        "wap04a.col.json": 0.37806463701259413,
+        "wap07a.col.json": 0.3505655644943934,
+        "wap08a.col.json": 0.3492940549859433
+      },
+      "candidate_session_mean_ms": 282.9685753333333,
+      "baseline_session_mean_ms": 2292.9491565999997,
+      "warm_session_ratio": 0.12340813337218562,
+      "candidate_pre_session_mean_ms": 872.5765025333333,
+      "baseline_pre_session_mean_ms": 882.3956736,
+      "semantic_status": "PASS",
+      "frozen_performance_gate": "PASS",
+      "workflow_run": 37944047042,
+      "artifact_id": 11622899680,
+      "artifact_zip_sha256": "e3413b7480bfc9db295e8839e0718e27decfc7eb96b5ffbd5cbe7ebd9fcd07e5",
+      "internal_manifest_entries_verified": 358
+    },
+    {
+      "label": "diagnostic_ubuntu24_python311",
+      "role": "project_owned_exposed_data_portability_diagnostic",
+      "cpu": "AMD EPYC 7763 64-Core Processor",
+      "python": "3.11.17",
+      "candidate_complete_mean_ms": 1706.0293150666666,
+      "baseline_complete_mean_ms": 3192.5329214666667,
+      "complete_mean_ratio": 0.5343811190153389,
+      "complete_mean_ratio_graph_clustered_95": [0.5175845380949671, 0.5419365562209253],
+      "complete_p95_ratio": 0.5410104892028029,
+      "complete_p95_ratio_graph_clustered_95": [0.5104076807740772, 0.54453743869327],
+      "per_graph_complete_mean_ratios": {
+        "wap02a.col.json": 0.5109012046348997,
+        "wap03a.col.json": 0.5438760068785993,
+        "wap04a.col.json": 0.5420657155915746,
+        "wap07a.col.json": 0.5305909663951782,
+        "wap08a.col.json": 0.5191844526818364
+      },
+      "candidate_session_mean_ms": 270.21652673333335,
+      "baseline_session_mean_ms": 1757.2546013333333,
+      "warm_session_ratio": 0.15377198416683846,
+      "candidate_pre_session_mean_ms": 1435.8127883333332,
+      "baseline_pre_session_mean_ms": 1435.2783201333334,
+      "semantic_status": "PASS",
+      "frozen_performance_gate": "FAIL",
+      "failure_reason": "upper complete mean-ratio bound exceeded 0.50; correctness, p95, and per-graph candidate-win requirements passed",
+      "workflow_run": 37944047042,
+      "artifact_id": 11622624683,
+      "artifact_zip_sha256": "550cd2a7187168aedb76ecca0c8299b3a88bceedd2102e5373cfb8597c8afbd2",
+      "internal_manifest_entries_verified": 358
     },
     {
       "label": "reproduction_ubuntu22_python311",
@@ -88,9 +150,29 @@
       "internal_manifest_entries_verified": 359
     }
   ],
-  "pending_diagnostics": [
-    "ubuntu22_python313",
-    "ubuntu24_python311"
-  ],
-  "interpretation": "The narrow prospective result is confirmed on Ubuntu 24/Python 3.13 and reproduced on a second Ubuntu 24/Python 3.13 host. Exact 2x complete-call portability is not established on Ubuntu 22/Python 3.11, although semantic correctness and a large warm-session advantage reproduce."
+  "certificate_reproduction": {
+    "workflow_run": 37943976472,
+    "ubuntu24_python313": {
+      "status": "PASS",
+      "artifact_id": 11622578216,
+      "artifact_zip_sha256": "711485baaeb9160e100ac3e51e20f719c352eeda3590745c9ff65db16daf7b19",
+      "internal_manifest_entries_verified": 36
+    },
+    "ubuntu22_python311": {
+      "status": "PASS",
+      "artifact_id": 11622553272,
+      "artifact_zip_sha256": "3296a5645b4faf062b1b700434d25581b0baa1c64a020997cc12d15ab0aedec9",
+      "internal_manifest_entries_verified": 36
+    },
+    "canonical_certificate_hashes_match_original": true,
+    "all_independent_relation_audits_pass": true
+  },
+  "portability_conclusion": {
+    "semantic_identity": "PASS on all tested environments",
+    "python313_complete_2x_gate": "PASS on Ubuntu 22 and Ubuntu 24",
+    "python311_complete_2x_gate": "FAIL on Ubuntu 22 and Ubuntu 24",
+    "warm_session_advantage": "SPECTRA uses 12.3% to 15.5% of MiniCard warm-session time in all executions",
+    "observed_front_end": "Python 3.11 canonical JSON decode/tuple conversion/full validation/re-serialization introduces a large common pre-session cost that dilutes the frozen complete-call ratio",
+    "claim": "The narrow flagship result is confirmed and reproduced for the frozen Python 3.13 contract; portable 2x complete-call superiority is not established for the tested Python 3.11 evidence path."
+  }
 }
