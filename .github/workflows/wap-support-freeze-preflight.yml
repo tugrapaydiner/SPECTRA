@@ -28,11 +28,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p delivery
           test ! -e experiments/wap_support/FREEZE.json
           test ! -e experiments/wap_support/HOLDOUT_OPEN.json
-          git status --porcelain | tee delivery/initial-status.txt
-          test ! -s delivery/initial-status.txt
+          status="$(git status --porcelain)"
+          test -z "$status"
+          mkdir -p delivery
+          printf '%s' "$status" > delivery/initial-status.txt
+          printf '%s\n' 'Run 37882539282 stopped before any graph access because its receipt directory was created before the cleanliness check.' > delivery/PREFLIGHT_HISTORY.txt
           git rev-parse HEAD > delivery/source-commit.txt
           git rev-parse HEAD^{tree} > delivery/source-tree.txt
           git archive --format=tar.gz --prefix=SPECTRA/ HEAD > delivery/source.tar.gz
