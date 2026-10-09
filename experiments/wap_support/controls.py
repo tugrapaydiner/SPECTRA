@@ -62,11 +62,14 @@ def _cache_eligible(labels: bytes, query: Sequence[Sequence[int]]) -> bool:
     return all((allowed >> labels[vertex]) & 1 for vertex, allowed in query)
 
 
-def run_session(case: WorkloadCase, runtime: QuotientRuntime, arm: str,
-                *, order_name: str, order_seed: int) -> SessionResult:
+def _run_session(case: WorkloadCase, runtime: QuotientRuntime, arm: str,
+                 *, order_name: str, order_seed: int, validate_case: bool) -> SessionResult:
     if arm not in ARMS:
         raise ValueError("unknown arm")
-    case.validate()
+    if type(validate_case) is not bool:
+        raise TypeError("validate_case must be bool")
+    if validate_case:
+        case.validate()
     order = order_indices(case.query_count, order_name, order_seed)
     session_start = time.perf_counter_ns()
     setup_start = session_start
@@ -152,6 +155,25 @@ def run_session(case: WorkloadCase, runtime: QuotientRuntime, arm: str,
         tuple(query_times), hashlib.sha256(output).hexdigest(), output,
         len(set(outputs)), cache_hits, stats, candidate_info,
     )
+
+
+def run_session(case: WorkloadCase, runtime: QuotientRuntime, arm: str,
+                *, order_name: str, order_seed: int) -> SessionResult:
+    """Canonical research endpoint: repeat the complete structural case audit."""
+    return _run_session(case, runtime, arm, order_name=order_name,
+                        order_seed=order_seed, validate_case=True)
+
+
+def run_prevalidated_session(case: WorkloadCase, runtime: QuotientRuntime, arm: str,
+                             *, order_name: str, order_seed: int) -> SessionResult:
+    """Service endpoint for a hash-bound case validated before binary packing.
+
+    This skips only ``WorkloadCase.validate``.  Fresh solver/index construction,
+    every query, complete witness materialisation, original-input checking,
+    diagnostics, and disposal remain identical to :func:`run_session`.
+    """
+    return _run_session(case, runtime, arm, order_name=order_name,
+                        order_seed=order_seed, validate_case=False)
 
 
 def _case_graph(case: WorkloadCase):
