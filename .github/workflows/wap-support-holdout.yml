@@ -11,6 +11,7 @@ jobs:
     timeout-minutes: 180
     env:
       PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
       OPENBLAS_NUM_THREADS: '1'
       OMP_NUM_THREADS: '1'
       MKL_NUM_THREADS: '1'
@@ -27,15 +28,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p delivery
-          git rev-parse HEAD > delivery/open-commit.txt
-          git rev-parse HEAD^{tree} > delivery/open-tree.txt
-          python -m experiments.wap_support.verify_freeze \
+          python -B -m experiments.wap_support.verify_freeze \
             --freeze experiments/wap_support/FREEZE.json \
             --marker experiments/wap_support/HOLDOUT_OPEN.json \
-            --out delivery/freeze-verification.json \
-            > delivery/freeze-verification.log
-          FREEZE_COMMIT="$(python -c "import json; print(json.load(open('experiments/wap_support/HOLDOUT_OPEN.json'))['freeze_commit'])")"
+            --out /tmp/freeze-verification.json \
+            > /tmp/freeze-verification.log
+          FREEZE_COMMIT="$(python -B -c 'import json; print(json.load(open("experiments/wap_support/HOLDOUT_OPEN.json"))["freeze_commit"])')"
+          mkdir -p delivery
+          cp /tmp/freeze-verification.json delivery/freeze-verification.json
+          cp /tmp/freeze-verification.log delivery/freeze-verification.log
+          git rev-parse HEAD > delivery/open-commit.txt
+          git rev-parse HEAD^{tree} > delivery/open-tree.txt
           git archive --format=tar.gz --prefix=SPECTRA/ "$FREEZE_COMMIT" > delivery/frozen-source.tar.gz
           git bundle create delivery/open-history.bundle --all
       - name: Install pinned controls
