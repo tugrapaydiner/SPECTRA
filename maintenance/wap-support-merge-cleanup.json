@@ -1,0 +1,26 @@
+{
+  "schema": "spectra.wap_support.merge_cleanup.v1",
+  "base_result_commit": "28857582eb15b85b961fdf59f5d72533d7923c56",
+  "purpose": "Prepare the confirmed WAP result for main without changing frozen research source, evidence, thresholds, or conclusions.",
+  "removed_categories": [
+    "transport-only Base64 patch chunks",
+    "one-shot patch-application workflows",
+    "completed development-data and preflight workflows",
+    "one-shot holdout-opening workflow",
+    "completed portability and certificate diagnostic workflows",
+    "failed draft-archive workflow"
+  ],
+  "preserved": [
+    "frozen source and open commits",
+    "FREEZE.json and HOLDOUT_OPEN.json",
+    "all result, decision, gate, novelty, prior-art, reproduction, and paper records",
+    "negative Python 3.11 timing outcomes",
+    "original Git history containing every removed working-tree byte"
+  ],
+  "new_permanent_checks": [
+    "focused WAP and quotient public contracts",
+    "native undefined-behaviour sanitizer contracts",
+    "documentation link and version checks",
+    "sdist/wheel build and installed CLI smoke"
+  ]
+}
