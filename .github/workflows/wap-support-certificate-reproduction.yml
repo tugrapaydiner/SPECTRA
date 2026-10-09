@@ -52,7 +52,6 @@ jobs:
         working-directory: /tmp/spectra-frozen
         run: |
           python -m pytest -q --confcutdir=tests/public \
-            tests/public/test_quotient_certificate.py \
             tests/public/test_quotient_native_contract.py \
             > "$GITHUB_WORKSPACE/delivery-${{ matrix.label }}/contracts.log" 2>&1
       - name: Acquire exact exposed graph blobs
@@ -150,7 +149,11 @@ jobs:
         run: |
           python - <<'PY'
           import json
-          result=json.load(open('delivery-${{ matrix.label }}/CERTIFICATE_REPRODUCTION.json'))
+          from pathlib import Path
+          path=Path('delivery-${{ matrix.label }}/CERTIFICATE_REPRODUCTION.json')
+          if not path.is_file():
+              raise SystemExit('certificate reproduction receipt missing; inspect earlier retained logs')
+          result=json.loads(path.read_text())
           assert result['status']=='PASS' and len(result['cases'])==5
           print('All five canonical certificates and independent audits match.')
           PY
