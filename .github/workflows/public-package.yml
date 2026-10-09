@@ -30,8 +30,8 @@ jobs:
           git rev-parse HEAD > .public-package/source_commit.txt
           git rev-parse HEAD^{tree} > .public-package/source_tree.txt
           git archive --format=tar.gz HEAD > .public-package/source.tar.gz
-      - name: Install test and build tools only
-        run: python -m pip install build pytest==9.0.2 numpy==2.3.5
+      - name: Install public contract and build dependencies
+        run: python -m pip install build pytest==9.0.2 numpy==2.3.5 'python-sat==1.9.dev15'
       - name: Dependency-light contracts and archival concurrency tests
         run: |
           set -o pipefail
