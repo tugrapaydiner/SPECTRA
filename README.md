@@ -8,11 +8,19 @@ queries**: compile a fixed conflict graph once, then answer many restrictions
 addressed to the original vertices while returning and independently checking a
 complete original-graph witness.
 
-On five prospectively unopened WAP optical-conflict graphs, SPECTRA used
-**36.35% of persistent native MiniCard’s mean complete 1,024-query session time**
-(approximately **2.75× lower latency**). The exact whole-graph 95% ratio interval
-was **34.68–37.29%**, the p95 ratio was **36.47%**, all **107,520 full answers**
-passed original graph/list/query checks, and SPECTRA won on every holdout graph.
+On five prospectively unopened WAP optical-conflict graphs under the frozen
+Python 3.13 contract, SPECTRA used **36.35% of persistent native MiniCard’s mean
+complete 1,024-query session time** (approximately **2.75× lower latency**). The
+exact whole-graph 95% ratio interval was **34.68–37.29%**, the p95 ratio was
+**36.47%**, all **107,520 full answers** passed original graph/list/query checks,
+and SPECTRA won on every holdout graph.
+
+The complete 2× gate reproduced on two additional Python 3.13 server environments,
+including Ubuntu 22 and Ubuntu 24. It did **not** reproduce under Python 3.11:
+both Python 3.11 runs retained exact semantics and per-graph wins but reached
+complete ratios of 0.529–0.534 because the frozen canonical evidence-decoding
+front end added a large common cost. This failure is retained and the threshold is
+not relaxed.
 
 This is a narrow result—not a claim that SPECTRA beats SAT solvers or graph-colouring
 systems generally, not an ordinary chromatic-number result, and not evidence for
@@ -23,9 +31,12 @@ historical “general reasoner,” MCTS, low-bit, or neural claims.
 [Exact protocol](experiments/wap_support/PROTOCOL.md) ·
 [Gate ledger](experiments/wap_support/FLAGSHIP_GATE_LEDGER.md) ·
 [Novelty boundary](experiments/wap_support/NOVELTY_AND_CLAIM_BOUNDARY.md) ·
+[Prior-art audit](experiments/wap_support/PRIOR_ART_AUDIT_20261009.md) ·
+[Cross-environment results](experiments/wap_support/CROSS_ENVIRONMENT_REPRODUCTION_20261009.md) ·
+[Certificate reproduction](experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md) ·
 [Replication guide](experiments/wap_support/REPLICATION.md)
 
-**Python 3.10+ · MIT-licensed project code · CPU-first · explicit verification boundaries**
+**Package: Python 3.10+ · Flagship complete-call result: Python 3.13 · MIT-licensed project code · CPU-first · explicit verification boundaries**
 
 ## Flagship result
 
@@ -82,6 +93,24 @@ The availability lists and query restrictions are synthetic. The topologies are
 public WAP optical-conflict graphs from the pinned upstream commit. Five graphs are
 five independent clusters—not 5,120 independent query problems.
 
+### Cross-environment boundary
+
+| Environment | Complete ratio | Exact upper 95% bound | Frozen 0.50 gate |
+|---|---:|---:|---|
+| Original Ubuntu 24 / Python 3.13 | 0.363503 | 0.372944 | **PASS** |
+| Ubuntu 24 / Python 3.13 reproduction | 0.359794 | 0.368473 | **PASS** |
+| Ubuntu 22 / Python 3.13 diagnostic | 0.363912 | 0.373872 | **PASS** |
+| Ubuntu 24 / Python 3.11 diagnostic | 0.534381 | 0.541937 | **FAIL** |
+| Ubuntu 22 / Python 3.11 reproduction | 0.529004 | 0.536117 | **FAIL** |
+
+Every execution completed all 105 sessions and audited all 107,520 answers. Exact
+canonical compiler certificates reproduce byte for byte across tested Python 3.11
+and 3.13 environments. The Python 3.11 failure is a complete-timing limitation,
+not a different quotient or invalid output: the warm repeated-query session still
+uses only 15.3–15.5% of MiniCard’s time, while frozen multi-megabyte JSON decoding,
+deep validation, canonical reserialization, and hashing add a large common cost.
+That cost remains in the published endpoint.
+
 ### Immutable evidence
 
 ```text
@@ -130,9 +159,8 @@ marijnheule/clicolcom@4932048642da2144f387961b595112277afff82f
 ```
 
 Then follow [REPLICATION.md](experiments/wap_support/REPLICATION.md). The results
-branch includes an exposed-data matrix for Ubuntu 22.04/Python 3.11 and Ubuntu
-24.04/Python 3.13. Project-owned CI is cross-environment reproduction, not
-independent-team replication.
+branch retains the full Ubuntu 22/24 × Python 3.11/3.13 matrix. Project-owned CI is
+cross-environment reproduction, not independent-team replication.
 
 Independent replication is tracked in
 [issue #55](https://github.com/tugrapaydiner/SPECTRA/issues/55). Negative or
@@ -183,8 +211,9 @@ non-solution status; it is not published as proof-certified UNSAT.
 - authentic operator or simulator availability/restriction traces;
 - external adoption in a maintained application;
 - ordinary laptop and non-x86 measurements;
-- exhaustive prior-art review for an equivalent original-address repeated-query
-  compiler contract;
+- external expert challenge of the prior-art audit;
+- a separately frozen deployment-format study that removes research-evidence JSON
+  overhead without rewriting the confirmed endpoint;
 - formal machine-checked correspondence between native implementation and theorem.
 
 These limitations constrain generality and impact. They do not change the frozen
