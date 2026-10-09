@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -62,6 +63,11 @@ def test_frozen_paths_must_be_safe_repository_paths(path):
 
 
 def test_executable_constants_are_exactly_bound():
+    if sys.version_info[:2] != (3, 13):
+        with pytest.raises(ValueError, match="holdout requires Python 3.13"):
+            verify_constants({"constants": constants()})
+        return
+
     verify_constants({"constants": constants()})
     changed = constants(); changed["query_count"] += 1
     with pytest.raises(ValueError, match="constants differ"):
