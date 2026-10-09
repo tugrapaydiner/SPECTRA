@@ -38,7 +38,7 @@ jobs:
           git archive --format=tar.gz HEAD > .indexed/source.tar.gz
       - name: Install base test/build tools
         run: |
-          python -m pip install build pytest==9.0.2
+          python -m pip install build pytest==9.0.2 'python-sat==1.9.dev15'
           python -m pip freeze > .indexed/environment.lock.txt
       - name: Public contracts including corruption rejection
         run: |
