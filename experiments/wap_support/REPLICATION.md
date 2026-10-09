@@ -21,7 +21,7 @@ A valid reproduction must retain:
 - whole-graph clustered analysis;
 - source, build, environment, evidence, and delivery manifests.
 
-The frozen workflow is intentionally not rerun. `.github/workflows/wap-support-reproduction.yml` executes the exact frozen source in separately configured exposed-data environments and reports relation identity plus descriptive timing. Such automation is cross-environment reproduction, not independent-team replication.
+The frozen holdout workflow must not be rerun as a second confirmation study. The project-owned exposed-data reproduction workflow is preserved immutably at commit `28857582eb15b85b961fdf59f5d72533d7923c56` under `.github/workflows/wap-support-reproduction.yml`. It was intentionally removed from the current working tree during the `main` cleanup so a completed, heavyweight, exposed-data experiment cannot run as ordinary repository CI. Checking out that immutable commit recovers the exact workflow and its pinned source/data boundary. Project-controlled automation is cross-environment reproduction, not independent-team replication.
 
 ## Independent replication request
 
