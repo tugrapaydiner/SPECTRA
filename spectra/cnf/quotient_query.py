@@ -13,6 +13,58 @@ from pathlib import Path
 SOURCE=Path(__file__).resolve().parents[1]/'_native'/'quotient_query.cpp'
 DEFAULT_BYTES=64*1024*1024
 MODES={'none':0,'parity':1,'scc':2,'hybrid':3}
+_RAW_CERTIFICATE_FIELDS={
+    'schema','n','k','impossible','palettes','initial','node',
+    'colour0','colour1','wide','offsets','arcs',
+}
+
+
+def _canonical_certificate(raw: dict) -> dict:
+    """Convert the ABI-v3 native CSR export into the public certificate schema.
+
+    Native ABI v3 exports each residual row as ``(source, target, forbidden)``.
+    The independently verified public form removes the redundant source column,
+    supplies atom starts explicitly, and lets ``offsets`` delimit each source.
+    Refuse malformed native evidence rather than repairing or guessing it.
+    """
+    if type(raw) is not dict or set(raw) != _RAW_CERTIFICATE_FIELDS:
+        raise AssertionError('native certificate field inventory differs')
+    palettes=raw['palettes']
+    if (type(palettes) is not list
+            or any(type(value) is not int or not 0 <= value < 1 << 64
+                   for value in palettes)):
+        raise AssertionError('native certificate palette bank differs')
+    start=[0]
+    for palette in palettes:
+        start.append(start[-1]+palette.bit_count())
+    atoms=start[-1]
+    offsets=raw['offsets']
+    triples=raw['arcs']
+    if (type(offsets) is not list or len(offsets) != atoms+1
+            or any(type(value) is not int for value in offsets)
+            or not offsets or offsets[0] != 0
+            or any(left > right for left,right in zip(offsets,offsets[1:]))):
+        raise AssertionError('native certificate CSR offsets differ')
+    if type(triples) is not list or offsets[-1] != len(triples):
+        raise AssertionError('native certificate arc inventory differs')
+    arcs=[]
+    for source in range(atoms):
+        for index in range(offsets[source],offsets[source+1]):
+            item=triples[index]
+            if type(item) is not tuple or len(item) != 3:
+                raise AssertionError('native certificate arc row differs')
+            observed_source,target,forbidden=item
+            if (type(observed_source) is not int or observed_source != source
+                    or type(target) is not int or not 0 <= target < len(palettes)
+                    or type(forbidden) is not int
+                    or not 0 <= forbidden < 1 << 64):
+                raise AssertionError('native certificate arc geometry differs')
+            arcs.append([target,forbidden])
+    result=dict(raw)
+    result['start']=start
+    result['arcs']=arcs
+    return result
+
 
 def build_quotient_runtime(directory: str|Path, *, compiler: str='g++', sanitize: bool=False) -> Path:
     if platform.system()!='Linux':raise NotImplementedError('Linux builder only; other platforms unvalidated')
@@ -114,14 +166,15 @@ class PreparedQuotient:
             return self._checker.check(labels, restrictions)
 
     def certificate(self) -> dict:
-        """Export integer-only evidence for an independent compilation audit.
+        """Export canonical integer-only evidence for independent audit.
 
         Export/verification is optional, not silently excluded from a claimed
         certified-setup cost. The ordinary solve contract still checks all edges.
         """
         with self._lock:
             if self._handle is None:raise RuntimeError('quotient is closed')
-            return self._module.certificate(self._handle)
+            raw=self._module.certificate(self._handle)
+        return _canonical_certificate(raw)
 
     def solve_support(self, restrictions: tuple = ()) -> tuple[bytes, int, int, int]:
         """Solve an arc-free quotient natively and independently check the witness."""
