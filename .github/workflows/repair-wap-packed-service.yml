@@ -1,0 +1,88 @@
+name: Repair WAP packed-service publication
+on:
+  push:
+    branches: [research/wap-packed-service-20261009]
+    paths: [.github/workflows/repair-wap-packed-service.yml]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Extract and verify the already committed overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import base64, hashlib, tarfile
+          source=Path('.github/workflows/apply-wap-packed-service.yml').read_text()
+          marker="<<'OVERLAY'\n"
+          start=source.index(marker)+len(marker)
+          end=source.index('\nOVERLAY\n',start)
+          encoded=''.join(source[start:end].split())
+          payload=base64.b64decode(encoded,validate=True)
+          digest=hashlib.sha256(payload).hexdigest()
+          expected='367e818c9c02bcd71a6b1f37913d83a10ac16aad5c0bcd7a41f0a919ae35aa46'
+          assert digest==expected,(digest,expected)
+          archive=Path('/tmp/wap-packed-overlay.tar.gz')
+          archive.write_bytes(payload)
+          with tarfile.open(archive,'r:gz') as stream:
+              members=stream.getmembers()
+              for member in members:
+                  path=PurePosixPath(member.name)
+                  assert not path.is_absolute() and '..' not in path.parts,member.name
+                  assert member.isfile(),member.name
+              expected_paths={
+                  '.github/workflows/wap-packed-service.yml',
+                  'experiments/wap_service_format/__init__.py',
+                  'experiments/wap_service_format/format.py',
+                  'experiments/wap_service_format/run.py',
+                  'experiments/wap_service_format/analyse.py',
+                  'experiments/wap_service_format/PROTOCOL.md',
+                  'experiments/wap_service_format/LOCAL_RESULT_20261009.md',
+                  'experiments/wap_support/controls.py',
+                  'tests/public/test_wap_service_format.py',
+              }
+              assert {m.name for m in members}==expected_paths
+              stream.extractall('.')
+          Path('/tmp/overlay-sha256.txt').write_text(digest+'\n')
+          PY
+          python -m py_compile \
+            experiments/wap_service_format/format.py \
+            experiments/wap_service_format/run.py \
+            experiments/wap_service_format/analyse.py \
+            experiments/wap_support/controls.py \
+            tests/public/test_wap_service_format.py
+      - name: Focused contracts before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -q pytest==9.0.2 'python-sat==1.9.dev15'
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/public \
+            tests/public/test_wap_service_format.py \
+            tests/public/test_wap_support.py \
+            tests/public/test_wap_support_audit.py \
+            tests/public/test_quotient_native_contract.py \
+            tests/public/test_arcfree_support.py
+      - name: Commit the exact validated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/apply-wap-packed-service.yml .github/workflows/repair-wap-packed-service.yml
+          git add \
+            .github/workflows/wap-packed-service.yml \
+            experiments/wap_service_format \
+            experiments/wap_support/controls.py \
+            tests/public/test_wap_service_format.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Add hash-bound packed WAP service and cross-version deployment study'
+          git push origin HEAD:research/wap-packed-service-20261009
