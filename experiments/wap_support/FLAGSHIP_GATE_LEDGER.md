@@ -13,7 +13,7 @@ This ledger applies to the WAP support-query result. It does not rehabilitate un
 | Gate | Status | Evidence / limitation |
 |---|---|---|
 | One central contribution | **PASS** | Exact original-address implication quotient, complete witness lifting, independent relation certificate, and native repeated support execution. |
-| Precise novelty boundary | **PARTIAL** | Established components are credited. The end-to-end systems contract appears distinctive, but no exhaustive literature review or external expert judgment proves priority. |
+| Precise novelty boundary | **PARTIAL** | Established components are credited and a focused closest-work audit is published. The end-to-end systems contract appears distinctive, but no exhaustive literature review or external expert judgment proves absolute priority. |
 | Problem where a user would choose SPECTRA | **PASS, NARROW** | Fixed optical-conflict topology with many support restrictions. Lists/queries are synthetic; no operator deployment is claimed. |
 | Serious practical baseline | **PASS** | Persistent native MiniCard with one Boolean per original binary list and retained learned clauses. Persistent CaDiCaL and cache controls are secondary. |
 | Substantial primary improvement | **PASS** | Mean ratio 0.3635, exact upper graph-clustered 95% bound 0.3729; approximately 2.75× lower full session latency. |
@@ -32,25 +32,28 @@ This ledger applies to the WAP support-query result. It does not rehabilitate un
 | Scaling / breaking point | **PARTIAL** | Development query-count sweep shows a short-session loss and crossover before 64–1,024 queries. Only one graph family and the frozen 1,024-query confirmation are covered. |
 | Reproducible failure taxonomy | **PASS** | Timeouts, crashes, invalid outputs, missing receipts, resource refusals, and audit failures are explicit terminal failures. The holdout observed none. |
 | Concrete lightweight envelope | **PASS, NARROW** | One CPU affinity, one numerical thread, 4 GiB address-space cap, 512 MiB admitted native payload; candidate sampled process high-water memory remains below the cap. Not an embedded-device claim. |
-| Independent machines | **PARTIAL** | The one-shot confirmation ran on one Azure host. Project-owned Ubuntu 22/Python 3.11 and Ubuntu 24/Python 3.13 reproductions are in progress; these are cross-environment automation, not outside-team replication. |
+| Independent machines | **PASS, NARROW** | The frozen result was confirmed on an EPYC 9V45 host and the complete 2× gate reproduced on EPYC 7763 hosts under both Ubuntu 22 and Ubuntu 24 with Python 3.13. These are project-owned server executions, not outside-team replication or ordinary-hardware evidence. |
+| Version portability | **PARTIAL** | Semantic identity, every answer, and all five canonical certificates reproduce under Python 3.11 and 3.13. The strict 2× complete-call gate passes on both tested Python 3.13 environments but fails on both Python 3.11 environments because the frozen evidence-decoding front end adds a large common cost. The threshold is not relaxed. |
 | Headline reconstructable | **PASS** | Hash-bound source, raw graphs, generated cases, 105 sessions, 107,520 outputs, certificate audits, exact analysis, source archive, and complete manifests retained. |
 | Independent external replication | **OPEN** | GitHub issue #55 invites a public outside-team replication. Project CI does not satisfy this gate. |
 | External usefulness/adoption | **OPEN** | No independently maintained network-planning application or partner trace has measured benefit. |
-| Claims attached to exact system | **PASS** | Report names source/freeze/open commits, exact workload, candidate/control, hardware, artifacts, cost boundary, and exclusions. |
+| Claims attached to exact system | **PASS** | Report names source/freeze/open commits, exact workload, Python 3.13 complete-call contract, candidate/control, hardware, artifacts, cost boundary, portability failure, and exclusions. |
 | Low-bit deployed advantage | **NOT APPLICABLE** | No low-bit claim in this result. |
 | Custom neural kernel beats compiler | **NOT APPLICABLE** | No neural kernel claim. |
 | Native SVM advantage | **NOT APPLICABLE** | No SVM claim. |
 | General CNF solver superiority | **NOT APPLICABLE** | Explicitly excluded. |
-| Stability/exactness guarantee | **PASS, NARROW** | Whole-relation certificate plus original witness checks establish correspondence for the supported list-colouring contract; not arbitrary-CNF formal verification. |
+| Stability/exactness guarantee | **PASS, NARROW** | Whole-relation certificate plus original witness checks establish correspondence for the supported list-colouring contract; not arbitrary-CNF formal verification. Exact certificate hashes reproduce across tested Python versions. |
 | Stopping rule obeyed | **PASS** | The holdout was opened once; no post-open candidate or threshold change. Subsequent executions are labelled reproduction only. |
 
 ## Decision
 
 ### Result-level decision
 
-**PASS: legitimate flagship research result, within the exact published contract.**
+**PASS: legitimate flagship research result, within the exact published Python 3.13 contract.**
 
-The result has a central contribution, prospectively unopened application instances, a strong persistent comparator, a large full-cost effect, exact whole-graph inference, complete witnesses, independent relation verification, durable evidence, and visible negative boundaries.
+The result has a central contribution, prospectively unopened application instances, a strong persistent comparator, a large full-cost effect, exact whole-graph inference, complete witnesses, independent relation verification, durable evidence, visible negative boundaries, and two additional Python 3.13 cross-environment reproductions.
+
+The result must not be described as a Python-version-independent 2× complete-call advantage: both Python 3.11 executions miss the unchanged 0.50 mean-ratio gate even though SPECTRA still wins every graph and its warm session remains more than 6× faster.
 
 ### System-level decision
 
@@ -63,5 +66,6 @@ The result does not rescue unrelated tracks or justify the repository’s broad 
 1. Independent outside-team replication.
 2. Authentic optical availability/restriction traces or a partner-defined service workload.
 3. Ordinary-hardware and non-x86 reproduction.
-4. Stronger prior-art review around original-address repeated-query compilation.
-5. A narrow release/README that cannot be confused with broad system superiority.
+4. External expert challenge of the prior-art audit.
+5. A separately frozen deployment-format study that avoids the canonical research-evidence JSON decoder without rewriting the confirmed endpoint.
+6. External adoption in a maintained application.
