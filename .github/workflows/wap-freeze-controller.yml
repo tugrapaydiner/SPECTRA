@@ -1,0 +1,116 @@
+name: Commit audited WAP freeze
+on:
+  push:
+    branches: [automation/wap-freeze-controller-20261009]
+    paths: [.github/workflows/wap-freeze-controller.yml]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify immutable preflight artifact and commit only the freeze
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: research/quotient-application-v2-20261008
+          SOURCE_COMMIT: 6c3d7a6bd064f932b84f0c7c65a82c47bc4e0573
+          SOURCE_TREE: 8d12b55c1b8a9f7fd5ebfb87b1c3d96583ff6925
+          ARTIFACT_ID: '11594979109'
+          ARTIFACT_SHA256: b28946303b1f43dc36411378a2a70700a3100ffdfc47cba806bd671566fd59e3
+          FREEZE_SHA256: 31997d38cced5e5611f3f17dc6bc3929b21dcc92a6b7bc81a78db31aab949020
+        run: |
+          set -euo pipefail
+          receipt=/tmp/wap-freeze-controller
+          extracted=/tmp/wap-freeze-preflight
+          mkdir -p "$receipt" "$extracted"
+          git fetch origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$SOURCE_COMMIT"
+          test "$(git show -s --format=%T "$SOURCE_COMMIT")" = "$SOURCE_TREE"
+          curl --fail --location --retry 3 --retry-all-errors \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            -o "$receipt/preflight.zip"
+          printf '%s  %s\n' "$ARTIFACT_SHA256" "$receipt/preflight.zip" | sha256sum --check
+          unzip -q "$receipt/preflight.zip" -d "$extracted"
+          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+          test -z "$(git status --porcelain)"
+          PREFLIGHT="$extracted" SOURCE_COMMIT="$SOURCE_COMMIT" SOURCE_TREE="$SOURCE_TREE" \
+          FREEZE_SHA256="$FREEZE_SHA256" python - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os
+          root=Path(os.environ['PREFLIGHT'])
+          manifest=json.loads((root/'DELIVERY_SHA256.json').read_text())
+          actual={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest()
+                  for p in sorted(root.rglob('*'))
+                  if p.is_file() and p.name!='DELIVERY_SHA256.json'}
+          assert manifest==actual
+          assert (root/'source-commit.txt').read_text().strip()==os.environ['SOURCE_COMMIT']
+          assert (root/'source-tree.txt').read_text().strip()==os.environ['SOURCE_TREE']
+          assert not (root/'initial-status.txt').read_text()
+          freeze_path=root/'proposed-FREEZE.json'
+          freeze_bytes=freeze_path.read_bytes()
+          assert hashlib.sha256(freeze_bytes).hexdigest()==os.environ['FREEZE_SHA256']
+          freeze=json.loads(freeze_bytes)
+          assert freeze['source_commit']==os.environ['SOURCE_COMMIT']
+          assert freeze['development_receipts']['analysis']['verdict']=='PASS'
+          assert freeze['development_receipts']['analysis']['answers_audited']==64512
+          assert freeze['statistics']=={
+              'answers_expected':107520,'exact_graph_resamples':3125,
+              'independent_graph_clusters':5,'orders_per_graph':3}
+          assert sorted(freeze['upstream']['graphs'])==[
+              'wap02a.col','wap03a.col','wap04a.col','wap07a.col','wap08a.col']
+          holdout_names=set(freeze['upstream']['graphs'])
+          assert not [p for p in root.rglob('*') if p.is_file() and p.name in holdout_names]
+          for name,digest in freeze['sources'].items():
+              path=Path(name)
+              assert path.is_file(), name
+              assert hashlib.sha256(path.read_bytes()).hexdigest()==digest, name
+          destination=Path('experiments/wap_support/FREEZE.json')
+          assert not destination.exists()
+          destination.write_bytes(freeze_bytes)
+          PY
+          test "$(git status --porcelain)" = '?? experiments/wap_support/FREEZE.json'
+          git add experiments/wap_support/FREEZE.json
+          test "$(git diff --cached --name-only)" = 'experiments/wap_support/FREEZE.json'
+          git diff --cached --check
+          git config user.name 'SPECTRA Evidence Bot'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git commit -m 'Freeze WAP support holdout after complete unopened-data preflight'
+          freeze_commit="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = 'experiments/wap_support/FREEZE.json'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          FREEZE_COMMIT="$freeze_commit" python - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os
+          path=Path('experiments/wap_support/FREEZE.json')
+          receipt={
+              'schema':'spectra.wap_support.freeze_commit_receipt.v1',
+              'source_commit':os.environ['SOURCE_COMMIT'],
+              'source_tree':os.environ['SOURCE_TREE'],
+              'freeze_commit':os.environ['FREEZE_COMMIT'],
+              'freeze_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+              'artifact_id':int(os.environ['ARTIFACT_ID']),
+              'artifact_sha256':os.environ['ARTIFACT_SHA256'],
+              'changed_paths':['experiments/wap_support/FREEZE.json'],
+          }
+          out=Path('/tmp/wap-freeze-controller/freeze-commit-receipt.json')
+          out.write_text(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: wap-freeze-controller-${{ github.run_id }}
+          path: /tmp/wap-freeze-controller
+          include-hidden-files: true
+          retention-days: 90
