@@ -11,6 +11,7 @@ import pytest
 from experiments.real_traffic import (
     ConflictGraph,
     Demand,
+    InvalidContradiction,
     TrafficCase,
     TrafficWeek,
     TraceFormatError,
@@ -25,8 +26,10 @@ from experiments.real_traffic import (
     parse_routes,
     parse_week,
     solve_binary,
+    solve_with_proof,
     traffic_url,
     verify_labels,
+    verify_contradiction,
 )
 
 
@@ -197,12 +200,14 @@ def test_trace_queries_keep_both_sat_and_unsat_outcomes() -> None:
         ),
         "1" * 64,
     )
-    queries, timestamps, statuses, receipts, stats = build_queries(
+    queries, timestamps, statuses, receipts, contradictions, stats = build_queries(
         graph, week, plan_a, plan_b, masks, protect_count=1, migrate_count=1,
     )
     assert timestamps == (1, 2)
     assert statuses == ("UNSAT", "SAT")
     assert receipts[0] is None and isinstance(receipts[1], str)
+    assert contradictions[0] is not None and contradictions[1] is None
+    verify_contradiction(graph.edges, masks, queries[0], contradictions[0])
     assert stats["sat_queries"] == stats["unsat_queries"] == 1
     assert len(queries) == 2
 
@@ -220,11 +225,11 @@ def test_case_round_trip_recomputes_every_outcome(tmp_path) -> None:
         ),
         "1" * 64,
     )
-    queries, timestamps, statuses, receipts, stats = build_queries(
+    queries, timestamps, statuses, receipts, contradictions, stats = build_queries(
         graph, week, plan_a, plan_b, masks, protect_count=1, migrate_count=1,
     )
     provisional = {
-        "schema": "spectra.real_traffic.case.v1",
+        "schema": "spectra.real_traffic.case.v2",
         "source_week": "fixture",
         "source_sha256": {"traffic": "1" * 64},
         "vertices": 4,
@@ -240,6 +245,7 @@ def test_case_round_trip_recomputes_every_outcome(tmp_path) -> None:
         "timestamps": timestamps,
         "statuses": statuses,
         "witness_sha256": receipts,
+        "contradictions": contradictions,
         **stats,
         "protect_count": 1,
         "migrate_count": 1,
@@ -255,3 +261,19 @@ def test_case_round_trip_recomputes_every_outcome(tmp_path) -> None:
     path.write_text(json.dumps(altered))
     with pytest.raises(TraceFormatError, match="UNSAT query receipt"):
         TrafficCase.read(path)
+
+
+def test_contradiction_paths_are_small_and_corruption_is_rejected() -> None:
+    edges = ((0, 1),)
+    masks = (0b11, 0b11)
+    restrictions = ((0, 0b01), (1, 0b01))
+    outcome = solve_with_proof(edges, masks, restrictions)
+    assert outcome.status == "UNSAT"
+    assert outcome.labels is None and outcome.contradiction is not None
+    receipt = verify_contradiction(edges, masks, restrictions, outcome.contradiction)
+    assert receipt["valid"] is True and receipt["path_edges"] >= 2
+
+    altered = json.loads(json.dumps(outcome.contradiction))
+    altered["positive_to_negative"][1] *= -1
+    with pytest.raises(InvalidContradiction):
+        verify_contradiction(edges, masks, restrictions, altered)
