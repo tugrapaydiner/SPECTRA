@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Sequence
 
 from experiments.real_traffic.plan import align_target_plan, color_graph
+from experiments.real_traffic.certificate import solve_with_proof, verify_contradiction
 from experiments.real_traffic.observer import (
     masks_from_plans,
-    solve_binary,
     verify_coloring_edges,
     verify_labels,
 )
@@ -48,6 +48,7 @@ class TrafficCase:
     timestamps: tuple[int, ...]
     statuses: tuple[str, ...]
     witness_sha256: tuple[str | None, ...]
+    contradictions: tuple[dict | None, ...]
     proposal_attempts: int
     duplicate_queries: int
     sat_queries: int
@@ -63,7 +64,7 @@ class TrafficCase:
         return data
 
     def validate(self) -> None:
-        if self.schema != "spectra.real_traffic.case.v1":
+        if self.schema != "spectra.real_traffic.case.v2":
             raise TraceFormatError("unsupported case schema")
         if self.vertices != len(self.demand_indices) or self.vertices != len(self.masks):
             raise TraceFormatError("case geometry differs")
@@ -72,7 +73,7 @@ class TrafficCase:
         if self.palette < 1 or self.palette > 64:
             raise TraceFormatError("palette outside native contract")
         if not (len(self.queries) == len(self.timestamps) == len(self.statuses)
-                == len(self.witness_sha256)):
+                == len(self.witness_sha256) == len(self.contradictions)):
             raise TraceFormatError("query records differ")
         if len(set(self.queries)) != len(self.queries):
             raise TraceFormatError("duplicate accepted query")
@@ -93,8 +94,8 @@ class TrafficCase:
         observed_sat = 0
         observed_unsat = 0
         observed_witnesses: set[str] = set()
-        for query, status, witness_digest in zip(
-                self.queries, self.statuses, self.witness_sha256):
+        for query, status, witness_digest, contradiction in zip(
+                self.queries, self.statuses, self.witness_sha256, self.contradictions):
             if len(query) != self.protect_count + self.migrate_count:
                 raise TraceFormatError("query width differs")
             previous = -1
@@ -104,16 +105,23 @@ class TrafficCase:
                 if allowed.bit_count() != 1 or not (allowed & self.masks[vertex]):
                     raise TraceFormatError("query mask differs")
                 previous = vertex
-            labels = solve_binary(self.edges, self.masks, query)
-            if labels is None:
+            outcome = solve_with_proof(self.edges, self.masks, query)
+            if outcome.status == "UNSAT":
                 observed_unsat += 1
-                if status != "UNSAT" or witness_digest is not None:
+                if status != "UNSAT" or witness_digest is not None or contradiction is None:
                     raise TraceFormatError("UNSAT query receipt differs")
+                try:
+                    verify_contradiction(self.edges, self.masks, query, contradiction)
+                except ValueError as exc:
+                    raise TraceFormatError("UNSAT contradiction differs") from exc
             else:
+                labels = outcome.labels
+                if labels is None:
+                    raise AssertionError("SAT outcome has no labels")
                 observed_sat += 1
                 digest = hashlib.sha256(bytes(labels)).hexdigest()
                 observed_witnesses.add(digest)
-                if status != "SAT" or witness_digest != digest:
+                if status != "SAT" or witness_digest != digest or contradiction is not None:
                     raise TraceFormatError("SAT query receipt differs")
         if (observed_sat != self.sat_queries or observed_unsat != self.unsat_queries
                 or observed_sat + observed_unsat != len(self.queries)
@@ -134,7 +142,7 @@ class TrafficCase:
             raw[field] = tuple(tuple(row) for row in raw[field])
         for field in (
             "demand_indices", "demand_names", "plan_a", "plan_b", "masks",
-            "timestamps", "statuses", "witness_sha256",
+            "timestamps", "statuses", "witness_sha256", "contradictions",
         ):
             raw[field] = tuple(raw[field])
         raw["queries"] = tuple(
@@ -149,7 +157,8 @@ def build_queries(graph: ConflictGraph, week: TrafficWeek, plan_a: Sequence[int]
                   plan_b: Sequence[int], masks: Sequence[int], *, protect_count: int = 4,
                   migrate_count: int = 4, max_offsets: int = 32
                   ) -> tuple[tuple[tuple[tuple[int, int], ...], ...], tuple[int, ...],
-                             tuple[str, ...], tuple[str | None, ...], dict]:
+                             tuple[str, ...], tuple[str | None, ...],
+                             tuple[dict | None, ...], dict]:
     """Let traffic fix each proposal first, then retain either exact outcome."""
     vertices = graph.n
     if not week.snapshots or len(week.snapshots[0]) != vertices:
@@ -164,6 +173,7 @@ def build_queries(graph: ConflictGraph, week: TrafficWeek, plan_a: Sequence[int]
     timestamps: list[int] = []
     statuses: list[str] = []
     witness_receipts: list[str | None] = []
+    contradictions: list[dict | None] = []
     seen: set[tuple[tuple[int, int], ...]] = set()
     witnesses: set[str] = set()
     attempts = duplicates = sat = unsat = 0
@@ -197,19 +207,26 @@ def build_queries(graph: ConflictGraph, week: TrafficWeek, plan_a: Sequence[int]
         if chosen is None:
             continue
         seen.add(chosen)
-        labels = solve_binary(graph.edges, masks, chosen)
+        outcome = solve_with_proof(graph.edges, masks, chosen)
         accepted.append(chosen)
         timestamps.append(timestamp)
-        if labels is None:
+        if outcome.status == "UNSAT":
+            if outcome.contradiction is None:
+                raise AssertionError("UNSAT outcome has no contradiction")
             unsat += 1
             statuses.append("UNSAT")
             witness_receipts.append(None)
+            contradictions.append(outcome.contradiction)
         else:
+            labels = outcome.labels
+            if labels is None:
+                raise AssertionError("SAT outcome has no labels")
             sat += 1
             digest = hashlib.sha256(bytes(labels)).hexdigest()
             witnesses.add(digest)
             statuses.append("SAT")
             witness_receipts.append(digest)
+            contradictions.append(None)
     stats = {
         "proposal_attempts": attempts,
         "duplicate_queries": duplicates,
@@ -219,7 +236,7 @@ def build_queries(graph: ConflictGraph, week: TrafficWeek, plan_a: Sequence[int]
     }
     return (
         tuple(accepted), tuple(timestamps), tuple(statuses),
-        tuple(witness_receipts), stats,
+        tuple(witness_receipts), tuple(contradictions), stats,
     )
 
 
@@ -249,12 +266,12 @@ def build_case(*, week_name: str, routing_bytes: bytes, demands_bytes: bytes,
     palette = max(max(plan_a), max(plan_b)) + 1
     if palette > 64:
         raise TraceFormatError("traffic plans exceed the native 64-color contract")
-    queries, timestamps, statuses, witness_sha256, stats = build_queries(
+    queries, timestamps, statuses, witness_sha256, contradictions, stats = build_queries(
         graph, week, plan_a, plan_b, masks,
         protect_count=protect_count, migrate_count=migrate_count,
     )
     provisional = {
-        "schema": "spectra.real_traffic.case.v1",
+        "schema": "spectra.real_traffic.case.v2",
         "source_week": week_name,
         "source_sha256": {
             "routing": hashlib.sha256(routing_bytes).hexdigest(),
@@ -276,6 +293,7 @@ def build_case(*, week_name: str, routing_bytes: bytes, demands_bytes: bytes,
         "timestamps": timestamps,
         "statuses": statuses,
         "witness_sha256": witness_sha256,
+        "contradictions": contradictions,
         **stats,
         "protect_count": protect_count,
         "migrate_count": migrate_count,
