@@ -6,7 +6,7 @@
     {
       "path": ".github/workflows/cpu-regression.yml",
       "previous_sha256": "6ef18f6d2f08d2f565b1b55c5ed5c61cc2849d92ee4a7773f05983039ff140ea",
-      "current_sha256": "38864988eb1604d0ab96ce7a2d336ee05a663a6a76b571474467822cab472907",
+      "current_sha256": "38864988e754e5e718047e85fb86e1117b2d9edfa56998d647a6185c9bf9855b",
       "reason": "Install and assert the pinned python-sat control required by the merged WAP public contracts."
     },
     {
