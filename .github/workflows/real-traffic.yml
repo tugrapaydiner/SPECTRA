@@ -36,6 +36,7 @@ jobs:
           git archive --format=tar.gz HEAD > delivery/source.tar.gz
       - name: Install the declared development tools
         run: |
+          set -euo pipefail
           python -m pip install pytest==9.0.2 numpy==2.3.5 'python-sat==1.9.dev15'
           mkdir -p delivery/dependencies
           python -m pip download --only-binary=:all: --no-deps 'dd==0.6.0' --dest delivery/dependencies
@@ -52,6 +53,7 @@ jobs:
           python -m pip freeze > delivery/environment.txt
       - name: Run the complete public contract suite
         run: |
+          set -o pipefail
           python -m pytest tests/public --confcutdir=tests/public -ra --junitxml=delivery/public.xml | tee delivery/public.txt
       - name: Download the fixed development week
         run: python -m experiments.real_traffic.fetch_data --week X01 --out delivery/abilene
