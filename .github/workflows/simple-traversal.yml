@@ -1,0 +1,70 @@
+name: Check the simple method honestly
+on:
+  push:
+    branches: [real-traffic]
+    paths:
+      - experiments/real_traffic/simple_traversal.cpp
+      - experiments/real_traffic/simple_traversal.py
+      - tests/public/test_simple_traversal.py
+      - .github/workflows/simple-traversal.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Keep the exact source
+        run: |
+          mkdir -p delivery
+          git rev-parse HEAD > delivery/commit.txt
+          git rev-parse HEAD^{tree} > delivery/tree.txt
+          git archive --format=tar.gz HEAD > delivery/source.tar.gz
+          python -m pip install pytest==9.0.2
+      - name: Run the exact differential tests
+        run: |
+          python -m pytest tests/public/test_simple_traversal.py \
+            --confcutdir=tests/public -q --junitxml=delivery/tests.xml \
+            | tee delivery/tests.txt
+      - name: Repeat on the sanitized native source
+        run: |
+          python - <<'PY' > delivery/ubsan-path.txt
+          from experiments.real_traffic.simple_traversal import build_simple_traversal
+          print(build_simple_traversal('delivery/ubsan', sanitize=True))
+          PY
+          SPECTRA_SIMPLE_TRAVERSAL_LIBRARY="$(cat delivery/ubsan-path.txt)" \
+            python -m pytest tests/public/test_simple_traversal.py \
+            --confcutdir=tests/public -q --junitxml=delivery/ubsan.xml \
+            | tee delivery/ubsan.txt
+      - name: Hash the receipts
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root=Path('delivery')
+          with (root/'SHA256SUMS').open('w') as output:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file() and path.name!='SHA256SUMS':
+                      output.write(hashlib.sha256(path.read_bytes()).hexdigest()+'  '+str(path.relative_to(root))+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simple-traversal-${{ github.run_id }}
+          path: delivery
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
