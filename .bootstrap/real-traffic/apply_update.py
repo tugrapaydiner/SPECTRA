@@ -12,6 +12,13 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 STAGE = Path(__file__).resolve().parent
 ARCHIVE_SHA256 = "29515edea8d7d4166ad70ac7817ec49eb00698cce9f922826c149403296f45ea"
+PARTS = (
+    ("part-000.b64", 12000, "ccc19a56ecc2af7d44be4f939aed9a3976cb18333813e56a5e6d3ef74986d5e2"),
+    ("part-001.b64", 12000, "a69e0c7eda4dd54966f4b2a584841ba29a53d28e6b829df4d8588ab246c05e6d"),
+    # This transport part contains the final 4,036-byte tail as its suffix.
+    ("part-002.b64", 16036, "8afb6b20e24fb5d6a3bd941ac02c75f7d34e4233144b9de4431073312b6f5a71"),
+    ("part-003.b64", 4036, "a8eceafad42f4005f63c19a764dd5f07d692ac4c1474f4dbbd684cc0660a1064"),
+)
 
 GROUPS = (
     (
@@ -58,10 +65,18 @@ def run(*args: str) -> None:
 
 
 def main() -> None:
-    parts = sorted(STAGE.glob("part-*.b64"))
-    if [part.name for part in parts] != [f"part-{index:03}.b64" for index in range(4)]:
-        raise RuntimeError("staged archive parts differ")
-    encoded = "".join(part.read_text() for part in parts)
+    texts: list[str] = []
+    for name, expected_size, expected_sha256 in PARTS:
+        path = STAGE / name
+        payload = path.read_bytes()
+        if len(payload) != expected_size:
+            raise RuntimeError(f"staged part size differs: {name}")
+        if hashlib.sha256(payload).hexdigest() != expected_sha256:
+            raise RuntimeError(f"staged part digest differs: {name}")
+        texts.append(payload.decode("ascii"))
+    if not texts[2].endswith(texts[3]):
+        raise RuntimeError("staged tail is not the checked suffix")
+    encoded = texts[0] + texts[1] + texts[2]
     archive = base64.b64decode(encoded, validate=True)
     if hashlib.sha256(archive).hexdigest() != ARCHIVE_SHA256:
         raise RuntimeError("staged archive digest differs")
