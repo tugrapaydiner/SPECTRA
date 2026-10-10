@@ -215,7 +215,7 @@ struct Index {
         }
         for (U source = 0; source < components; ++source) {
             if (opposite[source] == NIL || opposite[opposite[source]] != source
-                    || opposite[source] == source) {
+                    || (!impossible && opposite[source] == source)) {
                 throw std::logic_error("invalid component complement");
             }
         }
@@ -379,8 +379,6 @@ PyObject* solve(PyObject*, PyObject* args) {
         }
         std::vector<U> assumptions;
         assumptions.reserve(static_cast<size_t>(PyTuple_GET_SIZE(query)));
-        std::vector<U> seen_variables;
-        seen_variables.reserve(assumptions.capacity());
         U previous = NIL;
         for (Py_ssize_t offset = 0; offset < PyTuple_GET_SIZE(query); ++offset) {
             PyObject* row = PyTuple_GET_ITEM(query, offset);
@@ -392,6 +390,9 @@ PyObject* solve(PyObject*, PyObject* args) {
             W allowed = integer(PyTuple_GET_ITEM(row, 1), "invalid restriction mask");
             if (variable >= index->variables || (previous != NIL && variable <= previous)) {
                 throw Invalid("restriction vertices must be distinct and increasing");
+            }
+            if (index->colors < 64 && (allowed >> index->colors)) {
+                throw Invalid("restriction uses a color outside the palette");
             }
             previous = variable;
             W original = (W(1) << index->low[variable]) | (W(1) << index->high[variable]);
