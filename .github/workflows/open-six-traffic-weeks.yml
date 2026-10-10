@@ -1,0 +1,48 @@
+name: Open the six traffic weeks once
+on:
+  workflow_run:
+    workflows: [Make one traffic week easy to check]
+    types: [completed]
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: real-traffic-six-weeks
+  cancel-in-progress: false
+jobs:
+  open:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: real-traffic
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Refuse a second opening
+        id: guard
+        run: |
+          if test -f experiments/real_traffic/SIX_WEEKS_OPENED; then
+            echo 'already=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'already=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Record the one-time opening
+        if: steps.guard.outputs.already == 'false'
+        run: |
+          printf 'opened_from=%s\nopened_by_run=%s\n' \
+            "$(git rev-parse HEAD)" "${{ github.event.workflow_run.id }}" \
+            > experiments/real_traffic/SIX_WEEKS_OPENED
+          git config user.name Tugrap
+          git config user.email 106766396+tugrapaydiner@users.noreply.github.com
+          git add experiments/real_traffic/SIX_WEEKS_OPENED
+          git commit -m 'Open the six weeks once'
+          git push origin HEAD:real-traffic
+      - name: Dispatch the frozen checks
+        if: steps.guard.outputs.already == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for week in X04 X08 X12 X16 X20 X24; do
+            gh workflow run real-traffic-week.yml --ref real-traffic -f week="$week"
+          done
