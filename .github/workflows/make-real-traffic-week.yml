@@ -1,0 +1,59 @@
+name: Make one traffic week easy to check
+on:
+  push:
+    branches: [real-traffic]
+    paths: [.github/workflows/make-real-traffic-week.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: real-traffic
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Create the sealed one-week workflow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/real-traffic.yml').read_text()
+          marker = 'permissions:'
+          if marker not in source:
+              raise SystemExit('real-traffic workflow has no permissions block')
+          body = source[source.index(marker):]
+          body = body.replace('X01', '${{ inputs.week }}')
+          body = body.replace('real-traffic-${{ github.run_id }}',
+                              'real-traffic-${{ inputs.week }}-${{ github.run_id }}')
+          header = '''name: Real traffic week
+          on:
+            workflow_dispatch:
+              inputs:
+                week:
+                  description: Abilene week to evaluate
+                  required: true
+                  type: choice
+                  options:
+                    - X04
+                    - X08
+                    - X12
+                    - X16
+                    - X20
+                    - X24
+          '''
+          # Dedent the embedded header without adding another dependency.
+          import textwrap
+          target = textwrap.dedent(header) + body
+          Path('.github/workflows/real-traffic-week.yml').write_text(target)
+          PY
+          git config user.name Tugrap
+          git config user.email 106766396+tugrapaydiner@users.noreply.github.com
+          git add .github/workflows/real-traffic-week.yml
+          if git diff --cached --quiet; then
+            echo 'The one-week workflow already matches.'
+          else
+            git commit -m 'Use the same check for every week'
+            git push origin HEAD:real-traffic
+          fi
