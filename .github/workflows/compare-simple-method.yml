@@ -1,0 +1,99 @@
+name: Compare against the simple method
+on:
+  workflow_run:
+    workflows: [Check the simple method honestly]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: compare-simple-method
+  cancel-in-progress: false
+jobs:
+  compare:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: real-traffic
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install the declared development tools
+        run: |
+          python -m pip install pytest==9.0.2 numpy==2.3.5 'python-sat==1.9.dev15' 'dd==0.6.0'
+      - name: Rebuild the exposed X01 case
+        run: |
+          mkdir -p delivery
+          python -m experiments.real_traffic.fetch_data --week X01 --out delivery/abilene
+          python -m experiments.real_traffic.prepare --week X01 \
+            --source delivery/abilene --out delivery/case
+      - name: Run the adverse same-host comparison
+        run: |
+          python -m experiments.real_traffic.simple_vs_spectra \
+            delivery/case/case.json --out delivery/comparison --rounds 5 \
+            | tee delivery/comparison.log
+      - name: Publish the decision without changing the gate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          result=json.loads(Path('delivery/comparison/comparison.json').read_text())
+          ratio=result['spectra_over_simple']
+          decision=result['decision']
+          lines=[
+              '# Cheap exact method audit', '',
+              f'**Decision: {decision.replace("_", " ").upper()}**', '',
+              f'- X01 requests: {result["queries"]}',
+              f'- SPECTRA/simple mean complete-session ratio: **{ratio:.6f}**',
+              '- Fixed substantial-advantage threshold: **0.70**',
+              f'- Selected SPECTRA API: `{result["candidate"]["module"]}.{result["candidate"]["runtime"]}.{result["candidate"]["solve"]}`',
+              '',
+              'This is exposed development evidence. It is not fresh temporal confirmation, external replication, or a deployment result.',
+          ]
+          Path('delivery/CHEAP_METHOD_AUDIT.md').write_text('\n'.join(lines)+'\n')
+          Path('experiments/real_traffic/CHEAP_METHOD_AUDIT.md').write_text('\n'.join(lines)+'\n')
+          Path('experiments/real_traffic/CHEAP_METHOD_AUDIT.json').write_text(
+              json.dumps(result,indent=2,sort_keys=True)+'\n')
+          PY
+          git config user.name Tugrap
+          git config user.email 106766396+tugrapaydiner@users.noreply.github.com
+          git add experiments/real_traffic/CHEAP_METHOD_AUDIT.md \
+                  experiments/real_traffic/CHEAP_METHOD_AUDIT.json
+          if git diff --cached --quiet; then
+            echo 'The cheap-method audit is already published.'
+          elif test "$(cat delivery/comparison/decision.txt)" = substantial; then
+            git commit -m 'The simple method is not enough'
+            git push origin HEAD:real-traffic
+          else
+            git commit -m 'The simple method is still too close'
+            git push origin HEAD:real-traffic
+          fi
+      - name: Hash every receipt
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root=Path('delivery')
+          with (root/'SHA256SUMS').open('w') as output:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file() and path.name!='SHA256SUMS':
+                      output.write(hashlib.sha256(path.read_bytes()).hexdigest()+'  '+str(path.relative_to(root))+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cheap-method-audit-${{ github.run_id }}
+          path: delivery
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
