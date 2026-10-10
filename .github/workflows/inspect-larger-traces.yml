@@ -4,6 +4,7 @@ on:
     branches: [real-traffic]
     paths:
       - experiments/real_traffic/inspect_sndlib.py
+      - experiments/real_traffic/fetch_germany50.py
       - .github/workflows/inspect-larger-traces.yml
   workflow_dispatch:
 permissions:
@@ -11,7 +12,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,13 +20,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Inspect Germany50 without downloading matrices
+      - name: Inspect Germany50 source links
         run: |
           mkdir -p delivery
-          python -m experiments.real_traffic.inspect_sndlib --network germany50 --out delivery/germany50 | tee delivery/germany50.txt
+          python -m experiments.real_traffic.inspect_sndlib --network germany50 --out delivery/germany50-links | tee delivery/germany50-links.txt
+      - name: Acquire the fixed development day
+        run: |
+          python -m experiments.real_traffic.fetch_germany50 --out delivery/germany50-day | tee delivery/germany50-day.txt
           git rev-parse HEAD > delivery/commit.txt
           git rev-parse HEAD^{tree} > delivery/tree.txt
-          echo 'Source inspection only; no traffic matrix, solver, or holdout was opened.' > delivery/ROLE.txt
+          echo 'Germany50 one-day development source only; no solver, holdout, or promotion decision.' > delivery/ROLE.txt
       - name: Hash the receipts
         run: |
           python - <<'PY'
@@ -39,7 +43,7 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: larger-trace-links-${{ github.run_id }}
+          name: germany50-development-${{ github.run_id }}
           path: delivery
           retention-days: 90
           if-no-files-found: error
