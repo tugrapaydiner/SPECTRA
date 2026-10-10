@@ -15,7 +15,7 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       OMP_NUM_THREADS: '1'
       OPENBLAS_NUM_THREADS: '1'
@@ -59,17 +59,28 @@ jobs:
         run: python -m experiments.real_traffic.fetch_data --week X01 --out delivery/abilene
       - name: Build and independently replay the trace case
         run: python -m experiments.real_traffic.prepare --week X01 --source delivery/abilene --out delivery/case
-      - name: Build the current SPECTRA runtime
+      - name: Build the native runtimes
         run: |
           python - <<'PY'
           from spectra.cnf.quotient_query import build_quotient_runtime
+          from experiments.real_traffic.model_decoder import build_model_decoder
           print(build_quotient_runtime('delivery/native'))
+          print(build_model_decoder('delivery/model-decoder'))
+          print(build_model_decoder('delivery/model-decoder-ubsan', sanitize=True))
           PY
-      - name: Compare every solver with one prepared proof relation
+      - name: Check the exact decoder under undefined-behaviour sanitization
         run: |
-          python -m experiments.real_traffic.prepared_benchmark run \
+          set -o pipefail
+          SPECTRA_MODEL_DECODER_LIBRARY="$(find delivery/model-decoder-ubsan -maxdepth 1 -name '_spectra_model_decoder*.so' -print -quit)" \
+            python -m pytest tests/public/test_real_traffic_model_decoder.py \
+            --confcutdir=tests/public --junitxml=delivery/model_decoder_ubsan.xml \
+            | tee delivery/model_decoder_ubsan.txt
+      - name: Compare the quotient against stronger controls
+        run: |
+          python -m experiments.real_traffic.strong_benchmark run \
             --case delivery/case/case.json \
             --library delivery/native \
+            --decoder delivery/model-decoder \
             --out delivery/benchmark \
             --repeats 3
       - name: Hash every retained byte
