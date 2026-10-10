@@ -142,7 +142,7 @@ def solve_with_proof(edges: Sequence[tuple[int, int]], masks: Sequence[int],
             _literal(node) for node in _path(adjacency, negative, positive, component)
         ],
     }
-    verify_contradiction(edges, masks, restrictions, certificate)
+    PreparedContradictionChecker(edges, masks).verify(restrictions, certificate)
     return ExactOutcome("UNSAT", None, certificate)
 
 
@@ -155,8 +155,8 @@ def _literal_for_colour(vertex: int, colour: int, mask: int) -> int:
     return -(vertex + 1) if colour == choices[0] else vertex + 1
 
 
-def _original_implications(edges: Sequence[tuple[int, int]], masks: Sequence[int],
-                           restrictions: Sequence[tuple[int, int]]) -> set[tuple[int, int]]:
+def _base_implications(edges: Sequence[tuple[int, int]],
+                       masks: Sequence[int]) -> frozenset[tuple[int, int]]:
     variables = len(masks)
     implications: set[tuple[int, int]] = set()
 
@@ -169,11 +169,15 @@ def _original_implications(edges: Sequence[tuple[int, int]], masks: Sequence[int
             raise InvalidContradiction("invalid binary list")
         if mask.bit_count() == 1:
             add_unit(vertex + 1)
+    seen_edges: set[tuple[int, int]] = set()
     for edge in edges:
         if (type(edge) is not tuple or len(edge) != 2
                 or any(type(v) is not int or not 0 <= v < variables for v in edge)):
             raise InvalidContradiction("invalid edge")
         left_vertex, right_vertex = edge
+        if left_vertex >= right_vertex or edge in seen_edges:
+            raise InvalidContradiction("edges must be distinct canonical nonloops")
+        seen_edges.add(edge)
         shared = masks[left_vertex] & masks[right_vertex]
         while shared:
             bit = shared & -shared
@@ -185,59 +189,92 @@ def _original_implications(edges: Sequence[tuple[int, int]], masks: Sequence[int
             right = _node(right_literal, variables)
             implications.add((left, right ^ 1))
             implications.add((right, left ^ 1))
+    return frozenset(implications)
+
+
+def _query_implications(restrictions: Sequence[tuple[int, int]],
+                        masks: Sequence[int]) -> frozenset[tuple[int, int]]:
+    variables = len(masks)
+    implications: set[tuple[int, int]] = set()
     seen_vertices: set[int] = set()
+    previous = -1
     for restriction in restrictions:
         if type(restriction) is not tuple or len(restriction) != 2:
             raise InvalidContradiction("invalid restriction")
         vertex, allowed = restriction
-        if type(vertex) is not int or not 0 <= vertex < variables or vertex in seen_vertices:
-            raise InvalidContradiction("invalid or duplicate restriction vertex")
+        if (type(vertex) is not int or not 0 <= vertex < variables
+                or vertex in seen_vertices or vertex <= previous):
+            raise InvalidContradiction("invalid, duplicate, or noncanonical restriction vertex")
         if type(allowed) is not int:
             raise InvalidContradiction("invalid restriction mask")
         available = allowed & masks[vertex]
         if available.bit_count() != 1:
             raise InvalidContradiction("restriction does not select one available colour")
         seen_vertices.add(vertex)
-        add_unit(_literal_for_colour(vertex, available.bit_length() - 1, masks[vertex]))
-    return implications
+        previous = vertex
+        literal = _literal_for_colour(vertex, available.bit_length() - 1, masks[vertex])
+        node = _node(literal, variables)
+        implications.add((node ^ 1, node))
+    return frozenset(implications)
+
+
+class PreparedContradictionChecker:
+    """Reuse immutable original implications while checking each query proof.
+
+    This checker is independent of the SPECTRA quotient and solver. It stores only
+    implications reconstructed from the original graph and lists. Query unit edges
+    are rebuilt for each request, and every certificate path edge must occur in
+    either the immutable original relation or that request's restrictions.
+    """
+
+    def __init__(self, edges: Sequence[tuple[int, int]], masks: Sequence[int]):
+        self.masks = tuple(masks)
+        self.variables = len(self.masks)
+        self.base_implications = _base_implications(edges, self.masks)
+
+    def verify(self, restrictions: Sequence[tuple[int, int]], certificate: dict) -> dict:
+        fields = {"schema", "variable", "positive_to_negative", "negative_to_positive"}
+        if type(certificate) is not dict or set(certificate) != fields:
+            raise InvalidContradiction("unexpected certificate fields")
+        if certificate["schema"] != "spectra.real_traffic.contradiction.v1":
+            raise InvalidContradiction("unsupported certificate schema")
+        variable = certificate["variable"]
+        if type(variable) is not int or not 0 <= variable < self.variables:
+            raise InvalidContradiction("certificate variable outside inventory")
+        query_implications = _query_implications(restrictions, self.masks)
+        positive = variable + 1
+        negative = -positive
+
+        def check_path(name: str, start: int, target: int) -> int:
+            path = certificate[name]
+            if (type(path) is not list or len(path) < 2
+                    or path[0] != start or path[-1] != target
+                    or any(type(literal) is not int or literal == 0
+                           or abs(literal) > self.variables for literal in path)):
+                raise InvalidContradiction(f"bad {name} path")
+            edges_checked = 0
+            for left, right in zip(path, path[1:]):
+                implication = (_node(left, self.variables), _node(right, self.variables))
+                if (implication not in self.base_implications
+                        and implication not in query_implications):
+                    raise InvalidContradiction(f"missing implication in {name}")
+                edges_checked += 1
+            return edges_checked
+
+        first = check_path("positive_to_negative", positive, negative)
+        second = check_path("negative_to_positive", negative, positive)
+        return {
+            "schema": "spectra.real_traffic.contradiction.audit.v1",
+            "valid": True,
+            "variable": variable,
+            "path_edges": first + second,
+            "base_implications": len(self.base_implications),
+            "query_implications": len(query_implications),
+            "native_code_executed": False,
+        }
 
 
 def verify_contradiction(edges: Sequence[tuple[int, int]], masks: Sequence[int],
                          restrictions: Sequence[tuple[int, int]], certificate: dict) -> dict:
-    """Check two opposite implication paths directly from original inputs."""
-    fields = {"schema", "variable", "positive_to_negative", "negative_to_positive"}
-    if type(certificate) is not dict or set(certificate) != fields:
-        raise InvalidContradiction("unexpected certificate fields")
-    if certificate["schema"] != "spectra.real_traffic.contradiction.v1":
-        raise InvalidContradiction("unsupported certificate schema")
-    variables = len(masks)
-    variable = certificate["variable"]
-    if type(variable) is not int or not 0 <= variable < variables:
-        raise InvalidContradiction("certificate variable outside inventory")
-    implications = _original_implications(edges, masks, restrictions)
-    positive = variable + 1
-    negative = -positive
-
-    def check_path(name: str, start: int, target: int) -> int:
-        path = certificate[name]
-        if (type(path) is not list or len(path) < 2
-                or path[0] != start or path[-1] != target
-                or any(type(literal) is not int or literal == 0
-                       or abs(literal) > variables for literal in path)):
-            raise InvalidContradiction(f"bad {name} path")
-        edges_checked = 0
-        for left, right in zip(path, path[1:]):
-            if (_node(left, variables), _node(right, variables)) not in implications:
-                raise InvalidContradiction(f"missing implication in {name}")
-            edges_checked += 1
-        return edges_checked
-
-    first = check_path("positive_to_negative", positive, negative)
-    second = check_path("negative_to_positive", negative, positive)
-    return {
-        "schema": "spectra.real_traffic.contradiction.audit.v1",
-        "valid": True,
-        "variable": variable,
-        "path_edges": first + second,
-        "native_code_executed": False,
-    }
+    """Compatibility wrapper for one-off independent proof checks."""
+    return PreparedContradictionChecker(edges, masks).verify(restrictions, certificate)
