@@ -8,12 +8,6 @@
       "previous_sha256": "6ef18f6d2f08d2f565b1b55c5ed5c61cc2849d92ee4a7773f05983039ff140ea",
       "current_sha256": "38864988e754e5e718047e85fb86e1117b2d9edfa56998d647a6185c9bf9855b",
       "reason": "Install and assert the pinned python-sat control required by the merged WAP public contracts."
-    },
-    {
-      "path": "scripts/audit_workspace.py",
-      "previous_sha256": "0d5b270c8137f4522fb266911f82041a82483643a7651d4ad4adce2b34428eb1",
-      "current_sha256": "7aa82f9807645cf381be95ae8b1868f176bab2ef0c130dd8205ba390955a61d8",
-      "reason": "Verify explicit post-migration updates without rewriting the immutable historical relocation manifest."
     }
   ]
 }
