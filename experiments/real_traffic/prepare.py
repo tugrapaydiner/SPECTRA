@@ -43,6 +43,10 @@ def prepare(source: str | Path, destination: str | Path, *, week: str) -> dict:
     if replayed != case:
         raise AssertionError("case round trip differs")
     changed = sum(left != right for left, right in zip(case.plan_a, case.plan_b))
+    proof_edges = sum(
+        len(proof["positive_to_negative"]) + len(proof["negative_to_positive"]) - 2
+        for proof in case.contradictions if proof is not None
+    )
     summary = {
         "schema": "spectra.real_traffic.summary.v1",
         "status": "DEVELOPMENT_DATA_READY",
@@ -54,6 +58,10 @@ def prepare(source: str | Path, destination: str | Path, *, week: str) -> dict:
         "queries": len(case.queries),
         "sat_queries": case.sat_queries,
         "unsat_queries": case.unsat_queries,
+        "unsat_contradictions": sum(
+            proof is not None for proof in case.contradictions
+        ),
+        "unsat_proof_edges": proof_edges,
         "unique_sat_witnesses": case.unique_witnesses,
         "duplicate_proposals": case.duplicate_queries,
         "proposal_attempts": case.proposal_attempts,
