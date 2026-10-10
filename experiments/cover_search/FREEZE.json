@@ -1,0 +1,27 @@
+{
+  "base_commit": "eabcc9c5a8ebe0beee364da3ecd1a68bedeb7253",
+  "description": "Public hash commitment before generation/evaluation of the prospective graph inventory; full sources delivered under these same hashes.",
+  "development_closed": true,
+  "no_post_evaluation_tuning": true,
+  "primary_external_gate": "All planted-graph SAT verified; cover/MiniCard upper paired descriptive95 mean ratio <=0.50 and p95 ratio <=1.10",
+  "schema": "spectra.cover.freeze.v1",
+  "sources": {
+    "data/cnf.py": "c2b6efa0fa645a1f7ff78c30612a0a7fdb1980841090dd1536ad5810617f4f4d",
+    "experiments/cover_search/BASELINE_SHA256.json": "99074c7cabc53a555ad47ee30d41d42bdcc79ccc8f6b26332e632435edc2e5eb",
+    "experiments/cover_search/PROTOCOL.md": "6c72f6aa08660a02f125c9428e7fa1c5eb8185dbee417ea2dadd051d2e2e02b2",
+    "experiments/cover_search/analyse.py": "a7947f17f4e31945db0f6cdfd582f598bcc063440d8de8ae01a8ae01fd081000",
+    "experiments/cover_search/run.py": "89dba14ce3fbd7db5d98d3fc6869584a4688a09881eeca2f86863d735b0d22ec",
+    "experiments/cover_search/study.py": "1725cd2f2723eb6be4922db8e9fd59d283140df96cbb7ab5aa388fea500a4d4a",
+    "experiments/cover_search/tasks.py": "daf41f858cddf03f25fe8b5145a07b7054a5da8453f1974f0a40411b12ca1a51",
+    "experiments/structured_search/UPSTREAM.json": "d58ffbd2ad9403d1ccfb9d147c9c9e85397cfa4feac89c7183f26d5efcc4e9a7",
+    "experiments/structured_search/study.py": "c99313b415bb19fbe4c50c0e79258e3bd2f2c8ef1c2a4cec12d3fdd9636eaf27",
+    "experiments/structured_search/task.py": "380797294da5eebbcdb9010adc4fc408ec021fc893ce839e91e346733efca7a3",
+    "experiments/structured_search/upstream/sudoku-top95.txt": "b16eff35fbe41fb7b122f21c5c6ba30b85861b47946d33257070df1a69cddd36",
+    "experiments/structured_search/upstream/sudoku.py": "be3dcf0eed3c430e63b12703de3612ad3759740ea321579a76e7819924860a2c",
+    "spectra/_native/cover_search.cpp": "0020c52ca4c378328518180766c9e305f48b212a73d8158ef943d623b561251d",
+    "spectra/cnf/cover.py": "198e943a28c5e97431fe77eab8a7218ac8a578e7d302912990d4d89000040702",
+    "spectra/cnf/dpll.py": "aa67b4735bbdbe562af65f14d9fbc7cdac5afda8f0965e1de6fd85caeb0773dc",
+    "tests/public/test_cover_search.py": "e4417e94a3837b8370fa7c1237878d5ba338a3f3879ac3085843f5c4a8b21944",
+    "tests/public/test_cover_study.py": "1e97db9e4f3b31efc5688c9cf2a0701b395c5497ba5978996c787b4c5062ae45"
+  }
+}

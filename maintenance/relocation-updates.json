@@ -1,0 +1,13 @@
+{
+  "schema": "spectra.relocation_updates.v1",
+  "base": "181e236528b5b58263c98b09925f0d7612c919d3",
+  "base_manifest": "maintenance/relocations.json",
+  "updates": [
+    {
+      "path": ".github/workflows/cpu-regression.yml",
+      "previous_sha256": "6ef18f6d2f08d2f565b1b55c5ed5c61cc2849d92ee4a7773f05983039ff140ea",
+      "current_sha256": "38864988e754e5e718047e85fb86e1117b2d9edfa56998d647a6185c9bf9855b",
+      "reason": "Install and assert the pinned python-sat control required by the merged WAP public contracts."
+    }
+  ]
+}

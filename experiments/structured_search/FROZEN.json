@@ -1,0 +1,31 @@
+{
+  "commit": "a0d7efaafd0573a4655d1e3965bbc1e7560f72ec",
+  "tree": "64b4fe052008474944623da3735d64e88cbe37d0",
+  "sources": {
+    "data/__init__.py": "d742a14c7ddade054afda0584a954f4fc08e2958ce4d1543bac90e86c8bc1305",
+    "data/cnf.py": "c2b6efa0fa645a1f7ff78c30612a0a7fdb1980841090dd1536ad5810617f4f4d",
+    "eval/__init__.py": "55d382b110730a2c15d0c673cc7b9835abbea5674c7da04536e180c117f1c6c9",
+    "eval/cnf_cached.py": "c7cf55fbca4f4d320f7d36c27b69f3abd3fff48d547a9f20eca9fd35a2bfb753",
+    "spectra/__init__.py": "4bfcd04048ed17da53d562abc4718d5faf9bb25069b56ce66c15f90e32ef13bd",
+    "spectra/cnf/__init__.py": "80541f1374919d670c392ec290fcc5a94ef317a56d85ce47f63497fec47e6a9f",
+    "spectra/cnf/dimacs.py": "5f4e02e431aa6d669a622ff6d6288588a63ad226d242afa705d762d56fb6ec21",
+    "spectra/cnf/state.py": "e3b1b5bb735e1c6f36fb9dcf6148aafab4141543e7a1a502f399d7a838d6982d",
+    "spectra/cnf/search.py": "872733b2ad694b30bdd3f96e84147dc752a7f17096273e66864bc03fa68d06c9",
+    "spectra/cnf/ranked.py": "f8befc3130e3594a03d0db87355baeb2dd6030350f072206906808dbe68af2c2",
+    "spectra/cnf/indexed.py": "52e0610591d97556602915da1d8fd84287c778cf6c620857f4d1f3bc3a0c625e",
+    "spectra/cnf/deductive.py": "5ed89280028aaec793a1892902417a7446851f52e2842199e5b77c6c068a4350",
+    "spectra/cnf/focused.py": "e5ea12eed15317f4c686c1b1d021876122b8c224921950f392fea59073e5fd7c",
+    "spectra/cnf/dpll.py": "aa67b4735bbdbe562af65f14d9fbc7cdac5afda8f0965e1de6fd85caeb0773dc",
+    "experiments/structured_search/study.py": "c99313b415bb19fbe4c50c0e79258e3bd2f2c8ef1c2a4cec12d3fdd9636eaf27",
+    "experiments/structured_search/task.py": "380797294da5eebbcdb9010adc4fc408ec021fc893ce839e91e346733efca7a3",
+    "experiments/structured_search/run.py": "c00fe36df46a4d9a2a05985a1926659460b83d93338337247e1f4212a60170f3",
+    "experiments/structured_search/analyse.py": "7399a4279b1400e3868b2f9bf18e529b3915703f27892d5fcc99477497e117cd",
+    "experiments/structured_search/PROTOCOL.md": "9cbc6216720a7593ca6116a6815001153beb339d532fb18b7e87e8b81a1dab11",
+    "experiments/structured_search/DEVELOPMENT_PLAN.md": "64ba86899b6dd3b8d3890472a664fe652da2c3d993fe7faa9a19b62d4d3d7897",
+    "experiments/structured_search/UPSTREAM.json": "d58ffbd2ad9403d1ccfb9d147c9c9e85397cfa4feac89c7183f26d5efcc4e9a7",
+    "experiments/structured_search/upstream/sudoku.py": "be3dcf0eed3c430e63b12703de3612ad3759740ea321579a76e7819924860a2c",
+    "experiments/structured_search/upstream/sudoku-top95.txt": "b16eff35fbe41fb7b122f21c5c6ba30b85861b47946d33257070df1a69cddd36",
+    "experiments/structured_search/upstream/LICENSE": "dd325ad86b175663be94c76100eff3306bf6618d7537538616dd32e546da32c7"
+  },
+  "scope": "published candidate/encoder/runner/analysis/protocol before first local solve on evaluation rows 11-95"
+}

@@ -1,0 +1,55 @@
+name: Sparse research dependencies
+on:
+  push:
+    branches: [research/sparse-incidence-20261007]
+    paths: [.github/workflows/sparse-dependencies.yml]
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Original upstream controls and exact project history
+        run: |
+          mkdir -p delivery/upstream
+          git bundle create delivery/source-history.bundle --all
+          git rev-parse HEAD > delivery/commit.txt
+          for name in dlx1 ssxcc; do
+            curl --fail --location --retry 2 "https://www-cs-faculty.stanford.edu/~knuth/programs/$name.w" -o "delivery/upstream/$name.w"
+          done
+          curl --fail --location --retry 2 https://www-cs-faculty.stanford.edu/~knuth/programs.html -o delivery/upstream/knuth-programs.html
+          for name in gb_flip.w boilerplate.w README; do
+            curl --fail --location --retry 2 "https://raw.githubusercontent.com/ascherer/sgb/bf93bd70fa1e0dbfb011214ca97c9c2cf8763edf/$name" -o "delivery/upstream/$name"
+          done
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -y -qq texlive-binaries
+          cd delivery/upstream
+          export CWEBINPUTS="$PWD:"
+          ctangle "$PWD/dlx1.w"
+          ctangle "$PWD/ssxcc.w"
+          ctangle "$PWD/gb_flip.w"
+          gcc -O3 -std=c90 -I. dlx1.c gb_flip.c -o dlx1
+          gcc -O3 -std=c90 -I. ssxcc.c gb_flip.c -o ssxcc
+          printf 'a b\na\nb\n' | ./dlx1 t1 m1 > dlx1-smoke.txt 2> dlx1-smoke-stderr.txt
+          printf 'a b\na\nb\n' | ./ssxcc t1 m1 > ssxcc-smoke.txt 2> ssxcc-smoke-stderr.txt
+          ctangle --version > ctangle-version.txt
+          gcc --version > compiler.txt
+          cd ../..
+          python3 - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          p=Path('delivery')
+          (p/'SHA256.json').write_text(json.dumps({str(f.relative_to(p)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.rglob('*')) if f.is_file()},indent=2,sort_keys=True)+'\n')
+          PY
+          echo 'CONTROL ACQUISITION/BUILD ONLY: no candidate performance claim. Previous attempts 37569972478 and 37570189632 remain failed, with retained wheels, source and logs.' > delivery/NOT_VALIDATION.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sparse-dependencies-${{ github.run_id }}
+          path: delivery
+          retention-days: 90

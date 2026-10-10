@@ -1,0 +1,24 @@
+{
+  "commit": "fceff2360fc7a2d9c7c2c6a44e0a750d878eae17",
+  "tree": "215b5148d52be0832eaf99b2a8ea8cdc1c3a2591",
+  "sources": {
+    "data/__init__.py": "d742a14c7ddade054afda0584a954f4fc08e2958ce4d1543bac90e86c8bc1305",
+    "data/cnf.py": "c2b6efa0fa645a1f7ff78c30612a0a7fdb1980841090dd1536ad5810617f4f4d",
+    "spectra/__init__.py": "4bfcd04048ed17da53d562abc4718d5faf9bb25069b56ce66c15f90e32ef13bd",
+    "spectra/cnf/dimacs.py": "5f4e02e431aa6d669a622ff6d6288588a63ad226d242afa705d762d56fb6ec21",
+    "eval/__init__.py": "55d382b110730a2c15d0c673cc7b9835abbea5674c7da04536e180c117f1c6c9",
+    "eval/cnf_cached.py": "c7cf55fbca4f4d320f7d36c27b69f3abd3fff48d547a9f20eca9fd35a2bfb753",
+    "spectra/cnf/__init__.py": "80541f1374919d670c392ec290fcc5a94ef317a56d85ce47f63497fec47e6a9f",
+    "spectra/cnf/state.py": "e3b1b5bb735e1c6f36fb9dcf6148aafab4141543e7a1a502f399d7a838d6982d",
+    "spectra/cnf/search.py": "872733b2ad694b30bdd3f96e84147dc752a7f17096273e66864bc03fa68d06c9",
+    "spectra/cnf/ranked.py": "f8befc3130e3594a03d0db87355baeb2dd6030350f072206906808dbe68af2c2",
+    "spectra/cnf/indexed.py": "52e0610591d97556602915da1d8fd84287c778cf6c620857f4d1f3bc3a0c625e",
+    "spectra/cnf/deductive.py": "5ed89280028aaec793a1892902417a7446851f52e2842199e5b77c6c068a4350",
+    "spectra/cnf/focused.py": "e5ea12eed15317f4c686c1b1d021876122b8c224921950f392fea59073e5fd7c",
+    "experiments/focused_evaluation/study.py": "98879c86c46f4e2298e4edff302d1015cdb8bcce62a2c3a2a7c869ecc24dccf3",
+    "experiments/focused_evaluation/run.py": "d5bb54b421f365c8bcb77e8c9d113a8b8cda1f4446875aa935c5dabdf431d3ac",
+    "experiments/focused_evaluation/analyse.py": "d156674424908c806ff9ac9c8c15bac1ff35b09e75a5297c1a3b6ea0cd537b6a",
+    "experiments/focused_evaluation/PROTOCOL.md": "d3f41034ae277426dbf9a414ef5218f74197085ab24d401b3f92baf215622bae"
+  },
+  "scope": "published candidate/generator/analysis/protocol before first evaluation input generation"
+}

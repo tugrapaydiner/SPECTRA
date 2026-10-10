@@ -1,0 +1,73 @@
+name: Cover search research
+on:
+  push:
+    branches: [research/cover-search-20261007]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Pinned research controls and complete source identity
+        run: |
+          python -m pip install pytest==9.0.2 'python-sat==1.9.dev15' build
+          mkdir -p delivery
+          python -m pip freeze > delivery/environment.txt
+          git rev-parse HEAD > delivery/commit.txt
+          git rev-parse HEAD^{tree} > delivery/tree.txt
+          git archive --format=tar.gz HEAD > delivery/source.tar.gz
+          python -I -S experiments/cover_search/reproduce.py --prepare-only > delivery/freeze-check.txt
+          cp experiments/cover_search/BASELINE_SHA256.json delivery/BASELINE_SHA256.json
+      - name: All public contracts and actual-history preservation
+        run: |
+          python -m pytest tests/public --confcutdir=tests/public --junitxml=delivery/tests.xml > delivery/tests.txt
+          python -I -S scripts/audit_workspace.py --out delivery/workspace.json > delivery/workspace.txt
+          python -I -S scripts/check_release_readiness.py --out delivery/navigation.json > delivery/navigation.txt
+      - name: Undefined-behaviour sanitizer on final native source
+        run: |
+          python -c "from spectra.cnf.cover import build_cover_runtime; build_cover_runtime('delivery/ubsan',sanitize=True)"
+          SPECTRA_COVER_LIBRARY="$PWD/delivery/ubsan/spectra_cover.so" python -m pytest tests/public/test_cover_search.py tests/public/test_cover_study.py tests/public/test_cover_corrigendum.py --confcutdir=tests/public --junitxml=delivery/ubsan.xml > delivery/ubsan.txt
+      - name: Actual sdist-to-wheel installation outside checkout
+        run: |
+          python -m build --outdir delivery/dist > delivery/build.txt
+          python -I -S scripts/check_current_installation.py --dist delivery/dist --out delivery/install > delivery/install.txt
+          delivery/install/venv/bin/python -I experiments/cover_search/check_installed.py > delivery/cover-installed.txt
+      - name: Complete fixed-workload cross-host reproduction
+        run: |
+          python -I -S experiments/cover_search/reproduce.py --out "$PWD/delivery/evidence" > delivery/measurement.txt
+          python -I -S experiments/cover_search/replay.py delivery/evidence --native-dir delivery/replay-native --out delivery/replay.json > delivery/replay.txt
+      - name: Preserve the original audit refusal explicitly
+        run: |
+          if python -I -S experiments/cover_search/analyse.py delivery/evidence --out delivery/SHOULD_NOT_EXIST.json > delivery/original-audit-failure.txt 2>&1; then
+            echo 'Unexpected uncorrected audit acceptance' >&2
+            exit 1
+          fi
+          grep -F 'incomplete or altered task inventory' delivery/original-audit-failure.txt
+          python -c "import json; r=json.load(open('delivery/evidence-summary.json')); print('PRIMARY COMPETITIVE GATE:', r['primary_external_gate']); print('Corrected descriptive study; CI success is not competitive promotion.')" > delivery/DECISION.txt
+      - name: Retain receipts, all observations and source; omit disposable environments
+        if: always()
+        run: |
+          rm -rf delivery/install/venv
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          p=Path('delivery');p.mkdir(exist_ok=True)
+          (p/'SHA256.json').write_text(json.dumps({str(f.relative_to(p)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.rglob('*')) if f.is_file() and f.name!='SHA256.json'},indent=2,sort_keys=True)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cover-search-${{ github.run_id }}
+          path: delivery
+          retention-days: 90

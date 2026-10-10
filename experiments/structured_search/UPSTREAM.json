@@ -1,0 +1,24 @@
+{
+  "repository": "https://github.com/norvig/pytudes",
+  "commit": "bfcdac7e2c74f44a9c2ff36217a8dd834ad6b73b",
+  "files": {
+    "sudoku.py": {
+      "bytes": 6264,
+      "sha256": "be3dcf0eed3c430e63b12703de3612ad3759740ea321579a76e7819924860a2c",
+      "git_blob": "2b887647fcbd086215f68cf5c7f7f0b540cdb1d9"
+    },
+    "sudoku-top95.txt": {
+      "bytes": 7790,
+      "sha256": "b16eff35fbe41fb7b122f21c5c6ba30b85861b47946d33257070df1a69cddd36",
+      "git_blob": "a68d5423883986aab6bf8438b7379d58192d9843"
+    },
+    "LICENSE": {
+      "bytes": 1074,
+      "sha256": "dd325ad86b175663be94c76100eff3306bf6618d7537538616dd32e546da32c7",
+      "git_blob": "1e687909987f55df74da813e1b4449c8df48cca0"
+    }
+  },
+  "development_rows": "1-10",
+  "evaluation_rows": "11-95",
+  "license": "upstream/LICENSE"
+}

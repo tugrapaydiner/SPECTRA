@@ -31,7 +31,7 @@ python scripts/audit_workspace.py --out .release-check/workspace.json
 The default `python -m build` builds an sdist, then builds the wheel from that
 sdist. The installation check creates a separate virtual environment, installs
 without dependencies, and runs **11 installed-only checks outside the checkout**.
-It verifies the command, APIs and four packaged native source files. It does not
+It verifies the command, APIs and packaged native source inventory. It does not
 substitute an editable install for a wheel test. The public-package CI performs
 the same path; the indexed-efficiency workflow also checks Python 3.10 and 3.13.
 
@@ -93,7 +93,7 @@ The [history index](history/README.md) and [contribution policy](../CONTRIBUTING
 cover the existing archived tips. The branch-retirement script remains dry-run
 by default and refuses advanced tips; no history rewrite is part of this cleanup.
 
-## Optional runtime tracks in the integrated candidate
+## Optional runtime tracks in unreleased main
 
 The prepared FP32 and compiler baselines are included without changing the
 default solver. Use [prepared execution](TRAINED_FP_GUIDE.md),
@@ -104,3 +104,11 @@ A fresh named distribution check can also be run with:
 python -m build --outdir dist/current
 python scripts/check_current_installation.py --dist dist/current --out install-check
 ```
+
+## README figures
+
+From the full checkout, `python scripts/render_readme_charts.py --check` validates
+all generated chart bytes against hash-pinned published summaries. Omit `--check`
+to regenerate the three assets. This needs only the standard library and does
+not run benchmarks or update historical measurements. See
+[chart provenance](../assets/readme/README.md).

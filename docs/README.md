@@ -1,55 +1,48 @@
 # Documentation
 
+## Flagship research result
+
+| Task | Document |
+|---|---|
+| Read the confirmed result and exact numerical scope | [Frozen WAP holdout](../experiments/wap_support/HOLDOUT_RESULTS_20261009.md) |
+| Inspect the predeclared protocol | [Protocol](../experiments/wap_support/PROTOCOL.md) |
+| Review every flagship gate and remaining limitation | [Gate ledger](../experiments/wap_support/FLAGSHIP_GATE_LEDGER.md) |
+| Check the novelty wording and excluded claims | [Novelty boundary](../experiments/wap_support/NOVELTY_AND_CLAIM_BOUNDARY.md) |
+| Inspect the closest-work audit | [Prior-art audit](../experiments/wap_support/PRIOR_ART_AUDIT_20261009.md) |
+| Review portability passes and failures | [Cross-environment reproduction](../experiments/wap_support/CROSS_ENVIRONMENT_REPRODUCTION_20261009.md) |
+| Reproduce the canonical compiler certificates | [Certificate reproduction](../experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md) |
+| Run or independently replicate the exposed study | [Replication guide](../experiments/wap_support/REPLICATION.md) |
+| Read the paper draft | [Paper draft](../experiments/wap_support/PAPER_DRAFT.md) |
+
+The WAP result is a narrow empirical systems result. It does not transfer to the
+historical neural, MCTS, low-bit, general-SAT, or universal CPU-performance claims.
+
 ## Use and maintain SPECTRA
 
 | Task | Guide |
 |---|---|
-| Install and run the public tools | [Quick start](../README.md#quick-start) |
+| Install and run the public tools | [Quick start](../README.md#base-toolkit-quick-start) |
 | Understand API, input formats and return values | [API and CLI](API.md) |
-| Run optional framework-free certified SVM inference | [SVM runtime](SVM.md) |
-| Export fitted raw-input preprocessing and SVM inference | [Pipeline deployment](SVM_PIPELINE.md) |
-| Share prepared SVM data and use other feature dimensions | [Shared SVM](SVM_SHARED.md) |
-| Independently replay a model/input-bound SVM decision | [Decision receipts](SVM_RECEIPTS.md) |
-| Check what is released, measured or experimental | [Current status](STATUS.md) |
+| Check released, merged, experimental and failed work | [Current status](STATUS.md) |
 | Run tests, build a wheel or reproduce experiments | [Development](DEVELOPMENT.md) |
-| Prepare a new release | [Release checklist](RELEASING.md) |
+| Prepare a package release | [Release checklist](RELEASING.md) |
 | Submit a change | [Contributing](../CONTRIBUTING.md) |
-| Handle external inputs and trusted checkpoints | [Security](../SECURITY.md) |
-| Review maintenance changes | [Changelog](../CHANGELOG.md) |
+| Handle external inputs and native code | [Security](../SECURITY.md) |
+| Review unreleased changes | [Changelog](../CHANGELOG.md) |
 
-## Measured systems work
+## Other measured systems work
 
-[Indexed efficiency](EFFICIENCY_GUIDE.md) is the v0.7.1 implementation guide.
-Its [frozen protocol](INDEXED_SEARCH_PROTOCOL.md), the
-[compact CNF protocol](COMPACT_CNF_PROTOCOL.md) and the earlier
-[cached-residual protocol](CACHED_RESIDUAL_PROTOCOL.md) describe separate
-experiments. Do not multiply their speedups or replace their original results
-with measurements from a different implementation or host.
-
-## Research evidence
-
-[Research review](RESEARCH_REVIEW_20260911.md) covers Sudoku, maze and stronger
-classical comparators. [Symmetry audit](SYMMETRY_AUDIT.md),
-[fixed-pool replay](FIXED_POOL_REPLAY.md) and
-[failure-information study](FAILURE_INFORMATION.md) define their own contracts.
-The [research log](RESEARCH_STATE.md), [claim ledger](CLAIMS.md) and
-[architecture description](ARCHITECTURE.md) are historical research context,
-not release instructions or proof that every proposed component works.
+[Indexed efficiency](EFFICIENCY_GUIDE.md),
+[matched native alternatives](../experiments/native_baselines/RESULTS.md),
+[prepared FP32](TRAINED_FP_GUIDE.md), [packed runtime](RUNTIME_GUIDE.md), and
+[compiler controls](COMPILER_BASELINE_GUIDE.md) are separate tracks with separate
+inputs, hardware, cost boundaries, and conclusions. Do not multiply their speedups
+or use the WAP result to promote them.
 
 ## Preserved history
 
 The [history index](history/README.md) links retired documents and workflows at
-immutable commits. [File receipts](../maintenance/relocations.json) and
-[branch receipts](../maintenance/branches.json) record the earlier archival work.
-Evidence-bound protocols retain their original locations. Raw evidence remains
-under `results/`; research module paths remain compatible with saved records.
-The installed wheel is not the complete research archive: use a full Git checkout
-for historical replay and the workspace-preservation audit.
-
-## Integrated optional execution
-
-[Prepared FP32](TRAINED_FP_GUIDE.md), [packed runtime](RUNTIME_GUIDE.md) and
-[compiler baseline](COMPILER_BASELINE_GUIDE.md) are separate opt-in tracks.
-
-[Optional compiled preprocessing](SVM_PREPROCESS_NATIVE.md) retains the raw-pipeline
-contract while reducing Python loop and built-in row-copy overhead.
+immutable commits. Raw evidence and negative outcomes remain in Git history and
+under their experiment directories. Transport-only patch chunks and one-shot
+application workflows are intentionally absent from the current working tree after
+merge; their original bytes remain recoverable from the research commits.

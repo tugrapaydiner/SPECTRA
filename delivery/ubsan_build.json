@@ -1,0 +1,30 @@
+{
+  "command": [
+    "/usr/bin/g++",
+    "-std=c++17",
+    "-shared",
+    "-fPIC",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-Wno-free-nonheap-object",
+    "-fno-fast-math",
+    "-ffp-contract=off",
+    "-O1",
+    "-g",
+    "-fsanitize=undefined",
+    "-fno-sanitize-recover=all",
+    "-I/opt/hostedtoolcache/Python/3.13.16/x64/include/python3.13",
+    "/home/runner/work/SPECTRA/SPECTRA/spectra/_native/quotient_query.cpp",
+    "-o",
+    "/tmp/spectra-q-ubsan/.coloring-gaq6ggbi/_spectra_quotient_query.cpython-313-x86_64-linux-gnu.so"
+  ],
+  "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "elapsed_ns": 2897643367,
+  "library_sha256": "b306ab68c558bcbfdb52843c7d8d1268562551bb60f4028b12dd546ce22770d7",
+  "python_include": "/opt/hostedtoolcache/Python/3.13.16/x64/include/python3.13",
+  "sanitize": true,
+  "source_sha256": "25ffa81d8a7d8716804f73805fa16eb6f6afb06475465a1c9d2d003a5b0d7e3b",
+  "stderr": "",
+  "stdout": ""
+}

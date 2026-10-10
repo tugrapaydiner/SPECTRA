@@ -1,0 +1,33 @@
+name: Export current quotient application source
+on:
+  push:
+    branches: [research/quotient-application-v2-20261008]
+    paths: [.github/workflows/export-current-source.yml]
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact tree and history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          git rev-parse HEAD > delivery/commit.txt
+          git rev-parse HEAD^{tree} > delivery/tree.txt
+          git archive --format=tar.gz --prefix=SPECTRA/ HEAD > delivery/source.tar.gz
+          git bundle create delivery/history.bundle --all
+          sha256sum delivery/commit.txt delivery/tree.txt delivery/source.tar.gz delivery/history.bundle > delivery/SHA256SUMS.txt
+          printf '%s\n' 'Source export only. No graph acquisition, benchmark execution, holdout access, or scientific conclusion.' > delivery/ROLE.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: quotient-application-source-${{ github.run_id }}
+          path: delivery
+          include-hidden-files: true
+          retention-days: 90

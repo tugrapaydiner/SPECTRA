@@ -33,8 +33,8 @@ def main(argv: list[str] | None = None) -> int:
     solve_parser.add_argument("--seed", type=int, default=0)
     solve_parser.add_argument("--max-flips", type=int, default=1024)
     solve_parser.add_argument("--out", type=Path)
-    solve_parser.add_argument("--backend", choices=["compact", "indexed"], default="compact",
-                              help="indexed preserves seeded paths; compact is the historical default")
+    solve_parser.add_argument("--backend", choices=["compact", "indexed", "deductive", "focused"], default="compact",
+                              help="focused uses variable age; deductive handles unit/2-SAT constraints; compact is the historical default")
     check_parser = actions.add_parser("check", help="Check a complete Boolean witness against original clauses")
     check_parser.add_argument("input", type=Path)
     check_parser.add_argument("witness", type=Path, help="JSON object with a Boolean-list witness field")
@@ -57,13 +57,13 @@ def main(argv: list[str] | None = None) -> int:
             from .evidence import verify
             _emit(verify(args.root, load_file(args.manifest, max_bytes=args.max_json_bytes)), None)
         else:
-            from .cnf import read_dimacs, solve, solve_indexed
+            from .cnf import read_dimacs, solve, solve_indexed, solve_deductive, solve_focused
             with args.input.open(encoding="utf-8") as stream:
                 problem = read_dimacs(stream)
             if args.action == "solve":
                 if args.out is not None and args.out.exists():
                     raise FileExistsError(f"refusing to replace {args.out}")
-                solver = solve_indexed if args.backend == "indexed" else solve
+                solver = {"compact": solve, "indexed": solve_indexed, "deductive": solve_deductive, "focused": solve_focused}[args.backend]
                 result = solver(problem, seed=args.seed, max_flips=args.max_flips).record()
                 result["backend"] = args.backend
                 result["timing_scope"] = "cold_search_including_preparation"

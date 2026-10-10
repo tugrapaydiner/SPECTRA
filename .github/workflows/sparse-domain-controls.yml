@@ -1,0 +1,41 @@
+name: Sparse domain controls
+on:
+  push:
+    branches: [research/sparse-incidence-20261007]
+    paths: [.github/workflows/sparse-domain-controls.yml]
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Fixed original controls and application-derived corpus
+        run: |
+          mkdir -p delivery/wheels delivery/dimacs
+          python -m pip download --only-binary=:all: --dest delivery/wheels 'igraph==1.0.0'
+          curl --fail --location --retry 2 https://mat.tepper.cmu.edu/COLOR/instances.html -o delivery/dimacs/instances.html
+          for name in fpsol2.i.2 fpsol2.i.3 inithx.i.1 inithx.i.2 inithx.i.3 mulsol.i.1 mulsol.i.2 mulsol.i.3 mulsol.i.4 mulsol.i.5 zeroin.i.1 zeroin.i.2 zeroin.i.3; do
+            curl --fail --location --retry 2 "https://mat.tepper.cmu.edu/COLOR/instances/$name.col" -o "delivery/dimacs/$name.col"
+          done
+          git rev-parse HEAD > delivery/commit.txt
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          p=Path('delivery')
+          (p/'SHA256.json').write_text(json.dumps({str(f.relative_to(p)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.rglob('*')) if f.is_file()},indent=2,sort_keys=True)+'\n')
+          PY
+          echo 'ACQUISITION ONLY. All 13 listed register-allocation instances with published colour counts <=64 are an application-admission panel, not new evidence of learned generalization. Source families are dependent clusters. No source model selection based on their outcomes is implied. igraph GPL remains external benchmark-only, not linked into SPECTRA runtime.' > delivery/ROLE.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sparse-domain-controls-${{ github.run_id }}
+          path: delivery
+          include-hidden-files: true
+          retention-days: 90

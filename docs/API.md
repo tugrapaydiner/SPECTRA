@@ -40,6 +40,18 @@ witness, unsatisfied-clause IDs, flips, queries, path hash and elapsed nanosecon
 The witness on `UNKNOWN` is only the final candidate. Neither backend supplies
 an UNSAT proof or a hard wall-clock deadline.
 
+`solve_deductive` is an optional classical backend that propagates forced literals,
+solves binary residuals by an implication graph, then uses indexed search for
+general residuals. Select `--backend deductive` from the CLI. Its flip cap bounds
+only residual search, and its trajectory can differ from the original formula's
+walk. See [deductive solving](DEDUCTIVE_GUIDE.md) for costs, result fields and
+measured scope. The historical default is unchanged.
+
+`solve_focused` and CLI `--backend focused` expose an experimental dense-clause
+pool and break/age move policy. This classical candidate has a retained fresh
+synthetic evaluation and independent witness checks. See [focused search](FOCUSED_GUIDE.md)
+for its measured scope, budget semantics and recovery limitations.
+
 ## Commands and exit codes
 
 ```bash
@@ -65,8 +77,9 @@ The default witness/manifest limit is **16 MiB**, measured before decoding:
 spectra cnf check examples/tiny.cnf answer.json --max-json-bytes 1048576
 ```
 
-`--max-json-bytes` must be positive. It bounds input bytes, not all decoder
-allocations, CPU time or filesystem access. Excessive nesting is reported as an
+`--max-json-bytes` must be an integer from 1 through `sys.maxsize - 1`.
+Reads use chunks of at most 64 KiB; a large cap does not preallocate the cap.
+The limit bounds input bytes, not all decoder allocations, CPU time or filesystem access. Excessive nesting is reported as an
 input error. `--out` uses exclusive creation; use a new path for each solve.
 
 ## Evidence integrity

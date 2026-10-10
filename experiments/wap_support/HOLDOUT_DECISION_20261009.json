@@ -1,0 +1,38 @@
+{
+  "schema": "spectra.wap_support.published_decision.v1",
+  "freeze_commit": "0af6fda36c60a110584e7db836ee5724e530fbd4",
+  "freeze_sha256": "31997d38cced5e5611f3f17dc6bc3929b21dcc92a6b7bc81a78db31aab949020",
+  "open_commit": "b7bca7fb7f62fcb0a43e6b33705cb834cd64494c",
+  "workflow_run": 37883619073,
+  "artifact_id": 11595284861,
+  "artifact_zip_sha256": "5410db4d5832544c3ec55b19c1449395020319516d20823038de66216b45527c",
+  "delivery_files_verified": 382,
+  "delivery_uncompressed_bytes_verified": 265056487,
+  "graphs": 5,
+  "sessions": 105,
+  "answers_audited": 107520,
+  "queries_per_session": 1024,
+  "candidate": "scc",
+  "baseline": "minicard",
+  "mean_ratio": 0.36350347091371066,
+  "mean_ratio_graph_clustered_95": [0.3467889941295958, 0.3729443897319325],
+  "p95_ratio": 0.3647351362591689,
+  "p95_ratio_graph_clustered_95": [0.33815656171573844, 0.3832259736306171],
+  "per_graph_mean_ratios": {
+    "wap02a.col.json": 0.34020933443363105,
+    "wap03a.col.json": 0.3776515134634959,
+    "wap04a.col.json": 0.36712556218812636,
+    "wap07a.col.json": 0.3504610113519844,
+    "wap08a.col.json": 0.3561087439475846
+  },
+  "verdict": "PASS",
+  "claim_scope": "Repeated 1024-query support sessions with synthetic two-colour lists/restrictions on five public WAP optical-conflict topologies.",
+  "not_claimed": [
+    "ordinary chromatic-number superiority",
+    "deployed optical-network traces",
+    "general SAT or list-colouring superiority",
+    "algorithmic novelty from SCC substitution alone",
+    "independent-team replication",
+    "external adoption"
+  ]
+}
