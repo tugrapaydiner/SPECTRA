@@ -1,0 +1,45 @@
+name: Fetch GEANT development trace
+on:
+  push:
+    branches: [real-traffic]
+    paths:
+      - experiments/real_traffic/fetch_geant.py
+      - .github/workflows/fetch-geant.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Download and inspect the four-month development trace
+        run: |
+          mkdir -p delivery
+          python -m experiments.real_traffic.fetch_geant --out delivery/geant | tee delivery/geant.txt
+          git rev-parse HEAD > delivery/commit.txt
+          git rev-parse HEAD^{tree} > delivery/tree.txt
+          echo 'GEANT four-month development source only; no solver, holdout, or promotion decision.' > delivery/ROLE.txt
+      - name: Hash every retained byte
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root=Path('delivery')
+          with (root/'SHA256SUMS').open('w') as output:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file() and path.name!='SHA256SUMS':
+                      output.write(hashlib.sha256(path.read_bytes()).hexdigest()+'  '+str(path.relative_to(root))+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geant-development-${{ github.run_id }}
+          path: delivery
+          retention-days: 90
+          if-no-files-found: error
