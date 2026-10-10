@@ -64,23 +64,30 @@ jobs:
           python - <<'PY'
           from spectra.cnf.quotient_query import build_quotient_runtime
           from experiments.real_traffic.model_decoder import build_model_decoder
+          from experiments.real_traffic.compiled_support import build_compiled_support
           print(build_quotient_runtime('delivery/native'))
           print(build_model_decoder('delivery/model-decoder'))
           print(build_model_decoder('delivery/model-decoder-ubsan', sanitize=True))
+          print(build_compiled_support('delivery/compiled-support'))
+          print(build_compiled_support('delivery/compiled-support-ubsan', sanitize=True))
           PY
-      - name: Check the exact decoder under undefined-behaviour sanitization
+      - name: Check the new native code under undefined-behaviour sanitization
         run: |
           set -o pipefail
           SPECTRA_MODEL_DECODER_LIBRARY="$(find delivery/model-decoder-ubsan -maxdepth 1 -name '_spectra_model_decoder*.so' -print -quit)" \
-            python -m pytest tests/public/test_real_traffic_model_decoder.py \
-            --confcutdir=tests/public --junitxml=delivery/model_decoder_ubsan.xml \
-            | tee delivery/model_decoder_ubsan.txt
-      - name: Compare the quotient against stronger controls
+          SPECTRA_COMPILED_SUPPORT_LIBRARY="$(find delivery/compiled-support-ubsan -maxdepth 1 -name '_spectra_compiled_support*.so' -print -quit)" \
+            python -m pytest \
+            tests/public/test_real_traffic_model_decoder.py \
+            tests/public/test_real_traffic_compiled_support.py \
+            --confcutdir=tests/public --junitxml=delivery/native_ubsan.xml \
+            | tee delivery/native_ubsan.txt
+      - name: Compare the compiled relation against strong controls
         run: |
-          python -m experiments.real_traffic.strong_benchmark run \
+          python -m experiments.real_traffic.closure_benchmark run \
             --case delivery/case/case.json \
             --library delivery/native \
             --decoder delivery/model-decoder \
+            --compiled delivery/compiled-support \
             --out delivery/benchmark \
             --repeats 3
       - name: Hash every retained byte
