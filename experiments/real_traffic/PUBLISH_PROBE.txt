@@ -1,0 +1,1 @@
+This file confirms the public continuation path is writable.
