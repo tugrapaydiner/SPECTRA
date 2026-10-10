@@ -259,7 +259,7 @@ def test_case_round_trip_recomputes_every_outcome(tmp_path) -> None:
     altered = json.loads(path.read_text())
     altered["statuses"][0] = "SAT"
     path.write_text(json.dumps(altered))
-    with pytest.raises(TraceFormatError, match="UNSAT query receipt"):
+    with pytest.raises(TraceFormatError, match="query receipt differs"):
         TrafficCase.read(path)
 
 
