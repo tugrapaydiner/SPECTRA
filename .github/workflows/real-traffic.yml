@@ -4,8 +4,7 @@ on:
     branches: [real-traffic]
     paths:
       - experiments/real_traffic/**
-      - tests/public/test_real_traffic.py
-      - tests/public/test_real_traffic_benchmark.py
+      - tests/public/test_real_traffic*.py
       - .github/workflows/real-traffic.yml
   workflow_dispatch:
 permissions:
@@ -64,9 +63,9 @@ jobs:
           from spectra.cnf.quotient_query import build_quotient_runtime
           print(build_quotient_runtime('delivery/native'))
           PY
-      - name: Compare full chronological sessions
+      - name: Compare every solver on the same boundary
         run: |
-          python -m experiments.real_traffic.benchmark run \
+          python -m experiments.real_traffic.fair_benchmark run \
             --case delivery/case/case.json \
             --library delivery/native \
             --out delivery/benchmark \
