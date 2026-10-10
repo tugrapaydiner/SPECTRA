@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Sequence
 
 from experiments.real_traffic.plan import align_target_plan, color_graph
-from experiments.real_traffic.certificate import solve_with_proof, verify_contradiction
+from experiments.real_traffic.certificate import (
+    PreparedContradictionChecker,
+    solve_with_proof,
+)
 from experiments.real_traffic.observer import (
     masks_from_plans,
     verify_coloring_edges,
@@ -91,6 +94,7 @@ class TrafficCase:
         if not verify_labels(self.edges, self.masks, self.plan_b):
             raise TraceFormatError("plan B is not a valid coloring")
 
+        proof_checker = PreparedContradictionChecker(self.edges, self.masks)
         observed_sat = 0
         observed_unsat = 0
         observed_witnesses: set[str] = set()
@@ -105,24 +109,28 @@ class TrafficCase:
                 if allowed.bit_count() != 1 or not (allowed & self.masks[vertex]):
                     raise TraceFormatError("query mask differs")
                 previous = vertex
-            outcome = solve_with_proof(self.edges, self.masks, query)
-            if outcome.status == "UNSAT":
+            if status == "UNSAT":
                 observed_unsat += 1
-                if status != "UNSAT" or witness_digest is not None or contradiction is None:
+                if witness_digest is not None or contradiction is None:
                     raise TraceFormatError("UNSAT query receipt differs")
                 try:
-                    verify_contradiction(self.edges, self.masks, query, contradiction)
+                    proof_checker.verify(query, contradiction)
                 except ValueError as exc:
                     raise TraceFormatError("UNSAT contradiction differs") from exc
-            else:
+            elif status == "SAT":
+                if contradiction is not None or type(witness_digest) is not str:
+                    raise TraceFormatError("SAT query receipt differs")
+                outcome = solve_with_proof(self.edges, self.masks, query)
                 labels = outcome.labels
-                if labels is None:
-                    raise AssertionError("SAT outcome has no labels")
+                if outcome.status != "SAT" or labels is None:
+                    raise TraceFormatError("SAT query is not satisfiable")
                 observed_sat += 1
                 digest = hashlib.sha256(bytes(labels)).hexdigest()
                 observed_witnesses.add(digest)
-                if status != "SAT" or witness_digest != digest or contradiction is not None:
-                    raise TraceFormatError("SAT query receipt differs")
+                if witness_digest != digest:
+                    raise TraceFormatError("SAT witness receipt differs")
+            else:
+                raise TraceFormatError("unsupported query status")
         if (observed_sat != self.sat_queries or observed_unsat != self.unsat_queries
                 or observed_sat + observed_unsat != len(self.queries)
                 or len(observed_witnesses) != self.unique_witnesses):
