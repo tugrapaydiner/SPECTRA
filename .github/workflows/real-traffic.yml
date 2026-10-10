@@ -5,17 +5,22 @@ on:
     paths:
       - experiments/real_traffic/**
       - tests/public/test_real_traffic.py
+      - tests/public/test_real_traffic_benchmark.py
       - .github/workflows/real-traffic.yml
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: real-traffic-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   prepare:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       OMP_NUM_THREADS: '1'
       OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,14 +35,42 @@ jobs:
           git rev-parse HEAD > delivery/commit.txt
           git rev-parse HEAD^{tree} > delivery/tree.txt
           git archive --format=tar.gz HEAD > delivery/source.tar.gz
-      - name: Run the complete public contract suite
+      - name: Install the declared development tools
         run: |
           python -m pip install pytest==9.0.2 numpy==2.3.5 'python-sat==1.9.dev15'
+          mkdir -p delivery/dependencies
+          python -m pip download --only-binary=:all: --no-deps 'dd==0.6.0' --dest delivery/dependencies
+          DD_WHEEL=$(find delivery/dependencies -maxdepth 1 -name 'dd-0.6.0-cp313-*.whl' -print -quit)
+          test -n "$DD_WHEEL"
+          echo 'bb46d9f633641927d266d098d507a5759644469ea416862f83781511cd6ca14d  '"$DD_WHEEL" | sha256sum --check -
+          python -m pip install "$DD_WHEEL"
+          python - <<'PY'
+          import dd.cudd
+          import pysat
+          print('CUDD:', dd.cudd.__version__)
+          print('PySAT:', pysat.__version__)
+          PY
+          python -m pip freeze > delivery/environment.txt
+      - name: Run the complete public contract suite
+        run: |
           python -m pytest tests/public --confcutdir=tests/public -ra --junitxml=delivery/public.xml | tee delivery/public.txt
       - name: Download the fixed development week
         run: python -m experiments.real_traffic.fetch_data --week X01 --out delivery/abilene
       - name: Build and independently replay the trace case
         run: python -m experiments.real_traffic.prepare --week X01 --source delivery/abilene --out delivery/case
+      - name: Build the current SPECTRA runtime
+        run: |
+          python - <<'PY'
+          from spectra.cnf.quotient_query import build_quotient_runtime
+          print(build_quotient_runtime('delivery/native'))
+          PY
+      - name: Compare full chronological sessions
+        run: |
+          python -m experiments.real_traffic.benchmark run \
+            --case delivery/case/case.json \
+            --library delivery/native \
+            --out delivery/benchmark \
+            --repeats 3
       - name: Hash every retained byte
         if: always()
         run: |
