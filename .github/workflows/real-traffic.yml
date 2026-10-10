@@ -63,9 +63,9 @@ jobs:
           from spectra.cnf.quotient_query import build_quotient_runtime
           print(build_quotient_runtime('delivery/native'))
           PY
-      - name: Compare every solver on the same boundary
+      - name: Compare every solver with one prepared proof relation
         run: |
-          python -m experiments.real_traffic.fair_benchmark run \
+          python -m experiments.real_traffic.prepared_benchmark run \
             --case delivery/case/case.json \
             --library delivery/native \
             --out delivery/benchmark \
