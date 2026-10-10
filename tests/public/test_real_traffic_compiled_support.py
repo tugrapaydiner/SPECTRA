@@ -45,6 +45,30 @@ def test_every_four_vertex_graph_and_binary_assignment(compiled_runtime) -> None
                     assert verify_labels(edges, masks, observed.labels, restrictions)
 
 
+def test_every_five_vertex_graph_and_partial_query(compiled_runtime) -> None:
+    """Exercise every unrestricted/low/high request over every five-vertex graph."""
+    bank = all_edges(5)
+    masks = (0b11,) * 5
+    checked = 0
+    for edge_mask in range(1 << len(bank)):
+        edges = tuple(edge for index, edge in enumerate(bank) if edge_mask >> index & 1)
+        with compiled_runtime.prepare(5, 2, edges, masks=masks) as prepared:
+            for states in product((-1, 0, 1), repeat=5):
+                restrictions = tuple(
+                    (vertex, 1 << state)
+                    for vertex, state in enumerate(states)
+                    if state >= 0
+                )
+                expected = solve_binary(edges, masks, restrictions)
+                observed = prepared.solve(restrictions)
+                assert (observed.status == "SAT_VERIFIED") == (expected is not None), (
+                    edge_mask, states, observed)
+                if expected is not None:
+                    assert verify_labels(edges, masks, observed.labels, restrictions)
+                checked += 1
+    assert checked == (1 << len(bank)) * (3 ** 5)
+
+
 def test_3000_random_list_queries_match_independent_solver(compiled_runtime) -> None:
     rng = random.Random(490331)
     for index in range(3000):
