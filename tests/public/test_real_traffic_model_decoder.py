@@ -65,7 +65,12 @@ def test_random_partial_models_keep_unassigned_variables_low(decoder_runtime) ->
         assert observed == bytes(expected)
 
 
-@pytest.mark.parametrize("bad", [[], [0], [1.0], [1, 1], [1, -1], [3]])
+def test_empty_partial_model_uses_every_low_choice(decoder_runtime) -> None:
+    with decoder_runtime.prepare((0b0011, 0b1100, 1 << 63)) as decoder:
+        assert decoder.decode([]) == bytes((0, 2, 63))
+
+
+@pytest.mark.parametrize("bad", [[0], [1.0], [1, 1], [1, -1], [3]])
 def test_invalid_model_is_rejected(decoder_runtime, bad) -> None:
     with decoder_runtime.prepare((0b11,)) as decoder:
         with pytest.raises(ValueError):
