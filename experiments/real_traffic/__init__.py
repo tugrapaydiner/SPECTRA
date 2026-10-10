@@ -4,6 +4,7 @@ from experiments.real_traffic.case import TrafficCase, build_case, build_queries
 from experiments.real_traffic.certificate import (
     ExactOutcome,
     InvalidContradiction,
+    PreparedContradictionChecker,
     solve_with_proof,
     verify_contradiction,
 )
@@ -39,7 +40,7 @@ from experiments.real_traffic.sources import (
 __all__ = [
     "FIELDS_PER_DEMAND", "MATRIX_WIDTH", "SNAPSHOTS_PER_WEEK", "SOURCE_ROOT",
     "SOURCE_URLS", "ConflictGraph", "Demand", "ExactOutcome",
-    "InvalidContradiction", "Link", "TrafficCase",
+    "InvalidContradiction", "Link", "PreparedContradictionChecker", "TrafficCase",
     "TrafficWeek", "TraceFormatError", "align_target_plan", "binary_clauses",
     "build_case", "build_conflict_graph", "build_queries", "color_graph",
     "hash_json", "masks_from_plans", "mean_traffic", "parse_demands",
