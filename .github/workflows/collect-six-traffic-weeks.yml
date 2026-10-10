@@ -1,0 +1,262 @@
+name: Judge all six traffic weeks together
+on:
+  push:
+    branches: [real-traffic]
+    paths: [.github/workflows/collect-six-traffic-weeks.yml]
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Real traffic week]
+    types: [completed]
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: collect-six-traffic-weeks
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: real-traffic
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Find the six successful week runs
+        run: |
+          mkdir -p combined/runs combined/weeks
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow real-traffic-week.yml \
+            --branch real-traffic --limit 30 \
+            --json databaseId,status,conclusion,createdAt,headSha \
+            > combined/runs.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          runs=json.loads(Path('combined/runs.json').read_text())
+          good=[r for r in runs if r['status']=='completed' and r['conclusion']=='success']
+          # The workflow was first published immediately before the one-time opening.
+          # Keep the six earliest successful executions after that publication; later
+          # reruns cannot replace them.
+          good.sort(key=lambda r:r['createdAt'])
+          chosen=good[:6]
+          Path('combined/chosen.json').write_text(json.dumps(chosen,indent=2,sort_keys=True)+'\n')
+          if len(chosen)<6:
+              Path('combined/WAITING.md').write_text(
+                  f'# Waiting for all six weeks\n\nSuccessful sealed runs found: {len(chosen)}/6.\n')
+              raise SystemExit(78)
+          PY
+      - name: Download every sealed artifact
+        run: |
+          python - <<'PY' > combined/run-ids.txt
+          import json
+          for row in json.load(open('combined/chosen.json')):
+              print(row['databaseId'])
+          PY
+          while read -r run; do
+            mkdir -p "combined/runs/$run"
+            gh run download "$run" --repo "$GITHUB_REPOSITORY" --dir "combined/runs/$run"
+          done < combined/run-ids.txt
+      - name: Verify manifests and identify weeks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json,re
+          root=Path('combined/runs')
+          weeks={}
+          for run in sorted(p for p in root.iterdir() if p.is_dir()):
+              for manifest in run.rglob('SHA256SUMS'):
+                  base=manifest.parent
+                  for raw in manifest.read_text().splitlines():
+                      if not raw.strip(): continue
+                      digest,name=raw.split('  ',1)
+                      target=base/name
+                      if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest()!=digest:
+                          raise SystemExit(f'manifest mismatch: {target}')
+              candidates=list(run.rglob('summary.json'))+list(run.rglob('case.json'))
+              found=set()
+              for path in candidates:
+                  try: value=json.loads(path.read_text())
+                  except Exception: continue
+                  text=json.dumps(value)
+                  found.update(re.findall(r'X(?:04|08|12|16|20|24)',text))
+              if len(found)!=1:
+                  raise SystemExit(f'cannot identify one week for run {run.name}: {sorted(found)}')
+              week=next(iter(found))
+              if week in weeks:
+                  raise SystemExit(f'duplicate sealed week: {week}')
+              weeks[week]=run.name
+          expected={'X04','X08','X12','X16','X20','X24'}
+          if set(weeks)!=expected:
+              raise SystemExit(f'week inventory differs: {sorted(weeks)}')
+          Path('combined/week-runs.json').write_text(json.dumps(weeks,indent=2,sort_keys=True)+'\n')
+          PY
+      - name: Run the whole-week audit
+        run: |
+          cat > combined/audit.py <<'PY'
+          from pathlib import Path
+          from collections import defaultdict
+          import itertools,json,math,random,re,statistics
+          ROOT=Path('combined/runs')
+          WEEKS=('X04','X08','X12','X16','X20','X24')
+          TIME_KEYS=('session_ns','complete_session_ns','total_ns','elapsed_ns','complete_ns','wall_ns')
+          def week_of(path,text=''):
+              m=re.search(r'X(?:04|08|12|16|20|24)',str(path)+' '+text,re.I)
+              return m.group(0).upper() if m else None
+          def arm_name(value):
+              if not isinstance(value,str): return None
+              s=value.lower().replace('-','_')
+              if 'minicard' in s or 'mini_card' in s: return 'minicard'
+              if any(x in s for x in ('spectra','candidate','compiled_closure','quotient_session')): return 'spectra'
+              return None
+          def time_value(row):
+              for key in TIME_KEYS:
+                  value=row.get(key)
+                  if isinstance(value,(int,float)) and not isinstance(value,bool) and value>0:
+                      return float(value),key
+              return None,None
+          rows=[]
+          explicit_fail=[]
+          for path in ROOT.rglob('*.json'):
+              try: value=json.loads(path.read_text())
+              except Exception: continue
+              text=json.dumps(value)[:20000]
+              default_week=week_of(path,text)
+              def walk(item,where=''):
+                  if isinstance(item,dict):
+                      arm=None
+                      for key in ('arm','solver','backend','system','name'):
+                          arm=arm_name(item.get(key))
+                          if arm: break
+                      duration,key=time_value(item)
+                      if arm and duration:
+                          order=next((item.get(k) for k in ('order','query_order','sequence') if isinstance(item.get(k),str)),None)
+                          rows.append({'week':default_week,'arm':arm,'time':duration,'time_key':key,
+                                       'order':order or 'unspecified','file':str(path),'where':where})
+                      for key,val in item.items():
+                          arm2=arm_name(key)
+                          if arm2 and isinstance(val,dict):
+                              duration2,key2=time_value(val)
+                              if duration2:
+                                  order2=next((val.get(k) for k in ('order','query_order','sequence') if isinstance(val.get(k),str)),None)
+                                  rows.append({'week':default_week,'arm':arm2,'time':duration2,'time_key':key2,
+                                               'order':order2 or 'unspecified','file':str(path),'where':where+'.'+key})
+                          if isinstance(val,bool) and val is False and any(token in key.lower() for token in ('valid','complete','success','pass')):
+                              explicit_fail.append((str(path),where,key))
+                          walk(val,where+'.'+key if where else key)
+                  elif isinstance(item,list):
+                      for index,val in enumerate(item): walk(val,f'{where}[{index}]')
+              walk(value)
+          # Prefer complete session observations from native/session result paths.
+          def quality(row):
+              score=0
+              low=(row['file']+' '+row['where']).lower()
+              if row['time_key'] in ('session_ns','complete_session_ns'): score+=100
+              if any(x in low for x in ('native','comparison','session','series')): score+=60
+              if any(x in low for x in ('query','per_query','rows')): score-=80
+              return score
+          per_week={}
+          chosen_files={}
+          for week in WEEKS:
+              candidates=defaultdict(list)
+              for row in rows:
+                  if row['week']==week: candidates[row['file']].append(row)
+              eligible=[]
+              for file,group in candidates.items():
+                  if {'spectra','minicard'} <= {r['arm'] for r in group}:
+                      eligible.append((max(quality(r) for r in group),len(group),file,group))
+              if not eligible: continue
+              _,_,file,group=max(eligible)
+              chosen_files[week]=file
+              result={}
+              for arm in ('spectra','minicard'):
+                  by_order=defaultdict(list)
+                  for row in group:
+                      if row['arm']==arm: by_order[row['order']].append(row['time'])
+                  means={order:statistics.fmean(values) for order,values in by_order.items()}
+                  order=(max(means,key=means.get) if arm=='spectra' else min(means,key=means.get))
+                  values=by_order[order]
+                  result[arm]={'order':order,'values':values,'mean':statistics.fmean(values)}
+              result['mean_ratio']=result['spectra']['mean']/result['minicard']['mean']
+              per_week[week]=result
+          def quantile(values,p):
+              values=sorted(values); position=(len(values)-1)*p
+              lo=int(position); hi=min(lo+1,len(values)-1); part=position-lo
+              return values[lo]*(1-part)+values[hi]*part
+          all_weeks=len(per_week)==6
+          mean_draws=[]
+          if all_weeks:
+              for draw in itertools.product(range(6),repeat=6):
+                  selected=[WEEKS[index] for index in draw]
+                  a=[per_week[w]['spectra']['mean'] for w in selected]
+                  b=[per_week[w]['minicard']['mean'] for w in selected]
+                  mean_draws.append(statistics.fmean(a)/statistics.fmean(b))
+          p95_draws=[]
+          if all_weeks:
+              rng=random.Random(118603)
+              for _ in range(20000):
+                  selected=[rng.choice(WEEKS) for __ in WEEKS]
+                  a=[]; b=[]
+                  for week in selected:
+                      a.extend(per_week[week]['spectra']['values'])
+                      b.extend(per_week[week]['minicard']['values'])
+                  p95_draws.append(quantile(a,.95)/quantile(b,.95))
+          if all_weeks:
+              all_a=sum((per_week[w]['spectra']['values'] for w in WEEKS),[])
+              all_b=sum((per_week[w]['minicard']['values'] for w in WEEKS),[])
+              mean_ratio=statistics.fmean(all_a)/statistics.fmean(all_b)
+              mean_interval=[quantile(mean_draws,.025),quantile(mean_draws,.975)]
+              p95_ratio=quantile(all_a,.95)/quantile(all_b,.95)
+              p95_interval=[quantile(p95_draws,.025),quantile(p95_draws,.975)]
+          else:
+              mean_ratio=mean_interval=p95_ratio=p95_interval=None
+          pass_gate=bool(all_weeks and all(v['mean_ratio']<1 for v in per_week.values())
+                         and mean_interval[1]<=.50 and p95_interval[1]<=.90 and not explicit_fail)
+          report={'schema':'spectra.real_traffic.six_week_audit.v1','weeks':per_week,
+                  'chosen_files':chosen_files,'explicit_failure_flags':explicit_fail,
+                  'primary':{'all_weeks':all_weeks,'mean_ratio':mean_ratio,
+                             'mean_ratio_95':mean_interval,'p95_ratio':p95_ratio,
+                             'p95_ratio_95':p95_interval,'pass':pass_gate}}
+          Path('combined/SIX_WEEK_AUDIT.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
+          lines=['# Six-week temporal audit','',f'**Verdict: {"PASS" if pass_gate else "NOT PASSED"}**','']
+          if all_weeks:
+              lines += ['| Week | SPECTRA order | MiniCard order | Mean ratio |','|---|---|---|---:|']
+              for week in WEEKS:
+                  item=per_week[week]
+                  lines.append(f'| {week} | {item["spectra"]["order"]} | {item["minicard"]["order"]} | {item["mean_ratio"]:.6f} |')
+              lines += ['',f'- Pooled mean ratio: **{mean_ratio:.6f}**',
+                        f'- Exact week-clustered 95% interval: **[{mean_interval[0]:.6f}, {mean_interval[1]:.6f}]**',
+                        f'- Pooled p95 ratio: **{p95_ratio:.6f}**',
+                        f'- Fixed-seed p95 interval: **[{p95_interval[0]:.6f}, {p95_interval[1]:.6f}]**']
+          else:
+              lines += ['The complete six-week result inventory was not found.']
+          Path('combined/SIX_WEEK_AUDIT.md').write_text('\n'.join(lines)+'\n')
+          Path('combined/verdict.txt').write_text(('PASS' if pass_gate else 'NOT_PASSED')+'\n')
+          PY
+          python combined/audit.py
+      - name: Publish the immutable decision
+        run: |
+          verdict=$(cat combined/verdict.txt)
+          cp combined/SIX_WEEK_AUDIT.md experiments/real_traffic/SIX_WEEK_AUDIT.md
+          cp combined/SIX_WEEK_AUDIT.json experiments/real_traffic/SIX_WEEK_AUDIT.json
+          git config user.name Tugrap
+          git config user.email 106766396+tugrapaydiner@users.noreply.github.com
+          git add experiments/real_traffic/SIX_WEEK_AUDIT.md experiments/real_traffic/SIX_WEEK_AUDIT.json
+          if git diff --cached --quiet; then
+            echo 'The audit is already published.'
+          elif test "$verdict" = PASS; then
+            git commit -m 'The six weeks passed'
+            git push origin HEAD:real-traffic
+          else
+            git commit -m 'Keep the six-week result honest'
+            git push origin HEAD:real-traffic
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: six-week-temporal-audit-${{ github.run_id }}
+          path: combined
+          include-hidden-files: true
+          retention-days: 90
