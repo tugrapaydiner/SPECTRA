@@ -1,0 +1,302 @@
+{
+  "candidate": {
+    "batch": false,
+    "builder": "build_quotient_runtime",
+    "library": "/tmp/spectra-simple-audit-srnqt66a/quotient_query-build_quotient_runtime/_spectra_quotient_query.cpython-313-x86_64-linux-gnu.so",
+    "module": "spectra.cnf.quotient_query",
+    "prepare": "prepare",
+    "runtime": "QuotientRuntime",
+    "solve": "solve"
+  },
+  "case_sha256": "752f01c13b1be66885b478ba20636939746617e79067f6919ff21afe58a06a5d",
+  "decision": "not_substantial",
+  "queries": 2015,
+  "rows": [
+    {
+      "arm": "spectra",
+      "dispose_ns": 15289,
+      "order": "shuffle",
+      "query_ns": 859699497,
+      "round": 3,
+      "session_ns": 859958362,
+      "setup_ns": 243576
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 11141,
+      "order": "shuffle",
+      "query_ns": 780474032,
+      "round": 3,
+      "session_ns": 780557650,
+      "setup_ns": 72477
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 8957,
+      "order": "reverse",
+      "query_ns": 854937365,
+      "round": 2,
+      "session_ns": 855139585,
+      "setup_ns": 193263
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 8596,
+      "order": "reverse",
+      "query_ns": 778602071,
+      "round": 2,
+      "session_ns": 778680668,
+      "setup_ns": 70001
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 9968,
+      "order": "reverse",
+      "query_ns": 855938349,
+      "round": 4,
+      "session_ns": 856156529,
+      "setup_ns": 208212
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 9217,
+      "order": "reverse",
+      "query_ns": 774862533,
+      "round": 4,
+      "session_ns": 774952261,
+      "setup_ns": 80511
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 9828,
+      "order": "chronological",
+      "query_ns": 858337350,
+      "round": 4,
+      "session_ns": 858556862,
+      "setup_ns": 209684
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 17563,
+      "order": "chronological",
+      "query_ns": 779225006,
+      "round": 4,
+      "session_ns": 779310357,
+      "setup_ns": 67788
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 9659,
+      "order": "reverse",
+      "query_ns": 858090267,
+      "round": 0,
+      "session_ns": 858290493,
+      "setup_ns": 190567
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 8496,
+      "order": "reverse",
+      "query_ns": 774692565,
+      "round": 0,
+      "session_ns": 774768618,
+      "setup_ns": 67557
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 20508,
+      "order": "shuffle",
+      "query_ns": 861611079,
+      "round": 2,
+      "session_ns": 861890884,
+      "setup_ns": 259297
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 6161,
+      "order": "shuffle",
+      "query_ns": 789759927,
+      "round": 2,
+      "session_ns": 789846529,
+      "setup_ns": 80441
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 10159,
+      "order": "shuffle",
+      "query_ns": 862809595,
+      "round": 0,
+      "session_ns": 863012185,
+      "setup_ns": 192431
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 7865,
+      "order": "shuffle",
+      "query_ns": 778809629,
+      "round": 0,
+      "session_ns": 778885973,
+      "setup_ns": 68479
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 9237,
+      "order": "chronological",
+      "query_ns": 855105926,
+      "round": 3,
+      "session_ns": 855307804,
+      "setup_ns": 192641
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 8666,
+      "order": "chronological",
+      "query_ns": 786235066,
+      "round": 3,
+      "session_ns": 786312691,
+      "setup_ns": 68959
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 9748,
+      "order": "chronological",
+      "query_ns": 851206422,
+      "round": 2,
+      "session_ns": 851409322,
+      "setup_ns": 193152
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 6702,
+      "order": "chronological",
+      "query_ns": 768159915,
+      "round": 2,
+      "session_ns": 768247439,
+      "setup_ns": 80822
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 9909,
+      "order": "shuffle",
+      "query_ns": 852414779,
+      "round": 4,
+      "session_ns": 852615035,
+      "setup_ns": 190347
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 8636,
+      "order": "shuffle",
+      "query_ns": 781889826,
+      "round": 4,
+      "session_ns": 781967631,
+      "setup_ns": 69169
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 8626,
+      "order": "reverse",
+      "query_ns": 860443406,
+      "round": 1,
+      "session_ns": 860648631,
+      "setup_ns": 196599
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 8927,
+      "order": "reverse",
+      "query_ns": 771795404,
+      "round": 1,
+      "session_ns": 771871977,
+      "setup_ns": 67646
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 10560,
+      "order": "chronological",
+      "query_ns": 854705015,
+      "round": 0,
+      "session_ns": 854908507,
+      "setup_ns": 192932
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 8015,
+      "order": "chronological",
+      "query_ns": 768502299,
+      "round": 0,
+      "session_ns": 768578151,
+      "setup_ns": 67837
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 11412,
+      "order": "reverse",
+      "query_ns": 850579559,
+      "round": 3,
+      "session_ns": 850801035,
+      "setup_ns": 210064
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 9127,
+      "order": "reverse",
+      "query_ns": 767328798,
+      "round": 3,
+      "session_ns": 767405893,
+      "setup_ns": 67968
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 9618,
+      "order": "chronological",
+      "query_ns": 854629433,
+      "round": 1,
+      "session_ns": 854832183,
+      "setup_ns": 193132
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 8847,
+      "order": "chronological",
+      "query_ns": 798439847,
+      "round": 1,
+      "session_ns": 798515880,
+      "setup_ns": 67186
+    },
+    {
+      "arm": "spectra",
+      "dispose_ns": 9127,
+      "order": "shuffle",
+      "query_ns": 859188552,
+      "round": 1,
+      "session_ns": 859411049,
+      "setup_ns": 213370
+    },
+    {
+      "arm": "simple",
+      "dispose_ns": 7574,
+      "order": "shuffle",
+      "query_ns": 772037126,
+      "round": 1,
+      "session_ns": 772112227,
+      "setup_ns": 67527
+    }
+  ],
+  "schema": "spectra.real_traffic.simple_comparison.v1",
+  "spectra_over_simple": 1.1011757291042201,
+  "summary": {
+    "simple": {
+      "maximum_ns": 798515880,
+      "mean_ns": 778134263.0,
+      "median_ns": 778680668,
+      "minimum_ns": 767405893
+    },
+    "spectra": {
+      "maximum_ns": 863012185,
+      "mean_ns": 856862564.4,
+      "median_ns": 856156529,
+      "minimum_ns": 850801035
+    }
+  }
+}
