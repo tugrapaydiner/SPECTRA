@@ -1,3 +1,4 @@
+# Development-only source acquisition. This workflow never opens a confirmation holdout.
 name: Fetch GEANT development trace
 on:
   push:
