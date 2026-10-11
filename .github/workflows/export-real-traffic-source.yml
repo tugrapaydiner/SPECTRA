@@ -1,0 +1,36 @@
+name: Export real-traffic source
+on:
+  push:
+    branches: [real-traffic]
+    paths:
+      - .github/workflows/export-real-traffic-source.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export the exact source tree and reachable history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          git rev-parse HEAD > delivery/commit.txt
+          git rev-parse HEAD^{tree} > delivery/tree.txt
+          git archive --format=tar.gz --prefix=SPECTRA/ HEAD > delivery/source.tar.gz
+          git bundle create delivery/history.bundle --all
+          sha256sum delivery/commit.txt delivery/tree.txt delivery/source.tar.gz delivery/history.bundle > delivery/SHA256SUMS.txt
+          printf '%s\n' 'Exact real-traffic source export only. No matrix parsing, solver execution, holdout access, or scientific conclusion.' > delivery/ROLE.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-traffic-source-${{ github.run_id }}
+          path: delivery
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
