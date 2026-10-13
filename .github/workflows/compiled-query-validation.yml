@@ -1,0 +1,86 @@
+name: compiled-query-validation
+on:
+  push:
+    branches: [research/compiled-query-validation]
+    paths:
+      - '.github/workflows/compiled-query-validation.yml'
+      - 'experiments/compiled_query/**'
+      - 'spectra/cnf/quotient_query.py'
+      - 'spectra/_native/quotient_query.cpp'
+  pull_request:
+    paths:
+      - '.github/workflows/compiled-query-validation.yml'
+      - 'experiments/compiled_query/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: compiled-query-validation-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preserve the exact source before execution
+        run: |
+          set -euo pipefail
+          mkdir -p validation
+          git rev-parse HEAD > validation/source_commit.txt
+          git rev-parse HEAD^{tree} > validation/source_tree.txt
+          git bundle create validation/source.bundle HEAD
+          sha256sum validation/source.bundle > validation/source_bundle.sha256
+      - uses: actions/upload-artifact@v4
+        if: matrix.python == '3.13'
+        with:
+          name: compiled-query-source-${{ github.run_id }}
+          path: validation/source*
+          retention-days: 30
+          if-no-files-found: error
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/checkout@v4
+        with:
+          repository: tulip-control/dd
+          ref: 4442d498ddea1bec0071315f538cb5ef37443985
+          path: validation/upstream-dd
+          persist-credentials: false
+      - name: Install pinned independently maintained native controls
+        env:
+          DD_FETCH: '1'
+          DD_CUDD: '1'
+        run: |
+          set -euo pipefail
+          python -m pip install 'setuptools==80.9.0' 'wheel==0.45.1' 'Cython==3.1.3'
+          python -m pip install --no-build-isolation ./validation/upstream-dd
+          python -m pip install 'python-sat==1.9.dev15' 'pytest==8.4.2' 'numpy==2.2.6'
+          python -c 'import dd.cudd; from pysat.solvers import Solver; s = Solver(name="minicard"); s.delete()'
+          python -m pip freeze > validation/environment.txt
+          python -VV > validation/python.txt
+          uname -a > validation/platform.txt
+          git -C validation/upstream-dd rev-parse HEAD > validation/dd_source_commit.txt
+      - name: Run semantic and harness contracts with native CUDD required
+        env:
+          SPECTRA_REQUIRE_CUDD: '1'
+        run: |
+          set -euo pipefail
+          python -m pytest experiments/compiled_query -q --junitxml=validation/contracts.xml 2>&1 | tee validation/contracts.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compiled-query-validation-${{ matrix.python }}-${{ github.run_id }}
+          path: |
+            validation/*.txt
+            validation/*.xml
+            validation/*.log
+          retention-days: 30
+          if-no-files-found: error
