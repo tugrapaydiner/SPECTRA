@@ -16,7 +16,9 @@ from .binary_list import BinaryListProblem, CompiledAnswer, CompiledListSession
 from .cases import digest, load_case
 
 ARMS = ('scc', 'none', 'minicard', 'cadical195',
-        'cudd-natural', 'cudd-bfs', 'cudd-occurrence')
+        'cudd-natural', 'cudd-bfs', 'cudd-occurrence',
+        'cudd-frontier-natural', 'cudd-frontier-bfs', 'cudd-frontier-occurrence',
+        'cudd-seeded-bfs')
 STATUS = {'UNSAT': 0, 'SAT_VERIFIED': 1, 'UNKNOWN': 2}
 HEADER = struct.Struct('<4sIQ')
 
@@ -69,13 +71,17 @@ class SATSession:
 
 class BDDSession:
     def __init__(self, problem, runtime, order, max_bytes, max_nodes):
+        construction = ('seeded' if order.startswith('seeded-') else
+                        'frontier' if order.startswith('frontier-') else 'balanced64')
+        order = order.removeprefix('frontier-').removeprefix('seeded-')
         self._checker = runtime.checker(problem.n, problem.palette, problem.edges,
                                         problem.masks, max_bytes)
         self._session = None
         try:
             self._session = CompiledListSession(problem, backend='cudd', order=order,
                                                 checker=self._checker.check,
-                                                max_nodes=max_nodes, memory_bytes=max_bytes)
+                                                max_nodes=max_nodes, memory_bytes=max_bytes,
+                                                construction=construction)
         except BaseException:
             self._checker.close()
             raise
