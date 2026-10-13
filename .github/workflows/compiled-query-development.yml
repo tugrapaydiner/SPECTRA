@@ -1,0 +1,92 @@
+name: compiled-query-development
+on:
+  push:
+    branches: [research/compiled-query-validation]
+    paths: ['.github/workflows/compiled-query-development.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  development:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      PYTHONHASHSEED: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/checkout@v4
+        with:
+          repository: tulip-control/dd
+          ref: 4442d498ddea1bec0071315f538cb5ef37443985
+          path: .ci-dd
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: marijnheule/clicolcom
+          ref: 4932048642da2144f387961b595112277afff82f
+          path: .ci-graphs
+          persist-credentials: false
+      - name: Install the pinned independent backends
+        env:
+          DD_FETCH: '1'
+          DD_CUDD: '1'
+        run: |
+          set -euo pipefail
+          python -m pip install 'setuptools==80.9.0' 'wheel==0.45.1' 'Cython==3.1.3'
+          python -m pip install --no-build-isolation ./.ci-dd
+          python -m pip install 'python-sat==1.9.dev15'
+          python -c 'import dd.cudd; import pysat.solvers'
+      - name: Preserve source and the two exposed development inputs
+        run: |
+          set -euo pipefail
+          mkdir -p development/graphs
+          for name in wap05a.col wap06a.col; do
+            mapfile -t matches < <(find .ci-graphs -type f -name "$name")
+            test "${#matches[@]}" -eq 1
+            cp "${matches[0]}" "development/graphs/$name"
+          done
+          git rev-parse HEAD > development/source_commit.txt
+          git bundle create development/source.bundle HEAD
+          python -m pip freeze > development/environment.txt
+          python -m experiments.compiled_query.study export-wap --graphs development/graphs --output development/cases
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compiled-query-development-inputs-${{ matrix.python }}-${{ github.run_id }}
+          path: |
+            development/source.bundle
+            development/source_commit.txt
+            development/environment.txt
+            development/graphs/
+            development/cases/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Freeze and run the separately named development matrix
+        run: |
+          set -euo pipefail
+          library="$(python -c "from spectra.cnf.quotient_query import build_quotient_runtime; print(build_quotient_runtime('development/build'))")"
+          python -m experiments.compiled_query.study new --cases development/cases --library "$library" --output development/study --prefixes 1 1024 --repeats 3 --deadline 15
+          python -m experiments.compiled_query.study run --output development/study | tee development/run.log
+          python -m experiments.compiled_query.study audit --output development/study > development/audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compiled-query-development-results-${{ matrix.python }}-${{ github.run_id }}
+          path: |
+            development/study/
+            development/build/
+            development/run.log
+            development/audit.json
+          retention-days: 30
+          if-no-files-found: error
