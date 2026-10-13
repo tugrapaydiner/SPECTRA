@@ -24,7 +24,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .merge/patch/*.txt | tr -d '\n' | base64 -d | gzip -dc > /tmp/checked-core.patch
+          {
+            cat .merge/patch/000.txt .merge/patch/001.txt
+            cat .merge/fix/002-*.txt
+            cat .merge/patch/003.txt .merge/patch/004.txt .merge/patch/005.txt .merge/patch/006.txt
+            cat .merge/fix/007-*.txt
+            cat .merge/patch/008.txt .merge/patch/009.txt .merge/patch/010.txt
+            cat .merge/fix/011-*.txt
+          } | tr -d '\n' | base64 -d | gzip -dc > /tmp/checked-core.patch
           printf '%s  %s\n' 'beb31a2dca9ddc10bf7747ffa6e0304fc0f3b275bb9fa1ce5fc53b0f7e733835' '/tmp/checked-core.patch' | sha256sum --check --strict
           git apply --check --whitespace=error /tmp/checked-core.patch
           git apply --index --whitespace=error /tmp/checked-core.patch
