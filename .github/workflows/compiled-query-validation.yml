@@ -36,7 +36,12 @@ jobs:
           mkdir -p validation
           git rev-parse HEAD > validation/source_commit.txt
           git rev-parse HEAD^{tree} > validation/source_tree.txt
-          git bundle create validation/source.bundle HEAD
+          # The retained helper is not an ancestor of main. A HEAD-only bundle
+          # omits it and cannot run the unchanged historical workspace audit.
+          git fetch --no-tags origin 095c1ed65ffa3beabc55e42052c2f3b038a3150e
+          git update-ref refs/spectra/audit-helper FETCH_HEAD
+          git rev-parse refs/spectra/audit-helper > validation/historical_helper_commit.txt
+          git bundle create validation/source.bundle HEAD refs/spectra/audit-helper
           sha256sum validation/source.bundle > validation/source_bundle.sha256
       - uses: actions/upload-artifact@v4
         if: matrix.python == '3.13'
@@ -68,6 +73,11 @@ jobs:
           python -VV > validation/python.txt
           uname -a > validation/platform.txt
           git -C validation/upstream-dd rev-parse HEAD > validation/dd_source_commit.txt
+      - name: Verify release navigation and protected historical evidence
+        run: |
+          set -euo pipefail
+          python scripts/check_release_readiness.py --out validation/release_audit.json
+          python scripts/audit_workspace.py --out validation/workspace_audit.json
       - name: Run semantic and harness contracts with native CUDD required
         env:
           SPECTRA_REQUIRE_CUDD: '1'
@@ -82,5 +92,6 @@ jobs:
             validation/*.txt
             validation/*.xml
             validation/*.log
+            validation/*_audit.json
           retention-days: 30
           if-no-files-found: error
