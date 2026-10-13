@@ -231,6 +231,7 @@ compiler, and deployment experiments. Each has its own evidence and limitations.
 | Native SVM execution | faithful same-model CPU execution and pipeline receipts | best task accuracy or universal speedups |
 | Neural/low-bit history | retained hypotheses, models, failures, and controls | a flagship learned-reasoning result |
 | Cover/domain experiments | exact structured execution and negative competitor results | universal graph-colouring advantage |
+| Two-plan migration support | complete minimum-change answers, fresh contradiction paths, independent native checking | operational network control, fresh confirmation, or universal speedups |
 
 The latest published package release remains
 [v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1). The WAP
