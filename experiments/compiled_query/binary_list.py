@@ -125,7 +125,11 @@ class CompiledListSession:
         self._choices = self.problem.colors()
         self._checker = self.problem.check if checker is None else checker
         self._lock = threading.RLock()
-        self._engine = CompiledCNF(problem.n, self.problem.cnf(), backend=backend,
+        engine_type = CompiledCNF
+        if construction == 'reduced':
+            from .reduced import ReducedCNF
+            engine_type = ReducedCNF
+        self._engine = engine_type(problem.n, self.problem.cnf(), backend=backend,
                                   order=order, reordering=reordering,
                                   max_nodes=max_nodes, memory_bytes=memory_bytes,
                                   construction=construction)
