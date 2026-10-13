@@ -18,6 +18,7 @@ jobs:
       OMP_NUM_THREADS: '1'
       OPENBLAS_NUM_THREADS: '1'
       PYTHONHASHSEED: '0'
+      SPECTRA_REQUIRE_CUDD: '1'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,7 +47,7 @@ jobs:
           set -euo pipefail
           python -m pip install 'setuptools==80.9.0' 'wheel==0.45.1' 'Cython==3.1.3'
           python -m pip install --no-build-isolation ./.ci-dd
-          python -m pip install 'python-sat==1.9.dev15'
+          python -m pip install 'python-sat==1.9.dev15' 'pytest==8.4.2' 'numpy==2.2.6'
           python -c 'import dd.cudd; import pysat.solvers'
       - name: Preserve source and the two exposed development inputs
         run: |
@@ -58,7 +59,9 @@ jobs:
             cp "${matches[0]}" "development/graphs/$name"
           done
           git rev-parse HEAD > development/source_commit.txt
-          git bundle create development/source.bundle HEAD
+          git fetch --no-tags origin 095c1ed65ffa3beabc55e42052c2f3b038a3150e
+          git update-ref refs/spectra/audit-helper FETCH_HEAD
+          git bundle create development/source.bundle HEAD refs/spectra/audit-helper
           python -m pip freeze > development/environment.txt
           python -m experiments.compiled_query.study export-wap --graphs development/graphs --output development/cases
       - uses: actions/upload-artifact@v4
@@ -72,13 +75,21 @@ jobs:
             development/cases/
           retention-days: 30
           if-no-files-found: error
-      - name: Freeze and run the separately named development matrix
+      - name: Require native semantic contracts before timing
+        run: |
+          set -euo pipefail
+          python -m pytest experiments/compiled_query -q --junitxml=development/contracts.xml 2>&1 | tee development/contracts.log
+      - name: Freeze and run the strengthened development matrix
         run: |
           set -euo pipefail
           library="$(python -c "from spectra.cnf.quotient_query import build_quotient_runtime; print(build_quotient_runtime('development/build'))")"
-          python -m experiments.compiled_query.study new --cases development/cases --library "$library" --output development/study --prefixes 1 1024 --repeats 3 --deadline 15
+          # These are new, explicit arms. The legacy balanced-construction timeout
+          # study at run 38466688942 is not overwritten or treated as a speedup.
+          python -m experiments.compiled_query.study new --cases development/cases --library "$library" --output development/study --arms scc none minicard cadical195 cudd-frontier-natural cudd-frontier-bfs cudd-frontier-occurrence cudd-seeded-bfs --prefixes 1 1024 --repeats 3 --deadline 15
           python -m experiments.compiled_query.study run --output development/study | tee development/run.log
           python -m experiments.compiled_query.study audit --output development/study > development/audit.json
+          # Audit integrity is not the same as all arms completing. Inspect the
+          # retained COMPLETE/INCOMPLETE/TIMEOUT cells before making any claim.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -88,5 +99,7 @@ jobs:
             development/build/
             development/run.log
             development/audit.json
+            development/contracts.xml
+            development/contracts.log
           retention-days: 30
           if-no-files-found: error
