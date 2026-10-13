@@ -79,13 +79,14 @@ jobs:
         run: |
           set -euo pipefail
           python -m pytest experiments/compiled_query -q --junitxml=development/contracts.xml 2>&1 | tee development/contracts.log
-      - name: Freeze and run the strengthened development matrix
+      - name: Freeze and run the generic-reduction development matrix
         run: |
           set -euo pipefail
           library="$(python -c "from spectra.cnf.quotient_query import build_quotient_runtime; print(build_quotient_runtime('development/build'))")"
-          # These are new, explicit arms. The legacy balanced-construction timeout
-          # study at run 38466688942 is not overwritten or treated as a speedup.
-          python -m experiments.compiled_query.study new --cases development/cases --library "$library" --output development/study --arms scc none minicard cadical195 cudd-frontier-natural cudd-frontier-bfs cudd-frontier-occurrence cudd-seeded-bfs --prefixes 1 1024 --repeats 3 --deadline 15
+          # Legacy and frontier/seeded studies remain in runs 38466688942 and
+          # 38480909635. Failed controls do not become infinite speedups.
+          # The reduced arms compute their OWN generic CNF map and charge it.
+          python -m experiments.compiled_query.study new --cases development/cases --library "$library" --output development/study --arms scc none minicard cadical195 cudd-frontier-bfs cudd-reduced-natural cudd-reduced-bfs cudd-reduced-occurrence --prefixes 1 1024 --repeats 3 --deadline 15
           python -m experiments.compiled_query.study run --output development/study | tee development/run.log
           python -m experiments.compiled_query.study audit --output development/study > development/audit.json
           # Audit integrity is not the same as all arms completing. Inspect the
