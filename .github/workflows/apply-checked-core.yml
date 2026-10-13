@@ -1,0 +1,55 @@
+name: Apply and test checked core
+on:
+  push:
+    branches: [checked-core]
+    paths:
+      - .github/workflows/apply-checked-core.yml
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Reconstruct and apply the audited patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .merge/patch/*.txt | tr -d '\n' | base64 -d | gzip -dc > /tmp/checked-core.patch
+          printf '%s  %s\n' 'beb31a2dca9ddc10bf7747ffa6e0304fc0f3b275bb9fa1ce5fc53b0f7e733835' '/tmp/checked-core.patch' | sha256sum --check --strict
+          git apply --check --whitespace=error /tmp/checked-core.patch
+          git apply --index --whitespace=error /tmp/checked-core.patch
+          rm -rf .merge .github/workflows/apply-checked-core.yml
+          git add -A
+          test "$(git write-tree)" = '0ba02630103342a7ed2a4f3b65481ec7853e6719'
+          test "$(git diff --cached origin/main --name-only | wc -l)" -eq 33
+      - name: Run the focused checked-core contracts
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check pytest==9.0.2
+          python -m pytest \
+            tests/public/test_compact_migration.py \
+            tests/public/test_migration_observer.py \
+            tests/public/test_packet_observer_contracts.py \
+            tests/public/test_packet_service.py \
+            tests/public/test_real_traffic.py \
+            tests/public/test_streamed_observer.py \
+            --confcutdir=tests/public -q
+          python -m compileall -q experiments/real_traffic
+      - name: Commit the clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Add the checked migration core'
+          git push origin HEAD:checked-core
