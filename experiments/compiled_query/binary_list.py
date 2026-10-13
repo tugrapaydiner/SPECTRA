@@ -117,7 +117,8 @@ class CompiledListSession:
     def __init__(self, problem: BinaryListProblem, *, backend: str = 'cudd',
                  order: str = 'bfs', reordering: bool = True,
                  checker: Callable[[bytes, Sequence[tuple[int, int]]], bool] | None = None,
-                 max_nodes: int = 2_000_000, memory_bytes: int = 512 << 20):
+                 max_nodes: int = 2_000_000, memory_bytes: int = 512 << 20,
+                 construction: str = 'balanced64'):
         # Revalidate even a caller-constructed dataclass and own immutable inputs.
         self.problem = BinaryListProblem.create(problem.n, problem.palette,
                                                problem.edges, problem.masks)
@@ -126,7 +127,8 @@ class CompiledListSession:
         self._lock = threading.RLock()
         self._engine = CompiledCNF(problem.n, self.problem.cnf(), backend=backend,
                                   order=order, reordering=reordering,
-                                  max_nodes=max_nodes, memory_bytes=memory_bytes)
+                                  max_nodes=max_nodes, memory_bytes=memory_bytes,
+                                  construction=construction)
 
     def solve(self, restrictions: Iterable[Sequence[int]] = ()) -> CompiledAnswer:
         query = self.problem.freeze_query(restrictions)
