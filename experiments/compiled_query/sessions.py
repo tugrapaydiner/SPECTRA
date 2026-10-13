@@ -18,7 +18,8 @@ from .cases import digest, load_case
 ARMS = ('scc', 'none', 'minicard', 'cadical195',
         'cudd-natural', 'cudd-bfs', 'cudd-occurrence',
         'cudd-frontier-natural', 'cudd-frontier-bfs', 'cudd-frontier-occurrence',
-        'cudd-seeded-bfs')
+        'cudd-seeded-bfs', 'cudd-reduced-natural', 'cudd-reduced-bfs',
+        'cudd-reduced-occurrence')
 STATUS = {'UNSAT': 0, 'SAT_VERIFIED': 1, 'UNKNOWN': 2}
 HEADER = struct.Struct('<4sIQ')
 
@@ -71,9 +72,10 @@ class SATSession:
 
 class BDDSession:
     def __init__(self, problem, runtime, order, max_bytes, max_nodes):
-        construction = ('seeded' if order.startswith('seeded-') else
+        construction = ('reduced' if order.startswith('reduced-') else
+                        'seeded' if order.startswith('seeded-') else
                         'frontier' if order.startswith('frontier-') else 'balanced64')
-        order = order.removeprefix('frontier-').removeprefix('seeded-')
+        order = order.removeprefix('frontier-').removeprefix('seeded-').removeprefix('reduced-')
         self._checker = runtime.checker(problem.n, problem.palette, problem.edges,
                                         problem.masks, max_bytes)
         self._session = None
@@ -132,6 +134,7 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
     case, case_hash = load_case(case_path)
     if type(count) is not int or count != len(case.queries) or count < 1:
         raise ValueError('input must contain exactly the requested nonempty prefix')
+            
     indices = query_order(count, order, seed)
     p = case.problem
     identity = (case.name, case.cluster, case.provenance)
