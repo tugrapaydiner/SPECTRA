@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   pinned-cudd:
-    name: Build pinned CUDD dependency (Python ${{ matrix.python }})
+    name: Build pinned native controls (Python ${{ matrix.python }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Build the explicitly pinned native dependency
+      - name: Build the explicitly pinned native dependencies
         env:
           DD_FETCH: '1'
           DD_CUDD: '1'
@@ -34,18 +34,24 @@ jobs:
           mkdir -p wheelhouse
           python -m pip install 'setuptools==80.9.0' 'wheel==0.45.1' 'Cython==3.1.3'
           python -m pip wheel --no-build-isolation --wheel-dir wheelhouse ./upstream-dd
-          python -m pip install --no-index --find-links wheelhouse dd
-      - name: Verify native import and record dependency provenance
+          python -m pip wheel --wheel-dir wheelhouse 'python-sat==1.9.dev15'
+          python -m pip install --no-index --find-links wheelhouse dd 'python-sat==1.9.dev15'
+      - name: Verify native imports and record dependency provenance
         run: |
           set -euo pipefail
           python - <<'PY'
           import dd.cudd
+          from pysat.solvers import Solver
           bdd = dd.cudd.BDD()
           bdd.declare('x')
           root = bdd.var('x')
           assert bdd.pick(root, care_vars={'x'}) == {'x': True}
           del root, bdd
-          print('Native CUDD import and one-variable dependency smoke check passed.')
+          for name in ('minicard', 'cadical195'):
+              with Solver(name=name, bootstrap_with=[[1]]) as solver:
+                  assert solver.solve()
+                  assert not solver.solve(assumptions=[-1])
+          print('Native CUDD, MiniCard and CaDiCaL dependency smoke checks passed.')
           print('This job is dependency preparation, not SPECTRA benchmark validation.')
           PY
           git -C upstream-dd rev-parse HEAD > wheelhouse/upstream_commit.txt
