@@ -134,7 +134,6 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
     case, case_hash = load_case(case_path)
     if type(count) is not int or count != len(case.queries) or count < 1:
         raise ValueError('input must contain exactly the requested nonempty prefix')
-            
     indices = query_order(count, order, seed)
     p = case.problem
     identity = (case.name, case.cluster, case.provenance)
