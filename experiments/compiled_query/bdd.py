@@ -102,7 +102,10 @@ class CompiledCNF:
 
     def __init__(self, nvars: int, clauses: Iterable[Iterable[int]], *,
                  backend: str = 'cudd', order: str = 'bfs', reordering: bool = True,
-                 max_nodes: int = 2_000_000, memory_bytes: int = 512 << 20):
+                 max_nodes: int = 2_000_000, memory_bytes: int = 512 << 20,
+                 construction: str = 'balanced64'):
+        if construction not in ('balanced64', 'frontier', 'seeded'):
+            raise ValueError('construction must be balanced64, frontier or seeded')
         if backend not in ('cudd', 'autoref'):
             raise ValueError('backend must be explicitly cudd or autoref')
         if type(reordering) is not bool:
@@ -113,6 +116,11 @@ class CompiledCNF:
             raise ValueError('memory_bytes must be an exact integer of at least 1 MiB')
         frozen = freeze_cnf(nvars, clauses)
         permutation = variable_order(nvars, frozen, order)
+        contradiction, pairs = False, ()
+        if construction == 'seeded':
+            from .preprocess import binary_equivalences, equivalence_order
+            contradiction, pairs = binary_equivalences(nvars, frozen)
+            permutation = equivalence_order(permutation, pairs)
         try:
             module = importlib.import_module('dd.' + backend)
         except ImportError as exc:
@@ -127,48 +135,93 @@ class CompiledCNF:
         self.backend = backend
         self.order = order
         self.reordering = reordering
+        self.construction = construction
         self._names = tuple(f'x{index}' for index in range(1, nvars + 1))
         self._care_vars = set(self._names)
         self._max_nodes = max_nodes
         self._clauses = len(frozen)
+        self._equivalence_seeds = 0
+        self._binary_contradiction = False
+        # CUDD __len__ calls Cudd_CheckZeroRef: a whole-manager audit, not an
+        # O(1) counter. Keep the old arm intact; new arms amortize this SOFT
+        # diagnostic over 64 operation checkpoints. OS limits remain unchanged.
+        self._guard_interval = 1 if construction == 'balanced64' else 64
+        self._guard_ticks = 0
+        self._guard_scans = 0
         try:
             self._bdd = (module.BDD(memory_estimate=memory_bytes)
                          if backend == 'cudd' else module.BDD())
             self._bdd.configure(reordering=reordering)
             self._bdd.declare(*(self._names[index - 1] for index in permutation))
             self._root = self._bdd.true
-            self._guard()
-            # No expression parser and no Python string-CNF parsing in the arm.
-            # Small balanced blocks prevent holding every clause BDD alive.
-            for offset in range(0, len(frozen), 64):
-                block = []
-                for row in frozen[offset:offset + 64]:
+            self._guard(force=True)
+            if construction == 'seeded':
+                self._binary_contradiction = contradiction
+                self._equivalence_seeds = len(pairs)
+                if contradiction:
+                    self._root = self._bdd.false
+                else:
+                    for left, right in pairs:
+                        a = self._bdd.var(self._names[left - 1])
+                        b = self._bdd.var(self._names[abs(right) - 1])
+                        self._root &= self._bdd.apply('equiv', a, b if right > 0 else ~b)
+                        self._guard()
+            if construction in ('frontier', 'seeded'):
+                # Query-blind scheduling on ORIGINAL generic CNF incidence.
+                # Complete early-variable constraints before later frontiers;
+                # never build an arbitrary 64-clause intermediate conjunction.
+                # Dynamic BDD reordering remains enabled and is not overridden.
+                rank = {variable: i for i, variable in enumerate(permutation)}
+                scheduled = sorted(frozen, key=lambda row: (
+                    max((rank[abs(x)] for x in row), default=-1),
+                    min((rank[abs(x)] for x in row), default=-1), row))
+                for row in scheduled:
                     clause = self._bdd.false
                     for literal in row:
                         atom = self._bdd.var(self._names[abs(literal) - 1])
                         clause |= atom if literal > 0 else ~atom
-                    block.append(clause)
+                    self._root &= clause
                     self._guard()
-                while len(block) > 1:
-                    block = [block[index] & block[index + 1]
-                             if index + 1 < len(block) else block[index]
-                             for index in range(0, len(block), 2)]
+                    if self._root == self._bdd.false:
+                        break
+            else:
+                # No expression parser and no Python string-CNF parsing in the arm.
+                # Small balanced blocks prevent holding every clause BDD alive.
+                for offset in range(0, len(frozen), 64):
+                    block = []
+                    for row in frozen[offset:offset + 64]:
+                        clause = self._bdd.false
+                        for literal in row:
+                            atom = self._bdd.var(self._names[abs(literal) - 1])
+                            clause |= atom if literal > 0 else ~atom
+                        block.append(clause)
+                        self._guard()
+                    while len(block) > 1:
+                        block = [block[index] & block[index + 1]
+                                 if index + 1 < len(block) else block[index]
+                                 for index in range(0, len(block), 2)]
+                        self._guard()
+                    if block:
+                        self._root &= block[0]
+                    block.clear()
                     self._guard()
-                if block:
-                    self._root &= block[0]
-                block.clear()
-                self._guard()
-                if self._root == self._bdd.false:
-                    break
+                    if self._root == self._bdd.false:
+                        break
+            self._guard(force=True)
         except BaseException:
             # Locals holding Functions are unwound with this frame.  The manager
             # remains referenced by those Functions until their final decref.
             self.close()
             raise
 
-    def _guard(self) -> None:
-        if self._bdd is not None and len(self._bdd) > self._max_nodes:
-            raise CompilationLimit('BDD live-node soft limit exceeded')
+    def _guard(self, *, force: bool = False) -> None:
+        self._guard_ticks += 1
+        if not force and self._guard_ticks % self._guard_interval:
+            return
+        if self._bdd is not None:
+            self._guard_scans += 1
+            if len(self._bdd) > self._max_nodes:
+                raise CompilationLimit('BDD live-node soft limit exceeded')
 
     def model(self, assumptions: Iterable[int] = ()) -> tuple[bool, ...] | None:
         """Apply *all* assumptions to the immutable original compiled root.
@@ -222,11 +275,17 @@ class CompiledCNF:
                 'variables': self.nvars,
                 'normalized_clauses': self._clauses,
                 'initial_order': self.order,
+                'equivalence_grouped_order': self.construction == 'seeded',
                 'dynamic_reordering': self.reordering,
+                'construction': self.construction,
+                'binary_equivalence_seeds': self._equivalence_seeds,
+                'binary_subset_contradiction': self._binary_contradiction,
                 'manager_live_nodes': len(self._bdd),
                 'root_dag_nodes': self._root.dag_size,
                 'statistics': self._bdd.statistics(),
                 'limits_are_soft': True,
+                'node_guard_operation_interval': self._guard_interval,
+                'node_guard_scans': self._guard_scans,
                 'uses_spectra_quotient': False,
                 'query_answer_cache': False,
             }
