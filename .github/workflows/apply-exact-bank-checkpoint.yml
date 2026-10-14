@@ -20,12 +20,22 @@ jobs:
       - name: Apply the locally verified checkpoint atomically
         env:
           EXPECTED_TREE: 291abbacb4f9b5d8a13336d8415cc2c571e49406
+          EXPECTED_B64_SHA256: 8db149d29ab07c42ea49878577f28428ae78081962530e654caa01cb820ea8d6
+          EXPECTED_GZIP_SHA256: 39bd2e37d2bef1a8e9b258d0f69e4d22de11b48953c17a530303952977fb6487
+          EXPECTED_PATCH_SHA256: 5dd92909269b53c71ed0f5938972b435b87ca59f221c4f60580c27b30bab6317
         run: |
           set -euo pipefail
           git config user.name 'Tugrap'
           git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
-          cat .github/bank-patch/00 .github/bank-patch/01 .github/bank-patch/02 .github/bank-patch/03 \
-            | base64 --decode | gzip --decompress > /tmp/exact-bank.patch
+          cat .github/bank-patch/00 .github/bank-patch/01 \
+              .github/bank-patch/02a .github/bank-patch/02b .github/bank-patch/02c \
+              .github/bank-patch/03 > /tmp/exact-bank.b64
+          echo "$EXPECTED_B64_SHA256  /tmp/exact-bank.b64" | sha256sum --check
+          base64 --decode /tmp/exact-bank.b64 > /tmp/exact-bank.patch.gz
+          echo "$EXPECTED_GZIP_SHA256  /tmp/exact-bank.patch.gz" | sha256sum --check
+          gzip --test /tmp/exact-bank.patch.gz
+          gzip --decompress --stdout /tmp/exact-bank.patch.gz > /tmp/exact-bank.patch
+          echo "$EXPECTED_PATCH_SHA256  /tmp/exact-bank.patch" | sha256sum --check
           git am /tmp/exact-bank.patch
           rm -rf .github/bank-patch .github/workflows/apply-exact-bank-checkpoint.yml
           git add -A
