@@ -83,7 +83,7 @@ class ExactRuntime:
             raise ValueError('invalid trusted native extension path')
         self._module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self._module)
-        if self._module.abi() != 1:
+        if self._module.abi() != 2:
             raise ValueError('unsupported exact binary ABI')
 
     def prepare(self, problem: BinaryListProblem, *, mode: str = 'scc',
@@ -94,8 +94,8 @@ class ExactRuntime:
 class ExactSession:
     def __init__(self, module, problem: BinaryListProblem, *, mode: str,
                  max_bytes: int):
-        if mode not in ('scc', 'raw', 'sparse'):
-            raise ValueError('mode must be scc, raw or sparse')
+        if mode not in ('scc', 'raw', 'sparse', 'route'):
+            raise ValueError('mode must be scc, raw, sparse or route')
         if type(max_bytes) is not int or max_bytes < 1 << 20:
             raise ValueError('max_bytes must be an exact integer of at least 1 MiB')
         self.problem = BinaryListProblem.create(problem.n, problem.palette, problem.edges, problem.masks)
@@ -110,7 +110,7 @@ class ExactSession:
             self._observer = module.observer_create(p.n, p.palette, p.edges, p.masks, max_bytes)
             observer_bytes = module.observer_bytes(self._observer)
             self._solver = module.create(p.n, p.palette, p.edges, p.masks,
-                                         {'raw': 0, 'scc': 1, 'sparse': 2}[mode], max_bytes - observer_bytes)
+                                         {'raw': 0, 'scc': 1, 'sparse': 2, 'route': 3}[mode], max_bytes - observer_bytes)
             self._owned_bytes = observer_bytes + module.info(self._solver)['retained_array_bytes']
         except BaseException:
             self.close()
@@ -124,7 +124,7 @@ class ExactSession:
         # Conservatively include both native owners, active scratch and returned
         # proof/label payload. Python input objects and allocator overhead are not
         # bounded by this check; a process cap remains a separate concern.
-        bound = self._owned_bytes + 128*(self.problem.n+1) + 32*len(query) + 8192
+        bound = self._owned_bytes + 512*(self.problem.n+1) + 32*len(query) + 8192
         if len(query) > 1_000_000 or bound > self._max_bytes:
             raise MemoryError('combined native query payload admission exceeds cap')
 

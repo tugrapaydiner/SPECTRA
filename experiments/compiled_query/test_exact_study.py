@@ -32,7 +32,7 @@ def example():
                 ((), ((0, 1), (3, 1)), ((1, 0),), ((0, 2),), ((0, 1), (0, 2))))
 
 
-@pytest.mark.parametrize('arm', ('exact-raw', 'exact-scc', 'exact-sparse'))
+@pytest.mark.parametrize('arm', ('exact-raw', 'exact-scc', 'exact-sparse', 'exact-route'))
 @pytest.mark.parametrize('order', ('forward', 'reverse', 'shuffle'))
 def test_complete_costs_include_proofs_and_disposal(tmp_path, libraries, example, arm, order):
     q, e = libraries

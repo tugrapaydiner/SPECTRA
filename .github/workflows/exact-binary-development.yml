@@ -4,9 +4,8 @@ on:
     branches: [research/compiled-query-validation]
     paths:
       - '.github/workflows/exact-binary-development.yml'
-      - 'experiments/compiled_query/exact*'
-      - 'experiments/compiled_query/proof.py'
-      - 'experiments/compiled_query/mixed_cases.py'
+      - 'experiments/compiled_query/*.py'
+      - 'experiments/compiled_query/*.cpp'
   workflow_dispatch:
 permissions:
   contents: read
@@ -89,9 +88,10 @@ jobs:
           python -m experiments.compiled_query.study synthetic --output exact-validation/synthetic-cases --queries 128 --n 96
           python -m experiments.compiled_query.study export-wap --graphs exact-validation/graphs --output exact-validation/wap-sat-cases
           python -m experiments.compiled_query.mixed_cases --source exact-validation/wap-sat-cases --output exact-validation/wap-mixed-cases --queries 1024
-          for name in synthetic wap-sat wap-mixed; do
+          python -m experiments.compiled_query.common_masks --source exact-validation/wap-mixed-cases --output exact-validation/wap-common-cases
+          for name in synthetic wap-sat wap-mixed wap-common; do
             count=1024; if [ "$name" = synthetic ]; then count=128; fi
-            python -m experiments.compiled_query.study new --cases "exact-validation/$name-cases" --library "$SPECTRA_QUOTIENT_LIBRARY" --exact-library "$SPECTRA_EXACT_LIBRARY" --output "exact-validation/$name-study" --arms exact-scc exact-raw exact-sparse scc none minicard cadical195 cudd-reduced-bfs --prefixes 1 "$count" --repeats 3 --deadline 15
+            python -m experiments.compiled_query.study new --cases "exact-validation/$name-cases" --library "$SPECTRA_QUOTIENT_LIBRARY" --exact-library "$SPECTRA_EXACT_LIBRARY" --output "exact-validation/$name-study" --arms exact-scc exact-raw exact-sparse exact-route scc none minicard cadical195 cudd-reduced-bfs --prefixes 1 "$count" --repeats 3 --deadline 15
           done
       - uses: actions/upload-artifact@v4
         with:
@@ -107,7 +107,7 @@ jobs:
       - name: Run every scheduled cell and independently replay all evidence
         run: |
           set -euo pipefail
-          for name in synthetic wap-sat wap-mixed; do
+          for name in synthetic wap-sat wap-mixed wap-common; do
             python -m experiments.compiled_query.study run --output "exact-validation/$name-study" | tee "exact-validation/$name-run.log"
             python -m experiments.compiled_query.study audit --output "exact-validation/$name-study" > "exact-validation/$name-audit.json"
           done

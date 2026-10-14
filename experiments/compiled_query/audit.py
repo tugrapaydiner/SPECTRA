@@ -2,8 +2,8 @@
 
 The audit is outside the timed endpoint. SAT witnesses are checked directly in
 Python. Non-SAT decisions use a separately written original-list implication
-checker, not the benchmark's CNF encoder, SCC quotient or BDD. No portable UNSAT
-certificate or independently conducted replication is claimed.
+checker, not the benchmark's CNF encoder, SCC quotient or BDD. Exact arms additionally
+carry portable original-input proofs; project-owned replay is not outside replication.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import statistics
 
 from .cases import digest, load_case
 from .sessions import EXACT_ARMS, decode_output, decode_certified_output, query_order
-from .proof import verify_answer
+from .proof_replay import OriginalReplay
 from .study import read_manifest
 
 
@@ -79,6 +79,7 @@ def percentile(values, fraction):
 def audit_study(root: Path) -> dict:
     manifest = read_manifest(root, check_sources=False)
     cases = [load_case(root / c['file'])[0] for c in manifest['cases']]
+    observers = [OriginalReplay(case.problem) for case in cases]
     statuses, counts = Counter(), Counter()
     decision_cache = {}
     certified_counts = Counter()
@@ -111,6 +112,7 @@ def audit_study(root: Path) -> dict:
         if record is None or record['status'] != status or receipt['returncode'] != 0:
             raise ValueError('successful controller/worker outcome differs')
         case = cases[job['case_index']]
+        observer = observers[job['case_index']]
         for key, expected in [('case_sha256', job['case_sha256']), ('arm', job['arm']),
                               ('query_count', job['count']), ('order', job['order']),
                               ('order_seed', job['order_seed']), ('cluster', case.cluster)]:
@@ -146,16 +148,16 @@ def audit_study(root: Path) -> dict:
             observed[label] += 1
             if certified:
                 name = 'SAT_VERIFIED' if decision else 'UNSAT_VERIFIED'
-                if not verify_answer(case.problem, query, name, labels if decision else b'', proof):
+                if not observer.verify(query, name, labels if decision else b'', proof):
                     raise ValueError('proof/witness fails original-input Python verification')
                 certified_counts[name] += 1
             if decision == 1:
-                if not case.problem.check(labels, query):
+                if not certified and not observer.verify(query, 'SAT_VERIFIED', labels, b''):
                     raise ValueError('full witness fails independent original-input replay')
             else:
                 key = (job['case_sha256'], query_index)
                 if key not in decision_cache:
-                    decision_cache[key] = original_feasible(case.problem, query)
+                    decision_cache[key] = observer.feasible(query)
                 if decision == 0 and decision_cache[key]:
                     raise ValueError('false UNSAT decision')
         if dict(observed) != record['counts']:

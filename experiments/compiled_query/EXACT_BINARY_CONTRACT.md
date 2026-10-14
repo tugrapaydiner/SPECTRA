@@ -46,13 +46,16 @@ forces complement(u), so u is false. The remaining case inherits satisfaction
 from the base model. Thus the completed assignment satisfies every original
 binary constraint and current pin. Singleton units are included in this argument.
 
-The implementation offers three explicitly named modes, not an outcome-selected
+The implementation offers four explicitly named modes, not an outcome-selected
 portfolio:
 
 - `raw`: propagate original literals and retain original implication edges.
 - `scc`: propagate the SCC DAG; reconstruct contradictions on original edges.
 - `sparse`: the same DAG executor, with a reachability-preserving original-edge
   proof subgraph instead of the complete original solver adjacency.
+- `route`: retain rooted inward/outward SCC trees and one original representative
+  per DAG edge. Reconstruct current-query paths directly from those trees and
+  the current propagation predecessors, without a second original-graph BFS.
 
 Every mode performs a separately owned original-input check. `raw` is the cheap
 matched exact control, not a general solver forced into a harder problem.
@@ -151,3 +154,60 @@ proof boundary, accounting and evidence—not a claim to have invented those too
 New unfiltered banks reuse exposed graph/list inputs; they are development tests,
 not fresh WAP confirmation. Independent replication and adoption remain separate
 open research-program gates.
+
+## Direct proof routing (ABI 2)
+
+The `route` implementation retains two original-literal parent trees per SCC and
+one actual original bridge per condensation edge. It releases the solver's full
+original adjacency after construction. Zero retained adjacency arcs does NOT
+mean zero retained original constraint information: the parent/bridge arrays and
+the separately owned original-graph observer remain and are counted.
+
+Propagation records the actual current seed, predecessor SCC and entering bridge
+for each reached SCC. Once complementary components are reached, the executor
+lifts two paths from those seeds to a representative literal and its complement.
+Inside an SCC, follow an inward tree until its first intersection with the
+outward root-to-target chain. Joining there gives a simple path; distinct SCCs
+along a DAG predecessor chain cannot repeat. Every emitted hop is an original
+implication, and the independent verifier rechecks that hop and the current roots.
+
+This avoids a second search of the proof graph, but is NOT a guaranteed
+output-linear or shortest-proof algorithm. Forming/sorting a target ancestor
+chain and probing it can cost more than the final returned path, and routed
+proofs can be longer. Setup, tree arrays, propagation predecessors, path walks,
+serialization and every verification hop remain charged. Base contradictions
+are freshly routed in the same trees; empty-domain contradictions retain kind 1.
+
+All four exact modes receive the same sparse pin preparation and root-domain
+checking improvement. The raw control is not left on an artificially slower
+preparation path. Conservative native query admission now includes an allowance
+for routing scratch; it is still not a process RSS bound. The Python/native ABI
+is explicitly bumped to 2, so old shared libraries fail admission rather than
+being mixed with the new wrapper.
+
+Post-run replay now retains validated ORIGINAL masks and edges. At n <= 4,096 it
+checks original conflict edges by exact colour-class/adjacency bitset intersection;
+above that fixed threshold it checks original edge pairs without an n-squared
+bit matrix. Every submitted colouring and proof is checked, not sampled. The
+independent feasibility replay retains only its own original implication adjacency;
+current query arcs and SCC decisions are recomputed. The slower scalar verifier
+remains available as `proof.verify_answer`; differential tests challenge both.
+This audit optimization is outside the timed service and cannot create a service
+speedup. Old measured bytes/times are preserved when replayed by the new checker.
+
+The ABI 2 capsule names are also versioned (`solver.v2`, `observer.v2`). Old
+ABI 1 handles are rejected before dereferencing, not merely by a wrapper check.
+
+## Common-contract mixed bank
+
+The wide-mask robustness bank deliberately includes bit 63 even when it lies
+outside the declared palette. The older quotient-based checker rejects such pins;
+those cells are API-domain errors, not false mathematical answers or numerical
+speedup denominators. They remain in their own retained study.
+
+For the matched mixed-outcome comparison, `common_masks.py` removes only unused
+palette bits, preserving every pin's intersection with the ORIGINAL domain.
+No query is removed, resampled, repaired for satisfiability, or selected by an
+answer. The common and wide banks therefore encode exactly the same mathematical
+requests, while the common bank stays within all included controls' mask range.
+This development correction does not turn exposed cases into a new holdout.

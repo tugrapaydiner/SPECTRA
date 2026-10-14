@@ -44,7 +44,7 @@ def check_answer(problem, query, answer, expected):
     assert answer.visited >= 0 and answer.arcs_scanned >= 0
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_exhaustive_three_vertex_original_graphs_domains_and_requests(exact_runtime, mode):
     # Every graph on 3 labelled vertices; every one/two-colour domain from 3
     # colours; every per-vertex subset of that original domain, without filtering.
@@ -62,7 +62,7 @@ def test_exhaustive_three_vertex_original_graphs_domains_and_requests(exact_runt
                     check_answer(p, q, session.solve(q), expected)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_random_lists_against_native_minicard(exact_runtime, mode):
     from pysat.solvers import Solver
     rng = random.Random(14972)
@@ -81,7 +81,7 @@ def test_random_lists_against_native_minicard(exact_runtime, mode):
                 assert verify_answer(p, q, a.status, a.labels, a.proof)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 @pytest.mark.parametrize('kind', (1, 2, 3))
 def test_every_proof_kind_and_single_byte_mutations(exact_runtime, mode, kind):
     if kind == 1:
@@ -107,7 +107,7 @@ def test_every_proof_kind_and_single_byte_mutations(exact_runtime, mode, kind):
             assert not verify_answer(p, q, forged.status, forged.labels, forged.proof)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_current_request_isolation_and_stale_proofs(exact_runtime, mode):
     p = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))
     with exact_runtime.prepare(p, mode=mode) as session:
@@ -121,7 +121,7 @@ def test_current_request_isolation_and_stale_proofs(exact_runtime, mode):
         assert session.check(bad + ((0, 3),), a)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_empty_graph_singletons_and_bit63(exact_runtime, mode):
     for p, queries in [
         (BinaryListProblem.create(0, 64, (), ()), ((),)),
@@ -134,7 +134,7 @@ def test_empty_graph_singletons_and_bit63(exact_runtime, mode):
                 check_answer(p, q, session.solve(q), brute(p, q))
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_long_chain_and_odd_cycle_no_recursion(exact_runtime, mode):
     n = 10001
     p = BinaryListProblem.create(n, 2, tuple((v, v+1) for v in range(n-1)), (3,)*n)
@@ -175,7 +175,7 @@ def test_original_input_validation_native_and_python(exact_runtime, change):
         exact_runtime._module.create(p.n, p.palette, p.edges, p.masks, 1, 512 << 20)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_memory_lifecycle_concurrency_and_fail_closed(exact_runtime, mode, monkeypatch):
     p = BinaryListProblem.create(8, 2, tuple((v, v+1) for v in range(7)), (3,)*8)
     for cap in (True, -1, 0, 100):
@@ -225,3 +225,35 @@ def test_sparse_graph_preserves_proofs_and_drops_dense_arcs(exact_runtime):
             assert a.status == b.status
             assert verify_answer(p, q, a.status, a.labels, a.proof)
             assert sparse.check(q, b)  # observer never trusts the sparse graph
+
+
+def test_routed_proofs_have_no_original_search_adjacency(exact_runtime):
+    n=300
+    p=BinaryListProblem.create(n,2,tuple((u,v) for u in range(n//2) for v in range(n//2,n)),(3,)*n)
+    with exact_runtime.prepare(p,mode='route') as routed, exact_runtime.prepare(p,mode='raw') as raw:
+        assert routed.info['original_adjacency_retained'] is False
+        assert routed.info['retained_proof_arcs']==0
+        assert routed.info['routing_array_bytes']>0
+        for q in ((),((0,1),(n-1,1)),((0,1),),((n-1,2),(1,2))):
+            a=routed.solve(q);b=raw.solve(q)
+            assert a.status==b.status
+            assert verify_answer(p,q,a.status,a.labels,a.proof)
+        assert routed.info['retained_array_bytes'] < raw.info['retained_array_bytes']//5
+
+
+def test_old_abi_capsules_are_rejected_before_native_dereference(exact_runtime):
+    import ctypes
+    constructor = ctypes.pythonapi.PyCapsule_New
+    constructor.restype = ctypes.py_object
+    constructor.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+    # Invalid address is safe only if the old ABI name is rejected BEFORE use.
+    # Keep the name bytes alive for the lifetime of their capsules.
+    solver_name = b'spectra.exact_binary.solver.v1'
+    observer_name = b'spectra.exact_binary.observer.v1'
+    old_solver = constructor(1, solver_name, None)
+    old_observer = constructor(1, observer_name, None)
+    with pytest.raises(ValueError, match='handle'):
+        exact_runtime._module.solve(old_solver, ())
+    with pytest.raises(ValueError, match='handle'):
+        exact_runtime._module.verify(old_observer, (), 1, b'', b'')
+    assert exact_runtime._module.abi() == 2

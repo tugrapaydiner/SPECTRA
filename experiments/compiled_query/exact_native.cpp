@@ -16,8 +16,8 @@ namespace {
 using U = uint32_t;
 using W = uint64_t;
 constexpr U NIL = UINT32_MAX, MAX_N = 100000, MAX_E = 2000000, MAX_P = 1000000;
-constexpr const char* SOLVER = "spectra.exact_binary.solver.v1";
-constexpr const char* OBSERVER = "spectra.exact_binary.observer.v1";
+constexpr const char* SOLVER = "spectra.exact_binary.solver.v2";
+constexpr const char* OBSERVER = "spectra.exact_binary.observer.v2";
 struct Invalid : std::runtime_error { using std::runtime_error::runtime_error; };
 struct Resource : std::runtime_error { using std::runtime_error::runtime_error; };
 W number(PyObject* value, const char* message, W cap = UINT64_MAX) {
@@ -61,7 +61,7 @@ struct Input {
         tuple(es,"edges require exact tuples"); tuple(ms,"masks require exact tuples");
         if (PyTuple_GET_SIZE(ms)!=n) throw Invalid("mask count differs");
         W m=static_cast<W>(PyTuple_GET_SIZE(es));
-        if (m>MAX_E || 768*W(n+1)+192*(m+1)+8192>cap)
+        if (m>MAX_E || 768*W(n+1)+384*(m+1)+8192>cap)
             throw Resource("conservative construction payload admission exceeds cap");
         masks.reserve(n);
         for (U v=0;v<n;++v) {
@@ -138,12 +138,13 @@ std::vector<U> trace(const std::vector<U>& parent,U v) {
 }
 struct Answer {bool sat=true;std::vector<uint8_t> labels,certificate;W visits=0,arcs=0;};
 struct Index {
-    U n,k,nc=0,bad=NIL;bool condensed,sparse;W cap;W full_arcs=0;
+    U n,k,nc=0,bad=NIL;bool condensed,sparse,routed;W cap;W full_arcs=0;
     std::vector<W> masks;
     std::vector<uint8_t> lo,hi,base;
     std::vector<U> comp,opposite;
+    std::vector<U> inward,outward,representative,cross_from,cross_to;
     CSR original,dag;
-    Index(const Input& p,U mode):n(p.n),k(p.k),condensed(mode!=0),sparse(mode==2),cap(p.cap),masks(p.masks),lo(n),hi(n,255),base(n) {
+    Index(const Input& p,U mode):n(p.n),k(p.k),condensed(mode!=0),sparse(mode==2),routed(mode==3),cap(p.cap),masks(p.masks),lo(n),hi(n,255),base(n) {
         std::vector<std::pair<U,U>> arcs;arcs.reserve(4*p.edges.size()+n);
         for(U v=0;v<n;++v) {lo[v]=first(masks[v]);W h=masks[v] & (masks[v]-1);
             if(h) hi[v]=first(h); else arcs.emplace_back(2*v+1,2*v);
@@ -172,12 +173,17 @@ struct Index {
             std::sort(links.begin(),links.end());links.erase(std::unique(links.begin(),links.end()),links.end());
             dag=CSR(nc,links);
         } else if(!condensed) {std::vector<U>().swap(comp);}
-        if(sparse) {
+        if(sparse || routed) {
+            if(routed) {
+                inward.assign(2*n,NIL);outward.assign(2*n,NIL);
+                representative.assign(nc,NIL);
+                for(U v=0;v<2*n;++v) if(representative[comp[v]]==NIL) representative[comp[v]]=v;
+            }
             // Reachability-preserving original-edge subgraph: inward/outward
             // trees in each SCC plus one original arc per condensation edge.
             // Full original graph remains separately owned by the verifier.
             std::vector<std::pair<U,U>> keep;
-            keep.reserve(std::min<W>(full_arcs,4*W(n)+dag.to.size()));
+            if(sparse) keep.reserve(std::min<W>(full_arcs,4*W(n)+dag.to.size()));
             std::vector<uint8_t> seen(2*n,0);
             std::vector<U> queue;queue.reserve(2*n);
             for(U direction=0;direction<2;++direction) {
@@ -185,10 +191,12 @@ struct Index {
                 const CSR& g=direction?reverse:original;
                 for(U root=0;root<2*n;++root) if(!seen[root]) {
                     queue.clear();queue.push_back(root);seen[root]=1;
+                    if(routed) (direction?inward:outward)[root]=root;
                     for(size_t head=0;head<queue.size();++head) {U v=queue[head];
                         for(U j=g.off[v];j<g.off[v+1];++j) {U u=g.to[j];
                             if(comp[u]==comp[root] && !seen[u]) {seen[u]=1;queue.push_back(u);
-                                keep.emplace_back(direction?u:v,direction?v:u);
+                                if(sparse) keep.emplace_back(direction?u:v,direction?v:u);
+                                if(routed) (direction?inward:outward)[u]=v;
                             }
                         }
                     }
@@ -200,16 +208,75 @@ struct Index {
             std::sort(bridges.begin(),bridges.end());
             U previous_a=NIL,previous_b=NIL;
             for(auto e:bridges) {U a=std::get<0>(e),b=std::get<1>(e);
-                if(a!=previous_a || b!=previous_b) {keep.emplace_back(std::get<2>(e),std::get<3>(e));previous_a=a;previous_b=b;}
+                if(a!=previous_a || b!=previous_b) {
+                    if(sparse) keep.emplace_back(std::get<2>(e),std::get<3>(e));
+                    if(routed && bad==NIL) {cross_from.push_back(std::get<2>(e));cross_to.push_back(std::get<3>(e));}
+                    previous_a=a;previous_b=b;
+                }
             }
             std::sort(keep.begin(),keep.end());keep.erase(std::unique(keep.begin(),keep.end()),keep.end());
             if(keep.size()>arcs.size()) throw std::logic_error("proof subgraph grew beyond original");
-            original=CSR(2*n,keep); // release dense original solver adjacency
+            if(routed) {
+                if(cross_from.size()!=dag.to.size()) throw std::logic_error("routing bridge geometry differs");
+                for(U c=0;c<nc && bad==NIL;++c) for(U j=dag.off[c];j<dag.off[c+1];++j)
+                    if(comp[cross_from[j]]!=c || comp[cross_to[j]]!=dag.to[j])
+                        throw std::logic_error("routing bridge identity differs");
+                original=CSR(); // no original adjacency or BFS is needed for proof reconstruction
+            } else original=CSR(2*n,keep); // release dense original solver adjacency
         }
     }
     W bytes() const {return 8*W(masks.capacity())+lo.capacity()+hi.capacity()+base.capacity()+
-        4*W(comp.capacity()+opposite.capacity())+original.bytes()+dag.bytes();}
+        4*W(comp.capacity()+opposite.capacity())+original.bytes()+dag.bytes()+routing_bytes();}
+    W routing_bytes() const {return 4*W(inward.capacity()+outward.capacity()+representative.capacity()+cross_from.capacity()+cross_to.capacity());}
+    std::vector<U> within(U from,U target,Answer& answer) const {
+        if(from==target) return {from};
+        if(comp[from]!=comp[target]) throw std::logic_error("intra-component routing crosses SCCs");
+        std::vector<U> tail;
+        for(U v=target;;v=outward[v]) {
+            tail.push_back(v);
+            if(outward[v]==v) break;
+            if(tail.size()>2*W(n) || outward[v]==NIL) throw std::logic_error("invalid outward routing tree");
+            ++answer.arcs;
+        }
+        // Join at the first inward vertex on the outward root-to-target path.
+        // This removes tree-overlap cycles without a graph search or n-sized
+        // scratch. Sorted membership avoids a hash-table worst-case assumption.
+        auto membership=tail;std::sort(membership.begin(),membership.end());
+        std::vector<U> result;
+        U meeting=NIL;
+        for(U v=from;;v=inward[v]) {
+            result.push_back(v);
+            if(std::binary_search(membership.begin(),membership.end(),v)) {meeting=v;break;}
+            if(result.size()>2*W(n) || inward[v]==NIL || inward[v]==v)
+                throw std::logic_error("routing trees do not meet");
+            ++answer.arcs;
+        }
+        size_t at=static_cast<size_t>(std::find(tail.begin(),tail.end(),meeting)-tail.begin());
+        while(at) result.push_back(tail[--at]);
+        return result;
+    }
+    std::vector<U> lift(U target,const std::vector<U>& parent,const std::vector<U>& edge,
+                        const std::vector<U>& seed,Answer& answer) const {
+        U c=comp[target];std::vector<U> chain;
+        while(parent[c]!=c) {
+            if(parent[c]==NIL || edge[c]==NIL || chain.size()>=nc)
+                throw std::logic_error("routing predecessor chain missing");
+            chain.push_back(edge[c]);c=parent[c];
+        }
+        U current=seed[c];if(current==NIL) throw std::logic_error("current request root missing");
+        std::vector<U> result{current};
+        for(auto it=chain.rbegin();it!=chain.rend();++it) {
+            auto segment=within(current,cross_from[*it],answer);
+            result.insert(result.end(),segment.begin()+1,segment.end());
+            current=cross_to[*it];result.push_back(current);++answer.arcs;
+        }
+        auto segment=within(current,target,answer);
+        result.insert(result.end(),segment.begin()+1,segment.end());
+        if(result.size()>2*W(n)) throw std::logic_error("lifted proof exceeds simple-path bound");
+        return result;
+    }
     std::vector<U> path(U from,U target,Answer& a) const {
+        if(routed) return within(from,target,a);
         std::vector<U> parent(2*n,NIL),queue;queue.reserve(2*n);parent[from]=from;queue.push_back(from);
         for(size_t head=0;head<queue.size() && parent[target]==NIL;++head) {U v=queue[head];++a.visits;
             for(U j=original.off[v];j<original.off[v+1];++j) {++a.arcs;U u=original.to[j];
@@ -220,6 +287,7 @@ struct Index {
         return trace(parent,target);
     }
     bool raw_closure(const std::vector<U>& seeds,std::vector<U>& parent,Answer& a) const {
+        if(routed) throw std::logic_error("routed proofs must not invoke original-graph search");
         parent.assign(2*n,NIL);std::vector<U> queue;queue.reserve(2*n);U conflict=NIL;
         for(U v:seeds) if(parent[v]==NIL) {parent[v]=v;queue.push_back(v);
             if(parent[v^1U]!=NIL) {conflict=v;break;}}
@@ -234,26 +302,50 @@ struct Index {
     }
     Answer solve(const std::vector<Pin>& pins) const {
         Answer answer;
-        auto allowed=masks;
-        for(auto p:pins) allowed[p.vertex]&=p.allowed;
-        for(U v=0;v<n;++v) if(!allowed[v]) {answer.sat=false;answer.certificate=proof(1,{v},{});return answer;}
+        // Give every exact mode the same sparse request preparation, including
+        // the cheap raw control. All pins were validated before this function.
+        auto restrictions=pins;
+        std::sort(restrictions.begin(),restrictions.end(),[](Pin a,Pin b){return a.vertex<b.vertex;});
+        std::vector<U> seeds;seeds.reserve(std::min<W>(pins.size(),n));
+        for(size_t i=0;i<restrictions.size();) {
+            U v=restrictions[i].vertex;W domain=masks[v];
+            do {domain&=restrictions[i++].allowed;} while(i<restrictions.size() && restrictions[i].vertex==v);
+            if(!domain) {answer.sat=false;answer.certificate=proof(1,{v},{});return answer;}
+            if(domain!=masks[v]) seeds.push_back(2*v+(first(domain)!=lo[v]));
+        }
         if(bad!=NIL) {answer.sat=false;
             auto a=path(2*bad,2*bad+1,answer),b=path(2*bad+1,2*bad,answer);
             answer.certificate=proof(3,a,b);return answer;
         }
-        std::vector<U> seeds;seeds.reserve(pins.size());
-        // Original singleton units are in the static graph and base model.
-        for(U v=0;v<n;++v) if(allowed[v]!=masks[v]) seeds.push_back(2*v+(first(allowed[v])!=lo[v]));
         std::vector<U> parent;
         std::vector<uint8_t> reached;
         if(condensed) {
-            reached.assign(nc,0);std::vector<U> queue;queue.reserve(nc);bool conflict=false;
-            for(U v:seeds) {U c=comp[v];if(!reached[c]) {reached[c]=1;queue.push_back(c);if(reached[opposite[c]]) {conflict=true;break;}}}
-            for(size_t head=0;!conflict && head<queue.size();++head) {U c=queue[head];++answer.visits;
+            reached.assign(nc,0);std::vector<U> queue;queue.reserve(nc);U conflict=NIL;
+            std::vector<U> route_parent,route_edge,route_seed;
+            if(routed) {route_parent.assign(nc,NIL);route_edge.assign(nc,NIL);route_seed.assign(nc,NIL);}
+            for(U v:seeds) {U c=comp[v];if(!reached[c]) {
+                reached[c]=1;queue.push_back(c);
+                if(routed) {route_parent[c]=c;route_seed[c]=v;}
+                if(reached[opposite[c]]) {conflict=c;break;}
+            }}
+            for(size_t head=0;conflict==NIL && head<queue.size();++head) {U c=queue[head];++answer.visits;
                 for(U j=dag.off[c];j<dag.off[c+1];++j) {++answer.arcs;U d=dag.to[j];
-                    if(!reached[d]) {reached[d]=1;queue.push_back(d);if(reached[opposite[d]]) {conflict=true;break;}}}
+                    if(!reached[d]) {
+                        reached[d]=1;queue.push_back(d);
+                        if(routed) {route_parent[d]=c;route_edge[d]=j;}
+                        if(reached[opposite[d]]) {conflict=d;break;}
+                    }
+                }
             }
-            if(conflict) {if(raw_closure(seeds,parent,answer)) throw std::logic_error("quotient contradiction did not replay");return answer;}
+            if(conflict!=NIL) {
+                if(routed) {
+                    U target=representative[conflict];answer.sat=false;
+                    auto left=lift(target,route_parent,route_edge,route_seed,answer);
+                    auto right=lift(target^1U,route_parent,route_edge,route_seed,answer);
+                    answer.certificate=proof(2,left,right);
+                } else if(raw_closure(seeds,parent,answer)) throw std::logic_error("quotient contradiction did not replay");
+                return answer;
+            }
         } else if(!raw_closure(seeds,parent,answer)) return answer;
         answer.labels.resize(n);
         for(U v=0;v<n;++v) {bool l=condensed?reached[comp[2*v]]:parent[2*v]!=NIL;
@@ -292,8 +384,10 @@ struct Observer {
         auto get=[data](size_t at)->U {U value=0;for(U j=0;j<4;++j) value|=U(data[at+j])<<(8*j);return value;};
         U kind=get(4), na=get(8),nb=get(12);
         if(W(16)+4*(W(na)+nb)!=size || na>2*W(n)+1 || nb>2*W(n)) return false;
-        auto allowed=masks;for(auto p:pins) allowed[p.vertex]&=p.allowed;
-        if(kind==1) return na==1 && nb==0 && get(16)<n && allowed[get(16)]==0;
+        // Proof checks need only the cited original root domains, not an
+        // n-element domain copy. Pin validation is still complete and unsampled.
+        auto effective=[&](U vertex) {W d=masks[vertex];for(auto pin:pins) if(pin.vertex==vertex) d&=pin.allowed;return d;};
+        if(kind==1) return na==1 && nb==0 && get(16)<n && effective(get(16))==0;
         if((kind!=2 && kind!=3) || !na || !nb || na>2*W(n)) return false;
         std::vector<U> a(na),b(nb);
         for(U i=0;i<na;++i) {a[i]=get(16+4*W(i));if(a[i]>=2*W(n)) return false;}
@@ -305,7 +399,7 @@ struct Observer {
         for(U i=1;i<na;++i) if(!hop(a[i-1],a[i])) return false;
         for(U i=1;i<nb;++i) if(!hop(b[i-1],b[i])) return false;
         if(kind==3) return a.front()==b.back() && a.back()==b.front() && a.back()==(a.front()^1U);
-        auto forced=[&](U literal) {return colors[literal]!=255 && allowed[literal/2]==(W(1)<<colors[literal]);};
+        auto forced=[&](U literal) {return colors[literal]!=255 && effective(literal/2)==(W(1)<<colors[literal]);};
         return a.back()==(b.back()^1U) && forced(a.front()) && forced(b.front());
     }
 };
@@ -327,7 +421,7 @@ template<class T> T* handle(PyObject* p,const char* tag) {auto* t=static_cast<T*
 PyObject* create(PyObject*,PyObject* args) {
     PyObject *nv,*kv,*es,*ms,*mode,*cap;
     if(!PyArg_ParseTuple(args,"OOOOOO",&nv,&kv,&es,&ms,&mode,&cap)) return nullptr;
-    try {W limit=number(cap,"invalid memory payload cap"),which=number(mode,"mode must be 0, 1 or 2",2);
+    try {W limit=number(cap,"invalid memory payload cap"),which=number(mode,"mode must be 0, 1, 2 or 3",3);
         Input input(nv,kv,es,ms,limit);std::unique_ptr<Index> result;
         {Released guard;result=std::make_unique<Index>(input,static_cast<U>(which));}
         PyObject* capsule=PyCapsule_New(result.get(),SOLVER,destroy_index);if(capsule) result.release();
@@ -370,15 +464,18 @@ PyObject* verify(PyObject*,PyObject* args) {
 }
 PyObject* info(PyObject*,PyObject* h) {
     try {auto* x=handle<Index>(h,SOLVER);
-        return Py_BuildValue("{sI,sI,sK,sK,sK,sK,sO}","vertices",x->n,"components",x->nc,
+        return Py_BuildValue("{sI,sI,sK,sK,sK,sK,sK,sO,sO}","vertices",x->n,"components",x->nc,
             "original_arcs",static_cast<unsigned long long>(x->full_arcs),
             "retained_proof_arcs",static_cast<unsigned long long>(x->original.to.size()),
             "condensation_arcs",static_cast<unsigned long long>(x->dag.to.size()),
-            "retained_array_bytes",static_cast<unsigned long long>(x->bytes()),"base_satisfiable",x->bad==NIL?Py_True:Py_False);
+            "retained_array_bytes",static_cast<unsigned long long>(x->bytes()),
+            "routing_array_bytes",static_cast<unsigned long long>(x->routing_bytes()),
+            "original_adjacency_retained",x->routed?Py_False:Py_True,
+            "base_satisfiable",x->bad==NIL?Py_True:Py_False);
     }catch(...){return exception();}
 }
 PyObject* observer_bytes(PyObject*,PyObject* h) {try{return PyLong_FromUnsignedLongLong(handle<Observer>(h,OBSERVER)->bytes());}catch(...){return exception();}}
-PyObject* abi(PyObject*,PyObject*){return PyLong_FromLong(1);}
+PyObject* abi(PyObject*,PyObject*){return PyLong_FromLong(2);}
 PyMethodDef methods[]={
     {"create",create,METH_VARARGS,nullptr},{"observer_create",observer_create,METH_VARARGS,nullptr},
     {"solve",solve,METH_VARARGS,nullptr},{"verify",verify,METH_VARARGS,nullptr},

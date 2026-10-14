@@ -20,7 +20,7 @@ ARMS = ('scc', 'none', 'minicard', 'cadical195',
         'cudd-frontier-natural', 'cudd-frontier-bfs', 'cudd-frontier-occurrence',
         'cudd-seeded-bfs', 'cudd-reduced-natural', 'cudd-reduced-bfs',
         'cudd-reduced-occurrence')
-EXACT_ARMS = ('exact-scc', 'exact-raw', 'exact-sparse')
+EXACT_ARMS = ('exact-scc', 'exact-raw', 'exact-sparse', 'exact-route')
 ALL_ARMS = ARMS + EXACT_ARMS
 STATUS = {'UNSAT': 0, 'SAT_VERIFIED': 1, 'UNKNOWN': 2}
 HEADER = struct.Struct('<4sIQ')
