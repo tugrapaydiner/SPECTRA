@@ -159,6 +159,16 @@ void append_answer(std::vector<uint8_t>& out,const Answer& answer,U n) {
     word(out,static_cast<U>(answer.certificate.size()));
     out.insert(out.end(),answer.certificate.begin(),answer.certificate.end());
 }
+W bank_output_bound(U n,W count) {
+    // SCQ2 row: decision + n witness/padding bytes + uint32 proof length,
+    // followed by at most two simple 2n-vertex original-literal paths.
+    return 16 + count * (25 + 17 * W(n));
+}
+W bank_scratch_bound(U n,W count,W pins) {
+    // Query copies, 64-lane propagation, selected labels, parent/proof scratch,
+    // and vector metadata. Python-owned input objects remain outside this cap.
+    return 2048 * W(n + 1) + 64 * pins + 64 * count + 8192;
+}
 std::vector<std::vector<Pin>> read_bank(PyObject* bank,U n,W cap) {
     tuple(bank,"query bank requires an exact tuple");
     W count=static_cast<W>(PyTuple_GET_SIZE(bank));
@@ -170,9 +180,12 @@ std::vector<std::vector<Pin>> read_bank(PyObject* bank,U n,W cap) {
         if(total>MAX_P-pins.size()) throw Resource("query bank pin count exceeds cap");
         total+=pins.size();queries.push_back(std::move(pins));
     }
-    W fixed=count*(W(n)+5);
-    W bound=32*total+32*count+fixed+64*W(n+1)+8192;
-    if(fixed/count!=W(n)+5 || bound>cap) throw Resource("query bank payload admission exceeds cap");
+    W input_bound=32*total+64*count;
+    W output_bound=bank_output_bound(n,count);
+    W scratch=bank_scratch_bound(n,count,total);
+    if(input_bound>cap || output_bound>cap-input_bound
+            || scratch>cap-input_bound-output_bound)
+        throw Resource("query bank solve/verify/output admission exceeds cap");
     return queries;
 }
 struct Index {
@@ -612,7 +625,12 @@ BankResult solve_bank(Index& x,const Observer& observer,
                       std::vector<std::vector<Pin>>& queries) {
     using Clock=std::chrono::steady_clock;
     BankResult result;result.tiled=true;
-    result.payload.reserve(16+queries.size()*(size_t(x.n)+5));
+    W output_bound=bank_output_bound(x.n,queries.size());
+    if(output_bound>std::numeric_limits<size_t>::max())
+        throw Resource("query bank output exceeds platform size");
+    // Reserve the complete admitted envelope once. This avoids unaccounted
+    // vector over-allocation while proofs are appended.
+    result.payload.reserve(static_cast<size_t>(output_bound));
     result.payload.insert(result.payload.end(),{'S','C','Q','2'});
     word(result.payload,x.n);qword(result.payload,queries.size());
     auto record=[&](Answer& answer) {
@@ -732,6 +750,8 @@ BankResult solve_bank(Index& x,const Observer& observer,
             result.payload.insert(result.payload.end(),answer.certificate.begin(),answer.certificate.end());
             result.visits+=answer.visits;result.arcs+=answer.arcs;
         }
+        if(W(result.payload.size())>output_bound)
+            throw Resource("SCQ2 bank output exceeds admitted bound");
         result.timing_ns.push_back(static_cast<W>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now()-start).count()));
     }
     return result;
@@ -810,7 +830,11 @@ PyObject* solve_bank_checked(PyObject*,PyObject* args) {
         auto* x=handle<Index>(solver_handle,SOLVER);
         auto* o=handle<Observer>(observer_handle,OBSERVER);
         if(x->n!=o->n || x->k!=o->k) throw Invalid("solver and observer geometry differs");
-        auto queries=read_bank(bank,x->n,std::min(x->cap,o->cap));BankResult result;
+        W observer_bytes=o->bytes();
+        W total_cap=x->cap>UINT64_MAX-observer_bytes?UINT64_MAX:x->cap+observer_bytes;
+        W retained=x->bytes()+observer_bytes;
+        if(retained>total_cap) throw Resource("combined native owner admission exceeds cap");
+        auto queries=read_bank(bank,x->n,total_cap-retained);BankResult result;
         {Released guard;result=solve_bank(*x,*o,queries);}
         PyObject* payload=PyBytes_FromStringAndSize(
             reinterpret_cast<const char*>(result.payload.data()),

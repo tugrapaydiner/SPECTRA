@@ -8,15 +8,18 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 import itertools
+import json
 import os
 from pathlib import Path
+import platform
 import random
 import struct
+import sys
 
 import pytest
 
 from .binary_list import BinaryListProblem
-from .exact import ExactAnswer, ExactRuntime, build_exact_runtime
+from .exact import ExactAnswer, ExactRuntime, ExactSession, build_exact_runtime
 from .proof import decode_proof, verify_answer
 
 
@@ -25,6 +28,36 @@ def exact_runtime(tmp_path_factory):
     explicit = os.environ.get('SPECTRA_EXACT_LIBRARY')
     library = Path(explicit) if explicit else build_exact_runtime(tmp_path_factory.mktemp('exact-native'))
     return ExactRuntime(library)
+
+
+def test_native_build_receipt_binds_interpreter_platform_and_binary(tmp_path):
+    library = build_exact_runtime(tmp_path / 'receipt-build')
+    receipt = json.loads(library.with_name('build.json').read_text())
+    assert receipt['library_sha256'] and receipt['source_sha256']
+    assert Path(receipt['python_executable']).resolve() == Path(sys.executable).resolve()
+    assert receipt['python_version'] == sys.version
+    assert receipt['python_implementation'] == platform.python_implementation()
+    assert receipt['python_soabi']
+    assert receipt['platform'] == platform.platform()
+
+
+def test_combined_owner_limit_fails_before_solver_construction():
+    class Module:
+        @staticmethod
+        def observer_create(*_args):
+            return object()
+
+        @staticmethod
+        def observer_bytes(_handle):
+            return 1 << 20
+
+        @staticmethod
+        def create(*_args):
+            raise AssertionError('solver construction must not be attempted')
+
+    problem = BinaryListProblem.create(1, 1, (), (1,))
+    with pytest.raises(MemoryError, match='owner admission'):
+        ExactSession(Module(), problem, mode='raw', max_bytes=1 << 20)
 
 
 def brute(problem, query):
@@ -238,6 +271,28 @@ def test_bank_rejects_empty_malformed_and_over_cap_inputs(exact_runtime):
             exact_runtime._module.solve_bank_checked(session._solver, session._observer,
                                                        ((), ((0, 1), (True, 1))))
         assert session.solve_bank(((),)).sat == 1
+
+
+def test_bank_cap_charges_worst_case_portable_proof_output(exact_runtime):
+    n = 1001
+    edges = tuple((v, v + 1) for v in range(n - 1))
+    problem = BinaryListProblem.create(n, 2, edges, (3,) * n)
+    query = ((0, 1), (n - 1, 2))
+    bank = (query,) * 512
+    with exact_runtime.prepare(problem, mode='scc') as reference:
+        observer = reference.info['native_observer_array_bytes']
+        owned = reference._owned_bytes
+    old_formula = owned + 512 * (n + 1) + 32 * sum(map(len, bank))         + len(bank) * (n + 37) + 8192
+    construction = 768 * (n + 1) + 384 * (len(edges) + 1) + 8192
+    cap = max(1 << 20, old_formula + 4096, observer + construction + 4096)
+    safe_formula = owned + 16 + len(bank) * (25 + 17 * n)         + 2048 * (n + 1) + 64 * sum(map(len, bank)) + 64 * len(bank) + 8192
+    assert old_formula < cap < safe_formula
+    with exact_runtime.prepare(problem, mode='scc', max_bytes=cap) as session:
+        with pytest.raises(MemoryError, match='solve/verify/output admission'):
+            session.solve_bank(bank)
+        with pytest.raises(MemoryError, match='solve/verify/output admission'):
+            exact_runtime._module.solve_bank_checked(
+                session._solver, session._observer, bank)
 
 
 def test_fused_endpoint_keeps_original_observer_contract(exact_runtime):

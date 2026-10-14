@@ -14,6 +14,7 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
+import sys
 import sysconfig
 import tempfile
 import threading
@@ -59,11 +60,22 @@ def build_exact_runtime(directory: Path, *, compiler: str = 'g++',
                       elapsed_ns=time.perf_counter_ns()-start,
                       compiler=subprocess.run([cc, '--version'], capture_output=True,
                                               text=True, check=True).stdout,
+                      python_executable=str(Path(sys.executable).resolve()),
+                      python_version=sys.version,
+                      python_implementation=platform.python_implementation(),
+                      python_soabi=sysconfig.get_config_var('SOABI'),
+                      platform=platform.platform(),
                       stdout=result.stdout, stderr=result.stderr)
-        os.link(target, library)
-        with receipt.open('x') as stream:
+        temporary_receipt = Path(tmp) / receipt.name
+        with temporary_receipt.open('x') as stream:
             json.dump(record, stream, sort_keys=True, indent=2)
             stream.write('\n')
+        os.link(target, library)
+        try:
+            os.link(temporary_receipt, receipt)
+        except BaseException:
+            library.unlink(missing_ok=True)
+            raise
     return library
 
 
@@ -128,6 +140,8 @@ class ExactSession:
             # The two native owners parse original inputs separately.
             self._observer = module.observer_create(p.n, p.palette, p.edges, p.masks, max_bytes)
             observer_bytes = module.observer_bytes(self._observer)
+            if observer_bytes >= max_bytes:
+                raise MemoryError('combined native owner admission exceeds cap')
             self._solver = module.create(p.n, p.palette, p.edges, p.masks,
                                          {'raw': 0, 'scc': 1, 'sparse': 2,
                                           'route': 3, 'closure': 4}[mode],
@@ -188,10 +202,16 @@ class ExactSession:
         if not bank:
             raise ValueError('query bank must be nonempty')
         pins = sum(map(len, bank))
-        bound = (self._owned_bytes + 512*(self.problem.n+1) + 32*pins
-                 + len(bank)*(self.problem.n+37) + 8192)
-        if len(bank) > 1_000_000 or pins > 1_000_000 or bound > self._max_bytes:
-            raise MemoryError('combined native query-bank payload admission exceeds cap')
+        count, n = len(bank), self.problem.n
+        # Every SCQ2 row contains n witness/padding bytes and can carry two
+        # simple original-literal paths of at most 2n vertices each. Charge the
+        # complete portable-proof envelope, native query copies, and 64-lane
+        # propagation/proof scratch before crossing into C++.
+        output_bound = 16 + count * (25 + 17 * n)
+        scratch_bound = 2048 * (n + 1) + 64 * pins + 64 * count + 8192
+        bound = self._owned_bytes + output_bound + scratch_bound
+        if count > 1_000_000 or pins > 1_000_000 or bound > self._max_bytes:
+            raise MemoryError('combined native query-bank solve/verify/output admission exceeds cap')
         with self._lock:
             self._require_open()
             values = self._module.solve_bank_checked(self._solver, self._observer, bank)
