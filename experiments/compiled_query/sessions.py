@@ -20,6 +20,8 @@ ARMS = ('scc', 'none', 'minicard', 'cadical195',
         'cudd-frontier-natural', 'cudd-frontier-bfs', 'cudd-frontier-occurrence',
         'cudd-seeded-bfs', 'cudd-reduced-natural', 'cudd-reduced-bfs',
         'cudd-reduced-occurrence')
+EXACT_ARMS = ('exact-scc', 'exact-raw', 'exact-sparse')
+ALL_ARMS = ARMS + EXACT_ARMS
 STATUS = {'UNSAT': 0, 'SAT_VERIFIED': 1, 'UNKNOWN': 2}
 HEADER = struct.Struct('<4sIQ')
 
@@ -105,7 +107,7 @@ class BDDSession:
 
 
 def preload(arm: str) -> None:
-    if arm not in ARMS:
+    if arm not in ALL_ARMS:
         raise ValueError('unknown arm')
     if arm.startswith('cudd-'):
         importlib.import_module('dd.cudd')
@@ -127,8 +129,8 @@ def query_order(count: int, order: str, seed: int) -> tuple[int, ...]:
 
 def run_session(case_path: Path, runtime, arm: str, *, count: int,
                 order: str = 'forward', seed: int = 0, max_bytes: int = 512 << 20,
-                max_nodes: int = 2_000_000) -> tuple[dict, bytes]:
-    if arm not in ARMS:
+                max_nodes: int = 2_000_000, exact_runtime=None) -> tuple[dict, bytes]:
+    if arm not in ALL_ARMS:
         raise ValueError('unknown arm')
     start = time.perf_counter_ns()
     case, case_hash = load_case(case_path)
@@ -140,7 +142,11 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
     input_end = time.perf_counter_ns()
     session = None
     try:
-        if arm in ('scc', 'none'):
+        if arm in EXACT_ARMS:
+            if exact_runtime is None:
+                raise ValueError('exact runtime must be supplied explicitly; no hidden build')
+            session = exact_runtime.prepare(p, mode=arm.removeprefix('exact-'), max_bytes=max_bytes)
+        elif arm in ('scc', 'none'):
             session = runtime.prepare(p.n, p.palette, p.edges, masks=p.masks,
                                       mode=arm, max_build_bytes=max_bytes)
         elif arm in ('minicard', 'cadical195'):
@@ -149,6 +155,7 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
             session = BDDSession(p, runtime, arm.removeprefix('cudd-'), max_bytes, max_nodes)
         setup_end = time.perf_counter_ns()
         rows, per_query, statuses = [], [], []
+        proof_bytes = 0
         for index in indices:
             tick = time.perf_counter_ns()
             if arm in ('scc', 'none'):
@@ -157,17 +164,21 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
             else:
                 answer = session.solve(case.queries[index])
             per_query.append(time.perf_counter_ns() - tick)
-            if answer.status not in STATUS:
+            status = 'UNSAT' if answer.status == 'UNSAT_VERIFIED' and arm in EXACT_ARMS else answer.status
+            if status not in STATUS:
                 raise AssertionError('unsupported solver decision')
             if answer.status == 'SAT_VERIFIED' and len(answer.labels) != p.n:
                 raise AssertionError('partial original-vertex witness')
             if answer.status != 'SAT_VERIFIED' and answer.labels:
                 raise AssertionError('non-SAT result supplied a witness')
-            rows.append(bytes((STATUS[answer.status],)) +
-                        (answer.labels if answer.status == 'SAT_VERIFIED' else bytes(p.n)))
-            statuses.append(answer.status)
+            row = bytes((STATUS[status],)) + (answer.labels if status == 'SAT_VERIFIED' else bytes(p.n))
+            if arm in EXACT_ARMS:
+                row += struct.pack('<I', len(answer.proof)) + answer.proof
+                proof_bytes += len(answer.proof)
+            rows.append(row)
+            statuses.append(status)
         queries_end = time.perf_counter_ns()
-        output = HEADER.pack(b'SCQ1', p.n, count) + b''.join(rows)
+        output = HEADER.pack(b'SCQ2' if arm in EXACT_ARMS else b'SCQ1', p.n, count) + b''.join(rows)
         output_hash = digest(output)
         output_end = time.perf_counter_ns()
         info = session.info
@@ -177,7 +188,7 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
         if session is not None:
             session.close()
     # Release every non-output input/staging owner before stopping the timer.
-    del session, rows, statuses, indices, answer, p, case
+    del session, rows, row, statuses, indices, answer, p, case
     end = time.perf_counter_ns()
     record = dict(schema='spectra.compiled_query.session.v1', arm=arm, case=identity[0],
                   cluster=identity[1], provenance=identity[2], case_sha256=case_hash,
@@ -189,7 +200,8 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
                   materialize_ns=output_end-queries_end,
                   diagnostics_ns=diagnostics_end-output_end, dispose_ns=end-diagnostics_end,
                   output_sha256=output_hash, output_bytes=len(output), solver_info=info,
-                  unsat_certificate=False)
+                  unsat_certificate=arm in EXACT_ARMS, proof_bytes=proof_bytes,
+                  decision_contract='checked-SAT-and-UNSAT' if arm in EXACT_ARMS else 'checked-SAT-only')
     return record, output
 
 
@@ -204,4 +216,42 @@ def decode_output(payload: bytes, n: int, count: int) -> tuple[tuple[int, bytes]
         if status not in STATUS.values() or (status != 1 and any(labels)):
             raise ValueError('output decision/nonwitness bytes differ')
         rows.append((status, labels))
+    return tuple(rows)
+
+
+def decode_certified_output(payload: bytes, n: int, count: int) -> tuple[tuple[int, bytes, bytes], ...]:
+    """Strict SCQ2 decoder; every UNSAT row must carry an SBP1 proof."""
+    from .proof import decode_proof
+    if type(n) is not int or n < 0 or type(count) is not int or count < 0:
+        raise ValueError('invalid expected geometry')
+    if type(payload) is not bytes or len(payload) < HEADER.size:
+        raise ValueError('invalid certified output')
+    if HEADER.unpack_from(payload) != (b'SCQ2', n, count):
+        raise ValueError('certified output header differs')
+    rows, offset = [], HEADER.size
+    if count > (len(payload) - offset) // (n + 5):
+        raise ValueError('truncated certified row bank')
+    for _ in range(count):
+        if offset + n + 5 > len(payload):
+            raise ValueError('truncated certified row')
+        code = payload[offset]
+        labels = payload[offset+1:offset+1+n]
+        length = struct.unpack_from('<I', payload, offset+1+n)[0]
+        offset += n + 5
+        if offset + length > len(payload):
+            raise ValueError('truncated proof bank')
+        proof = payload[offset:offset+length]
+        offset += length
+        if code == 1:
+            if proof:
+                raise ValueError('SAT row must not carry contradiction evidence')
+        elif code == 0:
+            if any(labels):
+                raise ValueError('UNSAT padding must be zero')
+            decode_proof(proof, n)
+        else:
+            raise ValueError('unknown certified decision')
+        rows.append((code, labels, proof))
+    if offset != len(payload):
+        raise ValueError('unconsumed certified output bytes')
     return tuple(rows)

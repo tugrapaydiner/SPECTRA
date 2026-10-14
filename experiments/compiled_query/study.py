@@ -22,7 +22,7 @@ import time
 import traceback
 
 from .cases import canonical, digest, export_wap, load_case, synthetic_cases, write_case
-from .sessions import ARMS, preload, run_session
+from .sessions import ARMS, ALL_ARMS, EXACT_ARMS, preload, run_session
 
 ROOT = Path(__file__).resolve().parents[2]
 ORDERS = ('forward', 'reverse', 'shuffle')
@@ -40,7 +40,7 @@ class Config:
     bdd_nodes: int = 2_000_000
 
     def validate(self):
-        if not self.arms or len(set(self.arms)) != len(self.arms) or any(a not in ARMS for a in self.arms):
+        if not self.arms or len(set(self.arms)) != len(self.arms) or any(a not in ALL_ARMS for a in self.arms):
             raise ValueError('invalid/duplicate arms')
         if (not self.prefixes or len(set(self.prefixes)) != len(self.prefixes)
                 or any(type(n) is not int or n < 1 for n in self.prefixes)):
@@ -95,6 +95,7 @@ def locked(root: Path):
 
 def sources() -> dict:
     paths = sorted((ROOT / 'experiments/compiled_query').glob('*.py'))
+    paths += sorted((ROOT / 'experiments/compiled_query').glob('*.cpp'))
     paths += [ROOT / 'spectra/cnf/quotient_query.py', ROOT / 'spectra/_native/quotient_query.cpp']
     return {str(p.relative_to(ROOT)): digest(p.read_bytes()) for p in paths}
 
@@ -145,7 +146,8 @@ def schedule(cases: list[dict], config: Config) -> list[dict]:
     return jobs
 
 
-def create_study(case_paths: list[Path], library: Path, output: Path, config: Config) -> dict:
+def create_study(case_paths: list[Path], library: Path, output: Path, config: Config, *,
+                 exact_library: Path | None = None) -> dict:
     config.validate()
     if not case_paths:
         raise ValueError('no case files')
@@ -178,12 +180,27 @@ def create_study(case_paths: list[Path], library: Path, output: Path, config: Co
     if (build['library_sha256'] != digest(native)
             or build['source_sha256'] != digest((ROOT / 'spectra/_native/quotient_query.cpp').read_bytes())):
         raise ValueError('native build receipt does not match source and library')
+    exact = None
+    if any(arm in EXACT_ARMS for arm in config.arms):
+        if exact_library is None:
+            raise ValueError('exact arms require an explicitly built exact_library')
+        exact_library = Path(exact_library)
+        exact_payload = exact_library.read_bytes()
+        exact_build = json.loads(exact_library.with_name('build.json').read_bytes())
+        if (exact_build['library_sha256'] != digest(exact_payload) or
+                exact_build['source_sha256'] != digest((ROOT / 'experiments/compiled_query/exact_native.cpp').read_bytes())):
+            raise ValueError('exact runtime source/build digest differs')
+        exact = dict(library='runtime/' + exact_library.name, library_sha256=digest(exact_payload),
+                     build=exact_build)
     manifest = dict(schema='spectra.compiled_query.study.v1', classification='development-only',
                     config=asdict(config), cases=cases, jobs=jobs, sources=sources(),
                     execution_identity=execution_identity(),
                     library='runtime/' + library.name, library_sha256=digest(native),
                     build=build, endpoint='validated JSON -> full checked SCQ1 output + SHA256 + disposal',
                     external_replication=False, rss_is_not_hard_capped=True)
+    if exact is not None:
+        manifest['exact_runtime'] = exact
+        manifest['endpoint'] = 'validated JSON -> checked SCQ1 or proof-carrying SCQ2 + SHA256 + disposal'
     output.mkdir(parents=True, exist_ok=False)
     (output / 'cases').mkdir()
     (output / 'runtime').mkdir()
@@ -191,6 +208,8 @@ def create_study(case_paths: list[Path], library: Path, output: Path, config: Co
     for filename, payload in snapshots:
         write_once(output / filename, payload)
     write_once(output / manifest['library'], native)
+    if exact is not None:
+        write_once(output / exact['library'], exact_payload)
     write_once(output / 'manifest.json', canonical(manifest))
     write_once(output / 'manifest.sha256', (digest(canonical(manifest)) + '\n').encode())
     return manifest
@@ -207,6 +226,10 @@ def read_manifest(root: Path, *, check_sources: bool = True) -> dict:
         raise ValueError('interpreter, host or backend code changed; start a new study')
     if digest((root / manifest['library']).read_bytes()) != manifest['library_sha256']:
         raise ValueError('native library changed')
+    if 'exact_runtime' in manifest:
+        exact = manifest['exact_runtime']
+        if digest((root / exact['library']).read_bytes()) != exact['library_sha256']:
+            raise ValueError('exact native library changed')
     for case in manifest['cases']:
         if digest((root / case['file']).read_bytes()) != case['sha256']:
             raise ValueError('case snapshot changed')
@@ -247,10 +270,14 @@ def worker(root: Path, job_id: str):
         preload(job['arm'])  # Process/import wall is retained by the controller.
         from spectra.cnf.quotient_query import QuotientRuntime
         runtime = QuotientRuntime(root / manifest['library'])
+        exact_runtime = None
+        if job['arm'] in EXACT_ARMS:
+            from .exact import ExactRuntime
+            exact_runtime = ExactRuntime(root / manifest['exact_runtime']['library'])
         record, output = run_session(root / manifest['cases'][job['case_index']]['inputs'][str(job['count'])]['file'],
                                      runtime, job['arm'], count=job['count'], order=job['order'],
                                      seed=job['order_seed'], max_bytes=config['native_bytes'],
-                                     max_nodes=config['bdd_nodes'])
+                                     max_nodes=config['bdd_nodes'], exact_runtime=exact_runtime)
         write_once(destination / 'outputs.bin', output)
     except Exception as exc:
         from .bdd import BackendUnavailable, CompilationLimit
@@ -353,7 +380,8 @@ def main():
     new.add_argument('--cases', type=Path, required=True)
     new.add_argument('--library', type=Path, required=True)
     new.add_argument('--output', type=Path, required=True)
-    new.add_argument('--arms', nargs='+', choices=ARMS, default=list(ARMS))
+    new.add_argument('--exact-library', type=Path)
+    new.add_argument('--arms', nargs='+', choices=ALL_ARMS, default=list(ARMS))
     new.add_argument('--prefixes', nargs='+', type=int, default=[1, 32, 128])
     new.add_argument('--repeats', type=int, default=3)
     new.add_argument('--deadline', type=float, default=30)
@@ -377,7 +405,7 @@ def main():
         paths = sorted(p for p in args.cases.glob('*.json') if not p.name.endswith('.generation.json'))
         create_study(paths, args.library, args.output,
                      Config(arms=tuple(args.arms), prefixes=tuple(args.prefixes), repeats=args.repeats,
-                            wall_seconds=args.deadline, bdd_nodes=args.bdd_nodes))
+                            wall_seconds=args.deadline, bdd_nodes=args.bdd_nodes), exact_library=args.exact_library)
     elif args.command == 'run':
         run_study(args.output, args.max_new)
     elif args.command == '_worker':

@@ -14,7 +14,8 @@ from pathlib import Path
 import statistics
 
 from .cases import digest, load_case
-from .sessions import decode_output, query_order
+from .sessions import EXACT_ARMS, decode_output, decode_certified_output, query_order
+from .proof import verify_answer
 from .study import read_manifest
 
 
@@ -80,6 +81,7 @@ def audit_study(root: Path) -> dict:
     cases = [load_case(root / c['file'])[0] for c in manifest['cases']]
     statuses, counts = Counter(), Counter()
     decision_cache = {}
+    certified_counts = Counter()
     cells = defaultdict(list)
     raw_rows = []
     for job in manifest['jobs']:
@@ -127,13 +129,26 @@ def audit_study(root: Path) -> dict:
         output = (folder / 'outputs.bin').read_bytes()
         if digest(output) != record['output_sha256'] or len(output) != record['output_bytes']:
             raise ValueError('output digest/size differs')
-        rows = decode_output(output, case.problem.n, job['count'])
+        certified = job['arm'] in EXACT_ARMS
+        if bool(record['unsat_certificate']) != certified:
+            raise ValueError('certificate contract differs from selected arm')
+        if certified:
+            rows = decode_certified_output(output, case.problem.n, job['count'])
+            if sum(len(row[2]) for row in rows) != record['proof_bytes']:
+                raise ValueError('proof payload accounting differs')
+        else:
+            rows = tuple((code, labels, b'') for code, labels in decode_output(output, case.problem.n, job['count']))
         order = query_order(job['count'], job['order'], job['order_seed'])
         observed = Counter()
-        for (decision, labels), query_index in zip(rows, order):
+        for (decision, labels, proof), query_index in zip(rows, order):
             query = case.queries[query_index]
             label = ('UNSAT', 'SAT_VERIFIED', 'UNKNOWN')[decision]
             observed[label] += 1
+            if certified:
+                name = 'SAT_VERIFIED' if decision else 'UNSAT_VERIFIED'
+                if not verify_answer(case.problem, query, name, labels if decision else b'', proof):
+                    raise ValueError('proof/witness fails original-input Python verification')
+                certified_counts[name] += 1
             if decision == 1:
                 if not case.problem.check(labels, query):
                     raise ValueError('full witness fails independent original-input replay')
@@ -166,22 +181,25 @@ def audit_study(root: Path) -> dict:
             row['p95_complete_ns'] = percentile([r['complete_ns'] for r in records], .95)
         summaries.append(row)
     lookup = {(r['case'], r['count'], r['arm']): r for r in summaries}
-    if 'scc' in manifest['config']['arms']:
+    for candidate in ('scc', *EXACT_ARMS):
+        if candidate not in manifest['config']['arms']:
+            continue
         for prefix in manifest['config']['prefixes']:
             for baseline in manifest['config']['arms']:
-                if baseline == 'scc':
+                if baseline == candidate:
                     continue
                 by_cluster = defaultdict(list)
                 missing = []
                 for case in cases:
-                    a = lookup[(case.name, prefix, 'scc')]
+                    a = lookup[(case.name, prefix, candidate)]
                     b = lookup[(case.name, prefix, baseline)]
                     if not (a['eligible'] and b['eligible']):
                         missing.append(case.name)
                     else:
                         by_cluster[case.cluster].append(a['mean_complete_ns'] / b['mean_complete_ns'])
-                comparison = dict(candidate='scc', baseline=baseline, count=prefix,
+                comparison = dict(candidate=candidate, baseline=baseline, count=prefix,
                                   eligible=not missing, excluded_or_incomplete=missing,
+                                  matching_certificate_contract=(candidate in EXACT_ARMS)==(baseline in EXACT_ARMS),
                                   graph_clusters=len(by_cluster), descriptive_only=True)
                 if not missing:
                     # A graph is one cluster even when multiple cases share it.
@@ -196,5 +214,7 @@ def audit_study(root: Path) -> dict:
                 scheduled_jobs=len(manifest['jobs']), outcomes=dict(statuses),
                 audited_decisions=dict(counts), original_non_sat_requests_checked=len(decision_cache),
                 all_scheduled_decisions_complete=statuses['COMPLETE'] == len(manifest['jobs']),
-                portable_unsat_certificate=False, outside_replication=False,
+                portable_unsat_certificate=bool(certified_counts), certified_decisions=dict(certified_counts),
+                mixed_output_contracts=any(a in EXACT_ARMS for a in manifest['config']['arms']) and
+                    any(a not in EXACT_ARMS for a in manifest['config']['arms']), outside_replication=False,
                 session_summaries=summaries, comparisons=comparisons, raw_rows=raw_rows)
