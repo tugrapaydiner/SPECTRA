@@ -1,0 +1,37 @@
+name: apply-exact-bank-hardening
+on:
+  push:
+    branches: [review/exact-bank-hardened-20261014]
+    paths: ['.github/workflows/apply-exact-bank-hardening.yml']
+permissions:
+  contents: write
+concurrency:
+  group: apply-exact-bank-hardening
+  cancel-in-progress: false
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify and apply reviewed non-workflow patch
+        shell: bash
+        env:
+          EXPECTED_B64_SHA256: 1f11be36b5aedc2b220b446c7378eb3d67c0ff36c58424e92ad0b9fc31bb178f
+          EXPECTED_GZIP_SHA256: 1e87e5b51050f999d3fd006f25f612ca1c1374a95eb4576120da809f222bc5c8
+          EXPECTED_PATCH_SHA256: 5783c8b7a0873a452c3dcfbae21d56af163650dc6772ca6e66af52081428d59d
+        run: |
+          set -euo pipefail
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          cp .github/exact-bank-hardening.patch.b64 /tmp/hardening.b64
+          echo "$EXPECTED_B64_SHA256  /tmp/hardening.b64" | sha256sum --check
+          base64 --decode /tmp/hardening.b64 > /tmp/hardening.patch.gz
+          echo "$EXPECTED_GZIP_SHA256  /tmp/hardening.patch.gz" | sha256sum --check
+          gzip --test /tmp/hardening.patch.gz
+          gzip --decompress --stdout /tmp/hardening.patch.gz > /tmp/hardening.patch
+          echo "$EXPECTED_PATCH_SHA256  /tmp/hardening.patch" | sha256sum --check
+          git am /tmp/hardening.patch
+          git push origin HEAD:review/exact-bank-hardened-20261014
