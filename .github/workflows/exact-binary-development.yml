@@ -89,10 +89,16 @@ jobs:
           python -m experiments.compiled_query.study export-wap --graphs exact-validation/graphs --output exact-validation/wap-sat-cases
           python -m experiments.compiled_query.mixed_cases --source exact-validation/wap-sat-cases --output exact-validation/wap-mixed-cases --queries 1024
           python -m experiments.compiled_query.common_masks --source exact-validation/wap-mixed-cases --output exact-validation/wap-common-cases
+          python -m experiments.compiled_query.mixed_cases --source exact-validation/wap-sat-cases --output exact-validation/wap-long-mixed-cases --queries 8192
+          python -m experiments.compiled_query.common_masks --source exact-validation/wap-long-mixed-cases --output exact-validation/wap-long-common-cases
           for name in synthetic wap-sat wap-mixed wap-common; do
             count=1024; if [ "$name" = synthetic ]; then count=128; fi
-            python -m experiments.compiled_query.study new --cases "exact-validation/$name-cases" --library "$SPECTRA_QUOTIENT_LIBRARY" --exact-library "$SPECTRA_EXACT_LIBRARY" --output "exact-validation/$name-study" --arms exact-scc exact-raw exact-sparse exact-route scc none minicard cadical195 cudd-reduced-bfs --prefixes 1 "$count" --repeats 3 --deadline 15
+            python -m experiments.compiled_query.study new --cases "exact-validation/$name-cases" --library "$SPECTRA_QUOTIENT_LIBRARY" --exact-library "$SPECTRA_EXACT_LIBRARY" --output "exact-validation/$name-study" --arms exact-scc exact-raw exact-sparse exact-route exact-bank-raw exact-bank-scc exact-bank-closure scc none minicard cadical195 cudd-reduced-bfs --prefixes 1 "$count" --repeats 3 --deadline 15
           done
+          # Long-bank amortization is a separately named development matrix. It
+          # uses the same unfiltered request generator and exact request order;
+          # no outcome is inspected while constructing the 8,192-row bank.
+          python -m experiments.compiled_query.study new --cases exact-validation/wap-long-common-cases --library "$SPECTRA_QUOTIENT_LIBRARY" --exact-library "$SPECTRA_EXACT_LIBRARY" --output exact-validation/wap-long-common-study --arms exact-bank-raw exact-bank-scc exact-bank-closure --prefixes 1024 8192 --repeats 3 --deadline 30
       - uses: actions/upload-artifact@v4
         with:
           name: exact-binary-inputs-${{ matrix.python }}-${{ github.run_id }}
@@ -107,7 +113,7 @@ jobs:
       - name: Run every scheduled cell and independently replay all evidence
         run: |
           set -euo pipefail
-          for name in synthetic wap-sat wap-mixed wap-common; do
+          for name in synthetic wap-sat wap-mixed wap-common wap-long-common; do
             python -m experiments.compiled_query.study run --output "exact-validation/$name-study" | tee "exact-validation/$name-run.log"
             python -m experiments.compiled_query.study audit --output "exact-validation/$name-study" > "exact-validation/$name-audit.json"
           done

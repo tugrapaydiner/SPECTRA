@@ -20,7 +20,15 @@ ARMS = ('scc', 'none', 'minicard', 'cadical195',
         'cudd-frontier-natural', 'cudd-frontier-bfs', 'cudd-frontier-occurrence',
         'cudd-seeded-bfs', 'cudd-reduced-natural', 'cudd-reduced-bfs',
         'cudd-reduced-occurrence')
-EXACT_ARMS = ('exact-scc', 'exact-raw', 'exact-sparse', 'exact-route')
+EXACT_FUSED_ARMS = ('exact-fused-raw', 'exact-fused-closure')
+EXACT_BANK_ARMS = ('exact-bank-raw', 'exact-bank-scc', 'exact-bank-closure')
+EXACT_ARMS = (('exact-scc', 'exact-raw', 'exact-sparse', 'exact-route', 'exact-closure')
+              + EXACT_FUSED_ARMS + EXACT_BANK_ARMS)
+EXACT_MODES = {'exact-scc': 'scc', 'exact-raw': 'raw', 'exact-sparse': 'sparse',
+               'exact-route': 'route', 'exact-closure': 'closure',
+               'exact-fused-raw': 'raw', 'exact-fused-closure': 'closure',
+               'exact-bank-raw': 'raw', 'exact-bank-scc': 'scc',
+               'exact-bank-closure': 'closure'}
 ALL_ARMS = ARMS + EXACT_ARMS
 STATUS = {'UNSAT': 0, 'SAT_VERIFIED': 1, 'UNKNOWN': 2}
 HEADER = struct.Struct('<4sIQ')
@@ -145,7 +153,7 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
         if arm in EXACT_ARMS:
             if exact_runtime is None:
                 raise ValueError('exact runtime must be supplied explicitly; no hidden build')
-            session = exact_runtime.prepare(p, mode=arm.removeprefix('exact-'), max_bytes=max_bytes)
+            session = exact_runtime.prepare(p, mode=EXACT_MODES[arm], max_bytes=max_bytes)
         elif arm in ('scc', 'none'):
             session = runtime.prepare(p.n, p.palette, p.edges, masks=p.masks,
                                       mode=arm, max_build_bytes=max_bytes)
@@ -154,49 +162,68 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
         else:
             session = BDDSession(p, runtime, arm.removeprefix('cudd-'), max_bytes, max_nodes)
         setup_end = time.perf_counter_ns()
-        rows, per_query, statuses = [], [], []
-        proof_bytes = 0
-        for index in indices:
-            tick = time.perf_counter_ns()
-            if arm in ('scc', 'none'):
-                answer = session.solve(case.queries[index], max_work=10_000_000,
-                                       max_state_bytes=max_bytes, core_first=True)
+        rows = statuses = answer = row = ordered = bank_result = None
+        per_query, tile_ns, proof_bytes = [], [], 0
+        timing_granularity = 'query'
+        if arm in EXACT_BANK_ARMS:
+            ordered = tuple(case.queries[index] for index in indices)
+            bank_result = session.solve_bank(ordered)
+            output = bank_result.payload
+            proof_bytes = bank_result.proof_bytes
+            counts = {'SAT_VERIFIED': bank_result.sat, 'UNSAT': bank_result.unsat}
+            timing_granularity = bank_result.timing_granularity
+            if timing_granularity == 'query':
+                per_query = list(bank_result.timing_ns)
             else:
-                answer = session.solve(case.queries[index])
-            per_query.append(time.perf_counter_ns() - tick)
-            status = 'UNSAT' if answer.status == 'UNSAT_VERIFIED' and arm in EXACT_ARMS else answer.status
-            if status not in STATUS:
-                raise AssertionError('unsupported solver decision')
-            if answer.status == 'SAT_VERIFIED' and len(answer.labels) != p.n:
-                raise AssertionError('partial original-vertex witness')
-            if answer.status != 'SAT_VERIFIED' and answer.labels:
-                raise AssertionError('non-SAT result supplied a witness')
-            row = bytes((STATUS[status],)) + (answer.labels if status == 'SAT_VERIFIED' else bytes(p.n))
-            if arm in EXACT_ARMS:
-                row += struct.pack('<I', len(answer.proof)) + answer.proof
-                proof_bytes += len(answer.proof)
-            rows.append(row)
-            statuses.append(status)
+                tile_ns = list(bank_result.timing_ns)
+        else:
+            rows, statuses = [], []
+            for index in indices:
+                tick = time.perf_counter_ns()
+                if arm in ('scc', 'none'):
+                    answer = session.solve(case.queries[index], max_work=10_000_000,
+                                           max_state_bytes=max_bytes, core_first=True)
+                elif arm in EXACT_FUSED_ARMS:
+                    answer = session.solve_fused(case.queries[index])
+                else:
+                    answer = session.solve(case.queries[index])
+                per_query.append(time.perf_counter_ns() - tick)
+                status = 'UNSAT' if answer.status == 'UNSAT_VERIFIED' and arm in EXACT_ARMS else answer.status
+                if status not in STATUS:
+                    raise AssertionError('unsupported solver decision')
+                if answer.status == 'SAT_VERIFIED' and len(answer.labels) != p.n:
+                    raise AssertionError('partial original-vertex witness')
+                if answer.status != 'SAT_VERIFIED' and answer.labels:
+                    raise AssertionError('non-SAT result supplied a witness')
+                row = bytes((STATUS[status],)) + (answer.labels if status == 'SAT_VERIFIED' else bytes(p.n))
+                if arm in EXACT_ARMS:
+                    row += struct.pack('<I', len(answer.proof)) + answer.proof
+                    proof_bytes += len(answer.proof)
+                rows.append(row)
+                statuses.append(status)
+            output = HEADER.pack(b'SCQ2' if arm in EXACT_ARMS else b'SCQ1', p.n, count) + b''.join(rows)
+            counts = dict(Counter(statuses))
         queries_end = time.perf_counter_ns()
-        output = HEADER.pack(b'SCQ2' if arm in EXACT_ARMS else b'SCQ1', p.n, count) + b''.join(rows)
         output_hash = digest(output)
         output_end = time.perf_counter_ns()
         info = session.info
-        counts = dict(Counter(statuses))
         diagnostics_end = time.perf_counter_ns()
     finally:
         if session is not None:
             session.close()
     # Release every non-output input/staging owner before stopping the timer.
-    del session, rows, row, statuses, indices, answer, p, case
+    del session, rows, row, statuses, indices, answer, ordered, bank_result, p, case
     end = time.perf_counter_ns()
-    record = dict(schema='spectra.compiled_query.session.v1', arm=arm, case=identity[0],
+    timing_samples = per_query if timing_granularity == 'query' else tile_ns
+    record = dict(schema=('spectra.compiled_query.session.v2' if arm in EXACT_BANK_ARMS
+                          else 'spectra.compiled_query.session.v1'), arm=arm, case=identity[0],
                   cluster=identity[1], provenance=identity[2], case_sha256=case_hash,
                   query_count=count, order=order, order_seed=seed,
                   status='INCOMPLETE' if counts.get('UNKNOWN', 0) else 'COMPLETE',
                   counts=counts, complete_ns=end-start, input_ns=input_end-start,
                   setup_ns=setup_end-input_end, query_loop_ns=queries_end-setup_end,
-                  query_ns=sum(per_query), per_query_ns=per_query,
+                  query_ns=sum(timing_samples), per_query_ns=per_query, tile_ns=tile_ns,
+                  timing_granularity=timing_granularity,
                   materialize_ns=output_end-queries_end,
                   diagnostics_ns=diagnostics_end-output_end, dispose_ns=end-diagnostics_end,
                   output_sha256=output_hash, output_bytes=len(output), solver_info=info,

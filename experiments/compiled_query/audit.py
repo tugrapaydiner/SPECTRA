@@ -120,11 +120,31 @@ def audit_study(root: Path) -> dict:
                 raise ValueError('session identity differs: ' + key)
         stages = ('input_ns', 'setup_ns', 'query_loop_ns', 'materialize_ns',
                   'diagnostics_ns', 'dispose_ns')
+        schema = record.get('schema')
+        per_query = record.get('per_query_ns', [])
+        tile_ns = record.get('tile_ns', [])
+        granularity = record.get('timing_granularity', 'query')
+        if schema == 'spectra.compiled_query.session.v1':
+            timing = per_query
+            geometry_ok = (granularity == 'query' and len(per_query) == job['count']
+                           and tile_ns in ([], None))
+        elif schema == 'spectra.compiled_query.session.v2':
+            if granularity == 'query':
+                timing = per_query
+                geometry_ok = len(per_query) == job['count'] and tile_ns == []
+            elif granularity == 'tile64':
+                timing = tile_ns
+                geometry_ok = per_query == [] and len(tile_ns) == (job['count'] + 63) // 64
+            else:
+                timing = ()
+                geometry_ok = False
+        else:
+            raise ValueError('unsupported session record schema')
         if (any(type(record[k]) is not int or record[k] < 0 for k in stages)
                 or sum(record[k] for k in stages) != record['complete_ns']
-                or record['query_ns'] != sum(record['per_query_ns'])
-                or len(record['per_query_ns']) != job['count']
-                or any(type(v) is not int or v < 0 for v in record['per_query_ns'])
+                or not geometry_ok
+                or any(type(v) is not int or v < 0 for v in timing)
+                or record['query_ns'] != sum(timing)
                 or record['query_ns'] > record['query_loop_ns']
                 or receipt['cold_wall_ns'] < record['complete_ns']):
             raise ValueError('timing accounting differs')

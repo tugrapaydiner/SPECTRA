@@ -32,7 +32,9 @@ def example():
                 ((), ((0, 1), (3, 1)), ((1, 0),), ((0, 2),), ((0, 1), (0, 2))))
 
 
-@pytest.mark.parametrize('arm', ('exact-raw', 'exact-scc', 'exact-sparse', 'exact-route'))
+@pytest.mark.parametrize('arm', ('exact-raw', 'exact-scc', 'exact-sparse', 'exact-route', 'exact-closure',
+                                  'exact-fused-raw', 'exact-fused-closure',
+                                  'exact-bank-raw', 'exact-bank-scc', 'exact-bank-closure'))
 @pytest.mark.parametrize('order', ('forward', 'reverse', 'shuffle'))
 def test_complete_costs_include_proofs_and_disposal(tmp_path, libraries, example, arm, order):
     q, e = libraries
@@ -44,7 +46,17 @@ def test_complete_costs_include_proofs_and_disposal(tmp_path, libraries, example
     assert record['decision_contract'] == 'checked-SAT-and-UNSAT'
     fields = ('input_ns', 'setup_ns', 'query_loop_ns', 'materialize_ns', 'diagnostics_ns', 'dispose_ns')
     assert record['complete_ns'] == sum(record[k] for k in fields)
-    assert record['query_loop_ns'] >= record['query_ns'] == sum(record['per_query_ns'])
+    if arm.startswith('exact-bank-'):
+        assert record['schema'] == 'spectra.compiled_query.session.v2'
+        assert record['timing_granularity'] == 'tile64'
+        assert record['per_query_ns'] == [] and len(record['tile_ns']) == 1
+        timing = record['tile_ns']
+    else:
+        assert record['schema'] == 'spectra.compiled_query.session.v1'
+        assert record['timing_granularity'] == 'query'
+        assert record['tile_ns'] == [] and len(record['per_query_ns']) == 5
+        timing = record['per_query_ns']
+    assert record['query_loop_ns'] >= record['query_ns'] == sum(timing)
     rows = decode_certified_output(payload, 4, 5)
     assert sum(len(p) for _, _, p in rows) == record['proof_bytes']
     assert len(payload) == 16 + 5*(4+5) + record['proof_bytes']
@@ -94,6 +106,25 @@ def test_worker_exact_and_legacy_contracts_stay_separate(tmp_path, libraries, ex
             assert row['eligible']
         if row['candidate']=='exact-scc' and row['baseline']=='scc':
             assert not row['eligible'] and 'geomean_complete_ratio' not in row
+
+
+
+def test_bank_session_records_survive_original_input_audit(tmp_path, libraries, example):
+    root = make(tmp_path, libraries, example, arms=('exact-bank-scc', 'exact-bank-raw'))
+    assert len(run_study(root)) == 2
+    report = audit_study(root)
+    assert report['outcomes'] == {'COMPLETE': 2}
+    assert report['certified_decisions'] == {'SAT_VERIFIED': 4, 'UNSAT_VERIFIED': 6}
+    match = [row for row in report['comparisons']
+             if row['candidate'] == 'exact-bank-scc'
+             and row['baseline'] == 'exact-bank-raw']
+    assert len(match) == 1 and match[0]['eligible']
+    manifest = read_manifest(root)
+    for job in manifest['jobs']:
+        record = json.loads((root / 'sessions' / job['id'] / 'record.json').read_bytes())
+        assert record['schema'] == 'spectra.compiled_query.session.v2'
+        assert record['timing_granularity'] == 'tile64'
+        assert record['per_query_ns'] == [] and len(record['tile_ns']) == 1
 
 
 def test_exact_library_receipt_tamper_rejected(tmp_path,libraries,example):
