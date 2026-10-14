@@ -3,6 +3,12 @@
 An opt-in, complete-cost challenge to SPECTRA's binary-list feasibility service.
 This directory does not replace the public solver or the frozen WAP study.
 
+The newer [exact mixed-outcome checkpoint](EXACT_REVIEW_20261013.md) adds a separate
+proof-carrying binary-domain service and documents its regressions as well as
+completed checks. Its [exact contract](EXACT_BINARY_CONTRACT.md) is stronger than
+the earlier feasibility-only arms. The studies linked below are the earlier CUDD
+checkpoint; their frozen outcomes are not overwritten or silently upgraded.
+
 Start with the [review and results](REVIEW_20261013.md), the
 [development protocol](PROTOCOL.md), the [reduction contract](REDUCTION_CONTRACT.md),
 and the [roadmap](ROADMAP.md). [Machine-readable results](RESULTS_20261013.json)
