@@ -1,0 +1,35 @@
+name: export-exact-bank-review
+on:
+  push:
+    branches: [review/exact-bank-checkpoint-20261014]
+    paths: ['.github/workflows/export-exact-bank-review.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export the exact hidden checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p review-export
+          target=0e73a92882a5ce645270b329043c80d37318ff78
+          test "$(git rev-parse "$target^{tree}")" = 291abbacb4f9b5d8a13336d8415cc2c571e49406
+          git archive --format=tar.gz --prefix=SPECTRA-exact-bank/ "$target" > review-export/source.tar.gz
+          git update-ref refs/review/exact-bank "$target"
+          git bundle create review-export/history.bundle refs/review/exact-bank
+          printf '%s\n' "$target" > review-export/commit.txt
+          git rev-parse "$target^{tree}" > review-export/tree.txt
+          sha256sum review-export/source.tar.gz review-export/history.bundle review-export/commit.txt review-export/tree.txt > review-export/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-bank-review-${{ github.run_id }}
+          path: review-export/
+          retention-days: 7
+          if-no-files-found: error
