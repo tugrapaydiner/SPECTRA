@@ -337,7 +337,7 @@ struct Index {
     std::vector<U> comp,opposite;
     std::vector<U> inward,outward,representative,cross_from,cross_to;
     CSR original,dag;
-    Index(Input p,U mode):n(p.n),k(p.k),condensed(mode!=0),sparse(mode==2),routed(mode==3),cap(p.cap),masks(std::move(p.masks)),lo(n),hi(n,255),base(n) {
+    Index(Input p,U mode,U bank_size=0):n(p.n),k(p.k),condensed(mode!=0),sparse(mode==2),routed(mode==3),cap(p.cap),masks(std::move(p.masks)),lo(n),hi(n,255),base(n) {
         std::vector<std::pair<U,U>> arcs;arcs.reserve(4*p.edges.size()+n);
         for(U v=0;v<n;++v) {lo[v]=first(masks[v]);W h=masks[v] & (masks[v]-1);
             if(h) hi[v]=first(h); else arcs.emplace_back(2*v+1,2*v);
@@ -353,6 +353,13 @@ struct Index {
         for(U c:comp) nc=std::max(nc,c+1);
         for(U v=0;v<n;++v) {if(comp[2*v]==comp[2*v+1] && bad==NIL) bad=v;
             base[v]=static_cast<uint8_t>(comp[2*v]<comp[2*v+1]);
+        }
+        if(mode==4) {
+            // Opt-in, query-blind policy. Small banks cannot use the lane kernel;
+            // base-infeasible graphs do not need a request-propagation index.
+            // Route proofs only when SCCs at least halve the literal graph.
+            condensed=bank_size>=64 && bad==NIL;
+            routed=condensed && nc<=n;
         }
         if(condensed && bad==NIL) {
             opposite.assign(nc,NIL);
@@ -902,7 +909,7 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
     if(!PyArg_ParseTuple(args,"OOO",&packet,&mode,&cap)) return nullptr;
     try {
         if(!PyBytes_CheckExact(packet)) throw Invalid("session packet must be immutable exact bytes");
-        W which=number(mode,"mode must be 0, 1, 2 or 3",3);
+        W which=number(mode,"mode must be 0, 1, 2, 3 or 4",4);
         W limit=number(cap,"invalid memory payload cap");
         if(limit<(1U<<20)) throw Invalid("memory payload cap must be at least 1 MiB");
         const auto* data=reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(packet));
@@ -915,13 +922,14 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
             W observer_bytes=observer->bytes();
             if(observer_bytes>=limit) throw Resource("SBC1 observer consumes session cap");
             SolverSessionPacket solver_rows(data,size,limit-observer_bytes);
-            solver=std::make_unique<Index>(solver_rows.take_input(limit-observer_bytes),static_cast<U>(which));
+            solver=std::make_unique<Index>(solver_rows.take_input(limit-observer_bytes),
+                                           static_cast<U>(which),solver_rows.query_count());
             result=run_rows(*solver,*observer,solver_rows,observer_rows,size,limit,"SBC1");
         }
         PyObject* output=PyBytes_FromStringAndSize(reinterpret_cast<const char*>(result.output.data()),
                                                    static_cast<Py_ssize_t>(result.output.size()));
         if(!output) return nullptr;
-        PyObject* metadata=Py_BuildValue("{sI,sI,sK,sK,sK,sK,sK,sK,sO,sO}",
+        PyObject* metadata=Py_BuildValue("{sI,sI,sK,sK,sK,sK,sK,sK,sO,sO,ss}",
             "vertices",solver->n,"components",solver->nc,
             "original_arcs",static_cast<unsigned long long>(solver->full_arcs),
             "retained_proof_arcs",static_cast<unsigned long long>(solver->original.to.size()),
@@ -930,7 +938,8 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
             "routing_array_bytes",static_cast<unsigned long long>(solver->routing_bytes()),
             "native_observer_array_bytes",static_cast<unsigned long long>(observer->bytes()),
             "original_adjacency_retained",solver->routed?Py_False:Py_True,
-            "base_satisfiable",solver->bad==NIL?Py_True:Py_False);
+            "base_satisfiable",solver->bad==NIL?Py_True:Py_False,
+            "selected_mode",solver->routed?"route":(solver->sparse?"sparse":(solver->condensed?"scc":"raw")));
         if(!metadata){Py_DECREF(output);return nullptr;}
         PyObject* kernel=PyUnicode_FromString(result.tiled?"tile64":"serial");
         PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);

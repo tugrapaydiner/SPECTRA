@@ -338,15 +338,23 @@ class ExactRuntime:
 
     def solve_session_packet(self, packet: bytes, *, mode: str = 'route',
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
-        """Construct, solve, verify, serialize and dispose one prepared SBC1 session."""
+        """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
+
+        Opt-in ``auto`` uses raw traversal below 64 requests or on a base-infeasible
+        graph. Otherwise it uses routed proofs when SCCs at least halve the
+        literal graph, and plain SCC batching when they do not. Selection uses
+        fixed-graph structure and bank length, never measured answers or timings.
+        ``info['selected_mode']`` names the actual engine. Explicit modes and the
+        default retain their meaning; this policy is an experimental heuristic.
+        """
         if type(packet) is not bytes:
             raise ValueError('session packet must be immutable exact bytes')
-        if mode not in ('scc', 'raw', 'sparse', 'route'):
-            raise ValueError('mode must be scc, raw, sparse or route')
+        if mode not in ('scc', 'raw', 'sparse', 'route', 'auto'):
+            raise ValueError('mode must be scc, raw, sparse, route or auto')
         if type(max_bytes) is not int or not (1 << 20) <= max_bytes <= MAX_BYTES:
             raise ValueError('max_bytes must be an exact uint64 of at least 1 MiB')
         values = self._module.solve_session_packet(
-            packet, {'raw': 0, 'scc': 1, 'sparse': 2, 'route': 3}[mode], max_bytes)
+            packet, {'raw': 0, 'scc': 1, 'sparse': 2, 'route': 3, 'auto': 4}[mode], max_bytes)
         output, count, sat, unsat, proof_bytes, visits, arcs, info = values
         info = {**info, 'backend': 'native-exact-binary', 'mode': mode,
                 'prepared_input': True, 'input_schema': 'SBC1',

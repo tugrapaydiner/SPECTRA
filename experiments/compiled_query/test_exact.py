@@ -371,6 +371,43 @@ def test_prepared_tile_threshold_is_explicit(exact_runtime):
         assert answer.info['bank_tiles'] == tiles
 
 
+@pytest.mark.parametrize('count', (0, 1, 63, 64, 65, 129))
+@pytest.mark.parametrize('structure', ('empty', 'independent', 'chain', 'odd_cycle'))
+def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, count, structure):
+    n = 0 if structure == 'empty' else 9
+    edges = () if structure in ('empty', 'independent') else tuple((v, v+1) for v in range(n-1))
+    if structure == 'odd_cycle':
+        edges += ((0, n-1),)
+    p = BinaryListProblem.create(n, 2, edges, (3,) * n)
+    requests = ((),) if not n else ((), ((0, 1),), ((0, 1), (1, 1)), ((0, 0),))
+    rows = tuple(requests[i % len(requests)] for i in range(count))
+    packet = pack_session_packet(p, rows)
+    answer = exact_runtime.solve_session_packet(packet, mode='auto')
+    selected = ('raw' if count < 64 or structure == 'odd_cycle' else
+                'route' if structure in ('chain', 'empty') else 'scc')
+    assert answer.info['mode'] == 'auto'
+    assert answer.info['selected_mode'] == selected
+    assert answer.output == exact_runtime.solve_session_packet(packet, mode=selected).output
+    for query, (decision, labels, certificate) in zip(rows, decode_certified_output(answer.output, n, count)):
+        assert bool(decision) == bool(brute(p, query))
+        assert verify_answer(p, query, 'SAT_VERIFIED' if decision else 'UNSAT_VERIFIED',
+                             labels if decision else b'', certificate)
+
+
+def test_auto_does_not_hide_malformed_packets_or_resource_limits(exact_runtime):
+    p = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))
+    packet = pack_session_packet(p, (((0, 0),), ((1, 1),)))
+    # Corrupt the final pin, after a valid immediate contradiction in row one.
+    damaged = bytearray(packet)
+    struct.pack_into('<I', damaged, 32 + 8*p.n + 8*len(p.edges) + 4*3 + 4, p.n)
+    with pytest.raises(ValueError):
+        exact_runtime.solve_session_packet(bytes(damaged), mode='auto')
+    large = BinaryListProblem.create(1000, 2, (), (3,) * 1000)
+    with pytest.raises(MemoryError):
+        exact_runtime.solve_session_packet(pack_session_packet(large, ((),)*100),
+                                           mode='auto', max_bytes=2 << 20)
+
+
 @pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_impossible_graph_bank_keeps_current_request_proofs(exact_runtime, mode):
     # An odd cycle is impossible before requests arrive. Reusing its fixed proof
