@@ -288,6 +288,41 @@ def test_batched_packet_and_serialized_output_fail_closed(exact_runtime):
         assert not session.check_bank(packet, bytearray(answer.output))
 
 
+def test_repeated_proof_checks_reject_cycles_without_sharing_scratch(exact_runtime):
+    p = BinaryListProblem.create(32, 2, ((0, 1), (1, 2), (0, 2)), (3,) * 32)
+    queries = ((),) * 129
+    packet = pack_query_bank(p, queries)
+    with exact_runtime.prepare(p, mode='route') as session:
+        answer = session.solve(())
+        kind, left, right = decode_proof(answer.proof, p.n)
+        assert kind == 3
+        # All hops and endpoints are valid, but the walk repeats literals.
+        loop = left + right[1:] + left[1:]
+        forged = struct.pack('<4sIII', b'SBP1', 3, len(loop), len(right))
+        forged += b''.join(struct.pack('<I', literal) for literal in loop + right)
+        assert len(loop) <= 2*p.n
+        assert not verify_answer(p, (), 'UNSAT_VERIFIED', b'', forged)
+
+        def bank(corrupt):
+            return struct.pack('<4sIQ', b'SCQ2', p.n, len(queries)) + b''.join(
+                b'\0' + bytes(p.n) + struct.pack('<I', len(proof)) + proof
+                for proof in (forged if i == corrupt else answer.proof for i in range(len(queries))))
+
+        good = bank(-1)
+        bad = [bank(index) for index in (0, 63, 64, 128)]
+        assert session.check_bank(packet, good)
+        for output in bad:
+            assert not session.check_bank(packet, output)
+            assert session.check_bank(packet, good)
+        # Bypass the Python lock to exercise one immutable native observer
+        # concurrently. Scratch must belong to each call, not to the observer.
+        def check(index):
+            output = good if index % 2 else bad[index % len(bad)]
+            return exact_runtime._module.check_bank(session._observer, packet, output)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            assert list(pool.map(check, range(40))) == [bool(i % 2) for i in range(40)]
+
+
 def test_batched_worst_case_output_is_admitted_before_work(exact_runtime):
     n = 1000
     p = BinaryListProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)

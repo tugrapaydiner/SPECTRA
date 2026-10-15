@@ -588,6 +588,14 @@ struct Index {
 };
 // Separately owned observer. It never receives Index, its graph, SCC labels,
 // base assignment, propagation flags, parents, or a previously checked answer.
+struct ProofScratch {
+    std::vector<U> seen;U epoch=0;
+    U next(U literals) {
+        if(seen.size()!=literals) {seen.assign(literals,0);epoch=0;}
+        if(epoch==UINT32_MAX) {std::fill(seen.begin(),seen.end(),0);epoch=0;}
+        return ++epoch;
+    }
+};
 struct Observer {
     U n,k;W cap;
     std::vector<W> masks;
@@ -617,7 +625,8 @@ struct Observer {
         if(colors[a]==255 || colors[b^1U]==255 || colors[a]!=colors[b^1U]) return false;
         return std::binary_search(edges.begin(),edges.end(),std::make_pair(std::min(u,v),std::max(u,v)));
     }
-    bool verify(const std::vector<Pin>& pins,U status,const uint8_t* labels,size_t len,const uint8_t* data,size_t size) const {
+    bool verify(const std::vector<Pin>& pins,U status,const uint8_t* labels,size_t len,const uint8_t* data,size_t size,
+                ProofScratch* scratch=nullptr) const {
         if(status==1) {
             if(len!=n || size) return false;
             for(U v=0;v<n;++v) if(labels[v]>=k || !((masks[v]>>labels[v])&1)) return false;
@@ -636,18 +645,27 @@ struct Observer {
         auto effective=[&](U vertex) {W d=masks[vertex];for(auto pin:pins) if(pin.vertex==vertex) d&=pin.allowed;return d;};
         if(kind==1) return na==1 && nb==0 && get(16)<n && effective(get(16))==0;
         if((kind!=2 && kind!=3) || !na || !nb || na>2*W(n)) return false;
-        std::vector<U> a(na),b(nb);
-        for(U i=0;i<na;++i) {a[i]=get(16+4*W(i));if(a[i]>=2*W(n)) return false;}
-        for(U i=0;i<nb;++i) {b[i]=get(16+4*(W(na)+i));if(b[i]>=2*W(n)) return false;}
-        // Enforce simple, bounded paths. This is a format rule, not needed for logic.
-        std::vector<uint8_t> seen(2*n,0);
-        for(U x:a) {if(seen[x]) return false;seen[x]=1;}
-        std::fill(seen.begin(),seen.end(),0);for(U x:b) {if(seen[x]) return false;seen[x]=1;}
-        for(U i=1;i<na;++i) if(!hop(a[i-1],a[i])) return false;
-        for(U i=1;i<nb;++i) if(!hop(b[i-1],b[i])) return false;
-        if(kind==3) return a.front()==b.back() && a.back()==b.front() && a.back()==(a.front()^1U);
+        // Read bounded paths directly from the serialized certificate. A fresh
+        // generation checks simplicity for each path; the backing array can be
+        // reused within this call without retaining any validation result.
+        ProofScratch local;auto& work=scratch?*scratch:local;
+        auto path_ok=[&](size_t offset,U count) {
+            U stamp=work.next(2*n),previous=NIL;
+            for(U i=0;i<count;++i) {
+                U literal=get(offset+4*W(i));
+                if(literal>=2*n || work.seen[literal]==stamp) return false;
+                work.seen[literal]=stamp;
+                if(i && !hop(previous,literal)) return false;
+                previous=literal;
+            }
+            return true;
+        };
+        if(!path_ok(16,na) || !path_ok(16+4*W(na),nb)) return false;
+        U a_first=get(16),a_last=get(16+4*W(na-1));
+        U b_first=get(16+4*W(na)),b_last=get(16+4*(W(na)+nb-1));
+        if(kind==3) return a_first==b_last && a_last==b_first && a_last==(a_first^1U);
         auto forced=[&](U literal) {return colors[literal]!=255 && effective(literal/2)==(W(1)<<colors[literal]);};
-        return a.back()==(b.back()^1U) && forced(a.front()) && forced(b.front());
+        return a_last==(b_last^1U) && forced(a_first) && forced(b_first);
     }
     template<class Bank>
     bool verify_bank(const Bank& bank,const uint8_t* output,size_t size) const {
@@ -656,6 +674,7 @@ struct Observer {
             return false;
         size_t at=16;
         std::vector<W> selected(n,0);
+        ProofScratch proof_scratch; // call-local, also for concurrent observer use
         for(U first_row=0;first_row<rows;first_row+=64) {
             U lanes=std::min<U>(64,rows-first_row);W sat_mask=0;
             std::fill(selected.begin(),selected.end(),0);
@@ -670,15 +689,15 @@ struct Observer {
                     W bit=W(1)<<lane;sat_mask|=bit;
                     for(U v=0;v<n;++v) {
                         U label=labels[v];
-                        if(label>=k || !((masks[v]>>label)&1)) return false;
-                        if(label==colors[2*v+1]) selected[v]|=bit;
-                        else if(label!=colors[2*v]) return false;
+                        if(label==colors[2*v]) continue;
+                        if(label<k && label==colors[2*v+1]) selected[v]|=bit;
+                        else return false;
                     }
                     for(auto pin:pins)
                         if(!((pin.allowed>>labels[pin.vertex])&1)) return false;
                 } else if(status==0) {
                     for(U v=0;v<n;++v) if(labels[v]) return false;
-                    if(!verify(pins,0,nullptr,0,output+at,length)) return false;
+                    if(!verify(pins,0,nullptr,0,output+at,length,&proof_scratch)) return false;
                 } else return false;
                 at+=length;
             }
