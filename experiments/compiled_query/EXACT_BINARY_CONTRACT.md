@@ -129,6 +129,36 @@ every decision, proof creation, original check, output construction, output hash
 diagnostics and disposal. Native build/import and post-run Python audit remain
 outside the warm endpoint; cold process wall cost is retained separately.
 
+### Prepared SBC1 session packet
+
+ABI 3 adds an explicitly separate ready-input endpoint. It does **not** redefine
+the validated-JSON service or pretend that deployment preparation is free. The
+little-endian SBC1 layout is:
+
+1. `<4s7I>`: magic `SBC1`, vertex count n, palette size, edge count m,
+   query count q, total pin count p, and two zero reserved words;
+2. n uint64 original masks;
+3. m sorted unique `(uint32,uint32)` original edges, each with `left < right`;
+4. q+1 monotone uint32 pin offsets starting at zero and ending at p;
+5. p uint32 original vertex identifiers;
+6. p uint64 current allowed masks, with no trailing bytes.
+
+The solver and observer each parse the complete immutable packet into separately
+owned graph/domain arrays. Both independently validate schema, counts, reserved
+words, exact length, mask domains, edge ordering, all offsets and every current
+vertex. The solver builds its own SCC/routing index; the observer builds no such
+index. One native call then solves the complete bank, constructs every witness or
+SBP1 proof, emits SCQ2, and has the observer reparse the request bank and final
+serialized output before publication. Native construction, decisions, proof work,
+checking, serialization and disposal are all inside that call.
+
+Packet creation from already validated original objects is recorded separately at
+the immutable study-freeze stage. Runtime file read and SHA-256 are charged to the
+ready-packet endpoint, but the earlier JSON decode and packet preparation are not.
+Therefore a ready-SBC1 result is a deployment-format result, not evidence that first
+use from arbitrary JSON has the same latency. Matched prepared `raw`, `scc`,
+`sparse` and `route` arms share exactly the same packet and certificate contract.
+
 Old SCQ1 controls are NOT upgraded silently: their UNSAT decisions have no portable
 certificate, and the old SPECTRA modes may return UNKNOWN. Comparisons between
 SCQ1 and SCQ2 have different certificate contracts and are flagged accordingly.
@@ -155,7 +185,7 @@ New unfiltered banks reuse exposed graph/list inputs; they are development tests
 not fresh WAP confirmation. Independent replication and adoption remain separate
 open research-program gates.
 
-## Direct proof routing (ABI 2)
+## Direct proof routing (retained under ABI 3)
 
 The `route` implementation retains two original-literal parent trees per SCC and
 one actual original bridge per condensation edge. It releases the solver's full
@@ -195,8 +225,10 @@ remains available as `proof.verify_answer`; differential tests challenge both.
 This audit optimization is outside the timed service and cannot create a service
 speedup. Old measured bytes/times are preserved when replayed by the new checker.
 
-The ABI 2 capsule names are also versioned (`solver.v2`, `observer.v2`). Old
-ABI 1 handles are rejected before dereferencing, not merely by a wrapper check.
+ABI 3 capsule names are versioned (`solver.v3`, `observer.v3`). Old ABI 2 handles
+are rejected before dereferencing, not merely by a wrapper check. The bump is
+required by the new batched and prepared-session entry points; it does not change
+the mathematical single-query answer contract.
 
 ## Common-contract mixed bank
 

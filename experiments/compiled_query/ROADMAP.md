@@ -33,6 +33,21 @@ Implement a generic CNF compiler through the independently maintained `tulip-con
 
 This addresses a missing comparator class; merely adding it does not establish a performance win or close the novelty gate. The two-plan migration service has a stronger minimum-change/proof-path contract than the WAP feasibility study and must not be conflated with this baseline.
 
+## Progress through 14 October 2026
+
+- The independent native CUDD comparator, generic lossless reduction, complete-cost
+  harness, exact mixed SAT/UNSAT companion, original-input SBP1 proofs, and
+  Python/native replay are implemented and retained with their negative results.
+- SBC1 now isolates deployment-format overhead. A ready packet is parsed separately
+  by solver and observer and executed as one checked SCQ2 bank. JSON decoding and
+  packet preparation remain separately disclosed rather than moved outside the
+  narrative.
+- The cheap exact `raw` arm remains the primary matched control. Direct proof
+  routing is not promoted as a speed result when it ties or loses to raw traversal.
+- The next internally actionable gate is cross-platform/ordinary-hardware transfer
+  of the final endpoint and an outcome-blind second problem family. The score ceiling
+  after that remains external replication, operator-defined utility and adoption.
+
 ## Progress rules
 
 Each milestone must retain its exact code, tests, costs and negative outcomes. A failed strong baseline is a result to investigate, not a reason to change the denominator. New development measurements cannot inherit the old frozen confirmation. No numerical score increase is automatic. High-90s claims require independent impact and replication as well as internal engineering.

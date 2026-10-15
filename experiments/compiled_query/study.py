@@ -22,7 +22,9 @@ import time
 import traceback
 
 from .cases import canonical, digest, export_wap, load_case, synthetic_cases, write_case
-from .sessions import ARMS, ALL_ARMS, EXACT_ARMS, preload, run_session
+from .exact import pack_validated_session_packet
+from .sessions import (ARMS, ALL_ARMS, EXACT_ARMS, EXACT_PACKET_ARMS,
+                       preload, query_order, run_prepared_session, run_session)
 
 ROOT = Path(__file__).resolve().parents[2]
 ORDERS = ('forward', 'reverse', 'shuffle')
@@ -152,9 +154,11 @@ def create_study(case_paths: list[Path], library: Path, output: Path, config: Co
     if not case_paths:
         raise ValueError('no case files')
     cases = []
+    case_objects = []
     snapshots = []
     for index, path in enumerate(case_paths):
         case, _ = load_case(path)
+        case_objects.append(case)
         payload = case.payload()
         snapshots.append((f'cases/{index:04d}.json', payload))
         inputs = {}
@@ -173,6 +177,27 @@ def create_study(case_paths: list[Path], library: Path, output: Path, config: Co
     if len({c['sha256'] for c in cases}) != len(cases):
         raise ValueError('duplicate cases would inflate replication counts')
     jobs = schedule(cases, config)
+    packet_payloads = {}
+    packet_preparation_ns = {}
+    for job in jobs:
+        if job['arm'] not in EXACT_PACKET_ARMS:
+            continue
+        case = case_objects[job['case_index']]
+        indices = query_order(job['count'], job['order'], job['order_seed'])
+        rows = tuple(case.queries[index] for index in indices)
+        filename = ('packets/' + f"{job['case_index']:04d}-q{job['count']}-"
+                    f"{job['order']}-{job['order_seed']:016x}.sbc1")
+        if filename not in packet_payloads:
+            tick = time.perf_counter_ns()
+            packet_payloads[filename] = pack_validated_session_packet(case.problem, rows)
+            packet_preparation_ns[filename] = time.perf_counter_ns() - tick
+        payload = packet_payloads[filename]
+        job['prepared_input'] = dict(file=filename, sha256=digest(payload),
+                                     bytes=len(payload), schema='SBC1',
+                                     preparation_charged=False,
+                                     preparation_ns=packet_preparation_ns[filename],
+                                     source_contract='validated original problem and frozen request rows')
+    snapshots.extend(sorted(packet_payloads.items()))
     library = Path(library)
     native = library.read_bytes()
     build_path = library.parent / 'build.json'
@@ -201,10 +226,16 @@ def create_study(case_paths: list[Path], library: Path, output: Path, config: Co
     if exact is not None:
         manifest['exact_runtime'] = exact
         manifest['endpoint'] = 'validated JSON -> checked SCQ1 or proof-carrying SCQ2 + SHA256 + disposal'
+    if packet_payloads:
+        manifest['prepared_packet_schema'] = 'SBC1'
+        manifest['endpoint'] += ('; ready SBC1 -> independently parsed/checked SCQ2 + '
+                                 'SHA256 + disposal (packet preparation outside endpoint)')
     output.mkdir(parents=True, exist_ok=False)
     (output / 'cases').mkdir()
     (output / 'runtime').mkdir()
     (output / 'sessions').mkdir()
+    if packet_payloads:
+        (output / 'packets').mkdir()
     for filename, payload in snapshots:
         write_once(output / filename, payload)
     write_once(output / manifest['library'], native)
@@ -236,9 +267,24 @@ def read_manifest(root: Path, *, check_sources: bool = True) -> dict:
         for prefix in case['inputs'].values():
             if digest((root / prefix['file']).read_bytes()) != prefix['sha256']:
                 raise ValueError('prefix snapshot changed')
+    for job in manifest['jobs']:
+        prepared = job.get('prepared_input')
+        if job['arm'] in EXACT_PACKET_ARMS:
+            if (type(prepared) is not dict or prepared.get('schema') != 'SBC1'
+                    or prepared.get('preparation_charged') is not False
+                    or type(prepared.get('preparation_ns')) is not int
+                    or prepared['preparation_ns'] < 0):
+                raise ValueError('prepared packet metadata differs')
+            payload = (root / prepared['file']).read_bytes()
+            if digest(payload) != prepared['sha256'] or len(payload) != prepared['bytes']:
+                raise ValueError('prepared packet snapshot changed')
+        elif prepared is not None:
+            raise ValueError('non-packet job unexpectedly names prepared input')
     config = Config(**{**manifest['config'], 'arms': tuple(manifest['config']['arms']),
                        'prefixes': tuple(manifest['config']['prefixes'])})
-    if schedule(manifest['cases'], config) != manifest['jobs']:
+    scheduled = [{key: value for key, value in job.items() if key != 'prepared_input'}
+                 for job in manifest['jobs']]
+    if schedule(manifest['cases'], config) != scheduled:
         raise ValueError('schedule is not the committed paired schedule')
     return manifest
 
@@ -268,16 +314,30 @@ def worker(root: Path, job_id: str):
     destination = root / 'sessions' / job_id
     try:
         preload(job['arm'])  # Process/import wall is retained by the controller.
-        from spectra.cnf.quotient_query import QuotientRuntime
-        runtime = QuotientRuntime(root / manifest['library'])
+        runtime = None
+        if job['arm'] not in EXACT_PACKET_ARMS:
+            from spectra.cnf.quotient_query import QuotientRuntime
+            runtime = QuotientRuntime(root / manifest['library'])
         exact_runtime = None
         if job['arm'] in EXACT_ARMS:
             from .exact import ExactRuntime
             exact_runtime = ExactRuntime(root / manifest['exact_runtime']['library'])
-        record, output = run_session(root / manifest['cases'][job['case_index']]['inputs'][str(job['count'])]['file'],
-                                     runtime, job['arm'], count=job['count'], order=job['order'],
-                                     seed=job['order_seed'], max_bytes=config['native_bytes'],
-                                     max_nodes=config['bdd_nodes'], exact_runtime=exact_runtime)
+        case_record = manifest['cases'][job['case_index']]
+        if job['arm'] in EXACT_PACKET_ARMS:
+            prepared = job['prepared_input']
+            record, output = run_prepared_session(
+                root / prepared['file'], exact_runtime, job['arm'], count=job['count'],
+                order=job['order'], seed=job['order_seed'], case_name=case_record['name'],
+                cluster=case_record['cluster'], provenance=case_record['provenance'],
+                case_sha256=job['case_sha256'], packet_sha256=prepared['sha256'],
+                preparation_ns=prepared['preparation_ns'],
+                max_bytes=config['native_bytes'])
+        else:
+            record, output = run_session(
+                root / case_record['inputs'][str(job['count'])]['file'], runtime, job['arm'],
+                count=job['count'], order=job['order'], seed=job['order_seed'],
+                max_bytes=config['native_bytes'], max_nodes=config['bdd_nodes'],
+                exact_runtime=exact_runtime)
         write_once(destination / 'outputs.bin', output)
     except Exception as exc:
         from .bdd import BackendUnavailable, CompilationLimit

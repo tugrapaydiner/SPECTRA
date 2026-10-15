@@ -9,10 +9,11 @@ import pytest
 
 from .audit import audit_study
 from .cases import Case, canonical, digest, write_case
-from .exact import ExactRuntime, build_exact_runtime
+from .exact import ExactRuntime, build_exact_runtime, pack_session_packet
 from .binary_list import BinaryListProblem
 from .proof import verify_answer
-from .sessions import decode_certified_output, run_session, query_order
+from .sessions import (decode_certified_output, run_prepared_session,
+                       run_session, query_order)
 from .study import Config, create_study, read_manifest, run_study
 from spectra.cnf.quotient_query import QuotientRuntime, build_quotient_runtime
 
@@ -94,6 +95,48 @@ def test_worker_exact_and_legacy_contracts_stay_separate(tmp_path, libraries, ex
             assert row['eligible']
         if row['candidate']=='exact-scc' and row['baseline']=='scc':
             assert not row['eligible'] and 'geomean_complete_ratio' not in row
+
+
+def test_ready_session_packet_is_frozen_run_and_independently_audited(tmp_path, libraries, example):
+    q, e = libraries
+    path = tmp_path / 'case.json'; write_case(path, example)
+    root = tmp_path / 'prepared-study'
+    create_study([path], q, root,
+                 Config(arms=('exact-packet-route', 'exact-packet-raw'),
+                        prefixes=(5,), repeats=1), exact_library=e)
+    manifest = read_manifest(root)
+    assert manifest['prepared_packet_schema'] == 'SBC1'
+    assert all(job['prepared_input']['preparation_charged'] is False
+               for job in manifest['jobs'])
+    assert len(run_study(root)) == 2
+    report = audit_study(root)
+    assert report['outcomes'] == {'COMPLETE': 2}
+    assert report['prepared_packet_contracts'] is True
+    assert report['certified_decisions'] == {'SAT_VERIFIED': 4, 'UNSAT_VERIFIED': 6}
+    comparison = next(row for row in report['comparisons']
+                      if row['candidate'] == 'exact-packet-route'
+                      and row['baseline'] == 'exact-packet-raw')
+    assert comparison['eligible'] and comparison['matching_certificate_contract']
+    assert run_study(root) == []
+
+
+def test_ready_packet_direct_endpoint_charges_read_hash_and_native_disposal(
+        tmp_path, libraries, example):
+    _, e = libraries
+    packet = pack_session_packet(example.problem, example.queries)
+    path = tmp_path / 'case.sbc1'; path.write_bytes(packet)
+    record, output = run_prepared_session(
+        path, ExactRuntime(e), 'exact-packet-route', count=5, order='forward', seed=0,
+        case_name=example.name, cluster=example.cluster, provenance=example.provenance,
+        case_sha256='original-json-digest', packet_sha256=digest(packet))
+    assert record['timing_granularity'] == 'session-packet'
+    assert record['packet_preparation_charged'] is False
+    assert record['complete_ns'] == sum(record[key] for key in
+        ('input_ns', 'setup_ns', 'query_loop_ns', 'materialize_ns',
+         'diagnostics_ns', 'dispose_ns'))
+    assert record['setup_ns'] == 0 and record['per_query_ns'] == []
+    assert record['counts'] == {'SAT_VERIFIED': 2, 'UNSAT': 3}
+    assert len(decode_certified_output(output, 4, 5)) == 5
 
 
 def test_exact_library_receipt_tamper_rejected(tmp_path,libraries,example):

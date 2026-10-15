@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -16,8 +17,8 @@ namespace {
 using U = uint32_t;
 using W = uint64_t;
 constexpr U NIL = UINT32_MAX, MAX_N = 100000, MAX_E = 2000000, MAX_P = 1000000;
-constexpr const char* SOLVER = "spectra.exact_binary.solver.v2";
-constexpr const char* OBSERVER = "spectra.exact_binary.observer.v2";
+constexpr const char* SOLVER = "spectra.exact_binary.solver.v3";
+constexpr const char* OBSERVER = "spectra.exact_binary.observer.v3";
 struct Invalid : std::runtime_error { using std::runtime_error::runtime_error; };
 struct Resource : std::runtime_error { using std::runtime_error::runtime_error; };
 W number(PyObject* value, const char* message, W cap = UINT64_MAX) {
@@ -54,6 +55,8 @@ struct Input {
     U n,k; W cap;
     std::vector<W> masks;
     std::vector<std::pair<U,U>> edges;
+    Input(U nv,U kv,std::vector<std::pair<U,U>> es,std::vector<W> ms,W limit)
+        :n(nv),k(kv),cap(limit),masks(std::move(ms)),edges(std::move(es)) {}
     Input(PyObject* nv, PyObject* kv, PyObject* es, PyObject* ms, W limit):cap(limit) {
         n=static_cast<U>(number(nv,"n outside supported bound",MAX_N));
         k=static_cast<U>(number(kv,"palette outside [1,64]",64));
@@ -121,6 +124,9 @@ std::vector<U> components(const CSR& g,const CSR& r) {
     return comp; // topological component numbering for the original implication DAG
 }
 void word(std::vector<uint8_t>& out,U x) {for(U j=0;j<4;++j) out.push_back(static_cast<uint8_t>(x>>(8*j)));}
+void qword(std::vector<uint8_t>& out,W x) {for(U j=0;j<8;++j) out.push_back(static_cast<uint8_t>(x>>(8*j)));}
+U load32(const uint8_t* data,size_t at) {U x=0;for(U j=0;j<4;++j)x|=U(data[at+j])<<(8*j);return x;}
+W load64(const uint8_t* data,size_t at) {W x=0;for(U j=0;j<8;++j)x|=W(data[at+j])<<(8*j);return x;}
 std::vector<uint8_t> proof(U kind,const std::vector<U>& a,const std::vector<U>& b) {
     std::vector<uint8_t> out;out.reserve(16+4*(a.size()+b.size()));
     out.insert(out.end(),{'S','B','P','1'}); word(out,kind);word(out,static_cast<U>(a.size()));word(out,static_cast<U>(b.size()));
@@ -136,6 +142,193 @@ std::vector<U> trace(const std::vector<U>& parent,U v) {
     }
     std::reverse(path.begin(),path.end());return path;
 }
+
+// SBQ1 solver-side parser. It owns no Python objects and borrows immutable bytes
+// only for one native call. The observer has a separately written parser below,
+// so a shared offset bug cannot silently validate its own output.
+struct SolverBank {
+    const uint8_t* data;size_t size;U count,pins;size_t offsets_at=16,vertices_at,masks_at;
+    SolverBank(const uint8_t* bytes,size_t length,U n):data(bytes),size(length),count(0),pins(0),vertices_at(0),masks_at(0) {
+        if(size<20 || std::memcmp(data,"SBQ1",4)) throw Invalid("invalid SBQ1 solver packet");
+        count=load32(data,4);pins=load32(data,8);
+        if(load32(data,12)!=0 || count>MAX_P || pins>MAX_P) throw Invalid("invalid SBQ1 solver header");
+        W expected=20+4*W(count)+12*W(pins);
+        if(expected!=size) throw Invalid("SBQ1 solver length differs");
+        vertices_at=20+4*W(count);masks_at=vertices_at+4*W(pins);
+        U previous=load32(data,offsets_at);
+        if(previous!=0) throw Invalid("SBQ1 solver offsets must start at zero");
+        for(U i=1;i<=count;++i) {
+            U next=load32(data,offsets_at+4*W(i));
+            if(next<previous || next>pins) throw Invalid("SBQ1 solver offsets differ");
+            previous=next;
+        }
+        if(previous!=pins) throw Invalid("SBQ1 solver offsets do not consume pins");
+        for(U i=0;i<pins;++i) if(load32(data,vertices_at+4*W(i))>=n)
+            throw Invalid("SBQ1 solver vertex outside graph");
+    }
+    U begin(U row) const {return load32(data,offsets_at+4*W(row));}
+    U end(U row) const {return load32(data,offsets_at+4*W(row+1));}
+    U query_count() const {return count;}
+    U pin_count() const {return pins;}
+    std::vector<Pin> row(U index) const {
+        U first_pin=begin(index),last_pin=end(index);std::vector<Pin> result;result.reserve(last_pin-first_pin);
+        for(U i=first_pin;i<last_pin;++i)
+            result.push_back({load32(data,vertices_at+4*W(i)),load64(data,masks_at+8*W(i))});
+        return result;
+    }
+};
+
+struct ObserverBank {
+    const uint8_t* payload;size_t bytes;U rows,total;size_t table=16,vertices,masks;
+    ObserverBank(const uint8_t* source,size_t length,U n):payload(source),bytes(length),rows(0),total(0),vertices(0),masks(0) {
+        if(bytes<QUERY_MIN || payload[0]!='S' || payload[1]!='B' || payload[2]!='Q' || payload[3]!='1')
+            throw Invalid("invalid SBQ1 observer packet");
+        rows=load32(payload,4);total=load32(payload,8);
+        if(load32(payload,12)!=0 || rows>MAX_P || total>MAX_P)
+            throw Invalid("invalid SBQ1 observer header");
+        W geometry=16+4*W(rows+1)+12*W(total);
+        if(geometry!=bytes) throw Invalid("SBQ1 observer geometry differs");
+        vertices=16+4*W(rows+1);masks=vertices+4*W(total);
+        U at=0;
+        for(U i=0;i<=rows;++i) {
+            U next=load32(payload,table+4*W(i));
+            if((i==0 && next!=0) || next<at || next>total)
+                throw Invalid("SBQ1 observer offsets differ");
+            at=next;
+        }
+        if(at!=total) throw Invalid("SBQ1 observer pin bank is not consumed");
+        for(U i=0;i<total;++i) if(load32(payload,vertices+4*W(i))>=n)
+            throw Invalid("SBQ1 observer vertex outside graph");
+    }
+    std::vector<Pin> row(U index) const {
+        U begin=load32(payload,table+4*W(index));
+        U finish=load32(payload,table+4*W(index+1));
+        std::vector<Pin> result;result.reserve(finish-begin);
+        for(U i=begin;i<finish;++i)
+            result.push_back({load32(payload,vertices+4*W(i)),load64(payload,masks+8*W(i))});
+        return result;
+    }
+    U query_count() const {return rows;}
+    U pin_count() const {return total;}
+private:
+    static constexpr size_t QUERY_MIN=20;
+};
+
+// SBC1 contains the complete fixed problem and one immutable request bank. The
+// solver and observer intentionally use separate parsers and separately owned
+// graph/domain arrays. A ready packet is a deployment input format, not a claim
+// that Python/JSON preparation disappeared.
+struct SolverSessionPacket {
+    const uint8_t* data;size_t size;U n,k,edge_count,count,pins;
+    size_t masks_at=32,edges_at,offsets_at,vertices_at,allowed_at;
+    std::vector<W> original_masks;
+    std::vector<std::pair<U,U>> original_edges;
+    SolverSessionPacket(const uint8_t* bytes,size_t length,W cap):data(bytes),size(length),
+        n(0),k(0),edge_count(0),count(0),pins(0),edges_at(0),offsets_at(0),vertices_at(0),allowed_at(0) {
+        if(size<36 || std::memcmp(data,"SBC1",4)) throw Invalid("invalid SBC1 solver packet");
+        n=load32(data,4);k=load32(data,8);edge_count=load32(data,12);
+        count=load32(data,16);pins=load32(data,20);
+        if(n>MAX_N || !k || k>64 || edge_count>MAX_E || count>MAX_P || pins>MAX_P
+                || load32(data,24)!=0 || load32(data,28)!=0)
+            throw Invalid("invalid SBC1 solver header");
+        W expected=36+8*W(n)+8*W(edge_count)+4*W(count)+12*W(pins);
+        if(expected!=size) throw Invalid("SBC1 solver length differs");
+        W construction=768*W(n+1)+384*W(edge_count+1)+8192;
+        if(construction>cap || W(size)>cap-construction)
+            throw Resource("SBC1 solver construction admission exceeds cap");
+        edges_at=masks_at+8*W(n);offsets_at=edges_at+8*W(edge_count);
+        vertices_at=offsets_at+4*W(count+1);allowed_at=vertices_at+4*W(pins);
+        original_masks.reserve(n);
+        for(U v=0;v<n;++v) {W domain=load64(data,masks_at+8*W(v));
+            if(!domain || (domain&~palette(k)) || bits(domain)>2)
+                throw Invalid("SBC1 solver original domain differs");
+            original_masks.push_back(domain);
+        }
+        original_edges.reserve(edge_count);U previous_left=0,previous_right=0;bool have_previous=false;
+        for(U i=0;i<edge_count;++i) {U left=load32(data,edges_at+8*W(i));U right=load32(data,edges_at+8*W(i)+4);
+            if(left>=right || right>=n || (have_previous && (left<previous_left || (left==previous_left && right<=previous_right))))
+                throw Invalid("SBC1 solver edges must be sorted unique pairs");
+            original_edges.emplace_back(left,right);previous_left=left;previous_right=right;have_previous=true;
+        }
+        U previous=load32(data,offsets_at);
+        if(previous!=0) throw Invalid("SBC1 solver offsets must start at zero");
+        for(U i=1;i<=count;++i) {
+            U next=load32(data,offsets_at+4*W(i));
+            if(next<previous || next>pins) throw Invalid("SBC1 solver offsets differ");
+            previous=next;
+        }
+        if(previous!=pins) throw Invalid("SBC1 solver offsets do not consume pins");
+        for(U i=0;i<pins;++i) if(load32(data,vertices_at+4*W(i))>=n)
+            throw Invalid("SBC1 solver query vertex outside graph");
+    }
+    U query_count() const {return count;}
+    U pin_count() const {return pins;}
+    std::vector<Pin> row(U index) const {
+        U begin=load32(data,offsets_at+4*W(index)),end=load32(data,offsets_at+4*W(index+1));
+        std::vector<Pin> result;result.reserve(end-begin);
+        for(U i=begin;i<end;++i)
+            result.push_back({load32(data,vertices_at+4*W(i)),load64(data,allowed_at+8*W(i))});
+        return result;
+    }
+    Input take_input(W cap) {return Input(n,k,std::move(original_edges),std::move(original_masks),cap);}
+};
+
+struct ObserverSessionPacket {
+    const uint8_t* payload;size_t bytes;U vertices_count,palette_size,edges_count,rows,total;
+    size_t domain_table=32,edge_table,offset_table,vertex_table,mask_table;
+    std::vector<W> domains;
+    std::vector<std::pair<U,U>> edges;
+    ObserverSessionPacket(const uint8_t* source,size_t length,W cap):payload(source),bytes(length),
+        vertices_count(0),palette_size(0),edges_count(0),rows(0),total(0),edge_table(0),offset_table(0),vertex_table(0),mask_table(0) {
+        if(bytes<36 || payload[0]!='S' || payload[1]!='B' || payload[2]!='C' || payload[3]!='1')
+            throw Invalid("invalid SBC1 observer packet");
+        vertices_count=load32(payload,4);palette_size=load32(payload,8);edges_count=load32(payload,12);
+        rows=load32(payload,16);total=load32(payload,20);
+        if(vertices_count>MAX_N || palette_size<1 || palette_size>64 || edges_count>MAX_E
+                || rows>MAX_P || total>MAX_P || load32(payload,24) || load32(payload,28))
+            throw Invalid("invalid SBC1 observer header");
+        W geometry=32+8*W(vertices_count)+8*W(edges_count)+4*W(rows+1)+12*W(total);
+        if(geometry!=bytes) throw Invalid("SBC1 observer geometry differs");
+        W construction=768*W(vertices_count+1)+384*W(edges_count+1)+8192;
+        if(construction>cap || W(bytes)>cap-construction)
+            throw Resource("SBC1 observer construction admission exceeds cap");
+        edge_table=domain_table+8*W(vertices_count);offset_table=edge_table+8*W(edges_count);
+        vertex_table=offset_table+4*W(rows+1);mask_table=vertex_table+4*W(total);
+        domains.reserve(vertices_count);
+        for(U v=0;v<vertices_count;++v) {W domain=load64(payload,domain_table+8*W(v));
+            if(domain==0 || (domain&~palette(palette_size))!=0 || bits(domain)>2)
+                throw Invalid("SBC1 observer original domain differs");
+            domains.push_back(domain);
+        }
+        edges.reserve(edges_count);U last_left=0,last_right=0;bool have=false;
+        for(U i=0;i<edges_count;++i) {U left=load32(payload,edge_table+8*W(i));U right=load32(payload,edge_table+8*W(i)+4);
+            bool ordered=!have || left>last_left || (left==last_left && right>last_right);
+            if(left>=right || right>=vertices_count || !ordered)
+                throw Invalid("SBC1 observer edge bank differs");
+            edges.emplace_back(left,right);last_left=left;last_right=right;have=true;
+        }
+        U consumed=0;
+        for(U i=0;i<=rows;++i) {
+            U next=load32(payload,offset_table+4*W(i));
+            if((i==0 && next!=0) || next<consumed || next>total)
+                throw Invalid("SBC1 observer offsets differ");
+            consumed=next;
+        }
+        if(consumed!=total) throw Invalid("SBC1 observer pin bank is not consumed");
+        for(U i=0;i<total;++i) if(load32(payload,vertex_table+4*W(i))>=vertices_count)
+            throw Invalid("SBC1 observer query vertex outside graph");
+    }
+    U query_count() const {return rows;}
+    U pin_count() const {return total;}
+    std::vector<Pin> row(U index) const {
+        U begin=load32(payload,offset_table+4*W(index)),end=load32(payload,offset_table+4*W(index+1));
+        std::vector<Pin> result;result.reserve(end-begin);
+        for(U i=begin;i<end;++i)
+            result.push_back({load32(payload,vertex_table+4*W(i)),load64(payload,mask_table+8*W(i))});
+        return result;
+    }
+    Input take_input(W cap) {return Input(vertices_count,palette_size,std::move(edges),std::move(domains),cap);}
+};
 struct Answer {bool sat=true;std::vector<uint8_t> labels,certificate;W visits=0,arcs=0;};
 struct Index {
     U n,k,nc=0,bad=NIL;bool condensed,sparse,routed;W cap;W full_arcs=0;
@@ -144,7 +337,7 @@ struct Index {
     std::vector<U> comp,opposite;
     std::vector<U> inward,outward,representative,cross_from,cross_to;
     CSR original,dag;
-    Index(const Input& p,U mode):n(p.n),k(p.k),condensed(mode!=0),sparse(mode==2),routed(mode==3),cap(p.cap),masks(p.masks),lo(n),hi(n,255),base(n) {
+    Index(Input p,U mode):n(p.n),k(p.k),condensed(mode!=0),sparse(mode==2),routed(mode==3),cap(p.cap),masks(std::move(p.masks)),lo(n),hi(n,255),base(n) {
         std::vector<std::pair<U,U>> arcs;arcs.reserve(4*p.edges.size()+n);
         for(U v=0;v<n;++v) {lo[v]=first(masks[v]);W h=masks[v] & (masks[v]-1);
             if(h) hi[v]=first(h); else arcs.emplace_back(2*v+1,2*v);
@@ -360,12 +553,26 @@ struct Index {
 struct Observer {
     U n,k;W cap;
     std::vector<W> masks;
-    std::vector<std::pair<U,U>> edges;
+    std::vector<std::pair<U,U>> edges,conflicts;
     std::vector<uint8_t> colors;
-    explicit Observer(const Input& p):n(p.n),k(p.k),cap(p.cap),masks(p.masks),edges(p.edges),colors(2*n,255) {
+    explicit Observer(Input p):n(p.n),k(p.k),cap(p.cap),masks(std::move(p.masks)),edges(std::move(p.edges)),colors(2*n,255) {
         for(U v=0;v<n;++v) {U side=0;for(U c=0;c<k;++c) if((masks[v]>>c)&1) colors[2*v+side++]=static_cast<uint8_t>(c);}
+        // Independently derive exactly the original equal-colour conflicts. The
+        // observer never receives the solver's implication graph or SCC index.
+        conflicts.reserve(2*edges.size());
+        for(auto edge:edges) {
+            W shared=masks[edge.first]&masks[edge.second];
+            while(shared) {
+                U color=first(shared);shared&=shared-1;
+                U left=2*edge.first+(colors[2*edge.first]!=color);
+                U right=2*edge.second+(colors[2*edge.second]!=color);
+                conflicts.emplace_back(left,right);
+            }
+        }
+        std::sort(conflicts.begin(),conflicts.end());
+        conflicts.erase(std::unique(conflicts.begin(),conflicts.end()),conflicts.end());
     }
-    W bytes() const {return 8*W(masks.capacity()+edges.capacity())+colors.capacity();}
+    W bytes() const {return 8*W(masks.capacity()+edges.capacity()+conflicts.capacity())+colors.capacity();}
     bool hop(U a,U b) const {
         U u=a/2,v=b/2;
         if(u==v) return (a%2)==1 && (b%2)==0 && bits(masks[u])==1;
@@ -376,7 +583,9 @@ struct Observer {
         if(status==1) {
             if(len!=n || size) return false;
             for(U v=0;v<n;++v) if(labels[v]>=k || !((masks[v]>>labels[v])&1)) return false;
-            for(auto e:edges) if(labels[e.first]==labels[e.second]) return false;
+            for(auto pair:conflicts)
+                if(labels[pair.first/2]==colors[pair.first]
+                        && labels[pair.second/2]==colors[pair.second]) return false;
             for(auto p:pins) if(!((p.allowed>>labels[p.vertex])&1)) return false;
             return true;
         }
@@ -402,11 +611,203 @@ struct Observer {
         auto forced=[&](U literal) {return colors[literal]!=255 && effective(literal/2)==(W(1)<<colors[literal]);};
         return a.back()==(b.back()^1U) && forced(a.front()) && forced(b.front());
     }
+    template<class Bank>
+    bool verify_bank(const Bank& bank,const uint8_t* output,size_t size) const {
+        U rows=bank.query_count();
+        if(size<16 || std::memcmp(output,"SCQ2",4) || load32(output,4)!=n || load64(output,8)!=rows)
+            return false;
+        size_t at=16;
+        std::vector<W> selected(n,0);
+        for(U first_row=0;first_row<rows;first_row+=64) {
+            U lanes=std::min<U>(64,rows-first_row);W sat_mask=0;
+            std::fill(selected.begin(),selected.end(),0);
+            for(U lane=0;lane<lanes;++lane) {
+                if(at+W(n)+5>size) return false;
+                U status=output[at];const uint8_t* labels=output+at+1;
+                U length=load32(output,at+1+W(n));at+=W(n)+5;
+                if(W(length)>size-at) return false;
+                auto pins=bank.row(first_row+lane);
+                if(status==1) {
+                    if(length) return false;
+                    W bit=W(1)<<lane;sat_mask|=bit;
+                    for(U v=0;v<n;++v) {
+                        U label=labels[v];
+                        if(label>=k || !((masks[v]>>label)&1)) return false;
+                        if(label==colors[2*v+1]) selected[v]|=bit;
+                        else if(label!=colors[2*v]) return false;
+                    }
+                    for(auto pin:pins)
+                        if(!((pin.allowed>>labels[pin.vertex])&1)) return false;
+                } else if(status==0) {
+                    for(U v=0;v<n;++v) if(labels[v]) return false;
+                    if(!verify(pins,0,nullptr,0,output+at,length)) return false;
+                } else return false;
+                at+=length;
+            }
+            // Check all SAT lanes against independently reconstructed original
+            // equal-colour conflicts with one word operation per conflict/tile.
+            for(auto pair:conflicts) {
+                W left=(pair.first%2)?selected[pair.first/2]:~selected[pair.first/2];
+                W right=(pair.second%2)?selected[pair.second/2]:~selected[pair.second/2];
+                if(left&right&sat_mask) return false;
+            }
+        }
+        return at==size;
+    }
 };
 struct Released {
     PyThreadState* state;
     Released():state(PyEval_SaveThread()){} ~Released(){PyEval_RestoreThread(state);}
 };
+struct BankResult {
+    std::vector<uint8_t> output;
+    W visits=0,arcs=0,proof_bytes=0;
+    U sat=0,unsat=0,tiles=0;
+    bool tiled=false;
+};
+template<class SolverRows,class ObserverRows>
+BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_rows,
+                    const ObserverRows& observer_rows,size_t packet_size,W total_cap,
+                    const char* schema) {
+    if(solver.n!=observer.n || solver.k!=observer.k)
+        throw Invalid("solver and observer geometry differs");
+    U count=solver_rows.query_count(),pins=solver_rows.pin_count();
+    if(count!=observer_rows.query_count() || pins!=observer_rows.pin_count())
+        throw std::logic_error("independent request parsers disagree");
+    W retained=solver.bytes()+observer.bytes();
+    W per_row=25+17*W(solver.n);
+    W output_bound=16+per_row*W(count);
+    // Covers parsed request copies, up to 64 complete answers, bit-lane state,
+    // proof replay scratch, vector metadata, and output serialization. Python
+    // inputs and allocator metadata remain outside this conservative native cap.
+    // Two output envelopes cover vector reallocation and the immutable Python
+    // bytes handoff while the native vector is still alive. Not an RSS limit.
+    W scratch=2048*W(solver.n+1)+64*W(pins)+64*W(count)+8192;
+    if(retained>total_cap || W(packet_size)>total_cap-retained
+            || output_bound>(total_cap-retained-W(packet_size))/2
+            || scratch>total_cap-retained-W(packet_size)-2*output_bound)
+        throw Resource("combined exact bank solve/verify/output admission exceeds cap");
+    BankResult result;
+    W initial=16+W(count)*(W(solver.n)+25);
+    if(initial>std::numeric_limits<size_t>::max())
+        throw Resource("exact bank output reserve exceeds platform size");
+    result.output.reserve(static_cast<size_t>(initial));
+    result.output.insert(result.output.end(),{'S','C','Q','2'});word(result.output,solver.n);qword(result.output,count);
+
+    auto append=[&](const Answer& answer) {
+        W row_bytes=5+W(solver.n)+answer.certificate.size();
+        if(row_bytes>output_bound-result.output.size())
+            throw Resource("SCQ2 output exceeds admitted bound");
+        W required=result.output.size()+row_bytes;
+        if(required>result.output.capacity()) {
+            // Bound capacity explicitly instead of relying on vector growth.
+            W grown=std::min(output_bound,std::max(required,2*W(result.output.capacity())));
+            result.output.reserve(static_cast<size_t>(grown));
+        }
+        result.visits+=answer.visits;result.arcs+=answer.arcs;
+        result.output.push_back(answer.sat?1:0);
+        if(answer.sat) {
+            if(answer.labels.size()!=solver.n || !answer.certificate.empty())
+                throw std::logic_error("SAT bank row geometry differs");
+            result.output.insert(result.output.end(),answer.labels.begin(),answer.labels.end());++result.sat;
+        } else {
+            if(!answer.labels.empty() || answer.certificate.size()>UINT32_MAX)
+                throw std::logic_error("UNSAT bank row geometry differs");
+            result.output.resize(result.output.size()+solver.n,0);++result.unsat;
+        }
+        word(result.output,static_cast<U>(answer.certificate.size()));
+        result.output.insert(result.output.end(),answer.certificate.begin(),answer.certificate.end());
+        result.proof_bytes+=answer.certificate.size();
+        if(W(result.output.size())>output_bound)
+            throw Resource("SCQ2 output exceeds admitted bound");
+    };
+
+    // The quotient component IDs are topological. For sufficiently large banks,
+    // propagate 64 independent requests as bits through the same DAG traversal.
+    // Contradiction certificates are still reconstructed by the ordinary exact
+    // solver per UNSAT lane, so proof semantics and independent checking remain
+    // unchanged. This is a batching optimization, not a new satisfiability rule.
+    const bool use_tiles=solver.condensed && solver.bad==NIL && count>=64;
+    if(use_tiles) {
+        result.tiled=true;
+        for(U first_row=0;first_row<count;first_row+=64) {
+            ++result.tiles;
+            U lanes=std::min<U>(64,count-first_row);
+            std::vector<std::vector<Pin>> requests(lanes);
+            std::vector<std::vector<U>> roots(lanes);
+            std::vector<U> empty(lanes,NIL),conflict(lanes,NIL);
+            std::vector<W> reached(solver.nc,0);
+            std::vector<Answer> answers(lanes);
+            for(U lane=0;lane<lanes;++lane) {
+                requests[lane]=solver_rows.row(first_row+lane);
+                auto restrictions=requests[lane];
+                std::sort(restrictions.begin(),restrictions.end(),[](Pin a,Pin b){return a.vertex<b.vertex;});
+                auto& seeds=roots[lane];seeds.reserve(std::min<size_t>(restrictions.size(),solver.n));
+                for(size_t i=0;i<restrictions.size();) {
+                    U v=restrictions[i].vertex;W domain=solver.masks[v];
+                    do {domain&=restrictions[i++].allowed;}
+                    while(i<restrictions.size() && restrictions[i].vertex==v);
+                    if(!domain) {empty[lane]=v;break;}
+                    if(domain!=solver.masks[v])
+                        seeds.push_back(2*v+(first(domain)!=solver.lo[v]));
+                }
+                if(empty[lane]==NIL) {
+                    W bit=W(1)<<lane;
+                    for(U literal:seeds) reached[solver.comp[literal]]|=bit;
+                }
+            }
+            for(U component=0;component<solver.nc;++component) if(reached[component]) {
+                ++result.visits;
+                W active=reached[component];
+                for(U j=solver.dag.off[component];j<solver.dag.off[component+1];++j) {
+                    ++result.arcs;reached[solver.dag.to[j]]|=active;
+                }
+            }
+            for(U component=0;component<solver.nc;++component) {
+                W lanes_in_conflict=reached[component]&reached[solver.opposite[component]];
+                while(lanes_in_conflict) {
+                    U lane=first(lanes_in_conflict);lanes_in_conflict&=lanes_in_conflict-1;
+                    if(conflict[lane]==NIL) conflict[lane]=component;
+                }
+            }
+            for(U lane=0;lane<lanes;++lane) {
+                Answer& answer=answers[lane];
+                if(empty[lane]!=NIL) {
+                    answer.sat=false;answer.certificate=proof(1,{empty[lane]},{});
+                } else if(conflict[lane]!=NIL) {
+                    // Re-run only contradictory lanes to reconstruct the same
+                    // portable proof. SAT lanes never pay a second traversal.
+                    answer=solver.solve(requests[lane]);
+                    if(answer.sat)
+                        throw std::logic_error("bit-lane contradiction did not replay");
+                } else {
+                    answer.labels.resize(solver.n);
+                    W bit=W(1)<<lane;
+                    for(U v=0;v<solver.n;++v) {
+                        bool low=(reached[solver.comp[2*v]]&bit)!=0;
+                        bool high=(reached[solver.comp[2*v+1]]&bit)!=0;
+                        if(low&&high) throw std::logic_error("SAT bit lane retains contradiction");
+                        U side=low?0:(high?1:solver.base[v]);
+                        answer.labels[v]=side?solver.hi[v]:solver.lo[v];
+                    }
+                }
+                append(answer);
+            }
+        }
+    } else {
+        for(U row=0;row<count;++row) append(solver.solve(solver_rows.row(row)));
+    }
+    if(!observer.verify_bank(observer_rows,result.output.data(),result.output.size()))
+        throw std::logic_error(std::string("serialized ")+schema+" bank failed independent observer");
+    return result;
+}
+BankResult run_bank(Index& solver,Observer& observer,const uint8_t* data,size_t size) {
+    SolverBank solver_bank(data,size,solver.n);
+    ObserverBank observer_bank(data,size,observer.n);
+    W observer_bytes=observer.bytes();
+    W total_cap=solver.cap>UINT64_MAX-observer_bytes?UINT64_MAX:solver.cap+observer_bytes;
+    return run_rows(solver,observer,solver_bank,observer_bank,size,total_cap,"SBQ1");
+}
 PyObject* exception() {
     try {throw;} catch(const Invalid& e){PyErr_SetString(PyExc_ValueError,e.what());}
     catch(const Resource& e){PyErr_SetString(PyExc_MemoryError,e.what());}
@@ -423,7 +824,7 @@ PyObject* create(PyObject*,PyObject* args) {
     if(!PyArg_ParseTuple(args,"OOOOOO",&nv,&kv,&es,&ms,&mode,&cap)) return nullptr;
     try {W limit=number(cap,"invalid memory payload cap"),which=number(mode,"mode must be 0, 1, 2 or 3",3);
         Input input(nv,kv,es,ms,limit);std::unique_ptr<Index> result;
-        {Released guard;result=std::make_unique<Index>(input,static_cast<U>(which));}
+        {Released guard;result=std::make_unique<Index>(std::move(input),static_cast<U>(which));}
         PyObject* capsule=PyCapsule_New(result.get(),SOLVER,destroy_index);if(capsule) result.release();
         return capsule;
     }catch(...){return exception();}
@@ -432,7 +833,7 @@ PyObject* observer_create(PyObject*,PyObject* args) {
     PyObject *nv,*kv,*es,*ms,*cap;
     if(!PyArg_ParseTuple(args,"OOOOO",&nv,&kv,&es,&ms,&cap)) return nullptr;
     try {Input input(nv,kv,es,ms,number(cap,"invalid memory payload cap"));
-        auto result=std::make_unique<Observer>(input);PyObject* capsule=PyCapsule_New(result.get(),OBSERVER,destroy_observer);
+        auto result=std::make_unique<Observer>(std::move(input));PyObject* capsule=PyCapsule_New(result.get(),OBSERVER,destroy_observer);
         if(capsule) result.release();
         return capsule;
     }catch(...){return exception();}
@@ -449,6 +850,78 @@ PyObject* solve(PyObject*,PyObject* args) {
         return Py_BuildValue("iNNKK",a.sat?1:0,labels,cert,static_cast<unsigned long long>(a.visits),static_cast<unsigned long long>(a.arcs));
     }catch(...){return exception();}
 }
+PyObject* solve_bank(PyObject*,PyObject* args) {
+    PyObject *solver_handle,*observer_handle,*packet;
+    if(!PyArg_ParseTuple(args,"OOO",&solver_handle,&observer_handle,&packet)) return nullptr;
+    try {
+        auto* solver=handle<Index>(solver_handle,SOLVER);auto* observer=handle<Observer>(observer_handle,OBSERVER);
+        if(!PyBytes_CheckExact(packet)) throw Invalid("query bank must be immutable exact bytes");
+        const auto* data=reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(packet));
+        size_t size=static_cast<size_t>(PyBytes_GET_SIZE(packet));BankResult result;
+        {Released guard;result=run_bank(*solver,*observer,data,size);}
+        PyObject* output=PyBytes_FromStringAndSize(reinterpret_cast<const char*>(result.output.data()),
+                                                   static_cast<Py_ssize_t>(result.output.size()));
+        if(!output) return nullptr;
+        return Py_BuildValue("NKKKKKK",output,
+            static_cast<unsigned long long>(result.sat+result.unsat),
+            static_cast<unsigned long long>(result.sat),
+            static_cast<unsigned long long>(result.unsat),
+            static_cast<unsigned long long>(result.proof_bytes),
+            static_cast<unsigned long long>(result.visits),
+            static_cast<unsigned long long>(result.arcs));
+    }catch(...){return exception();}
+}
+PyObject* solve_session_packet(PyObject*,PyObject* args) {
+    PyObject *packet,*mode,*cap;
+    if(!PyArg_ParseTuple(args,"OOO",&packet,&mode,&cap)) return nullptr;
+    try {
+        if(!PyBytes_CheckExact(packet)) throw Invalid("session packet must be immutable exact bytes");
+        W which=number(mode,"mode must be 0, 1, 2 or 3",3);
+        W limit=number(cap,"invalid memory payload cap");
+        if(limit<(1U<<20)) throw Invalid("memory payload cap must be at least 1 MiB");
+        const auto* data=reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(packet));
+        size_t size=static_cast<size_t>(PyBytes_GET_SIZE(packet));
+        std::unique_ptr<Index> solver;std::unique_ptr<Observer> observer;BankResult result;
+        {
+            Released guard;
+            ObserverSessionPacket observer_rows(data,size,limit);
+            observer=std::make_unique<Observer>(observer_rows.take_input(limit));
+            W observer_bytes=observer->bytes();
+            if(observer_bytes>=limit) throw Resource("SBC1 observer consumes session cap");
+            SolverSessionPacket solver_rows(data,size,limit-observer_bytes);
+            solver=std::make_unique<Index>(solver_rows.take_input(limit-observer_bytes),static_cast<U>(which));
+            result=run_rows(*solver,*observer,solver_rows,observer_rows,size,limit,"SBC1");
+        }
+        PyObject* output=PyBytes_FromStringAndSize(reinterpret_cast<const char*>(result.output.data()),
+                                                   static_cast<Py_ssize_t>(result.output.size()));
+        if(!output) return nullptr;
+        PyObject* metadata=Py_BuildValue("{sI,sI,sK,sK,sK,sK,sK,sK,sO,sO}",
+            "vertices",solver->n,"components",solver->nc,
+            "original_arcs",static_cast<unsigned long long>(solver->full_arcs),
+            "retained_proof_arcs",static_cast<unsigned long long>(solver->original.to.size()),
+            "condensation_arcs",static_cast<unsigned long long>(solver->dag.to.size()),
+            "retained_array_bytes",static_cast<unsigned long long>(solver->bytes()),
+            "routing_array_bytes",static_cast<unsigned long long>(solver->routing_bytes()),
+            "native_observer_array_bytes",static_cast<unsigned long long>(observer->bytes()),
+            "original_adjacency_retained",solver->routed?Py_False:Py_True,
+            "base_satisfiable",solver->bad==NIL?Py_True:Py_False);
+        if(!metadata){Py_DECREF(output);return nullptr;}
+        PyObject* kernel=PyUnicode_FromString(result.tiled?"tile64":"serial");
+        PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);
+        if(!kernel || !tiles || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0
+                || PyDict_SetItemString(metadata,"bank_tiles",tiles)<0) {
+            Py_XDECREF(kernel);Py_XDECREF(tiles);Py_DECREF(output);Py_DECREF(metadata);return nullptr;
+        }
+        Py_DECREF(kernel);Py_DECREF(tiles);
+        return Py_BuildValue("NKKKKKKN",output,
+            static_cast<unsigned long long>(result.sat+result.unsat),
+            static_cast<unsigned long long>(result.sat),
+            static_cast<unsigned long long>(result.unsat),
+            static_cast<unsigned long long>(result.proof_bytes),
+            static_cast<unsigned long long>(result.visits),
+            static_cast<unsigned long long>(result.arcs),metadata);
+    }catch(...){return exception();}
+}
 PyObject* verify(PyObject*,PyObject* args) {
     PyObject *h,*q,*status,*labels,*proof_bytes;
     if(!PyArg_ParseTuple(args,"OOOOO",&h,&q,&status,&labels,&proof_bytes)) return nullptr;
@@ -459,6 +932,21 @@ PyObject* verify(PyObject*,PyObject* args) {
         const auto* p=reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(proof_bytes));
         size_t nl=PyBytes_GET_SIZE(labels),np=PyBytes_GET_SIZE(proof_bytes);bool ok;
         {Released guard;ok=o->verify(pins,static_cast<U>(code),l,nl,p,np);}
+        return PyBool_FromLong(ok);
+    }catch(...){return exception();}
+}
+PyObject* check_bank(PyObject*,PyObject* args) {
+    PyObject *observer_handle,*packet,*output;
+    if(!PyArg_ParseTuple(args,"OOO",&observer_handle,&packet,&output)) return nullptr;
+    try {
+        auto* observer=handle<Observer>(observer_handle,OBSERVER);
+        if(!PyBytes_CheckExact(packet) || !PyBytes_CheckExact(output)) Py_RETURN_FALSE;
+        const auto* request_data=reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(packet));
+        const auto* answer_data=reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(output));
+        size_t request_size=static_cast<size_t>(PyBytes_GET_SIZE(packet));
+        size_t answer_size=static_cast<size_t>(PyBytes_GET_SIZE(output));bool ok;
+        {Released guard;ObserverBank bank(request_data,request_size,observer->n);
+            ok=observer->verify_bank(bank,answer_data,answer_size);}
         return PyBool_FromLong(ok);
     }catch(...){return exception();}
 }
@@ -475,10 +963,12 @@ PyObject* info(PyObject*,PyObject* h) {
     }catch(...){return exception();}
 }
 PyObject* observer_bytes(PyObject*,PyObject* h) {try{return PyLong_FromUnsignedLongLong(handle<Observer>(h,OBSERVER)->bytes());}catch(...){return exception();}}
-PyObject* abi(PyObject*,PyObject*){return PyLong_FromLong(2);}
+PyObject* abi(PyObject*,PyObject*){return PyLong_FromLong(3);}
 PyMethodDef methods[]={
     {"create",create,METH_VARARGS,nullptr},{"observer_create",observer_create,METH_VARARGS,nullptr},
-    {"solve",solve,METH_VARARGS,nullptr},{"verify",verify,METH_VARARGS,nullptr},
+    {"solve",solve,METH_VARARGS,nullptr},{"solve_bank",solve_bank,METH_VARARGS,nullptr},
+    {"solve_session_packet",solve_session_packet,METH_VARARGS,nullptr},
+    {"verify",verify,METH_VARARGS,nullptr},{"check_bank",check_bank,METH_VARARGS,nullptr},
     {"info",info,METH_O,nullptr},{"observer_bytes",observer_bytes,METH_O,nullptr},
     {"abi",abi,METH_NOARGS,nullptr},{nullptr,nullptr,0,nullptr}};
 PyModuleDef module={PyModuleDef_HEAD_INIT,"_spectra_exact_binary",nullptr,-1,methods,nullptr,nullptr,nullptr,nullptr};

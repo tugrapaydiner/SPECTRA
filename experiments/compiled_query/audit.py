@@ -14,7 +14,8 @@ from pathlib import Path
 import statistics
 
 from .cases import digest, load_case
-from .sessions import EXACT_ARMS, decode_output, decode_certified_output, query_order
+from .sessions import (EXACT_ARMS, EXACT_PACKET_ARMS, decode_output,
+                       decode_certified_output, query_order)
 from .proof_replay import OriginalReplay
 from .study import read_manifest
 
@@ -120,14 +121,30 @@ def audit_study(root: Path) -> dict:
                 raise ValueError('session identity differs: ' + key)
         stages = ('input_ns', 'setup_ns', 'query_loop_ns', 'materialize_ns',
                   'diagnostics_ns', 'dispose_ns')
+        granularity = record.get('timing_granularity', 'query')
+        per_query_ok = (granularity == 'query'
+                        and record['query_ns'] == sum(record['per_query_ns'])
+                        and len(record['per_query_ns']) == job['count']
+                        and all(type(v) is int and v >= 0 for v in record['per_query_ns']))
+        bank_ok = (granularity == 'bank' and record['per_query_ns'] == []
+                   and record['query_ns'] == record['query_loop_ns'])
+        packet_ok = (granularity == 'session-packet' and record['per_query_ns'] == []
+                     and record['query_ns'] == record['query_loop_ns']
+                     and record['setup_ns'] == 0)
         if (any(type(record[k]) is not int or record[k] < 0 for k in stages)
                 or sum(record[k] for k in stages) != record['complete_ns']
-                or record['query_ns'] != sum(record['per_query_ns'])
-                or len(record['per_query_ns']) != job['count']
-                or any(type(v) is not int or v < 0 for v in record['per_query_ns'])
+                or not (per_query_ok or bank_ok or packet_ok)
+                or type(record['query_ns']) is not int or record['query_ns'] < 0
                 or record['query_ns'] > record['query_loop_ns']
                 or receipt['cold_wall_ns'] < record['complete_ns']):
             raise ValueError('timing accounting differs')
+        if job['arm'] in EXACT_PACKET_ARMS:
+            prepared = job['prepared_input']
+            if (record.get('prepared_input_sha256') != prepared['sha256']
+                    or record.get('prepared_input_bytes') != prepared['bytes']
+                    or record.get('packet_preparation_charged') is not False
+                    or record.get('packet_preparation_ns') != prepared['preparation_ns']):
+                raise ValueError('prepared packet accounting differs')
         output = (folder / 'outputs.bin').read_bytes()
         if digest(output) != record['output_sha256'] or len(output) != record['output_bytes']:
             raise ValueError('output digest/size differs')
@@ -217,6 +234,7 @@ def audit_study(root: Path) -> dict:
                 audited_decisions=dict(counts), original_non_sat_requests_checked=len(decision_cache),
                 all_scheduled_decisions_complete=statuses['COMPLETE'] == len(manifest['jobs']),
                 portable_unsat_certificate=bool(certified_counts), certified_decisions=dict(certified_counts),
+                prepared_packet_contracts=any(a in EXACT_PACKET_ARMS for a in manifest['config']['arms']),
                 mixed_output_contracts=any(a in EXACT_ARMS for a in manifest['config']['arms']) and
                     any(a not in EXACT_ARMS for a in manifest['config']['arms']), outside_replication=False,
                 session_summaries=summaries, comparisons=comparisons, raw_rows=raw_rows)

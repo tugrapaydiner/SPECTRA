@@ -14,13 +14,19 @@ from pathlib import Path
 
 from .binary_list import BinaryListProblem, CompiledAnswer, CompiledListSession
 from .cases import digest, load_case
+from .exact import pack_frozen_query_bank
 
 ARMS = ('scc', 'none', 'minicard', 'cadical195',
         'cudd-natural', 'cudd-bfs', 'cudd-occurrence',
         'cudd-frontier-natural', 'cudd-frontier-bfs', 'cudd-frontier-occurrence',
         'cudd-seeded-bfs', 'cudd-reduced-natural', 'cudd-reduced-bfs',
         'cudd-reduced-occurrence')
-EXACT_ARMS = ('exact-scc', 'exact-raw', 'exact-sparse', 'exact-route')
+EXACT_SINGLE_ARMS = ('exact-scc', 'exact-raw', 'exact-sparse', 'exact-route')
+EXACT_BANK_ARMS = ('exact-bank-scc', 'exact-bank-raw',
+                   'exact-bank-sparse', 'exact-bank-route')
+EXACT_PACKET_ARMS = ('exact-packet-scc', 'exact-packet-raw',
+                     'exact-packet-sparse', 'exact-packet-route')
+EXACT_ARMS = EXACT_SINGLE_ARMS + EXACT_BANK_ARMS + EXACT_PACKET_ARMS
 ALL_ARMS = ARMS + EXACT_ARMS
 STATUS = {'UNSAT': 0, 'SAT_VERIFIED': 1, 'UNKNOWN': 2}
 HEADER = struct.Struct('<4sIQ')
@@ -132,6 +138,8 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
                 max_nodes: int = 2_000_000, exact_runtime=None) -> tuple[dict, bytes]:
     if arm not in ALL_ARMS:
         raise ValueError('unknown arm')
+    if arm in EXACT_PACKET_ARMS:
+        raise ValueError('prepared packet arms require run_prepared_session')
     start = time.perf_counter_ns()
     case, case_hash = load_case(case_path)
     if type(count) is not int or count != len(case.queries) or count < 1:
@@ -139,13 +147,18 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
     indices = query_order(count, order, seed)
     p = case.problem
     identity = (case.name, case.cluster, case.provenance)
+    packet = None
+    if arm in EXACT_BANK_ARMS:
+        packet = pack_frozen_query_bank(p.n, (case.queries[index] for index in indices))
     input_end = time.perf_counter_ns()
     session = None
     try:
         if arm in EXACT_ARMS:
             if exact_runtime is None:
                 raise ValueError('exact runtime must be supplied explicitly; no hidden build')
-            session = exact_runtime.prepare(p, mode=arm.removeprefix('exact-'), max_bytes=max_bytes)
+            mode = (arm.removeprefix('exact-bank-') if arm in EXACT_BANK_ARMS
+                    else arm.removeprefix('exact-'))
+            session = exact_runtime.prepare(p, mode=mode, max_bytes=max_bytes)
         elif arm in ('scc', 'none'):
             session = runtime.prepare(p.n, p.palette, p.edges, masks=p.masks,
                                       mode=arm, max_build_bytes=max_bytes)
@@ -156,39 +169,53 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
         setup_end = time.perf_counter_ns()
         rows, per_query, statuses = [], [], []
         proof_bytes = 0
-        for index in indices:
-            tick = time.perf_counter_ns()
-            if arm in ('scc', 'none'):
-                answer = session.solve(case.queries[index], max_work=10_000_000,
-                                       max_state_bytes=max_bytes, core_first=True)
-            else:
-                answer = session.solve(case.queries[index])
-            per_query.append(time.perf_counter_ns() - tick)
-            status = 'UNSAT' if answer.status == 'UNSAT_VERIFIED' and arm in EXACT_ARMS else answer.status
-            if status not in STATUS:
-                raise AssertionError('unsupported solver decision')
-            if answer.status == 'SAT_VERIFIED' and len(answer.labels) != p.n:
-                raise AssertionError('partial original-vertex witness')
-            if answer.status != 'SAT_VERIFIED' and answer.labels:
-                raise AssertionError('non-SAT result supplied a witness')
-            row = bytes((STATUS[status],)) + (answer.labels if status == 'SAT_VERIFIED' else bytes(p.n))
-            if arm in EXACT_ARMS:
-                row += struct.pack('<I', len(answer.proof)) + answer.proof
-                proof_bytes += len(answer.proof)
-            rows.append(row)
-            statuses.append(status)
-        queries_end = time.perf_counter_ns()
-        output = HEADER.pack(b'SCQ2' if arm in EXACT_ARMS else b'SCQ1', p.n, count) + b''.join(rows)
+        timing_granularity = 'query'
+        if arm in EXACT_BANK_ARMS:
+            bank = session.solve_bank(packet)
+            queries_end = time.perf_counter_ns()
+            if bank.query_count != count:
+                raise AssertionError('native bank count differs')
+            output = bank.output
+            counts = {key: value for key, value in
+                      (('SAT_VERIFIED', bank.sat_count), ('UNSAT', bank.unsat_count)) if value}
+            proof_bytes = bank.proof_bytes
+            query_ns = queries_end - setup_end
+            timing_granularity = 'bank'
+        else:
+            for index in indices:
+                tick = time.perf_counter_ns()
+                if arm in ('scc', 'none'):
+                    answer = session.solve(case.queries[index], max_work=10_000_000,
+                                           max_state_bytes=max_bytes, core_first=True)
+                else:
+                    answer = session.solve(case.queries[index])
+                per_query.append(time.perf_counter_ns() - tick)
+                status = 'UNSAT' if answer.status == 'UNSAT_VERIFIED' and arm in EXACT_ARMS else answer.status
+                if status not in STATUS:
+                    raise AssertionError('unsupported solver decision')
+                if answer.status == 'SAT_VERIFIED' and len(answer.labels) != p.n:
+                    raise AssertionError('partial original-vertex witness')
+                if answer.status != 'SAT_VERIFIED' and answer.labels:
+                    raise AssertionError('non-SAT result supplied a witness')
+                row = bytes((STATUS[status],)) + (answer.labels if status == 'SAT_VERIFIED' else bytes(p.n))
+                if arm in EXACT_ARMS:
+                    row += struct.pack('<I', len(answer.proof)) + answer.proof
+                    proof_bytes += len(answer.proof)
+                rows.append(row)
+                statuses.append(status)
+            queries_end = time.perf_counter_ns()
+            output = HEADER.pack(b'SCQ2' if arm in EXACT_ARMS else b'SCQ1', p.n, count) + b''.join(rows)
+            counts = dict(Counter(statuses))
+            query_ns = sum(per_query)
         output_hash = digest(output)
         output_end = time.perf_counter_ns()
         info = session.info
-        counts = dict(Counter(statuses))
         diagnostics_end = time.perf_counter_ns()
     finally:
         if session is not None:
             session.close()
     # Release every non-output input/staging owner before stopping the timer.
-    del session, rows, row, statuses, indices, answer, p, case
+    del session, rows, statuses, indices, p, case, packet
     end = time.perf_counter_ns()
     record = dict(schema='spectra.compiled_query.session.v1', arm=arm, case=identity[0],
                   cluster=identity[1], provenance=identity[2], case_sha256=case_hash,
@@ -196,12 +223,76 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
                   status='INCOMPLETE' if counts.get('UNKNOWN', 0) else 'COMPLETE',
                   counts=counts, complete_ns=end-start, input_ns=input_end-start,
                   setup_ns=setup_end-input_end, query_loop_ns=queries_end-setup_end,
-                  query_ns=sum(per_query), per_query_ns=per_query,
+                  query_ns=query_ns, per_query_ns=per_query,
+                  timing_granularity=timing_granularity,
                   materialize_ns=output_end-queries_end,
                   diagnostics_ns=diagnostics_end-output_end, dispose_ns=end-diagnostics_end,
                   output_sha256=output_hash, output_bytes=len(output), solver_info=info,
                   unsat_certificate=arm in EXACT_ARMS, proof_bytes=proof_bytes,
                   decision_contract='checked-SAT-and-UNSAT' if arm in EXACT_ARMS else 'checked-SAT-only')
+    return record, output
+
+
+def run_prepared_session(packet_path: Path, exact_runtime, arm: str, *, count: int,
+                         order: str, seed: int, case_name: str, cluster: str,
+                         provenance: str, case_sha256: str, packet_sha256: str,
+                         preparation_ns: int | None = None,
+                         max_bytes: int = 512 << 20) -> tuple[dict, bytes]:
+    """Run a ready SBC1 deployment packet with all native work charged.
+
+    Packet construction belongs to study preparation and is deliberately not
+    hidden inside this endpoint. File read, packet hashing, two independent native
+    parses, solver/observer construction, every decision/proof check, SCQ2 output,
+    output hashing, and native disposal are inside ``complete_ns``.
+    """
+    if arm not in EXACT_PACKET_ARMS:
+        raise ValueError('arm is not a prepared exact packet endpoint')
+    if exact_runtime is None:
+        raise ValueError('exact runtime must be supplied explicitly; no hidden build')
+    if preparation_ns is not None and (type(preparation_ns) is not int or preparation_ns < 0):
+        raise ValueError('invalid packet preparation receipt')
+    start = time.perf_counter_ns()
+    packet = Path(packet_path).read_bytes()
+    actual_packet_hash = digest(packet)
+    if actual_packet_hash != packet_sha256:
+        raise ValueError('prepared SBC1 packet changed')
+    input_end = time.perf_counter_ns()
+    mode = arm.removeprefix('exact-packet-')
+    answer = exact_runtime.solve_session_packet(packet, mode=mode, max_bytes=max_bytes)
+    queries_end = time.perf_counter_ns()
+    if answer.query_count != count:
+        raise AssertionError('prepared packet query count differs')
+    output = answer.output
+    counts = {key: value for key, value in
+              (('SAT_VERIFIED', answer.sat_count), ('UNSAT', answer.unsat_count)) if value}
+    proof_bytes = answer.proof_bytes
+    packet_bytes = len(packet)
+    output_hash = digest(output)
+    output_end = time.perf_counter_ns()
+    info = answer.info
+    diagnostics_end = time.perf_counter_ns()
+    del answer, packet
+    end = time.perf_counter_ns()
+    record = dict(schema='spectra.compiled_query.session.v1', arm=arm,
+                  case=case_name, cluster=cluster, provenance=provenance,
+                  case_sha256=case_sha256, query_count=count, order=order,
+                  order_seed=seed, status='COMPLETE', counts=counts,
+                  complete_ns=end-start, input_ns=input_end-start, setup_ns=0,
+                  query_loop_ns=queries_end-input_end,
+                  query_ns=queries_end-input_end, per_query_ns=[],
+                  timing_granularity='session-packet',
+                  materialize_ns=output_end-queries_end,
+                  diagnostics_ns=diagnostics_end-output_end,
+                  dispose_ns=end-diagnostics_end,
+                  output_sha256=output_hash, output_bytes=len(output),
+                  solver_info=info, unsat_certificate=True,
+                  proof_bytes=proof_bytes,
+                  decision_contract='checked-SAT-and-UNSAT',
+                  prepared_input_sha256=actual_packet_hash,
+                  prepared_input_bytes=packet_bytes,
+                  packet_preparation_charged=False,
+                  packet_preparation_ns=preparation_ns,
+                  packet_preparation_stage='immutable study freeze')
     return record, output
 
 

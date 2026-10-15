@@ -1,0 +1,275 @@
+{
+  "audit_sha256": "b6a0a6b795dd97c02f587bc52705aab2f24031b28d37cdb032f79ddf48d438b7",
+  "boundaries": [
+    "The two WAP graphs and their synthetic list construction were already exposed development inputs.",
+    "Packet preparation and arbitrary JSON decoding are outside the ready-packet endpoint.",
+    "Project-owned process isolation and replay are not outside-team replication.",
+    "Direct routed proof reconstruction is not consistently faster than prepared raw traversal.",
+    "No default solver, frozen WAP claim, release, or stable installed-wheel API is changed."
+  ],
+  "cases": [
+    {
+      "case": "wap05a.col-unfiltered-common-mask",
+      "cluster": "wap:902314553711d9b5b110589fdb9aca1326e013bd62acded08c0f4d9dc62c09e2",
+      "exact-packet-raw": {
+        "mean_complete_ns": 25185571.0,
+        "mean_input_ns": 300169.6666666667,
+        "mean_query_ns": 24327898.666666668,
+        "p95_complete_ns": 27450652
+      },
+      "exact-packet-route": {
+        "mean_complete_ns": 22529897.666666668,
+        "mean_input_ns": 381872.6666666667,
+        "mean_query_ns": 21527558.333333332,
+        "p95_complete_ns": 23624720
+      },
+      "exact-raw": {
+        "mean_complete_ns": 185295161.66666666,
+        "mean_input_ns": 117791710.0,
+        "mean_query_ns": 21787877.666666668,
+        "p95_complete_ns": 196549231
+      },
+      "exact-route": {
+        "mean_complete_ns": 199018191.0,
+        "mean_input_ns": 130156510.0,
+        "mean_query_ns": 20379961.666666668,
+        "p95_complete_ns": 248017370
+      },
+      "packet_preparation_mean_ns": 21913638.666666668,
+      "packet_preparation_samples_ns": [
+        21367733,
+        22275845,
+        22097338
+      ],
+      "validated_object_first_use_packet_route_ns": 44443536.333333336,
+      "validated_object_first_use_vs_exact_raw_ratio": 0.2398526541847014
+    },
+    {
+      "case": "wap06a.col-unfiltered-common-mask",
+      "cluster": "wap:43e578718c7903571dc3334ce5b1d52fa8b418dbc89be014208ed0291ca4ec6a",
+      "exact-packet-raw": {
+        "mean_complete_ns": 23686674.666666668,
+        "mean_input_ns": 362016.3333333333,
+        "mean_query_ns": 22686505.0,
+        "p95_complete_ns": 25087360
+      },
+      "exact-packet-route": {
+        "mean_complete_ns": 24625636.333333332,
+        "mean_input_ns": 408539.0,
+        "mean_query_ns": 23605557.666666668,
+        "p95_complete_ns": 25762433
+      },
+      "exact-raw": {
+        "mean_complete_ns": 204428317.33333334,
+        "mean_input_ns": 130806415.33333333,
+        "mean_query_ns": 22391218.333333332,
+        "p95_complete_ns": 214766296
+      },
+      "exact-route": {
+        "mean_complete_ns": 177676502.33333334,
+        "mean_input_ns": 113057791.33333333,
+        "mean_query_ns": 20062281.0,
+        "p95_complete_ns": 192220091
+      },
+      "packet_preparation_mean_ns": 22862694.666666668,
+      "packet_preparation_samples_ns": [
+        22026792,
+        25140179,
+        21421113
+      ],
+      "validated_object_first_use_packet_route_ns": 47488331.0,
+      "validated_object_first_use_vs_exact_raw_ratio": 0.23229820417964533
+    }
+  ],
+  "certified_decisions": {
+    "SAT_VERIFIED": 14472,
+    "UNSAT_VERIFIED": 10104
+  },
+  "classification": "development-only",
+  "comparisons": {
+    "packet_raw_vs_exact_raw": {
+      "baseline": "exact-raw",
+      "candidate": "exact-packet-raw",
+      "cluster_ratios": {
+        "wap:43e578718c7903571dc3334ce5b1d52fa8b418dbc89be014208ed0291ca4ec6a": 0.11586787474283242,
+        "wap:902314553711d9b5b110589fdb9aca1326e013bd62acded08c0f4d9dc62c09e2": 0.1359213633721701
+      },
+      "count": 1024,
+      "descriptive_only": true,
+      "eligible": true,
+      "excluded_or_incomplete": [],
+      "geomean_complete_ratio": 0.12549469911546707,
+      "graph_clusters": 2,
+      "matching_certificate_contract": true
+    },
+    "packet_route_vs_exact_raw": {
+      "baseline": "exact-raw",
+      "candidate": "exact-packet-route",
+      "cluster_ratios": {
+        "wap:43e578718c7903571dc3334ce5b1d52fa8b418dbc89be014208ed0291ca4ec6a": 0.12046098434190831,
+        "wap:902314553711d9b5b110589fdb9aca1326e013bd62acded08c0f4d9dc62c09e2": 0.121589238833966
+      },
+      "count": 1024,
+      "descriptive_only": true,
+      "eligible": true,
+      "excluded_or_incomplete": [],
+      "geomean_complete_ratio": 0.1210237968141924,
+      "graph_clusters": 2,
+      "matching_certificate_contract": true
+    },
+    "packet_route_vs_exact_route": {
+      "baseline": "exact-route",
+      "candidate": "exact-packet-route",
+      "cluster_ratios": {
+        "wap:43e578718c7903571dc3334ce5b1d52fa8b418dbc89be014208ed0291ca4ec6a": 0.1385981601952854,
+        "wap:902314553711d9b5b110589fdb9aca1326e013bd62acded08c0f4d9dc62c09e2": 0.11320521784195428
+      },
+      "count": 1024,
+      "descriptive_only": true,
+      "eligible": true,
+      "excluded_or_incomplete": [],
+      "geomean_complete_ratio": 0.1252598695408923,
+      "graph_clusters": 2,
+      "matching_certificate_contract": true
+    },
+    "packet_route_vs_packet_raw": {
+      "baseline": "exact-packet-raw",
+      "candidate": "exact-packet-route",
+      "cluster_ratios": {
+        "wap:43e578718c7903571dc3334ce5b1d52fa8b418dbc89be014208ed0291ca4ec6a": 1.0396409238477036,
+        "wap:902314553711d9b5b110589fdb9aca1326e013bd62acded08c0f4d9dc62c09e2": 0.894555762371505
+      },
+      "count": 1024,
+      "descriptive_only": true,
+      "eligible": true,
+      "excluded_or_incomplete": [],
+      "geomean_complete_ratio": 0.9643737756830586,
+      "graph_clusters": 2,
+      "matching_certificate_contract": true
+    }
+  },
+  "date": "2026-10-14",
+  "execution_identity": {
+    "affinity": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "dependencies": {
+      "dd": {
+        "files": {
+          "dd/__init__.py": "b6291b52020ac8308c98e11238143787c42b2fe09df6d4b612d3b6bf4d006125",
+          "dd/_abc.py": "7e9f136a255b6254ae8917fe0e90f7ecae0d8a7407353c9aa87510c169c497f9",
+          "dd/_copy.py": "84c7893ed66e5eedabc2aecabefbd745f7df6a593153ee3515d7851074c8f2c8",
+          "dd/_parser.py": "0e4cd45e77ebe2a1a2a40e21c641a0577cbac00e860abe89b849de7e0e113732",
+          "dd/_utils.py": "7cfd2e9211be07a7195d44005a11b372f748ea8a46f115574150fb6ec405e167",
+          "dd/_version.py": "120ec264237de42c85305a354d6fc2765b74d07bb9aa8a130404a7d3f1528039",
+          "dd/autoref.py": "20dc656d8203bf07f0e4a68e16ee2f502ffb0ed0ea907f9869ea7192ad34e8f1",
+          "dd/bdd.py": "f28bb1adfbd93cb16f7acaa217537169e4e41a9b6439d28acd4a993750be295a",
+          "dd/cudd.cpython-313-x86_64-linux-gnu.so": "fb4c38026ac698f3523592e5731dd986a96700d202a6213e57256a405bd8ceff",
+          "dd/dddmp.py": "f03c70709d87d107459fe8227e4eea141ac1ddf85443102b2d28fdad523c6b6b",
+          "dd/mdd.py": "f126ae08429358aa4eec529e9037874d034e29dd5fdf80d69d5eeac8b4019d5e"
+        },
+        "version": "0.6.1"
+      },
+      "python-sat": {
+        "files": {
+          "../../../bin/approxmc.py": "9adce75c5fb62ec8227c54a9a4e1292229ad535775c56776fada7986bc3a1b73",
+          "../../../bin/bbscan.py": "2dbad840d3efbec624673ca0860feca6aa0def4fa79bc88c6d45d642ce88e290",
+          "../../../bin/bica.py": "93b7e365846658a0702287fd49d59c5c1cf3880f72a98663f2d60cf0943d18fe",
+          "../../../bin/fm.py": "e9edf9d6d73a0c1d41251bdd694931b85c1671a680a2b6f0494059b0a2fc8319",
+          "../../../bin/genhard.py": "89e64c35ee0d60d9762936856603cb5c54e51e26fc4f93eda2d9a50224ddc5aa",
+          "../../../bin/lbx.py": "db64decd64cd5ead66e0448fd654b1bfcfc5e8e249001b9b60f15042bb5c2368",
+          "../../../bin/lsu.py": "aba61bdab83856c931d63b28bfeeaf3b6322e8d400f13a93fc4cebebe5111cd5",
+          "../../../bin/mcsls.py": "3a295ee927627d9dcc8ae47c11bfc2ac65068c3f0d0a27cdd1780044e30cfbe0",
+          "../../../bin/models.py": "c390e0f50fb94619e55665d79a5110574a1914e8d9624128dec11b8c68bccbfd",
+          "../../../bin/musx.py": "f636213e879861b5a28445ed083c93da63e025223aba4a1863e99078cd0467f2",
+          "../../../bin/optux.py": "effd1b6d14c38a583b6903d4a6fb43ffc6297c1204ec325acd392d89997ba317",
+          "../../../bin/primer.py": "4f9721ce67fd0d2417b56d84e134b0a09ce426f715647a46c6b92a9b9a6bb819",
+          "../../../bin/rc2.py": "824f911286f74e9351cf071434edbdc62053c26ba3937dadea2415639ffc6aeb",
+          "../../../bin/unigen.py": "d3133c72a3e0b2f0752ccf39551c8529f0c0b57a77cfd4e59a721e266e409bff",
+          "pycard.cpython-313-x86_64-linux-gnu.so": "4f637c153a1c8f184c73e31c3a04b09358bd55008327ad01aacc26227113b352",
+          "pyformula.cpython-313-x86_64-linux-gnu.so": "b1aeed917246704af64c737724a4787278502747cff087b58a70114e2d39d7a8",
+          "pysat/__init__.py": "8647cef5101ee1f8c7080a9bebea4002113825c9a45dfe762336bba0a3f5f77a",
+          "pysat/_fileio.py": "a5744618068fed4f2bddba67e5286c78248744e5ea8bbca06987ba4fa40e46da",
+          "pysat/_utils.py": "e1cbf8d29ef414abe30932aaf06ab34bf8e5c45ef8729fe5a234d94a29bfa891",
+          "pysat/allies/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pysat/allies/approxmc.py": "2ed52cb3a3e2aa682f1702d37b82941e685abddce5a2d4628b65143926fd8135",
+          "pysat/allies/unigen.py": "a8e19cfd6c1c222f808054890c18616369fa43a51e61532930fb9e9b8f957fa7",
+          "pysat/card.py": "adabf7fedfe60b36cbc3c48075770e87e3cd6c5b5a013552009ce96f282a890e",
+          "pysat/engines.py": "c80600fcfcc81abfee445f3933b90bd9b8a98e92db63b8dd7c5293758fb25bc2",
+          "pysat/examples/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "pysat/examples/bbscan.py": "1386398f72e5af4fa3227f910d9224f9fd3649bba3838c17eeecaca221519cb8",
+          "pysat/examples/bica.py": "88ba24ea0f279ac05343bf856e3c568633b48abc746a7db205bc2c8f02e24671",
+          "pysat/examples/fm.py": "7bfb3ac0d06cb447a8330f73632c83460904f87a9af74d88cbf0b1092f7ad421",
+          "pysat/examples/genhard.py": "0c55ed495438aa7efccb4f9932bd83ea00422e2cd94b3824bdc6c3b23aa39ca2",
+          "pysat/examples/hitman.py": "9f3c2a2d57e577633a6d97443026062aa8a0118e8f8bffc23826d875d29d88f1",
+          "pysat/examples/lbx.py": "227323a98fbd52f58ace7217384c1f06c338b297e476e0e577a81492bd630aaa",
+          "pysat/examples/lsu.py": "7aa0e53fec71b8a947bd4ff275320c3a5aaa168531e1691ebaa919ef40e5f273",
+          "pysat/examples/mcsls.py": "6cfe3b3f9e8e38ffeecb432e140ed31b131d9008acee05f813d004108d2d49e7",
+          "pysat/examples/models.py": "71d211f223ab62eda26ea7dc6ff90429740c09f9858b3edcbd9df2d5dbabdd0c",
+          "pysat/examples/musx.py": "86cc151a48e6f799613b2aed9757b8a2e0f2352cbe856bd0d39d3ce179dc93d2",
+          "pysat/examples/optux.py": "719330c733b1b93ce8e930d4bd9555b85dd5d6d380940759a56e9c9baa96d473",
+          "pysat/examples/primer.py": "d0e795f51ea65b222bd812888ad92b7e0637ab65c4fac57564b4a2c9b191157c",
+          "pysat/examples/rc2.py": "efe16eca0c406e03586fd4262ac36190ae441b9396f26a473a9a00f069c3b36f",
+          "pysat/examples/usage.py": "c7d96ec3aa72280027765c40794585852e1a2d25660f6b7f8ffe6e03d61d7478",
+          "pysat/formula.py": "aad003a5abe5e66fa91d10e767b3c3122a2c4fb4db682c2a63fc69bfffbe365c",
+          "pysat/integer.py": "ba6e855d4ce60475059565cd2acd312e1f49b2cde38848a7d84aff538d4ab640",
+          "pysat/pb.py": "0cccbc51f6dba5f268e5c4d9ba5f56d68fe696bf81d2508812c7998eb41877c0",
+          "pysat/process.py": "f2535ba442a2a456636d0f430893df74bf1e647c7e96d36ebbb87881e5967496",
+          "pysat/solvers.py": "253654d8efabae650a0d136ad2f2e6d30b57206b1fb70846c714197468a28f7e",
+          "pysolvers.cpython-313-x86_64-linux-gnu.so": "4be499af6e7afa54ea219c6bff630cbf8b70f8b762da36e32eb68c79ca9834ae"
+        },
+        "version": "1.9.dev15"
+      }
+    },
+    "executable_sha256": "17b78e0a93175e86f9ac03141924fd7a7f0c0c52e66b34bfa0de20ffef989df1",
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "python": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]"
+  },
+  "input_contract": "ready immutable SBC1 packet; preparation separately recorded",
+  "original_non_sat_requests_checked": 842,
+  "outcomes": {
+    "COMPLETE": 24
+  },
+  "output_contract": "strict SCQ2 with full SAT labels or portable SBP1 UNSAT proof",
+  "scheduled_sessions": 24,
+  "schema": "spectra.compiled_query.packet_result.v1",
+  "source_hashes": {
+    "experiments/compiled_query/__init__.py": "f0db315ee73522436e5275bb420aea1955f2b1b9da37fe8e0c2c3b654551cd85",
+    "experiments/compiled_query/audit.py": "951baf13477f7fc49b073ae929e2797ece2c05d08c9f110c6b0a92a45dc52173",
+    "experiments/compiled_query/bdd.py": "88244ba56c87380b52595a4da62f5fc93a03cc47ba94b98386a25d7fa9b21a82",
+    "experiments/compiled_query/binary_list.py": "8967c937dedef79d014d49f22a2f7538b804c8c9c5b9204e6ee537ca5fa36dd4",
+    "experiments/compiled_query/cases.py": "ce7e6767415ddc177b543eb9da5ef531e4331b3acda3c3d17c02a8e7f605b7c5",
+    "experiments/compiled_query/common_masks.py": "8830c5e6f6ae75332a10cb162be5732f2d4ba9862694e7ccbb0019e0b9880dba",
+    "experiments/compiled_query/exact.py": "7a80d1b87409a6ea24f6bd763eb559a15f71f8e4b8073ff08683abc96f090909",
+    "experiments/compiled_query/exact_native.cpp": "2de36dff7b0313108408452b9409c8568daf25d74780df119c5b5fcf01bbe8ec",
+    "experiments/compiled_query/mixed_cases.py": "ea55c72a51de237bea1bcb9389169d341a545c13b35d2b85a77938490511066b",
+    "experiments/compiled_query/preprocess.py": "c89ce9a45d729b61b50630dceaa5ddbec38a68596992900847e79bba8dd6bfc2",
+    "experiments/compiled_query/proof.py": "2129deb15b1e5a9c35eb69269cc392e2b7720f96fb479624da105f76b8238488",
+    "experiments/compiled_query/proof_replay.py": "8d0d9b30848b9adc9726fd27c1de998c3c1017c3f33c9ad8f754c89794df52a1",
+    "experiments/compiled_query/reduced.py": "f9094fbdc11c2109db5d76c5bfcc45f0b1e0b8f6acd9ecbc278a827df361d8fe",
+    "experiments/compiled_query/sessions.py": "3fafea5c3ff5abb09982c09f0c50914cd8067c34d3f06bbb13379bce33d05e10",
+    "experiments/compiled_query/study.py": "ffa2b2fa9990e93cd015329c9fa119ba9334fab67dbe218ba3a1f6648272dfe6",
+    "experiments/compiled_query/test_bdd.py": "1c1a66e1278afb49c30838d55b79d45ab09859307b0b799b7975503c5d5e5034",
+    "experiments/compiled_query/test_construction.py": "5be0c9cf0e20488abf1c2f958eaf77afc2d735b31fa23c5527e81a1690090c2c",
+    "experiments/compiled_query/test_exact.py": "fc4d073a622d43bac1077efbd36cd0f1122d1666a2941cd7c4dbf88d1daf5bf7",
+    "experiments/compiled_query/test_exact_study.py": "9eb34bdf4e67e8f0fda3db048d7d298df98bfd060691bae35b6c1b2e55d5482d",
+    "experiments/compiled_query/test_proof_replay.py": "8d7096bd12967655edb8d13683c5ab6cb3d8d858f3b3fa08a99d02155f064499",
+    "experiments/compiled_query/test_reduced.py": "178839a830657b61c54c053d2d4972d76c12636efd8bbb6a802313aad8447d7d",
+    "experiments/compiled_query/test_study.py": "dd065be7355c8fb256b216210e029a700707e3a4a81d25c5c19b0ce613efb109",
+    "spectra/_native/quotient_query.cpp": "25ffa81d8a7d8716804f73805fa16eb6f6afb06475465a1c9d2d003a5b0d7e3b",
+    "spectra/cnf/quotient_query.py": "70cd1a7fa0f8d7564b8ef13a6557e9e22fb92dc0b5e35cee9033dc5c5cd5034d"
+  },
+  "study_manifest_sha256": "23658ed8c795ccf39e334e2fd9c33cbc2ee23e70ff4e445f67e2db70f71d71a0",
+  "validated_object_first_use_geomean_ratio_vs_exact_raw": 0.2360452093028529,
+  "verification": {
+    "asan_leak_detection": false,
+    "asan_ubsan_exact_contracts_passed": 70,
+    "focused_contracts_passed": 179,
+    "ubsan_exact_contracts_passed": 70
+  }
+}

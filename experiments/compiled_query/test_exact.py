@@ -16,8 +16,11 @@ import struct
 import pytest
 
 from .binary_list import BinaryListProblem
-from .exact import ExactAnswer, ExactRuntime, build_exact_runtime
+from .exact import (ExactAnswer, ExactRuntime, build_exact_runtime,
+                    pack_query_bank, pack_session_packet,
+                    unpack_query_bank, unpack_session_packet)
 from .proof import decode_proof, verify_answer
+from .sessions import decode_certified_output
 
 
 @pytest.fixture(scope='module')
@@ -241,6 +244,161 @@ def test_routed_proofs_have_no_original_search_adjacency(exact_runtime):
         assert routed.info['retained_array_bytes'] < raw.info['retained_array_bytes']//5
 
 
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+def test_batched_bank_matches_individually_checked_answers(exact_runtime, mode):
+    p = BinaryListProblem.create(8, 3,
+        ((0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (0, 7)),
+        (3, 6, 5, 3, 6, 5, 3, 6))
+    queries = ((), ((0, 1),), ((0, 1), (7, 2)), ((3, 0),),
+               ((2, 1), (2, 4)), ((4, 2), (5, 4)), ((7, 1 << 63),))
+    packet = pack_query_bank(p, queries)
+    assert unpack_query_bank(packet, p.n) == queries
+    with exact_runtime.prepare(p, mode=mode) as session:
+        bank = session.solve_bank(packet)
+        rows = decode_certified_output(bank.output, p.n, len(queries))
+        assert bank.query_count == len(queries)
+        assert bank.sat_count + bank.unsat_count == len(queries)
+        assert bank.proof_bytes == sum(len(proof) for _, _, proof in rows)
+        assert session.check_bank(packet, bank.output)
+        for query, (decision, labels, proof) in zip(queries, rows):
+            single = session.solve(query)
+            assert decision == (single.status == 'SAT_VERIFIED')
+            assert labels == (single.labels if decision else bytes(p.n))
+            assert verify_answer(p, query, single.status, labels if decision else b'', proof)
+
+
+def test_batched_packet_and_serialized_output_fail_closed(exact_runtime):
+    p = BinaryListProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,) * 4)
+    queries = ((), ((0, 1),), ((0, 1), (3, 1)), ((1, 0),))
+    packet = pack_query_bank(p, queries)
+    with exact_runtime.prepare(p, mode='route') as session:
+        answer = session.solve_bank(packet)
+        with pytest.raises(ValueError, match='immutable'):
+            session.solve_bank(bytearray(packet))
+        corruptions = []
+        for offset, value in ((0, ord('X')), (12, 1), (16, 1), (32, 255)):
+            changed = bytearray(packet); changed[offset] = value; corruptions.append(bytes(changed))
+        corruptions += [packet[:-1], packet + b'\0']
+        for changed in corruptions:
+            with pytest.raises(ValueError):
+                session.solve_bank(changed)
+        for offset in (0, 4, 16, len(answer.output) - 1):
+            changed = bytearray(answer.output); changed[offset] ^= 1
+            assert not session.check_bank(packet, bytes(changed))
+        assert not session.check_bank(packet, bytearray(answer.output))
+
+
+def test_batched_worst_case_output_is_admitted_before_work(exact_runtime):
+    n = 1000
+    p = BinaryListProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)
+    packet = pack_query_bank(p, ((),) * 100)
+    with exact_runtime.prepare(p, mode='route', max_bytes=2 << 20) as session:
+        with pytest.raises(MemoryError, match='admission'):
+            session.solve_bank(packet)
+
+
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+def test_prepared_session_packet_matches_persistent_exact_endpoint(exact_runtime, mode):
+    p = BinaryListProblem.create(8, 3,
+        ((0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (0, 7)),
+        (3, 6, 5, 3, 6, 5, 3, 6))
+    queries = ((), ((0, 1),), ((0, 1), (7, 2)), ((3, 0),),
+               ((2, 1), (2, 4)), ((4, 2), (5, 4)), ((7, 1 << 63),))
+    packet = pack_session_packet(p, queries)
+    decoded_problem, decoded_queries = unpack_session_packet(packet)
+    assert decoded_problem == p and decoded_queries == queries
+    prepared = exact_runtime.solve_session_packet(packet, mode=mode)
+    assert prepared.info['prepared_input'] is True
+    assert prepared.info['input_schema'] == 'SBC1'
+    assert prepared.info['mode'] == mode
+    query_packet = pack_query_bank(p, queries)
+    with exact_runtime.prepare(p, mode=mode) as session:
+        persistent = session.solve_bank(query_packet)
+        assert prepared.output == persistent.output
+        assert session.check_bank(query_packet, prepared.output)
+    assert prepared.query_count == len(queries)
+    assert prepared.sat_count + prepared.unsat_count == len(queries)
+    rows = decode_certified_output(prepared.output, p.n, len(queries))
+    for query, (decision, labels, proof) in zip(queries, rows):
+        status = 'SAT_VERIFIED' if decision else 'UNSAT_VERIFIED'
+        assert verify_answer(p, query, status, labels if decision else b'', proof)
+
+
+
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+def test_prepared_session_packet_tile64_matches_individual_exact_answers(exact_runtime, mode):
+    n = 24
+    p = BinaryListProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)
+    rows = []
+    for index in range(130):
+        vertex = index % (n - 1)
+        kind = index % 6
+        if kind == 0:
+            query = ()
+        elif kind == 1:
+            query = ((vertex, 1),)
+        elif kind == 2:
+            query = ((vertex, 1), (vertex + 1, 1))
+        elif kind == 3:
+            query = ((vertex, 2), (vertex + 1, 2))
+        elif kind == 4:
+            query = ((vertex, 1), (vertex, 2))
+        else:
+            query = ((vertex, 1 << 63),)
+        rows.append(query)
+    queries = tuple(rows)
+    packet = pack_session_packet(p, queries)
+    prepared = exact_runtime.solve_session_packet(packet, mode=mode)
+    assert prepared.info['bank_kernel'] == ('serial' if mode == 'raw' else 'tile64')
+    assert prepared.info['bank_tiles'] == (0 if mode == 'raw' else 3)
+    decoded = decode_certified_output(prepared.output, p.n, len(queries))
+    with exact_runtime.prepare(p, mode=mode) as session:
+        for query, (decision, labels, proof) in zip(queries, decoded):
+            single = session.solve(query)
+            assert decision == (single.status == 'SAT_VERIFIED')
+            assert labels == (single.labels if decision else bytes(p.n))
+            assert proof == single.proof
+            assert verify_answer(p, query, single.status,
+                                 labels if decision else b'', proof)
+
+
+def test_prepared_tile_threshold_is_explicit(exact_runtime):
+    p = BinaryListProblem.create(8, 2, tuple((v, v + 1) for v in range(7)), (3,) * 8)
+    for count, expected, tiles in ((63, 'serial', 0), (64, 'tile64', 1), (129, 'tile64', 3)):
+        packet = pack_session_packet(p, ((),) * count)
+        answer = exact_runtime.solve_session_packet(packet, mode='route')
+        assert answer.info['bank_kernel'] == expected
+        assert answer.info['bank_tiles'] == tiles
+
+
+def test_prepared_session_packet_rejects_every_corrupted_region(exact_runtime):
+    p = BinaryListProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,) * 4)
+    queries = ((), ((0, 1),), ((0, 1), (3, 1)), ((1, 0),))
+    packet = pack_session_packet(p, queries)
+    with pytest.raises(ValueError, match='immutable'):
+        exact_runtime.solve_session_packet(bytearray(packet))
+    masks_at = 32
+    edges_at = masks_at + 8 * p.n
+    offsets_at = edges_at + 8 * len(p.edges)
+    vertices_at = offsets_at + 4 * (len(queries) + 1)
+    mutations = []
+    for offset, value in ((0, ord('X')), (8, 0), (24, 1), (masks_at, 0),
+                          (edges_at + 4, 0), (offsets_at, 1), (vertices_at, 255)):
+        changed = bytearray(packet); changed[offset] = value; mutations.append(bytes(changed))
+    mutations += [packet[:-1], packet + b'\0']
+    for changed in mutations:
+        with pytest.raises(ValueError):
+            exact_runtime.solve_session_packet(changed)
+
+
+def test_prepared_session_packet_admits_worst_case_output_before_construction(exact_runtime):
+    n = 1000
+    p = BinaryListProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)
+    packet = pack_session_packet(p, ((),) * 100)
+    with pytest.raises(MemoryError, match='admission'):
+        exact_runtime.solve_session_packet(packet, mode='route', max_bytes=2 << 20)
+
+
 def test_old_abi_capsules_are_rejected_before_native_dereference(exact_runtime):
     import ctypes
     constructor = ctypes.pythonapi.PyCapsule_New
@@ -248,12 +406,12 @@ def test_old_abi_capsules_are_rejected_before_native_dereference(exact_runtime):
     constructor.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
     # Invalid address is safe only if the old ABI name is rejected BEFORE use.
     # Keep the name bytes alive for the lifetime of their capsules.
-    solver_name = b'spectra.exact_binary.solver.v1'
-    observer_name = b'spectra.exact_binary.observer.v1'
+    solver_name = b'spectra.exact_binary.solver.v2'
+    observer_name = b'spectra.exact_binary.observer.v2'
     old_solver = constructor(1, solver_name, None)
     old_observer = constructor(1, observer_name, None)
     with pytest.raises(ValueError, match='handle'):
         exact_runtime._module.solve(old_solver, ())
     with pytest.raises(ValueError, match='handle'):
         exact_runtime._module.verify(old_observer, (), 1, b'', b'')
-    assert exact_runtime._module.abi() == 2
+    assert exact_runtime._module.abi() == 3

@@ -3,11 +3,19 @@
 An opt-in, complete-cost challenge to SPECTRA's binary-list feasibility service.
 This directory does not replace the public solver or the frozen WAP study.
 
-The newer [exact mixed-outcome checkpoint](EXACT_REVIEW_20261013.md) adds a separate
-proof-carrying binary-domain service and documents its regressions as well as
-completed checks. Its [exact contract](EXACT_BINARY_CONTRACT.md) is stronger than
-the earlier feasibility-only arms. The studies linked below are the earlier CUDD
-checkpoint; their frozen outcomes are not overwritten or silently upgraded.
+The latest local checkpoint is the [unified prepared-bank review]
+(UNIFIED_PREPARED_REVIEW_20261014.md), with [machine-readable results]
+(UNIFIED_PREPARED_RESULTS_20261014.json). It ports 64-lane exact propagation and
+independent SAT checking into the strict ABI-3/SBC1 one-call endpoint; the inputs
+remain exposed development workloads, not a new holdout.
+
+The [prepared-packet checkpoint](PACKET_REVIEW_20261014.md) adds a complete SBC1
+session format and one-call exact execution. It is built on the
+[exact mixed-outcome checkpoint](EXACT_REVIEW_20261013.md), which added a separate
+proof-carrying binary-domain service and documented its regressions. Their
+[exact contract](EXACT_BINARY_CONTRACT.md) is stronger than the earlier
+feasibility-only arms. Earlier CUDD outcomes are not overwritten or silently
+upgraded.
 
 Start with the [review and results](REVIEW_20261013.md), the
 [development protocol](PROTOCOL.md), the [reduction contract](REDUCTION_CONTRACT.md),
@@ -44,6 +52,31 @@ SPECTRA_REQUIRE_CUDD=1 python -m pytest experiments/compiled_query -q
 
 Missing native CUDD is a test failure when that environment variable is set.
 The explicitly named `autoref` reference tests never stand in for the native arm.
+
+## Prepared exact session endpoint
+
+`pack_session_packet` converts an already validated fixed problem and request bank
+to immutable SBC1. `solve_session_packet` independently reparses that packet for
+the solver and observer, constructs both native owners, solves every request,
+checks every witness/proof, emits strict SCQ2, and disposes native state in one
+call. Packet preparation is a separate, disclosed deployment step.
+
+```python
+from experiments.compiled_query.exact import (
+    ExactRuntime, build_exact_runtime, pack_session_packet,
+)
+
+library = build_exact_runtime('exact-build')
+runtime = ExactRuntime(library)
+packet = pack_session_packet(problem, requests)  # charge or persist this step
+answer = runtime.solve_session_packet(packet, mode='raw')
+scq2_bytes = answer.output
+```
+
+Use `exact-packet-raw`, `exact-packet-scc`, `exact-packet-sparse`, or
+`exact-packet-route` in the process-isolated study. The manifest stores the exact
+packet bytes, SHA-256, preparation receipt, and paired schedule. Ready-packet
+latency must not be described as first-use latency from arbitrary JSON.
 
 ## Run an unfiltered development study
 
