@@ -1,0 +1,117 @@
+name: publish-exact-public-api
+on:
+  push:
+    branches: [research/exact-public-api-20261015]
+    paths: ['.github/workflows/publish-exact-public-api.yml']
+permissions:
+  contents: write
+concurrency:
+  group: publish-exact-public-api
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify and apply the reviewed non-workflow checkpoint
+        env:
+          EXPECTED_B64_SHA256: b1920731f765279a8912c20aee5769b511c34d90a67a99073aa8dee1b9dd139d
+          EXPECTED_XZ_SHA256: e7fa27f840f881febbcd622df3cdcaf46b594c236c8ae40cf5671ff68e7c85bb
+          EXPECTED_PATCH_SHA256: 54a3b3cdd7901456cacb2897118e3bc5e79e471e30aede92748b03ce856fbdef
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/exact-public-publication
+          cat .delivery/exact-public/00 .delivery/exact-public/01 \
+              .delivery/exact-public/02 .delivery/exact-public/03 \
+              .delivery/exact-public/04 .delivery/exact-public/05 \
+              > /tmp/exact-public-publication/checkpoint.b64
+          echo "$EXPECTED_B64_SHA256  /tmp/exact-public-publication/checkpoint.b64" | sha256sum --check
+          base64 --decode /tmp/exact-public-publication/checkpoint.b64 \
+              > /tmp/exact-public-publication/checkpoint.patch.xz
+          echo "$EXPECTED_XZ_SHA256  /tmp/exact-public-publication/checkpoint.patch.xz" | sha256sum --check
+          xz --test /tmp/exact-public-publication/checkpoint.patch.xz
+          xz --decompress --stdout /tmp/exact-public-publication/checkpoint.patch.xz \
+              > /tmp/exact-public-publication/checkpoint.patch
+          echo "$EXPECTED_PATCH_SHA256  /tmp/exact-public-publication/checkpoint.patch" | sha256sum --check
+          git merge-base --is-ancestor dfa45150293e9701290578b40c794a3d5aa86c47 HEAD
+          git apply --check --index /tmp/exact-public-publication/checkpoint.patch
+          git apply --index /tmp/exact-public-publication/checkpoint.patch
+          cat > /tmp/exact-public-publication/expected-paths.txt <<'EOF'
+          CHANGELOG.md
+          README.md
+          SECURITY.md
+          docs/API.md
+          docs/DEVELOPMENT.md
+          docs/EXACT_API.md
+          docs/README.md
+          docs/RELEASING.md
+          docs/STATUS.md
+          scripts/check_current_installation.py
+          scripts/check_exact_installation.py
+          spectra/_native/exact_binary.cpp
+          spectra/cli.py
+          spectra/exact.py
+          spectra/exact_problem.py
+          spectra/exact_proof.py
+          tests/public/test_exact_api.py
+          EOF
+          sed -i 's/^          //' /tmp/exact-public-publication/expected-paths.txt
+          git diff --cached --name-only | sort > /tmp/exact-public-publication/actual-paths.txt
+          sort /tmp/exact-public-publication/expected-paths.txt \
+              > /tmp/exact-public-publication/expected-paths.sorted.txt
+          diff -u /tmp/exact-public-publication/expected-paths.sorted.txt \
+              /tmp/exact-public-publication/actual-paths.txt
+          cat > /tmp/exact-public-publication/expected-blobs.txt <<'EOF'
+          8274cd6c2f2d67349b66860d426f49d13ba327de CHANGELOG.md
+          9a67972c6ae65fd34e9f9a478e73a05cbd0b53e4 README.md
+          67a3daf0c742eeaeb1fd2dbe775f1f484ec3ad82 SECURITY.md
+          d518c0095610c6c279f31d964a9871eeea49cad6 docs/API.md
+          207f1d2e7d45c033855a84ae020e993f8b75c74d docs/DEVELOPMENT.md
+          cafb0dc9165d5ba982481df2f5da57fa5dfa44f6 docs/EXACT_API.md
+          f11fd189150076467e99000a2decee3f6e3b5ee2 docs/README.md
+          d8a87e02a0256a2262152d72976bfdff5d385c79 docs/RELEASING.md
+          d7af2a0aa21cfe9ec14d24ac9d512b1387a3f35d docs/STATUS.md
+          e73d0ebee22066ce8e2d9e1574c4c6f439efde17 scripts/check_current_installation.py
+          e0631dbe522157f08d1362484cbae48e0a11e286 scripts/check_exact_installation.py
+          96182ee6c7754d24e1c8bc46181dd69a5732d32f spectra/_native/exact_binary.cpp
+          9b430c99dde3231aa948d441cfec40fd01d0acae spectra/cli.py
+          983d33551e29d13016e36cd6038d02d270575b66 spectra/exact.py
+          e7b5089e47468c40a0480fcf0ecaa5c712c46eeb spectra/exact_problem.py
+          b0c840e736288b14ff27794d22edc13661468e4d spectra/exact_proof.py
+          7b9ebc4b949c5f06d6ef171ce509908286973310 tests/public/test_exact_api.py
+          EOF
+          sed -i 's/^          //' /tmp/exact-public-publication/expected-blobs.txt
+          while read -r expected path; do
+            actual="$(git rev-parse ":$path")"
+            test "$actual" = "$expected" || {
+              echo "Blob mismatch for $path: $actual != $expected" >&2
+              exit 1
+            }
+          done < /tmp/exact-public-publication/expected-blobs.txt
+          git rm -r .delivery/exact-public
+          if git diff --cached --name-only | grep -q '^.github/workflows/'; then
+            echo 'Refusing to publish workflow changes with the Actions token.' >&2
+            exit 1
+          fi
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git commit -m 'Add versioned installed proof-carrying exact-query API'
+          git rev-parse HEAD > /tmp/exact-public-publication/source_commit.txt
+          git rev-parse HEAD^{tree} > /tmp/exact-public-publication/source_tree.txt
+          git diff --check HEAD^
+          git push origin HEAD:research/exact-public-api-20261015
+          git bundle create /tmp/exact-public-publication/source.bundle HEAD
+          git archive --format=tar.gz --output=/tmp/exact-public-publication/source.tar.gz HEAD
+          cd /tmp/exact-public-publication
+          sha256sum checkpoint.patch source.bundle source.tar.gz > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exact-public-api-publication-${{ github.run_id }}
+          path: /tmp/exact-public-publication/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
