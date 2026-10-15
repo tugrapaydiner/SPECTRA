@@ -10,26 +10,182 @@ concurrency:
   group: faster-query-review-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  source:
+  publish:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      commit: ${{ steps.publish.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false
-      - name: Preserve source and complete ancestry
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==8.4.2' 'python-sat==1.9.dev15'
+      - name: Verify the reviewed patch and limit its scope
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 098a8477f6cc8bb696423e78c4d6b6a26a95a0e1 HEAD
+          echo '2aecaebda361d2ef292b11739b2bf031513dfd7fa99654300371fd33926ef09d  .delivery/canonical-construction.patch' | sha256sum --check
+          git apply --check --index .delivery/canonical-construction.patch
+          git apply --index .delivery/canonical-construction.patch
+          python - <<'PY'
+          import subprocess
+          expected = {'experiments/compiled_query/exact_native.cpp', 'experiments/compiled_query/test_linear_construction.py', 'experiments/compiled_query/LINEAR_CONSTRUCTION.md'}
+          actual = set(subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines())
+          assert actual == expected, (actual, expected)
+          PY
+          echo '67a8b5c8c55dd4fdc5070f2308cabf37a463a7a1294f12a8dd496d792852fb25  experiments/compiled_query/exact_native.cpp' | sha256sum --check
+      - name: Require the focused native and evidence contracts before publication
         run: |
           set -euo pipefail
           mkdir -p /tmp/review-source
+          python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_query_latency.py experiments/compiled_query/test_linear_construction.py -q --junitxml=/tmp/review-source/contracts.xml 2>&1 | tee /tmp/review-source/contracts.log
+      - name: Publish only the tested non-workflow changes
+        id: publish
+        run: |
+          set -euo pipefail
+          git rm .delivery/canonical-construction.patch
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git commit -m 'Build canonical implication graphs without redundant global sorts'
+          git push origin HEAD:research/faster-queries-review-20261015
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           git rev-parse HEAD > /tmp/review-source/commit.txt
           git rev-parse HEAD^{tree} > /tmp/review-source/tree.txt
           git bundle create /tmp/review-source/source.bundle HEAD
           cd /tmp/review-source
           sha256sum source.bundle > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: faster-query-review-source-${{ github.run_id }}
           path: /tmp/review-source/
           retention-days: 30
-          if-no-files-found: error
+          if-no-files-found: warn
+  compare:
+    needs: publish
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, python: '3.11'}
+          - {runner: ubuntu-24.04, python: '3.13'}
+          - {runner: ubuntu-24.04-arm, python: '3.13'}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.publish.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install 'pytest==8.4.2' 'python-sat==1.9.dev15'
+      - name: Check native adjacency, proofs, input handling and evidence
+        run: |
+          set -euo pipefail
+          mkdir -p review-evidence
+          git rev-parse HEAD > review-evidence/commit.txt
+          python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_query_latency.py experiments/compiled_query/test_linear_construction.py -q --junitxml=review-evidence/tests.xml 2>&1 | tee review-evidence/tests.log
+      - name: Compare the unchanged seven-arm schedule against the immediate parent
+        run: |
+          set -euo pipefail
+          python -m experiments.compiled_query.query_latency run --out review-evidence/comparison --baseline-commit 098a8477f6cc8bb696423e78c4d6b6a26a95a0e1 --include-baseline-auto 2>&1 | tee review-evidence/run.log
+          python -m experiments.compiled_query.query_latency audit --out review-evidence/comparison 2>&1 | tee review-evidence/audit.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linear-review-${{ matrix.runner }}-py${{ matrix.python }}-${{ github.run_id }}
+          path: review-evidence/
+          retention-days: 30
+          if-no-files-found: warn
+  sanitizers:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: ['undefined', 'address,undefined']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.publish.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==8.4.2' 'python-sat==1.9.dev15'
+      - name: Run all exact-service contracts under the selected sanitizer
+        env:
+          SANITIZER: ${{ matrix.sanitizer }}
+        run: |
+          set -euo pipefail
+          mkdir -p review-evidence
+          git rev-parse HEAD > review-evidence/commit.txt
+          export SPECTRA_EXACT_LIBRARY="$(python -c "from experiments.compiled_query.exact import build_exact_runtime; import os; print(build_exact_runtime('review-evidence/build', sanitizer=os.environ['SANITIZER']))")"
+          export UBSAN_OPTIONS=halt_on_error=1
+          if [ "$SANITIZER" = 'address,undefined' ]; then
+            export LD_PRELOAD="$(g++ -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so)"
+            export ASAN_OPTIONS=detect_leaks=0:abort_on_error=1
+          fi
+          python -m pytest experiments/compiled_query/test_exact.py -q --junitxml=review-evidence/tests.xml 2>&1 | tee review-evidence/tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linear-review-sanitizer-${{ matrix.sanitizer }}-${{ github.run_id }}
+          path: review-evidence/
+          retention-days: 30
+          if-no-files-found: warn
+  windows:
+    needs: publish
+    runs-on: windows-2022
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.publish.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Load the installed MSVC x64 environment
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'MSVC x64 build tools not found' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $lines = & cmd /c "`"$vcvars`" >nul && set"
+          if ($LASTEXITCODE -ne 0) { throw 'MSVC environment setup failed' }
+          foreach ($line in $lines) {
+            $pair = $line -split '=', 2
+            if ($pair.Count -eq 2 -and $pair[0] -in @('PATH','INCLUDE','LIB','LIBPATH','VCToolsInstallDir','VCINSTALLDIR','WindowsSdkDir','WindowsSDKVersion')) {
+              $line | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            }
+          }
+      - run: python -m pip install 'pytest==8.4.2' 'python-sat==1.9.dev15'
+      - name: Check actual MSVC builds and the sorted native reference
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force review-evidence | Out-Null
+          git rev-parse HEAD | Out-File review-evidence/commit.txt
+          python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=review-evidence/tests.xml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linear-review-windows-py3.13-${{ github.run_id }}
+          path: review-evidence/
+          retention-days: 30
+          if-no-files-found: warn
