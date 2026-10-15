@@ -1,0 +1,35 @@
+name: Faster query review
+on:
+  push:
+    branches: [research/faster-queries-review-20261015]
+    paths: ['.github/workflows/faster-query-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: faster-query-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preserve source and complete ancestry
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/review-source
+          git rev-parse HEAD > /tmp/review-source/commit.txt
+          git rev-parse HEAD^{tree} > /tmp/review-source/tree.txt
+          git bundle create /tmp/review-source/source.bundle HEAD
+          cd /tmp/review-source
+          sha256sum source.bundle > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: faster-query-review-source-${{ github.run_id }}
+          path: /tmp/review-source/
+          retention-days: 30
+          if-no-files-found: error
