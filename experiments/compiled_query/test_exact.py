@@ -44,7 +44,7 @@ def check_answer(problem, query, answer, expected):
     assert answer.visited >= 0 and answer.arcs_scanned >= 0
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route', 'closure'))
 def test_exhaustive_three_vertex_original_graphs_domains_and_requests(exact_runtime, mode):
     # Every graph on 3 labelled vertices; every one/two-colour domain from 3
     # colours; every per-vertex subset of that original domain, without filtering.
@@ -62,7 +62,7 @@ def test_exhaustive_three_vertex_original_graphs_domains_and_requests(exact_runt
                     check_answer(p, q, session.solve(q), expected)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route', 'closure'))
 def test_random_lists_against_native_minicard(exact_runtime, mode):
     from pysat.solvers import Solver
     rng = random.Random(14972)
@@ -81,7 +81,7 @@ def test_random_lists_against_native_minicard(exact_runtime, mode):
                 assert verify_answer(p, q, a.status, a.labels, a.proof)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route', 'closure'))
 @pytest.mark.parametrize('kind', (1, 2, 3))
 def test_every_proof_kind_and_single_byte_mutations(exact_runtime, mode, kind):
     if kind == 1:
@@ -107,7 +107,7 @@ def test_every_proof_kind_and_single_byte_mutations(exact_runtime, mode, kind):
             assert not verify_answer(p, q, forged.status, forged.labels, forged.proof)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route', 'closure'))
 def test_current_request_isolation_and_stale_proofs(exact_runtime, mode):
     p = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))
     with exact_runtime.prepare(p, mode=mode) as session:
@@ -121,7 +121,7 @@ def test_current_request_isolation_and_stale_proofs(exact_runtime, mode):
         assert session.check(bad + ((0, 3),), a)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route', 'closure'))
 def test_empty_graph_singletons_and_bit63(exact_runtime, mode):
     for p, queries in [
         (BinaryListProblem.create(0, 64, (), ()), ((),)),
@@ -134,7 +134,7 @@ def test_empty_graph_singletons_and_bit63(exact_runtime, mode):
                 check_answer(p, q, session.solve(q), brute(p, q))
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route', 'closure'))
 def test_long_chain_and_odd_cycle_no_recursion(exact_runtime, mode):
     n = 10001
     p = BinaryListProblem.create(n, 2, tuple((v, v+1) for v in range(n-1)), (3,)*n)
@@ -175,7 +175,7 @@ def test_original_input_validation_native_and_python(exact_runtime, change):
         exact_runtime._module.create(p.n, p.palette, p.edges, p.masks, 1, 512 << 20)
 
 
-@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route', 'closure'))
 def test_memory_lifecycle_concurrency_and_fail_closed(exact_runtime, mode, monkeypatch):
     p = BinaryListProblem.create(8, 2, tuple((v, v+1) for v in range(7)), (3,)*8)
     for cap in (True, -1, 0, 100):
@@ -199,6 +199,54 @@ def test_memory_lifecycle_concurrency_and_fail_closed(exact_runtime, mode, monke
     with pytest.raises(RuntimeError): session.solve(())
     with pytest.raises(RuntimeError): _ = session.info
     with pytest.raises(RuntimeError): session.__enter__()
+
+
+
+@pytest.mark.parametrize('mode', ('raw', 'scc', 'closure'))
+def test_checked_bank_matches_individual_original_answers(exact_runtime, mode):
+    from .sessions import decode_certified_output
+    p = BinaryListProblem.create(7, 3,
+        ((0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (0, 6)),
+        (3, 6, 5, 3, 6, 5, 3))
+    queries = ((), ((0, 1),), ((0, 1), (6, 1)), ((2, 0),),
+               ((1, 2), (4, 4)), ((0, 1), (0, 2)), ((6, 2),))
+    with exact_runtime.prepare(p, mode=mode) as session:
+        expected = [session.solve(q) for q in queries]
+        bank = session.solve_bank(queries)
+        assert bank.sat + bank.unsat == len(queries)
+        assert bank.timing_granularity == 'tile64' and len(bank.timing_ns) == 1
+        rows = decode_certified_output(bank.payload, p.n, len(queries))
+        assert sum(len(proof) for _, _, proof in rows) == bank.proof_bytes
+        for q, prior, (decision, labels, proof_bytes) in zip(queries, expected, rows):
+            status = 'SAT_VERIFIED' if decision else 'UNSAT_VERIFIED'
+            assert status == prior.status
+            assert verify_answer(p, q, status, labels if decision else b'', proof_bytes)
+            if decision:
+                assert labels in brute(p, q) and proof_bytes == b''
+            else:
+                assert labels == bytes(p.n) and proof_bytes
+
+
+def test_bank_rejects_empty_malformed_and_over_cap_inputs(exact_runtime):
+    p = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))
+    with exact_runtime.prepare(p, mode='scc') as session:
+        with pytest.raises(ValueError, match='nonempty'):
+            session.solve_bank(())
+        with pytest.raises(ValueError):
+            session.solve_bank(((), ((0, 1), (3, 1))))
+        with pytest.raises(ValueError):
+            exact_runtime._module.solve_bank_checked(session._solver, session._observer,
+                                                       ((), ((0, 1), (True, 1))))
+        assert session.solve_bank(((),)).sat == 1
+
+
+def test_fused_endpoint_keeps_original_observer_contract(exact_runtime):
+    p = BinaryListProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,) * 4)
+    queries = ((), ((0, 1),), ((0, 1), (3, 1)), ((2, 0),))
+    with exact_runtime.prepare(p, mode='raw') as session:
+        for query in queries:
+            answer = session.solve_fused(query)
+            check_answer(p, query, answer, brute(p, query))
 
 
 def test_observer_rejects_status_and_sat_witness_forgery(exact_runtime):

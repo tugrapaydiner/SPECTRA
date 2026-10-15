@@ -76,6 +76,18 @@ class ExactAnswer:
     arcs_scanned: int
 
 
+@dataclass(frozen=True)
+class ExactBankAnswer:
+    payload: bytes
+    sat: int
+    unsat: int
+    proof_bytes: int
+    visited: int
+    arcs_scanned: int
+    timing_ns: tuple[int, ...]
+    timing_granularity: str
+
+
 class ExactRuntime:
     def __init__(self, library: Path):
         spec = importlib.util.spec_from_file_location('_spectra_exact_binary', Path(library).resolve())
@@ -94,11 +106,18 @@ class ExactRuntime:
 class ExactSession:
     def __init__(self, module, problem: BinaryListProblem, *, mode: str,
                  max_bytes: int):
-        if mode not in ('scc', 'raw', 'sparse', 'route'):
-            raise ValueError('mode must be scc, raw, sparse or route')
+        if mode not in ('scc', 'raw', 'sparse', 'route', 'closure'):
+            raise ValueError('mode must be scc, raw, sparse, route or closure')
         if type(max_bytes) is not int or max_bytes < 1 << 20:
             raise ValueError('max_bytes must be an exact integer of at least 1 MiB')
-        self.problem = BinaryListProblem.create(problem.n, problem.palette, problem.edges, problem.masks)
+        if type(problem) is not BinaryListProblem:
+            raise TypeError('problem must be an exact BinaryListProblem')
+        # Both native owners independently validate and copy the complete original
+        # graph/domains below. Re-running the Python normalizer here used to sort
+        # tens of thousands of already canonical edges a third time. Accepted
+        # native input is exact nested tuples, so the frozen problem is an
+        # immutable query-geometry view while solver/observer own their payloads.
+        self.problem = problem
         self._module, self.mode = module, mode
         self._lock = threading.RLock()
         self._solver = self._observer = None
@@ -110,7 +129,9 @@ class ExactSession:
             self._observer = module.observer_create(p.n, p.palette, p.edges, p.masks, max_bytes)
             observer_bytes = module.observer_bytes(self._observer)
             self._solver = module.create(p.n, p.palette, p.edges, p.masks,
-                                         {'raw': 0, 'scc': 1, 'sparse': 2, 'route': 3}[mode], max_bytes - observer_bytes)
+                                         {'raw': 0, 'scc': 1, 'sparse': 2,
+                                          'route': 3, 'closure': 4}[mode],
+                                         max_bytes - observer_bytes)
             self._owned_bytes = observer_bytes + module.info(self._solver)['retained_array_bytes']
         except BaseException:
             self.close()
@@ -138,6 +159,52 @@ class ExactSession:
                 raise AssertionError('exact answer failed independent original-input observer')
             return ExactAnswer('SAT_VERIFIED' if decision else 'UNSAT_VERIFIED',
                                labels, proof, visits, arcs)
+
+    def solve_fused(self, restrictions=()) -> ExactAnswer:
+        """Solve and independently check in one native crossing.
+
+        The observer remains a separately owned original-input object.  This
+        endpoint only removes duplicate Python/C-API query parsing and the second
+        interpreter transition; it does not omit or sample verification.
+        """
+        query = self.problem.freeze_query(restrictions)
+        with self._lock:
+            self._require_open()
+            self._admit_query(query)
+            decision, labels, proof, visits, arcs = self._module.solve_checked(
+                self._solver, self._observer, query)
+            return ExactAnswer('SAT_VERIFIED' if decision else 'UNSAT_VERIFIED',
+                               labels, proof, visits, arcs)
+
+    def solve_bank(self, restrictions) -> ExactBankAnswer:
+        """Solve a fixed ordered bank and return checked SCQ2 bytes.
+
+        Raw mode keeps serial solving as the matched control while all modes
+        share tile-level independent SAT checking. SCC/closure modes propagate up
+        to 64 requests together, and every full witness or original-literal
+        contradiction proof remains independently checked.
+        """
+        bank = tuple(self.problem.freeze_query(query) for query in restrictions)
+        if not bank:
+            raise ValueError('query bank must be nonempty')
+        pins = sum(map(len, bank))
+        bound = (self._owned_bytes + 512*(self.problem.n+1) + 32*pins
+                 + len(bank)*(self.problem.n+37) + 8192)
+        if len(bank) > 1_000_000 or pins > 1_000_000 or bound > self._max_bytes:
+            raise MemoryError('combined native query-bank payload admission exceeds cap')
+        with self._lock:
+            self._require_open()
+            values = self._module.solve_bank_checked(self._solver, self._observer, bank)
+        payload, sat, unsat, proof_bytes, visits, arcs, timing, granularity = values
+        if (type(payload) is not bytes or type(sat) is not int or type(unsat) is not int
+                or sat + unsat != len(bank) or type(timing) is not tuple
+                or granularity not in ('query', 'tile64')):
+            raise AssertionError('native query-bank result geometry differs')
+        expected = len(bank) if granularity == 'query' else (len(bank)+63)//64
+        if len(timing) != expected or any(type(value) is not int or value < 0 for value in timing):
+            raise AssertionError('native query-bank timing geometry differs')
+        return ExactBankAnswer(payload, sat, unsat, proof_bytes, visits, arcs,
+                               timing, granularity)
 
     def check(self, restrictions, answer: ExactAnswer) -> bool:
         query = self.problem.freeze_query(restrictions)
