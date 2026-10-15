@@ -1,89 +1,39 @@
-name: apply-exact-bank-checkpoint
+name: export-batch-checkpoint-source
 on:
   push:
     branches: [research/compiled-query-validation]
     paths:
       - '.github/workflows/apply-exact-bank-checkpoint.yml'
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: apply-exact-bank-checkpoint
+  group: export-batch-checkpoint-source
   cancel-in-progress: false
 jobs:
-  apply:
+  export:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: 972b8e5b8c66f73065050966c8f7e2b7f9069515
           fetch-depth: 0
-      - name: Apply and verify the hash-pinned prepared-session core
-        env:
-          EXPECTED_B64_SHA256: 5bc32d7362ff3f1cff1fab94d74f522d0d65f40b48eca986c10b21b3c2162ef5
-          EXPECTED_GZIP_SHA256: ba5aa7cce763d1c98f722a54d11fb5048aa180e03cfafb348c2dccb6feeab651
-          EXPECTED_PATCH_SHA256: f2beda631bf842479ec2ffb460e185df64cdbc7503969e69f407c3ad3db2e9da
+          persist-credentials: false
+      - name: Export the exact bit-parallel checkpoint
         run: |
           set -euo pipefail
-          base="$GITHUB_SHA"
-          git config user.name 'Tugrap'
-          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
-          cat .github/bank-patch/00 .github/bank-patch/01 \
-              .github/bank-patch/02a .github/bank-patch/02b .github/bank-patch/02c \
-              .github/bank-patch/03 > /tmp/exact-bank.b64
-          echo "$EXPECTED_B64_SHA256  /tmp/exact-bank.b64" | sha256sum --check
-          base64 --decode /tmp/exact-bank.b64 > /tmp/exact-bank.patch.gz
-          echo "$EXPECTED_GZIP_SHA256  /tmp/exact-bank.patch.gz" | sha256sum --check
-          gzip --test /tmp/exact-bank.patch.gz
-          gzip --decompress --stdout /tmp/exact-bank.patch.gz > /tmp/exact-bank.patch
-          echo "$EXPECTED_PATCH_SHA256  /tmp/exact-bank.patch" | sha256sum --check
-          git am /tmp/exact-bank.patch
-          git reset --soft "$base"
-          if git diff --cached --name-only | grep -q '^.github/workflows/'; then
-            echo 'Refusing to publish workflow changes through the Actions token.' >&2
-            git diff --cached --name-only >&2
-            exit 1
-          fi
-          git commit -m 'Add prepared exact sessions with independently checked batched proofs'
-          cat > /tmp/expected_blobs.txt <<'EOF'
-          f86db57fcc285465904347c95b800078d503ed1f experiments/compiled_query/EXACT_BINARY_CONTRACT.md
-          29c8c2c560c766a25dab33ba6076e64e6de00d83 experiments/compiled_query/PACKET_RESULTS_20261014.json
-          2bdb2a20973f05db69125afecd554acf40c84e18 experiments/compiled_query/PACKET_REVIEW_20261014.md
-          ecf2d9703952bfaec2ead3cee95fac9907423b12 experiments/compiled_query/README.md
-          babf1853743d6a438cdfc1dfad8e4ac49e891639 experiments/compiled_query/ROADMAP.md
-          09b774bbb2ae96bb3809cc0395b32355d5fdf420 experiments/compiled_query/audit.py
-          e0a368ea7ccdf79f9ca26b516c31eac76aa08fde experiments/compiled_query/exact.py
-          061ce3172dfe9fa6436f43c51118bedbdbea52a6 experiments/compiled_query/exact_native.cpp
-          26061151488d00e5130b184b42c48df8804bf46d experiments/compiled_query/sessions.py
-          863f66a9b93d6fef2aaf10eaf656b724b5579705 experiments/compiled_query/study.py
-          45b9d86668866fdfb24b935cc2916e12d4949686 experiments/compiled_query/test_exact.py
-          eaf0cec896d4fc69b0201e08c28341086107fe58 experiments/compiled_query/test_exact_study.py
-          EOF
-          sed -i 's/^          //' /tmp/expected_blobs.txt
-          awk '{print $2}' /tmp/expected_blobs.txt | sort > /tmp/expected_paths.txt
-          git diff --name-only "$base"..HEAD | sort > /tmp/actual_paths.txt
-          diff -u /tmp/expected_paths.txt /tmp/actual_paths.txt
-          while read -r expected path; do
-            actual="$(git rev-parse "HEAD:$path")"
-            test "$actual" = "$expected" || {
-              echo "Blob mismatch for $path: $actual != $expected" >&2
-              exit 1
-            }
-          done < /tmp/expected_blobs.txt
-          git rev-parse HEAD > /tmp/source_commit.txt
-          git rev-parse HEAD^{tree} > /tmp/source_tree.txt
-          git diff --binary "$base"..HEAD > /tmp/exact-bank-core.patch
-          sha256sum /tmp/exact-bank-core.patch > /tmp/exact-bank-core.patch.sha256
-          git push origin HEAD:research/compiled-query-validation
+          mkdir -p /tmp/batch-checkpoint
+          git rev-parse HEAD > /tmp/batch-checkpoint/source_commit.txt
+          git rev-parse HEAD^{tree} > /tmp/batch-checkpoint/source_tree.txt
+          git archive --format=tar.gz --output=/tmp/batch-checkpoint/source.tar.gz HEAD
+          sha256sum /tmp/batch-checkpoint/source.tar.gz > /tmp/batch-checkpoint/SHA256SUMS.txt
+          git diff --binary ed1090312959827faa74faa138c101ec2a6d13c8..HEAD \
+            > /tmp/batch-checkpoint/batch-from-ed109.patch
+          sha256sum /tmp/batch-checkpoint/batch-from-ed109.patch \
+            >> /tmp/batch-checkpoint/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: prepared-session-core-${{ github.run_id }}
-          path: |
-            /tmp/source_commit.txt
-            /tmp/source_tree.txt
-            /tmp/exact-bank-core.patch
-            /tmp/exact-bank-core.patch.sha256
-            /tmp/expected_blobs.txt
-            /tmp/actual_paths.txt
+          name: exact-batch-checkpoint-${{ github.run_id }}
+          path: /tmp/batch-checkpoint/
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
