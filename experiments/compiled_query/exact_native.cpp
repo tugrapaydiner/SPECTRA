@@ -542,6 +542,12 @@ struct Index {
             auto a=path(2*bad,2*bad+1,answer),b=path(2*bad+1,2*bad,answer);
             answer.certificate=proof(3,a,b);return answer;
         }
+        return solve_roots(seeds);
+    }
+    // Roots belong to this request only. The caller has already intersected
+    // every restriction and ruled out empty domains and a fixed contradiction.
+    Answer solve_roots(const std::vector<U>& seeds) const {
+        Answer answer;
         std::vector<U> parent;
         std::vector<uint8_t> reached;
         if(condensed) {
@@ -765,14 +771,12 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
         for(U first_row=0;first_row<count;first_row+=64) {
             ++result.tiles;
             U lanes=std::min<U>(64,count-first_row);
-            std::vector<std::vector<Pin>> requests(lanes);
             std::vector<std::vector<U>> roots(lanes);
             std::vector<U> empty(lanes,NIL),conflict(lanes,NIL);
             std::vector<W> reached(solver.nc,0);
             std::vector<Answer> answers(lanes);
             for(U lane=0;lane<lanes;++lane) {
-                requests[lane]=solver_rows.row(first_row+lane);
-                auto restrictions=requests[lane];
+                auto restrictions=solver_rows.row(first_row+lane);
                 std::sort(restrictions.begin(),restrictions.end(),[](Pin a,Pin b){return a.vertex<b.vertex;});
                 auto& seeds=roots[lane];seeds.reserve(std::min<size_t>(restrictions.size(),solver.n));
                 for(size_t i=0;i<restrictions.size();) {
@@ -807,9 +811,15 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
                 if(empty[lane]!=NIL) {
                     answer.sat=false;answer.certificate=proof(1,{empty[lane]},{});
                 } else if(conflict[lane]!=NIL) {
-                    // Re-run only contradictory lanes to reconstruct the same
-                    // portable proof. SAT lanes never pay a second traversal.
-                    answer=solver.solve(requests[lane]);
+                    // The batch already established a contradiction. Reuse its
+                    // prepared roots, without sorting the request again. Only
+                    // routed proofs need a second SCC walk for predecessors;
+                    // other modes can reconstruct directly in original edges.
+                    if(solver.routed) answer=solver.solve_roots(roots[lane]);
+                    else {
+                        std::vector<U> parent;
+                        solver.raw_closure(roots[lane],parent,answer);
+                    }
                     if(answer.sat)
                         throw std::logic_error("bit-lane contradiction did not replay");
                 } else {

@@ -371,6 +371,34 @@ def test_prepared_tile_threshold_is_explicit(exact_runtime):
         assert answer.info['bank_tiles'] == tiles
 
 
+@pytest.mark.parametrize('mode', ('scc', 'sparse', 'route'))
+def test_mixed_domain_tiles_keep_exact_scalar_proofs(exact_runtime, mode):
+    # Adjacent domains share one colour, producing a nontrivial condensation
+    # DAG. Include repeated/reordered pins, immediate and propagated conflicts,
+    # unforced requests, and a partial last tile.
+    p = BinaryListProblem.create(8, 4, tuple((v, v+1) for v in range(7)),
+                                (3, 6, 12, 9, 3, 6, 12, 9))
+    rng = random.Random(73051)
+    rows = [(), ((0, 2), (1, 2)), ((0, 1), (0, 2)),
+            ((1, 6), (0, 2), (1, 2)), ((7, 8), (6, 8)), ((0, 1 << 63),)]
+    rows += [tuple((rng.randrange(p.n), rng.randrange(16))
+                   for _ in range(rng.randrange(1, 9))) for _ in range(123)]
+    rows = tuple(rows)
+    expected = []
+    with exact_runtime.prepare(p, mode=mode) as session:
+        for query in rows:
+            answer = session.solve(query)
+            check_answer(p, query, answer, brute(p, query))
+            expected.append((answer.status == 'SAT_VERIFIED',
+                             answer.labels if answer.labels else bytes(p.n), answer.proof))
+    for count in (63, 64, 65, 129):
+        bank = exact_runtime.solve_session_packet(pack_session_packet(p, rows[:count]), mode=mode)
+        decoded = decode_certified_output(bank.output, p.n, count)
+        assert decoded == tuple(expected[:count])
+    reverse = exact_runtime.solve_session_packet(pack_session_packet(p, rows[::-1]), mode=mode)
+    assert decode_certified_output(reverse.output, p.n, len(rows)) == tuple(expected[::-1])
+
+
 @pytest.mark.parametrize('count', (0, 1, 63, 64, 65, 129))
 @pytest.mark.parametrize('structure', ('empty', 'independent', 'chain', 'odd_cycle'))
 def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, count, structure):
