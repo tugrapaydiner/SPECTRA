@@ -732,8 +732,8 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
     result.output.reserve(static_cast<size_t>(initial));
     result.output.insert(result.output.end(),{'S','C','Q','2'});word(result.output,solver.n);qword(result.output,count);
 
-    auto append=[&](const Answer& answer) {
-        W row_bytes=5+W(solver.n)+answer.certificate.size();
+    auto reserve_row=[&](size_t proof_size) {
+        W row_bytes=5+W(solver.n)+proof_size;
         if(row_bytes>output_bound-result.output.size())
             throw Resource("SCQ2 output exceeds admitted bound");
         W required=result.output.size()+row_bytes;
@@ -742,6 +742,9 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
             W grown=std::min(output_bound,std::max(required,2*W(result.output.capacity())));
             result.output.reserve(static_cast<size_t>(grown));
         }
+    };
+    auto append=[&](const Answer& answer) {
+        reserve_row(answer.certificate.size());
         result.visits+=answer.visits;result.arcs+=answer.arcs;
         result.output.push_back(answer.sat?1:0);
         if(answer.sat) {
@@ -774,7 +777,6 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
             std::vector<std::vector<U>> roots(lanes);
             std::vector<U> empty(lanes,NIL),conflict(lanes,NIL);
             std::vector<W> reached(solver.nc,0);
-            std::vector<Answer> answers(lanes);
             for(U lane=0;lane<lanes;++lane) {
                 auto restrictions=solver_rows.row(first_row+lane);
                 std::sort(restrictions.begin(),restrictions.end(),[](Pin a,Pin b){return a.vertex<b.vertex;});
@@ -806,8 +808,22 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
                     if(conflict[lane]==NIL) conflict[lane]=component;
                 }
             }
+            W sat_lanes=0;
+            for(U lane=0;lane<lanes;++lane)
+                if(empty[lane]==NIL && conflict[lane]==NIL) sat_lanes|=W(1)<<lane;
+            // Resolve component choices once per vertex for the whole tile.
+            // The output still contains every original label for every lane.
+            std::vector<W> high_choices;
+            if(sat_lanes) {
+                high_choices.resize(solver.n);
+                for(U v=0;v<solver.n;++v) {
+                    W low=reached[solver.comp[2*v]],high=reached[solver.comp[2*v+1]];
+                    if(low&high&sat_lanes) throw std::logic_error("SAT bit lane retains contradiction");
+                    high_choices[v]=(high|(solver.base[v]?~low:0))&sat_lanes;
+                }
+            }
             for(U lane=0;lane<lanes;++lane) {
-                Answer& answer=answers[lane];
+                Answer answer;
                 if(empty[lane]!=NIL) {
                     answer.sat=false;answer.certificate=proof(1,{empty[lane]},{});
                 } else if(conflict[lane]!=NIL) {
@@ -823,15 +839,16 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
                     if(answer.sat)
                         throw std::logic_error("bit-lane contradiction did not replay");
                 } else {
-                    answer.labels.resize(solver.n);
+                    // Write directly into the admitted SCQ2 row. Its four-byte
+                    // proof length stays zero; no temporary label vector/copy.
+                    reserve_row(0);
+                    size_t at=result.output.size();
+                    result.output.resize(at+W(solver.n)+5,0);
+                    result.output[at]=1;++result.sat;
                     W bit=W(1)<<lane;
-                    for(U v=0;v<solver.n;++v) {
-                        bool low=(reached[solver.comp[2*v]]&bit)!=0;
-                        bool high=(reached[solver.comp[2*v+1]]&bit)!=0;
-                        if(low&&high) throw std::logic_error("SAT bit lane retains contradiction");
-                        U side=low?0:(high?1:solver.base[v]);
-                        answer.labels[v]=side?solver.hi[v]:solver.lo[v];
-                    }
+                    for(U v=0;v<solver.n;++v)
+                        result.output[at+1+v]=(high_choices[v]&bit)?solver.hi[v]:solver.lo[v];
+                    continue;
                 }
                 append(answer);
             }

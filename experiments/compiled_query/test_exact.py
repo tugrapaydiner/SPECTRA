@@ -399,6 +399,34 @@ def test_mixed_domain_tiles_keep_exact_scalar_proofs(exact_runtime, mode):
     assert decode_certified_output(reverse.output, p.n, len(rows)) == tuple(expected[::-1])
 
 
+@pytest.mark.parametrize('mode', ('scc', 'sparse', 'route', 'auto'))
+def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
+    n = 71
+    masks = tuple(1 if v % 11 == 0 else 1 | (1 << 63) for v in range(n))
+    p = BinaryListProblem.create(n, 64, tuple((v, v+1) for v in range(0, n-1, 2)), masks)
+    rng = random.Random(84617)
+    rows = []
+    for index in range(129):
+        labels = [0] * n
+        for v in range(0, n-1, 2):
+            first = 0 if masks[v] == 1 else 63 if masks[v+1] == 1 else rng.choice((0, 63))
+            labels[v], labels[v+1] = first, 63-first
+        rows.append(tuple((v, 1 << labels[v]) for v in range(n)
+                          if index % 3 and rng.random() < .3))
+    rows = tuple(rows)
+    expected = []
+    with exact_runtime.prepare(p, mode='scc' if mode == 'auto' else mode) as session:
+        for query in rows:
+            answer = session.solve(query)
+            assert answer.status == 'SAT_VERIFIED'
+            assert verify_answer(p, query, answer.status, answer.labels, answer.proof)
+            expected.append((1, answer.labels, b''))
+    for count in (64, 65, 129):
+        answer = exact_runtime.solve_session_packet(pack_session_packet(p, rows[:count]), mode=mode)
+        assert answer.sat_count == count and answer.proof_bytes == 0
+        assert decode_certified_output(answer.output, n, count) == tuple(expected[:count])
+
+
 @pytest.mark.parametrize('count', (0, 1, 63, 64, 65, 129))
 @pytest.mark.parametrize('structure', ('empty', 'independent', 'chain', 'odd_cycle'))
 def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, count, structure):
