@@ -21,10 +21,14 @@ never upload changed bytes under an already published version.
 
 Run the complete [development test/build procedure](DEVELOPMENT.md), including
 public contracts, fast research regressions, a wheel built from the sdist,
-11 installed-only checks, navigation/version checks and the history-based
+installed-only checks, navigation/version checks and the history-based
 workspace audit. Retain exact commands, exit statuses, environments and logs.
 Native execution and historical evidence replays are additional checks, not
-implied by successful wheel installation. Report excluded slow tests explicitly.
+implied by successful wheel installation. A release containing `spectra.exact`
+must also pass the installed-wheel exact check on the final wheel, verify its
+packaged C++ source inventory, compile under the supported Linux and Windows
+builders, and retain the ABI/API/build-receipt results. Report excluded slow tests
+and disabled leak detection explicitly.
 
 ```bash
 python scripts/check_release_readiness.py

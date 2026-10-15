@@ -23,6 +23,7 @@ historical neural, MCTS, low-bit, general-SAT, or universal CPU-performance clai
 |---|---|
 | Install and run the public tools | [Quick start](../README.md#base-toolkit-quick-start) |
 | Understand API, input formats and return values | [API and CLI](API.md) |
+| Build and use checked SAT/UNSAT exact queries | [Proof-carrying exact API](EXACT_API.md) |
 | Check released, merged, experimental and failed work | [Current status](STATUS.md) |
 | Run tests, build a wheel or reproduce experiments | [Development](DEVELOPMENT.md) |
 | Prepare a package release | [Release checklist](RELEASING.md) |
