@@ -48,7 +48,8 @@ jobs:
           python -VV > exact-public-evidence/python.txt
           uname -a > exact-public-evidence/platform.txt
           export SPECTRA_EXACT_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('exact-public-evidence/source-build'))")"
-          python -m pytest tests/public/test_exact_api.py experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-public-evidence/source-tests.xml 2>&1 | tee exact-public-evidence/source-tests.log
+          python -m pytest tests/public/test_exact_api.py --confcutdir=tests/public -q --junitxml=exact-public-evidence/public-tests.xml 2>&1 | tee exact-public-evidence/public-tests.log
+          python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-public-evidence/research-tests.xml 2>&1 | tee exact-public-evidence/research-tests.log
       - name: Build the compiler-free wheel and test its installed native API
         run: |
           set -euo pipefail
@@ -104,7 +105,9 @@ jobs:
           $library = python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('exact-public-evidence/source-build'))"
           "SPECTRA_EXACT_LIBRARY=$library" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $env:SPECTRA_EXACT_LIBRARY = $library
-          python -m pytest tests/public/test_exact_api.py experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-public-evidence/source-tests.xml 2>&1 | Tee-Object exact-public-evidence/source-tests.log
+          python -m pytest tests/public/test_exact_api.py --confcutdir=tests/public -q --junitxml=exact-public-evidence/public-tests.xml 2>&1 | Tee-Object exact-public-evidence/public-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-public-evidence/research-tests.xml 2>&1 | Tee-Object exact-public-evidence/research-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m build --wheel --outdir exact-public-evidence/dist 2>&1 | Tee-Object exact-public-evidence/build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -136,7 +139,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: python -m pip install 'pytest==9.0.2'
+      - run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
       - name: Build packaged source and run exact API contracts under sanitizer
         env:
           SANITIZER: ${{ matrix.sanitizer }}
@@ -149,7 +152,8 @@ jobs:
             export LD_PRELOAD="$(g++ -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so)"
             export ASAN_OPTIONS=detect_leaks=0:abort_on_error=1
           fi
-          python -m pytest tests/public/test_exact_api.py experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-sanitizer-evidence/tests.xml 2>&1 | tee exact-sanitizer-evidence/tests.log
+          python -m pytest tests/public/test_exact_api.py --confcutdir=tests/public -q --junitxml=exact-sanitizer-evidence/public-tests.xml 2>&1 | tee exact-sanitizer-evidence/public-tests.log
+          python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-sanitizer-evidence/research-tests.xml 2>&1 | tee exact-sanitizer-evidence/research-tests.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
