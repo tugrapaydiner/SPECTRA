@@ -30,6 +30,7 @@ SCHEMA = 'spectra.query_latency_development.v1'
 ARMS = ('baseline-raw', 'baseline-route', 'candidate-raw', 'candidate-scc',
         'candidate-route', 'candidate-auto')
 REPEATS = 9
+REPLICAS = tuple(range(6))
 COMPARISONS = {
     'auto_vs_raw': ('candidate-auto', 'candidate-raw'),
     'auto_vs_baseline_route': ('candidate-auto', 'baseline-route'),
@@ -103,7 +104,7 @@ def prepare(root: Path) -> dict:
         raise ValueError('compiler or flags differ between arms')
     cases = []
     for family in FAMILIES:
-        for replica in range(6):
+        for replica in REPLICAS:
             case = make_case(family, replica)
             case_hash = write_once(root / 'cases' / (case.name + '.json'), case.payload())
             cases.append(dict(name=case.name, family=family, replica=replica, sha256=case_hash))
@@ -123,6 +124,11 @@ def manifest_at(root: Path, *, executing: bool = False) -> dict:
     if (manifest['schema'] != SCHEMA or tuple(manifest['arms']) != ARMS
             or tuple(manifest['counts']) != COUNTS or manifest['repeats'] != REPEATS):
         raise ValueError('comparison schedule or schema differs')
+    expected_cases = {(family, replica) for family in FAMILIES for replica in REPLICAS}
+    actual_cases = {(item['family'], item['replica']) for item in manifest['cases']}
+    if (actual_cases != expected_cases or len(manifest['cases']) != len(expected_cases)
+            or len({item['name'] for item in manifest['cases']}) != len(expected_cases)):
+        raise ValueError('comparison must retain every fixed graph realization exactly once')
     if executing and manifest['sources'] != sources():
         raise ValueError('executing sources differ from the recorded commit')
     return manifest

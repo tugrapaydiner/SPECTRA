@@ -20,6 +20,7 @@ def run(tmp_path, monkeypatch, library):
     monkeypatch.setattr(bench, 'COUNTS', (1, 64))
     monkeypatch.setattr(bench, 'REPEATS', 1)
     monkeypatch.setattr(bench, 'FAMILIES', ('random_tree',))
+    monkeypatch.setattr(bench, 'REPLICAS', (0,))
     root = tmp_path / 'fixture'
     root.mkdir()
     case = bench.make_case('random_tree', 0, n=8, count=64)
@@ -96,3 +97,22 @@ def test_crashed_worker_cannot_produce_a_complete_panel_speedup(run):
     assert not result['development_target_pass']
     assert result['aggregates'] == {}
     assert result['failures'][0]['reason'] == 'CRASH'
+
+
+@pytest.mark.parametrize('damage', ('drop', 'duplicate', 'relabel'))
+def test_manifest_cannot_reduce_or_relabel_the_fixed_panel(run, damage):
+    root, _ = run
+    path = root/'manifest.json'
+    manifest = json.loads(path.read_bytes())
+    if damage == 'drop':
+        manifest['cases'].clear()
+    elif damage == 'duplicate':
+        manifest['cases'].append(manifest['cases'][0].copy())
+    else:
+        manifest['cases'][0]['family'] = 'another-family'
+    # Even recomputing the hash cannot turn a partial schedule into a full panel.
+    data = bench.canonical(manifest)
+    path.write_bytes(data)
+    (root/'manifest.sha256').write_text(digest(data)+'\n')
+    with pytest.raises(ValueError, match='every fixed graph'):
+        bench.summarize(root)
