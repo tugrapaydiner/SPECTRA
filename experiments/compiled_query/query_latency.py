@@ -29,6 +29,7 @@ BASELINE = '39e9ee0b89f1261106231ee94546758c510291ba'
 SCHEMA = 'spectra.query_latency_development.v1'
 ARMS = ('baseline-raw', 'baseline-route', 'candidate-raw', 'candidate-scc',
         'candidate-route', 'candidate-auto')
+EXTENDED_ARMS = (*ARMS, 'baseline-auto')
 REPEATS = 9
 REPLICAS = tuple(range(6))
 COMPARISONS = {
@@ -57,6 +58,7 @@ def sources() -> dict:
     folder = Path(__file__).parent
     paths = sorted(folder.glob('*.py')) + sorted(folder.glob('*.cpp'))
     paths.append(folder / 'QUERY_LATENCY_PLAN.md')
+    paths.append(folder / 'FEASIBLE_BATCH_PLAN.md')
     return {str(p.relative_to(ROOT)): digest(p.read_bytes()) for p in paths}
 
 
@@ -71,7 +73,13 @@ def read_bound(path: Path, expected: str) -> bytes:
     return data
 
 
-def prepare(root: Path) -> dict:
+def prepare(root: Path, *, baseline_commit: str = BASELINE,
+            include_baseline_auto: bool = False) -> dict:
+    if (len(baseline_commit) != 40
+            or any(c not in '0123456789abcdef' for c in baseline_commit)):
+        raise ValueError('baseline must be a full lowercase commit SHA')
+    if git('rev-parse', '--verify', baseline_commit + '^{commit}').decode().strip() != baseline_commit:
+        raise ValueError('baseline must identify the commit itself')
     # Untracked source files are also forbidden: a Git commit must reproduce this run.
     if git('status', '--porcelain', '--', 'experiments/compiled_query').strip():
         raise ValueError('commit the comparison sources before running')
@@ -79,7 +87,7 @@ def prepare(root: Path) -> dict:
     identity = sources()
     commit = git('rev-parse', 'HEAD').decode().strip()
     source_path = 'experiments/compiled_query/exact_native.cpp'
-    baseline_source = git('show', BASELINE + ':' + source_path)
+    baseline_source = git('show', baseline_commit + ':' + source_path)
     write_once(root / 'baseline.cpp', baseline_source)
     write_once(root / 'candidate.cpp', exact.SOURCE.read_bytes())
     current = exact.build_exact_runtime(root / 'candidate')
@@ -109,9 +117,10 @@ def prepare(root: Path) -> dict:
             case_hash = write_once(root / 'cases' / (case.name + '.json'), case.payload())
             cases.append(dict(name=case.name, family=family, replica=replica, sha256=case_hash))
     manifest = dict(schema=SCHEMA, classification='exposed synthetic development panel; not confirmation',
-                    candidate_commit=commit, baseline_commit=BASELINE, sources=identity,
+                    candidate_commit=commit, baseline_commit=baseline_commit, sources=identity,
                     baseline_source_sha256=digest(baseline_source), builds=builds, cases=cases,
-                    arms=ARMS, counts=COUNTS, repeats=REPEATS, warmups=2,
+                    arms=EXTENDED_ARMS if include_baseline_auto else ARMS,
+                    counts=COUNTS, repeats=REPEATS, warmups=2,
                     deadline_seconds=120, address_space_bytes=2 << 30, native_bytes=512 << 20,
                     python=sys.version, platform=platform.platform(), machine=platform.machine())
     manifest_hash = put(root / 'manifest.json', manifest)
@@ -121,7 +130,7 @@ def prepare(root: Path) -> dict:
 
 def manifest_at(root: Path, *, executing: bool = False) -> dict:
     manifest = json.loads(read_bound(root / 'manifest.json', (root / 'manifest.sha256').read_text().strip()))
-    if (manifest['schema'] != SCHEMA or tuple(manifest['arms']) != ARMS
+    if (manifest['schema'] != SCHEMA or tuple(manifest['arms']) not in (ARMS, EXTENDED_ARMS)
             or tuple(manifest['counts']) != COUNTS or manifest['repeats'] != REPEATS):
         raise ValueError('comparison schedule or schema differs')
     expected_cases = {(family, replica) for family in FAMILIES for replica in REPLICAS}
@@ -170,7 +179,7 @@ def worker(root: Path, index: int) -> None:
             if packet_hash not in packets:
                 write_once(folder / 'packets' / (packet_hash + '.sbc1'), packet)
                 packets[packet_hash] = dict(count=count, order=order)
-            arms = list(ARMS)
+            arms = list(manifest['arms'])
             rng.shuffle(arms)
             for arm in arms:
                 build, mode = arm.split('-')
@@ -206,8 +215,10 @@ def worker(root: Path, index: int) -> None:
         peak_process_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024))
 
 
-def execute(root: Path) -> None:
-    manifest = prepare(root)
+def execute(root: Path, *, baseline_commit: str = BASELINE,
+            include_baseline_auto: bool = False) -> None:
+    manifest = prepare(root, baseline_commit=baseline_commit,
+                       include_baseline_auto=include_baseline_auto)
     for index, item in enumerate(manifest['cases']):
         folder = root / 'runs' / item['name']
         folder.mkdir(parents=True, exist_ok=False)
@@ -245,6 +256,10 @@ def gmean(values) -> float:
 
 def summarize(root: Path) -> dict:
     manifest = manifest_at(root)
+    arms = tuple(manifest['arms'])
+    pairs = dict(COMPARISONS)
+    if 'baseline-auto' in arms:
+        pairs['auto_vs_baseline_auto'] = ('candidate-auto', 'baseline-auto')
     cells, counts, selections = defaultdict(list), Counter(), Counter()
     case_results, failures = [], []
     checked_outputs = checked_decisions = 0
@@ -260,7 +275,7 @@ def summarize(root: Path) -> dict:
         worker_receipt = json.loads(read_bound(folder/'worker.json', control['worker_sha256']))
         if worker_receipt['manifest_sha256'] != manifest_hash or worker_receipt['builds'] != manifest['builds']:
             raise ValueError('worker identity differs')
-        expected = {record_name(c, r, a) for c in COUNTS for r in range(REPEATS) for a in ARMS}
+        expected = {record_name(c, r, a) for c in COUNTS for r in range(REPEATS) for a in arms}
         if set(worker_receipt['records']) != expected or {p.name for p in (folder/'records').iterdir()} != expected:
             raise ValueError('missing, extra or duplicate timing records')
         packets = json.loads(read_bound(folder/'packets.json', worker_receipt['packets_sha256']))
@@ -322,16 +337,16 @@ def summarize(root: Path) -> dict:
                     if target in output_by_arm and output_by_arm[target] != output_by_arm[count, repeat, 'candidate-auto']:
                         raise ValueError('auto differs from its reported engine')
         medians = {str(count): {arm: statistics.median(cells[case.name, count, arm])
-            for arm in ARMS if len(cells[case.name, count, arm]) == REPEATS} for count in COUNTS}
+            for arm in arms if len(cells[case.name, count, arm]) == REPEATS} for count in COUNTS}
         case_results.append({**item, 'base_satisfiable': replay.feasible(()), 'medians_ns': medians,
                              'peak_process_rss_bytes': worker_receipt['peak_process_rss_bytes']})
-    expected_calls = len(manifest['cases']) * len(COUNTS) * REPEATS * len(ARMS)
+    expected_calls = len(manifest['cases']) * len(COUNTS) * REPEATS * len(arms)
     complete = counts['COMPLETE'] == expected_calls and counts['workers_COMPLETE'] == len(manifest['cases']) and not failures
     aggregates = {}
     if complete:
         for count in COUNTS:
             comparisons = {}
-            for name, (a, b) in COMPARISONS.items():
+            for name, (a, b) in pairs.items():
                 ratios = {r['name']: r['medians_ns'][str(count)][a]/r['medians_ns'][str(count)][b] for r in case_results}
                 strata = [[ratios[r['name']] for r in case_results if r['family'] == f] for f in FAMILIES]
                 rng = random.Random(seed_for(f'query-latency/bootstrap/{count}/{name}'))
@@ -356,10 +371,13 @@ def main():
     parser.add_argument('command', choices=('run', 'audit', '_worker'))
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--case', type=int)
+    parser.add_argument('--baseline-commit', default=BASELINE)
+    parser.add_argument('--include-baseline-auto', action='store_true')
     args = parser.parse_args()
     root = args.out.resolve()
     if args.command == 'run':
-        execute(root)
+        execute(root, baseline_commit=args.baseline_commit,
+                include_baseline_auto=args.include_baseline_auto)
     elif args.command == '_worker':
         worker(root, args.case)
     else:

@@ -8,12 +8,15 @@ on:
       - experiments/compiled_query/query_latency.py
       - experiments/compiled_query/test_*.py
       - experiments/compiled_query/QUERY_LATENCY_PLAN.md
+      - experiments/compiled_query/FEASIBLE_BATCH_PLAN.md
       - .github/workflows/query-latency.yml
   pull_request:
     paths:
       - experiments/compiled_query/exact.py
       - experiments/compiled_query/exact_native.cpp
       - experiments/compiled_query/query_latency.py
+      - experiments/compiled_query/test_*.py
+      - experiments/compiled_query/FEASIBLE_BATCH_PLAN.md
       - .github/workflows/query-latency.yml
   workflow_dispatch:
 permissions:
@@ -47,10 +50,10 @@ jobs:
           set -euo pipefail
           mkdir -p query-checks
           python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_query_latency.py -q --junitxml=query-checks/tests.xml 2>&1 | tee query-checks/tests.log
-      - name: Compare all six engines and replay every distinct answer
+      - name: Compare all seven engines and replay every distinct answer
         run: |
           set -euo pipefail
-          python -m experiments.compiled_query.query_latency run --out query-checks/comparison 2>&1 | tee query-checks/run.log
+          python -m experiments.compiled_query.query_latency run --out query-checks/comparison --baseline-commit 2afaf001c78bee5a3ea5a3918193acd012213150 --include-baseline-auto 2>&1 | tee query-checks/run.log
           python -m experiments.compiled_query.query_latency audit --out query-checks/comparison 2>&1 | tee query-checks/audit.log
       - uses: actions/upload-artifact@v4
         if: always()

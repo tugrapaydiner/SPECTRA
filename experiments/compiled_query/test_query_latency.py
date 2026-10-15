@@ -15,7 +15,7 @@ def library(tmp_path_factory):
 
 
 @pytest.fixture
-def run(tmp_path, monkeypatch, library):
+def run(tmp_path, monkeypatch, library, request):
     # Tiny, explicitly synthetic test schedule. Never a benchmark observation.
     monkeypatch.setattr(bench, 'COUNTS', (1, 64))
     monkeypatch.setattr(bench, 'REPEATS', 1)
@@ -30,7 +30,8 @@ def run(tmp_path, monkeypatch, library):
     manifest = dict(schema=bench.SCHEMA, classification='test fixture only',
         sources=bench.sources(), builds={'baseline': build, 'candidate': build},
         cases=[dict(name=case.name, family='random_tree', replica=0, sha256=case_hash)],
-        arms=bench.ARMS, counts=bench.COUNTS, repeats=bench.REPEATS, warmups=0,
+        arms=bench.EXTENDED_ARMS if getattr(request, 'param', False) else bench.ARMS,
+        counts=bench.COUNTS, repeats=bench.REPEATS, warmups=0,
         address_space_bytes=2 << 30, native_bytes=512 << 20,
         candidate_commit='test fixture', baseline_commit='test fixture')
     manifest_hash = bench.put(root/'manifest.json', manifest)
@@ -66,6 +67,26 @@ def test_audit_replays_a_complete_small_fixture(run):
     assert result['independently_replayed_decisions'] >= 65
     assert set(result['aggregates']) == {'1', '64'}
     assert not result['development_target_pass']  # No long-bank evidence in this fixture.
+
+
+@pytest.mark.parametrize('run', (True,), indirect=True)
+def test_extended_comparison_keeps_the_previous_auto_engine(run):
+    root, folder = run
+    result = bench.summarize(root)
+    assert result['functional_complete']
+    assert result['counts']['COMPLETE'] == 14
+    assert 'auto_vs_baseline_auto' in result['aggregates']['64']
+    (folder/'records'/'64-00-baseline-auto.json').unlink()
+    with pytest.raises(ValueError):
+        bench.summarize(root)
+
+
+@pytest.mark.parametrize('baseline', ('HEAD', '2afaf00', '--all', 'x' * 40))
+def test_baseline_requires_an_explicit_commit_before_creating_evidence(tmp_path, baseline):
+    root = tmp_path/'not-created'
+    with pytest.raises(ValueError, match='full lowercase commit SHA'):
+        bench.prepare(root, baseline_commit=baseline)
+    assert not root.exists()
 
 
 @pytest.mark.parametrize('damage', ('missing_record', 'changed_time', 'changed_output', 'changed_worker'))
