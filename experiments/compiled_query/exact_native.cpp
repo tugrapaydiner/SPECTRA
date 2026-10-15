@@ -824,7 +824,7 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
         std::vector<uint8_t> base_proof;
         for(U row=0;row<count;++row) {
             Answer answer=solver.solve(solver_rows.row(row),&base_proof);
-            if(solver.bad!=NIL && base_proof.empty() && answer.certificate.size()>=16
+            if(row+1<count && solver.bad!=NIL && base_proof.empty() && answer.certificate.size()>=16
                     && load32(answer.certificate.data(),4)==3)
                 base_proof=answer.certificate;
             append(answer);
