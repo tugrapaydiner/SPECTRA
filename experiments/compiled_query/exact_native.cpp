@@ -361,10 +361,14 @@ struct Index {
                 if(a==b || (opposite[a]!=NIL && opposite[a]!=b)) throw std::logic_error("complement mapping differs");
                 opposite[a]=b;
             }
-            std::vector<std::pair<U,U>> links;links.reserve(arcs.size());
-            for(auto e:arcs) if(comp[e.first]!=comp[e.second]) links.emplace_back(comp[e.first],comp[e.second]);
-            std::sort(links.begin(),links.end());links.erase(std::unique(links.begin(),links.end()),links.end());
-            dag=CSR(nc,links);
+            // Routed mode builds the same ordered DAG from its original-edge
+            // bridges below. Sorting both the links and bridges repeats work.
+            if(!routed) {
+                std::vector<std::pair<U,U>> links;links.reserve(arcs.size());
+                for(auto e:arcs) if(comp[e.first]!=comp[e.second]) links.emplace_back(comp[e.first],comp[e.second]);
+                std::sort(links.begin(),links.end());links.erase(std::unique(links.begin(),links.end()),links.end());
+                dag=CSR(nc,links);
+            }
         } else if(!condensed) {std::vector<U>().swap(comp);}
         if(sparse || routed) {
             if(routed) {
@@ -399,17 +403,23 @@ struct Index {
             for(auto e:arcs) if(comp[e.first]!=comp[e.second])
                 bridges.emplace_back(comp[e.first],comp[e.second],e.first,e.second);
             std::sort(bridges.begin(),bridges.end());
+            std::vector<std::pair<U,U>> routed_links;
+            if(routed && bad==NIL) routed_links.reserve(bridges.size());
             U previous_a=NIL,previous_b=NIL;
             for(auto e:bridges) {U a=std::get<0>(e),b=std::get<1>(e);
                 if(a!=previous_a || b!=previous_b) {
                     if(sparse) keep.emplace_back(std::get<2>(e),std::get<3>(e));
-                    if(routed && bad==NIL) {cross_from.push_back(std::get<2>(e));cross_to.push_back(std::get<3>(e));}
+                    if(routed && bad==NIL) {
+                        routed_links.emplace_back(a,b);
+                        cross_from.push_back(std::get<2>(e));cross_to.push_back(std::get<3>(e));
+                    }
                     previous_a=a;previous_b=b;
                 }
             }
             std::sort(keep.begin(),keep.end());keep.erase(std::unique(keep.begin(),keep.end()),keep.end());
             if(keep.size()>arcs.size()) throw std::logic_error("proof subgraph grew beyond original");
             if(routed) {
+                if(bad==NIL) dag=CSR(nc,routed_links);
                 if(cross_from.size()!=dag.to.size()) throw std::logic_error("routing bridge geometry differs");
                 for(U c=0;c<nc && bad==NIL;++c) for(U j=dag.off[c];j<dag.off[c+1];++j)
                     if(comp[cross_from[j]]!=c || comp[cross_to[j]]!=dag.to[j])
