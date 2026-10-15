@@ -1,0 +1,103 @@
+{
+  "classification": "development-only",
+  "new_frozen_claim": false,
+  "new_holdout": false,
+  "outside_replication": false,
+  "results": {
+    "github-3.11": {
+      "all_scheduled_decisions_complete": false,
+      "audited_decisions": {
+        "SAT_VERIFIED": 43056
+      },
+      "complete_session_ratios": {
+        "1": {
+          "cadical195": 0.5646633008564957,
+          "cudd-frontier-bfs": 0.08634289416457248,
+          "cudd-reduced-bfs": 0.4550938542890284,
+          "cudd-reduced-natural": 0.43112099499049933,
+          "cudd-reduced-occurrence": 0.4262016772024312,
+          "minicard": 0.5678056862730305,
+          "none": 1.007109611559968
+        },
+        "1024": {
+          "cadical195": 0.30931160745679687,
+          "cudd-frontier-bfs": null,
+          "cudd-reduced-bfs": 0.2615738807958227,
+          "cudd-reduced-natural": 0.2273127882104123,
+          "cudd-reduced-occurrence": 0.2335290787041826,
+          "minicard": 0.31759638856703765,
+          "none": 0.4498827199707555
+        }
+      },
+      "manifest_sha256": "e8affc935a11be96b986be38d6271d0a1ee050c23709b757792bc33be79afa14",
+      "outcomes": {
+        "COMPLETE": 90,
+        "TIMEOUT": 6
+      }
+    },
+    "github-3.13": {
+      "all_scheduled_decisions_complete": false,
+      "audited_decisions": {
+        "SAT_VERIFIED": 43056
+      },
+      "complete_session_ratios": {
+        "1": {
+          "cadical195": 0.549797682824588,
+          "cudd-frontier-bfs": 0.09158166328165092,
+          "cudd-reduced-bfs": 0.4895911375443042,
+          "cudd-reduced-natural": 0.4635008160665209,
+          "cudd-reduced-occurrence": 0.45956685367342254,
+          "minicard": 0.5657553659878476,
+          "none": 1.006278733745254
+        },
+        "1024": {
+          "cadical195": 0.321636427542635,
+          "cudd-frontier-bfs": null,
+          "cudd-reduced-bfs": 0.2678035768967308,
+          "cudd-reduced-natural": 0.22978902670060702,
+          "cudd-reduced-occurrence": 0.23196616477857201,
+          "minicard": 0.3258394005967801,
+          "none": 0.4686824806953006
+        }
+      },
+      "manifest_sha256": "f8eeeaeb79389541090ebc5a23d9210d9a16dad49ff65455ee483c56f94d5b3f",
+      "outcomes": {
+        "COMPLETE": 90,
+        "TIMEOUT": 6
+      }
+    },
+    "local-3.13": {
+      "all_scheduled_decisions_complete": false,
+      "audited_decisions": {
+        "SAT_VERIFIED": 43056
+      },
+      "complete_session_ratios": {
+        "1": {
+          "cadical195": 0.6874032949710744,
+          "cudd-frontier-bfs": 0.1212040613068334,
+          "cudd-reduced-bfs": 0.7478777384408981,
+          "cudd-reduced-natural": 0.7325864446000075,
+          "cudd-reduced-occurrence": 0.7540485516340102,
+          "minicard": 0.6979155770430012,
+          "none": 0.9942216593289417
+        },
+        "1024": {
+          "cadical195": 0.4567924458813604,
+          "cudd-frontier-bfs": null,
+          "cudd-reduced-bfs": 0.41589771896313216,
+          "cudd-reduced-natural": 0.3436410628967746,
+          "cudd-reduced-occurrence": 0.39982427369784634,
+          "minicard": 0.4892825655210961,
+          "none": 0.5044276711755333
+        }
+      },
+      "manifest_sha256": "00f25041546b6eb09bc59ce4ed7e714051509272d60a82a1b0b41edfc1c06037",
+      "outcomes": {
+        "COMPLETE": 90,
+        "TIMEOUT": 6
+      }
+    }
+  },
+  "runtime_changed": false,
+  "source_commit": "e801b730978de090a956c6c60e5f4d6306419d18"
+}
