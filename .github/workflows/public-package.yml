@@ -1,7 +1,7 @@
 name: public-package
 on:
   pull_request:
-    branches: [main, "maintenance/**", "research/deductive-search-*", "research/focused-search-*", "research/research-engineering-*"]
+    branches: [main, "maintenance/**", "research/deductive-search-*", "research/focused-search-*", "research/research-engineering-*", "research/faster-queries-review-*"]
   workflow_dispatch:
 permissions:
   contents: read
