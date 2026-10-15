@@ -36,6 +36,11 @@ historical “general reasoner,” MCTS, low-bit, or neural claims.
 [Certificate reproduction](experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md) ·
 [Replication guide](experiments/wap_support/REPLICATION.md)
 
+The separate experimental exact-query service now has
+[faster short requests, optional engine selection and Windows builds](experiments/compiled_query/QUERY_LATENCY_RESULTS_20261015.md).
+Its latest development comparison retains a failed speed target against an
+improved raw control; it does not replace the frozen WAP result above.
+
 **Package: Python 3.10+ · Flagship complete-call result: Python 3.13 · MIT-licensed project code · CPU-first · explicit verification boundaries**
 
 ## Flagship result

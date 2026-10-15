@@ -1,0 +1,393 @@
+{
+  "schema": "spectra.prepared_transfer_ci_receipt.v1",
+  "source_commit": "39e9ee0b89f1261106231ee94546758c510291ba",
+  "workflow_commit": "0d4d3ba6a71914bd36061ef2607bd65eb926ee49",
+  "run_url": "https://github.com/tugrapaydiner/SPECTRA/actions/runs/38682131221",
+  "provenance": "Summaries retrieved from the completed GitHub Actions job logs on 2026-10-15. Project-owned CI, not outside replication. Original workflow artifacts contain the complete records.",
+  "runs": [
+    {
+      "job_id": 116248796466,
+      "summary": {
+        "schema": "spectra.prospective_structural_panel.v1",
+        "classification": "prospective synthetic structural panel, not external replication",
+        "functional_complete": true,
+        "precommitted_speed_gate_pass": false,
+        "counts": {
+          "workers_COMPLETE": 48,
+          "COMPLETE": 8640,
+          "MISSING": 0
+        },
+        "unique_semantically_checked_outputs": 1636,
+        "unique_output_decisions_checked": {
+          "SAT_VERIFIED": 113475,
+          "UNSAT_VERIFIED": 371071
+        },
+        "aggregates": {
+          "1": {
+            "route_raw": 1.3909923497944552,
+            "route_raw_ci95": [
+              1.3290897021531822,
+              1.4587123076509623
+            ],
+            "route_prior": 0.9627423689232832,
+            "route_scc": 1.333785516264496,
+            "families": {
+              "random_tree": 1.41117786697321,
+              "percolated_grid": 1.4694656740275285,
+              "geometric": 1.3453759977651087,
+              "preferential": 1.4471320787752442,
+              "rewired_ring": 1.4164669647320656,
+              "communities": 1.3096342642779486,
+              "percolated_cube": 1.2723332935517842,
+              "random_bipartite": 1.4707793127075093
+            },
+            "regressions_over_25pct": 31
+          },
+          "63": {
+            "route_raw": 1.0658322470391202,
+            "route_raw_ci95": [
+              1.0053950620239065,
+              1.1277915635315388
+            ],
+            "route_prior": 0.995599104463711,
+            "route_scc": 1.095755608233144,
+            "families": {
+              "random_tree": 1.123201478019238,
+              "percolated_grid": 1.2064004622038123,
+              "geometric": 1.1620360349907302,
+              "preferential": 0.9759811540495932,
+              "rewired_ring": 1.1646487929069251,
+              "communities": 0.9928350966401229,
+              "percolated_cube": 0.8590880062667233,
+              "random_bipartite": 1.0909149663545643
+            },
+            "regressions_over_25pct": 15
+          },
+          "64": {
+            "route_raw": 1.076432824940796,
+            "route_raw_ci95": [
+              1.0155978033837294,
+              1.137377752538218
+            ],
+            "route_prior": 1.0144056603031373,
+            "route_scc": 1.0747170475165997,
+            "families": {
+              "random_tree": 1.1813816660430652,
+              "percolated_grid": 1.1863157492862828,
+              "geometric": 1.0966705183564183,
+              "preferential": 1.012535208946856,
+              "rewired_ring": 1.1685321573251355,
+              "communities": 0.9926705728607383,
+              "percolated_cube": 0.8961801674281854,
+              "random_bipartite": 1.1142367850060213
+            },
+            "regressions_over_25pct": 12
+          },
+          "65": {
+            "route_raw": 1.0642841092248199,
+            "route_raw_ci95": [
+              1.0025615659480829,
+              1.1253324882960558
+            ],
+            "route_prior": 1.014481899785443,
+            "route_scc": 1.0722523438931946,
+            "families": {
+              "random_tree": 1.1602249939389642,
+              "percolated_grid": 1.1840443794810482,
+              "geometric": 1.1112075875313125,
+              "preferential": 0.9960153082060207,
+              "rewired_ring": 1.1572301614521905,
+              "communities": 0.9757778160931692,
+              "percolated_cube": 0.8727237305976628,
+              "random_bipartite": 1.098605434794903
+            },
+            "regressions_over_25pct": 11
+          },
+          "1024": {
+            "route_raw": 0.8373605081254463,
+            "route_raw_ci95": [
+              0.7590192189981272,
+              0.9146272863230617
+            ],
+            "route_prior": 1.0241796878768652,
+            "route_scc": 0.8666787365229484,
+            "families": {
+              "random_tree": 1.027092567108128,
+              "percolated_grid": 0.9721110164797098,
+              "geometric": 0.9074025921371234,
+              "preferential": 0.7223439647431616,
+              "rewired_ring": 0.9867367159828685,
+              "communities": 0.7128945073035471,
+              "percolated_cube": 0.6131690711982435,
+              "random_bipartite": 0.8562951512119402
+            },
+            "regressions_over_25pct": 2
+          }
+        },
+        "notes": [
+          "Bootstrap resamples graph realizations within fixed families, not queries or timed repetitions.",
+          "Full native verification runs on every call; Python replay deduplicates identical packet/output bytes.",
+          "Base-infeasible inputs are retained and marked per graph; aggregate speed does not imply every query is difficult.",
+          "Ready bytes input and output hashing included; file read, packing, process launch and Python replay excluded.",
+          "These are fresh synthetic instances, not an operator workload, real deployment or external replication."
+        ]
+      }
+    },
+    {
+      "job_id": 116248796639,
+      "summary": {
+        "schema": "spectra.prospective_structural_panel.v1",
+        "classification": "prospective synthetic structural panel, not external replication",
+        "functional_complete": true,
+        "precommitted_speed_gate_pass": false,
+        "counts": {
+          "workers_COMPLETE": 48,
+          "COMPLETE": 8640,
+          "MISSING": 0
+        },
+        "unique_semantically_checked_outputs": 1636,
+        "unique_output_decisions_checked": {
+          "SAT_VERIFIED": 113475,
+          "UNSAT_VERIFIED": 371071
+        },
+        "aggregates": {
+          "1": {
+            "route_raw": 1.3395207451481872,
+            "route_raw_ci95": [
+              1.2921373234503837,
+              1.3897576695090814
+            ],
+            "route_prior": 0.9723037811476251,
+            "route_scc": 1.3067355991105363,
+            "families": {
+              "random_tree": 1.3653264747919915,
+              "percolated_grid": 1.3821003468037678,
+              "geometric": 1.32028027859852,
+              "preferential": 1.3982339412229121,
+              "rewired_ring": 1.3342247019080515,
+              "communities": 1.2695415899700042,
+              "percolated_cube": 1.2503445014001948,
+              "random_bipartite": 1.4049727113518973
+            },
+            "regressions_over_25pct": 31
+          },
+          "63": {
+            "route_raw": 1.0297539363278996,
+            "route_raw_ci95": [
+              0.9723353923516925,
+              1.0869868778807235
+            ],
+            "route_prior": 1.0094076640609857,
+            "route_scc": 1.0530725091239113,
+            "families": {
+              "random_tree": 1.0901813362397403,
+              "percolated_grid": 1.1517739766560466,
+              "geometric": 1.1071984203792526,
+              "preferential": 0.9386770257574057,
+              "rewired_ring": 1.1176507882152633,
+              "communities": 0.9478900810845317,
+              "percolated_cube": 0.8252121905243162,
+              "random_bipartite": 1.1082309967556832
+            },
+            "regressions_over_25pct": 7
+          },
+          "64": {
+            "route_raw": 1.0420575040646465,
+            "route_raw_ci95": [
+              0.9832199763495607,
+              1.1020832121688495
+            ],
+            "route_prior": 1.01659567725591,
+            "route_scc": 1.0379882463221513,
+            "families": {
+              "random_tree": 1.1437309357219898,
+              "percolated_grid": 1.1594978926724877,
+              "geometric": 1.0704987492774531,
+              "preferential": 0.9782029215065263,
+              "rewired_ring": 1.1220514408989184,
+              "communities": 0.9568948148111462,
+              "percolated_cube": 0.8582926359981821,
+              "random_bipartite": 1.0864560836826318
+            },
+            "regressions_over_25pct": 9
+          },
+          "65": {
+            "route_raw": 1.0369288208572847,
+            "route_raw_ci95": [
+              0.9747325182155956,
+              1.0972483234555455
+            ],
+            "route_prior": 1.0203866272993791,
+            "route_scc": 1.0369586393338843,
+            "families": {
+              "random_tree": 1.1216425271217414,
+              "percolated_grid": 1.1446887742472729,
+              "geometric": 1.0816929067584713,
+              "preferential": 0.965225269085527,
+              "rewired_ring": 1.118017760591358,
+              "communities": 0.9602279222246254,
+              "percolated_cube": 0.8543535129977006,
+              "random_bipartite": 1.0870671356923203
+            },
+            "regressions_over_25pct": 10
+          },
+          "1024": {
+            "route_raw": 0.8164294358305723,
+            "route_raw_ci95": [
+              0.7415722424470521,
+              0.8898286820635041
+            ],
+            "route_prior": 1.0533943477960575,
+            "route_scc": 0.841736475913048,
+            "families": {
+              "random_tree": 0.9906396808616295,
+              "percolated_grid": 0.9555609230408839,
+              "geometric": 0.8918667415148153,
+              "preferential": 0.6951337165669053,
+              "rewired_ring": 0.9472739489531653,
+              "communities": 0.7038028818906903,
+              "percolated_cube": 0.5805037159060684,
+              "random_bipartite": 0.8691108530292192
+            },
+            "regressions_over_25pct": 2
+          }
+        },
+        "notes": [
+          "Bootstrap resamples graph realizations within fixed families, not queries or timed repetitions.",
+          "Full native verification runs on every call; Python replay deduplicates identical packet/output bytes.",
+          "Base-infeasible inputs are retained and marked per graph; aggregate speed does not imply every query is difficult.",
+          "Ready bytes input and output hashing included; file read, packing, process launch and Python replay excluded.",
+          "These are fresh synthetic instances, not an operator workload, real deployment or external replication."
+        ]
+      }
+    },
+    {
+      "job_id": 116248796673,
+      "summary": {
+        "schema": "spectra.prospective_structural_panel.v1",
+        "classification": "prospective synthetic structural panel, not external replication",
+        "functional_complete": true,
+        "precommitted_speed_gate_pass": false,
+        "counts": {
+          "workers_COMPLETE": 48,
+          "COMPLETE": 8640,
+          "MISSING": 0
+        },
+        "unique_semantically_checked_outputs": 1636,
+        "unique_output_decisions_checked": {
+          "SAT_VERIFIED": 113475,
+          "UNSAT_VERIFIED": 371071
+        },
+        "aggregates": {
+          "1": {
+            "route_raw": 1.371436446769383,
+            "route_raw_ci95": [
+              1.324128458916244,
+              1.4214551206104962
+            ],
+            "route_prior": 1.0270743913226563,
+            "route_scc": 1.3284910593558032,
+            "families": {
+              "random_tree": 1.4098385540195961,
+              "percolated_grid": 1.4456878142681056,
+              "geometric": 1.3553104280000585,
+              "preferential": 1.4108516965930404,
+              "rewired_ring": 1.3854782296963892,
+              "communities": 1.3123876332316333,
+              "percolated_cube": 1.239005534340185,
+              "random_bipartite": 1.4253002654248914
+            },
+            "regressions_over_25pct": 36
+          },
+          "63": {
+            "route_raw": 1.0519484233335321,
+            "route_raw_ci95": [
+              0.9896342340933325,
+              1.1106343046480038
+            ],
+            "route_prior": 1.0371238839449626,
+            "route_scc": 1.0754073562930182,
+            "families": {
+              "random_tree": 1.1190117034163194,
+              "percolated_grid": 1.1814265905852925,
+              "geometric": 1.1286038913009007,
+              "preferential": 0.9232527046694051,
+              "rewired_ring": 1.1548185517855916,
+              "communities": 0.9559611241814017,
+              "percolated_cube": 0.8699391912484665,
+              "random_bipartite": 1.1334678191967114
+            },
+            "regressions_over_25pct": 12
+          },
+          "64": {
+            "route_raw": 1.0699430052276704,
+            "route_raw_ci95": [
+              1.0052850728602272,
+              1.1322327378715922
+            ],
+            "route_prior": 1.0432706470674378,
+            "route_scc": 1.0634507457079618,
+            "families": {
+              "random_tree": 1.1763410842837243,
+              "percolated_grid": 1.1848207731067626,
+              "geometric": 1.1266005676053574,
+              "preferential": 0.9783267494806688,
+              "rewired_ring": 1.168930676295231,
+              "communities": 0.9662096459890797,
+              "percolated_cube": 0.8895758041900041,
+              "random_bipartite": 1.1127618943658408
+            },
+            "regressions_over_25pct": 10
+          },
+          "65": {
+            "route_raw": 1.0555219795514668,
+            "route_raw_ci95": [
+              0.9903101896280635,
+              1.117217273249398
+            ],
+            "route_prior": 1.0434285980302929,
+            "route_scc": 1.0541421527004975,
+            "families": {
+              "random_tree": 1.1632852193219692,
+              "percolated_grid": 1.1631869000068256,
+              "geometric": 1.1163218931204586,
+              "preferential": 0.9419183240812617,
+              "rewired_ring": 1.1350086150984489,
+              "communities": 0.9652355718756743,
+              "percolated_cube": 0.8862099078208442,
+              "random_bipartite": 1.1154003379515391
+            },
+            "regressions_over_25pct": 9
+          },
+          "1024": {
+            "route_raw": 0.8248308274575827,
+            "route_raw_ci95": [
+              0.7481420622183521,
+              0.8995197419096246
+            ],
+            "route_prior": 1.0068181924154789,
+            "route_scc": 0.8541797621822148,
+            "families": {
+              "random_tree": 0.9865627437614944,
+              "percolated_grid": 0.9568003288124878,
+              "geometric": 0.9138526376878625,
+              "preferential": 0.6797063658212679,
+              "rewired_ring": 0.9636140946914775,
+              "communities": 0.6926454605447971,
+              "percolated_cube": 0.6255402076272757,
+              "random_bipartite": 0.8751977095137691
+            },
+            "regressions_over_25pct": 2
+          }
+        },
+        "notes": [
+          "Bootstrap resamples graph realizations within fixed families, not queries or timed repetitions.",
+          "Full native verification runs on every call; Python replay deduplicates identical packet/output bytes.",
+          "Base-infeasible inputs are retained and marked per graph; aggregate speed does not imply every query is difficult.",
+          "Ready bytes input and output hashing included; file read, packing, process launch and Python replay excluded.",
+          "These are fresh synthetic instances, not an operator workload, real deployment or external replication."
+        ]
+      }
+    }
+  ]
+}

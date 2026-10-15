@@ -3,11 +3,19 @@
 An opt-in, complete-cost challenge to SPECTRA's binary-list feasibility service.
 This directory does not replace the public solver or the frozen WAP study.
 
-The latest local checkpoint is the [unified prepared-bank review]
-(UNIFIED_PREPARED_REVIEW_20261014.md), with [machine-readable results]
-(UNIFIED_PREPARED_RESULTS_20261014.json). It ports 64-lane exact propagation and
-independent SAT checking into the strict ABI-3/SBC1 one-call endpoint; the inputs
-remain exposed development workloads, not a new holdout.
+The latest development checkpoint is [faster queries: results and remaining
+gaps](QUERY_LATENCY_RESULTS_20261015.md), with
+[machine-readable results](QUERY_LATENCY_RESULTS_20261015.json). It removes
+duplicate preparation work, reuses fixed-graph contradiction proofs within a
+bank, adds optional engine selection and builds the exact runtime on Windows.
+The stronger 10% speed target against the improved raw engine **still fails**.
+The 48 synthetic graphs remain exposed development workloads, not a new holdout.
+
+The previous [unified prepared-bank review](UNIFIED_PREPARED_REVIEW_20261014.md)
+and [results](UNIFIED_PREPARED_RESULTS_20261014.json) ported 64-lane exact
+propagation and independent SAT checking into the strict ABI-3/SBC1 one-call
+endpoint. The [frozen transfer protocol](TRANSFER_PROTOCOL_20261015.md) and its
+[failed speed gate](TRANSFER_CI_RESULTS_20261015.json) are retained separately.
 
 The [prepared-packet checkpoint](PACKET_REVIEW_20261014.md) adds a complete SBC1
 session format and one-call exact execution. It is built on the
@@ -40,11 +48,12 @@ disposal. Cold process cost is retained separately. All failures remain visible.
 
 ## Run the native contracts
 
-Use the pinned dependency build in
-[compiled-query-validation.yml](../../.github/workflows/compiled-query-validation.yml).
-It checks Python 3.11 and 3.13, builds native CUDD at upstream commit
+Use the dependency installation steps in
+[prepared-transfer-validation.yml](../../.github/workflows/prepared-transfer-validation.yml).
+That frozen workflow checks Python 3.11 and 3.13, builds native CUDD at upstream commit
 `4442d498ddea1bec0071315f538cb5ef37443985`, and uses `python-sat==1.9.dev15`.
-After installing those dependencies, from the repository root:
+The workflow itself checks out its frozen source commit. To test the current
+checkout after installing those dependencies, run from the repository root:
 
 ```bash
 SPECTRA_REQUIRE_CUDD=1 python -m pytest experiments/compiled_query -q
@@ -73,10 +82,42 @@ answer = runtime.solve_session_packet(packet, mode='raw')
 scq2_bytes = answer.output
 ```
 
+For the new, opt-in engine policy, use
+`runtime.solve_session_packet(packet, mode='auto')` and inspect
+`answer.info['selected_mode']`. It chooses raw for fewer than 64 requests or an
+impossible fixed graph, then route or SCC according to graph compression.
+Existing defaults are unchanged. This policy is specific to the one-call packet
+endpoint; it is not a mode for persistent `prepare` sessions.
+
+The exact extension supports GIL-enabled CPython on Linux and Windows x64.
+On Windows, run the build from an x64 MSVC developer prompt with matching x64
+Python; `build_exact_runtime` selects `cl` automatically. Windows debug builds
+and free-threaded Python builds are not supported. The
+[Windows workflow](../../.github/workflows/query-windows.yml) checks actual
+MSVC builds on Python 3.11 and 3.13. The comparison harness below is Linux-only.
+
 Use `exact-packet-raw`, `exact-packet-scc`, `exact-packet-sparse`, or
 `exact-packet-route` in the process-isolated study. The manifest stores the exact
 packet bytes, SHA-256, preparation receipt, and paired schedule. Ready-packet
 latency must not be described as first-use latency from arbitrary JSON.
+
+## Reproduce the query-cost comparison
+
+From a full checkout on Linux with a C++17 compiler and Python development
+headers, use a fresh output directory:
+
+```bash
+python -m experiments.compiled_query.query_latency run --out query-latency-run
+python -m experiments.compiled_query.query_latency audit --out query-latency-run
+```
+
+The [plan](QUERY_LATENCY_PLAN.md) fixes six arms, all 48 graphs, five bank
+lengths and nine paired repetitions. The harness retains each timed record,
+checks same-mode output identity and replays every distinct answer. A successful
+functional audit does not imply a speed-target pass: inspect both
+`functional_complete` and `development_target_pass`. The
+[Linux and ARM workflow](../../.github/workflows/query-latency.yml) also runs
+the native contracts and address/undefined sanitizers.
 
 ## Run an unfiltered development study
 
