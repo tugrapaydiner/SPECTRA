@@ -33,13 +33,23 @@ SESSION_PACKET_HEADER = struct.Struct('<4s7I')
 SESSION_PACKET_MAGIC = b'SBC1'
 
 
-def build_exact_runtime(directory: Path, *, compiler: str = 'g++',
+def build_exact_runtime(directory: Path, *, compiler: str | None = None,
                         sanitizer: str = 'none') -> Path:
-    """Build explicitly; receipts bind source, flags, interpreter, and binary."""
-    if platform.system() != 'Linux':
-        raise NotImplementedError('native builder currently validates Linux only')
+    """Build on Linux or Windows x64; bind source, flags, Python ABI and binary.
+
+    Windows needs a configured MSVC x64 developer prompt and CPython import
+    libraries. Sanitizer builds remain Linux-only. No compiler is installed here.
+    """
+    windows = sys.platform == 'win32'
+    if sys.platform not in ('linux', 'win32'):
+        raise NotImplementedError('native builder supports Linux and Windows x64')
+    if sys.implementation.name != 'cpython' or sysconfig.get_config_var('Py_GIL_DISABLED'):
+        raise ValueError('GIL-enabled CPython is required')
     if sanitizer not in ('none', 'undefined', 'address,undefined'):
         raise ValueError('unsupported sanitizer')
+    if windows and sanitizer != 'none':
+        raise ValueError('sanitizer builds currently require Linux')
+    compiler = compiler or ('cl' if windows else 'g++')
     cc = shutil.which(compiler)
     if cc is None:
         raise FileNotFoundError(compiler)
@@ -57,10 +67,24 @@ def build_exact_runtime(directory: Path, *, compiler: str = 'g++',
     start = time.perf_counter_ns()
     with tempfile.TemporaryDirectory(dir=dest) as tmp:
         target = Path(tmp) / library.name
-        command = [cc, *flags, '-I' + sysconfig.get_path('include'), str(SOURCE), '-o', str(target)]
-        result = subprocess.run(command, capture_output=True, text=True, timeout=120)
+        if windows:
+            from spectra.svm_build import command_for
+            if sysconfig.get_config_var('Py_DEBUG'):
+                raise ValueError('Windows debug Python is not supported')
+            name = f'python{sys.version_info.major}{sys.version_info.minor}.lib'
+            import_library = Path(sys.base_prefix) / 'libs' / name
+            if not import_library.is_file():
+                raise ValueError('CPython import library missing: ' + str(import_library))
+            command = command_for(SOURCE.resolve(), target, target='portable', compiler=cc,
+                include=Path(sysconfig.get_path('include')), import_library=import_library)
+        else:
+            command = [cc, *flags, '-I' + sysconfig.get_path('include'), str(SOURCE), '-o', str(target)]
+        result = subprocess.run(command, cwd=tmp, capture_output=True, text=True,
+                                encoding='utf-8', errors='replace', timeout=120)
         if result.returncode:
-            raise RuntimeError(result.stderr)
+            raise RuntimeError(result.stdout + result.stderr)
+        version = subprocess.run([cc] if windows else [cc, '--version'],
+            capture_output=True, text=True, encoding='utf-8', errors='replace', check=not windows)
         record = dict(python_executable=sys.executable, python_version=sys.version,
                       python_implementation=platform.python_implementation(),
                       soabi=sysconfig.get_config_var('SOABI'), platform=platform.platform(),
@@ -68,8 +92,7 @@ def build_exact_runtime(directory: Path, *, compiler: str = 'g++',
                       library_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
                       command=command, sanitizer=sanitizer,
                       elapsed_ns=time.perf_counter_ns()-start,
-                      compiler=subprocess.run([cc, '--version'], capture_output=True,
-                                              text=True, check=True).stdout,
+                      compiler=version.stdout + version.stderr,
                       stdout=result.stdout, stderr=result.stderr)
         os.link(target, library)
         try:

@@ -64,7 +64,7 @@ def test_failed_receipt_removes_published_binary(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, 'open', fail)
     with pytest.raises(OSError, match='injected'):
         build_exact_runtime(tmp_path / 'failed')
-    assert not list((tmp_path / 'failed').glob('*.so'))
+    assert not list((tmp_path / 'failed').glob('_spectra_exact_binary*'))
     assert not (tmp_path / 'failed' / 'build.json').exists()
 
 

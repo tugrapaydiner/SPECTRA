@@ -12,6 +12,9 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 namespace {
 using U = uint32_t;
@@ -32,8 +35,14 @@ void tuple(PyObject* value, const char* message) {
     if (!PyTuple_CheckExact(value)) throw Invalid(message);
 }
 W palette(U k) { return k == 64 ? UINT64_MAX : ((W(1) << k) - 1); }
+#if defined(_MSC_VER)
+U first(W v) { unsigned long index=0;_BitScanForward64(&index,v);return static_cast<U>(index); }
+// Do not require POPCNT on the Windows portable build.
+U bits(W v) { U count=0;while(v) {v&=v-1;++count;}return count; }
+#else
 U first(W v) { return static_cast<U>(__builtin_ctzll(v)); }
 U bits(W v) { return static_cast<U>(__builtin_popcountll(v)); }
+#endif
 struct Pin { U vertex; W allowed; };
 std::vector<Pin> read_query(PyObject* q, U n, W cap) {
     tuple(q, "queries require exact tuples");
