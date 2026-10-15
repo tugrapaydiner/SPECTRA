@@ -1,0 +1,84 @@
+name: publish-prepared-transfer
+on:
+  push:
+    branches: [research/prepared-transfer-20261015]
+    paths: ['.github/workflows/publish-prepared-transfer.yml']
+permissions:
+  contents: write
+concurrency:
+  group: publish-prepared-transfer
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify the immutable reviewed source transport
+        env:
+          EXPECTED_B64: 66365e73022fa82c71c5c5d5332caf4de6732eff07ae81316d6a24de3a7d0f4a
+          EXPECTED_XZ: cf3baa56cc858a2c94e7ac0cde2a918620905c4a3a474c7440271f8299e22a1a
+          EXPECTED_PATCH: 3bbbca7955919ba5261dc38755be1c3552419f10646e06ee0d1f4b3ed145f3aa
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/publication
+          python - <<'PY'
+          import base64, hashlib, lzma, os
+          from pathlib import Path
+          payload = b''.join(Path(f'.delivery/transfer-source/{i:02d}').read_bytes() for i in range(6))
+          def check(data, key):
+              got = hashlib.sha256(data).hexdigest()
+              if got != os.environ[key]:
+                  raise RuntimeError(f'{key} mismatch: {got}')
+          check(payload, 'EXPECTED_B64')
+          archive = base64.b64decode(payload, validate=True)
+          check(archive, 'EXPECTED_XZ')
+          patch = lzma.decompress(archive)
+          check(patch, 'EXPECTED_PATCH')
+          Path('/tmp/publication/reviewed.patch').write_bytes(patch)
+          PY
+      - name: Apply reviewed non-workflow changes and publish atomically
+        env:
+          EXPECTED_CORE_TREE: 4ed5e135148ad279fcc1eb51e6f38bb226c181be
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          git apply --check --index /tmp/publication/reviewed.patch
+          git apply --index /tmp/publication/reviewed.patch
+          git diff --cached --name-only -z > /tmp/publication/changed.paths
+          python - <<'PY'
+          from pathlib import Path
+          paths = Path('/tmp/publication/changed.paths').read_bytes().split(b'\0')
+          if not all(p.startswith(b'experiments/compiled_query/') for p in paths if p):
+              raise RuntimeError('Reviewed patch must change only the exact-query experiment')
+          PY
+          actual_tree="$(git write-tree)"
+          test "$(git rev-parse "$actual_tree:experiments/compiled_query")" = "$EXPECTED_CORE_TREE"
+          git rm -r .delivery/transfer-source
+          if git diff --cached --name-only | grep -q '^.github/workflows/'; then
+            echo 'Workflow changes are not permitted in this code publication step.' >&2
+            exit 1
+          fi
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git commit -m 'Publish unified prepared exact service and prospective structural-transfer protocol'
+          git rev-parse HEAD > /tmp/publication/source_commit.txt
+          git rev-parse HEAD^{tree} > /tmp/publication/source_tree.txt
+          git rev-parse HEAD:experiments/compiled_query > /tmp/publication/core_tree.txt
+          git push origin HEAD:research/prepared-transfer-20261015
+          git fetch --no-tags origin 095c1ed65ffa3beabc55e42052c2f3b038a3150e
+          git update-ref refs/spectra/audit-helper FETCH_HEAD
+          git bundle create /tmp/publication/source.bundle HEAD refs/spectra/audit-helper
+          git archive --format=tar.gz --output=/tmp/publication/source.tar.gz HEAD
+          cd /tmp/publication
+          sha256sum reviewed.patch source.bundle source.tar.gz > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prepared-transfer-publication-${{ github.run_id }}
+          path: /tmp/publication/
+          retention-days: 30
+          if-no-files-found: error
