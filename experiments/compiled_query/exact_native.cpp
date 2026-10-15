@@ -357,8 +357,26 @@ struct Index {
                 arcs.emplace_back(a,b^1U);arcs.emplace_back(b,a^1U);
             }
         }
-        std::sort(arcs.begin(),arcs.end());arcs.erase(std::unique(arcs.begin(),arcs.end()),arcs.end());
-        full_arcs=arcs.size();original=CSR(2*n,arcs);CSR reverse(2*n,arcs,true);comp=components(original,reverse);
+        // Input owns sorted unique (u,v), u<v edges. In that edge stream each
+        // vertex sees its neighbours in increasing order, and a source/target
+        // literal contributes at most one arc per neighbour. Singleton unit
+        // arcs have otherwise empty source/target rows. Stable CSR scattering
+        // therefore produces exactly the same two ordered adjacencies as a
+        // global arc sort, with no duplicates. See LINEAR_CONSTRUCTION.md.
+        full_arcs=arcs.size();original=CSR(2*n,arcs);CSR reverse(2*n,arcs,true);
+#if defined(SPECTRA_EXACT_VALIDATE_LINEAR_CSR)
+        // Diagnostic builds only: compare actual native arrays, not a model of
+        // them, with the previous sorted construction on every admitted graph.
+        auto reference_arcs=arcs;
+        std::sort(reference_arcs.begin(),reference_arcs.end());
+        reference_arcs.erase(std::unique(reference_arcs.begin(),reference_arcs.end()),reference_arcs.end());
+        CSR reference_forward(2*n,reference_arcs),reference_reverse(2*n,reference_arcs,true);
+        if(reference_arcs.size()!=arcs.size() || original.off!=reference_forward.off
+                || original.to!=reference_forward.to || reverse.off!=reference_reverse.off
+                || reverse.to!=reference_reverse.to)
+            throw std::logic_error("linear implication construction differs from sorted reference");
+#endif
+        comp=components(original,reverse);
         for(U c:comp) nc=std::max(nc,c+1);
         for(U v=0;v<n;++v) {if(comp[2*v]==comp[2*v+1] && bad==NIL) bad=v;
             base[v]=static_cast<uint8_t>(comp[2*v]<comp[2*v+1]);
@@ -615,8 +633,10 @@ struct Observer {
                 conflicts.emplace_back(left,right);
             }
         }
-        std::sort(conflicts.begin(),conflicts.end());
-        conflicts.erase(std::unique(conflicts.begin(),conflicts.end()),conflicts.end());
+        // Each admitted original edge is unique; each shared colour creates
+        // one distinct forbidden literal pair. Verification scans every pair,
+        // so neither sorting nor duplicate elimination is needed here. Keep
+        // the independently owned original edges sorted for proof-hop lookup.
     }
     W bytes() const {return 8*W(masks.capacity()+edges.capacity()+conflicts.capacity())+colors.capacity();}
     bool hop(U a,U b) const {
