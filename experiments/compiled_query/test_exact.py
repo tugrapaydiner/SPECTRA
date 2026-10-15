@@ -371,6 +371,33 @@ def test_prepared_tile_threshold_is_explicit(exact_runtime):
         assert answer.info['bank_tiles'] == tiles
 
 
+@pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
+def test_impossible_graph_bank_keeps_current_request_proofs(exact_runtime, mode):
+    # An odd cycle is impossible before requests arrive. Reusing its fixed proof
+    # must not replace an earlier empty-domain proof or leak into another call.
+    n = 101
+    p = BinaryListProblem.create(n, 2,
+        tuple((v, v + 1) for v in range(n - 1)) + ((0, n - 1),), (3,) * n)
+    rows = (((0, 1), (0, 2)), (), ((7, 1),), ((9, 0),), ()) * 27
+    answer = exact_runtime.solve_session_packet(pack_session_packet(p, rows), mode=mode)
+    decoded = decode_certified_output(answer.output, n, len(rows))
+    visits = arcs = 0
+    with exact_runtime.prepare(p, mode=mode) as session:
+        for query, (decision, labels, certificate) in zip(rows, decoded):
+            single = session.solve(query)
+            assert not decision and labels == bytes(n)
+            assert certificate == single.proof
+            assert verify_answer(p, query, single.status, b'', certificate)
+            visits += single.visited
+            arcs += single.arcs_scanned
+    assert answer.visited <= visits and answer.arcs_scanned < arcs
+    assert exact_runtime.solve_session_packet(pack_session_packet(p, rows[::-1]),
+                                             mode=mode).unsat_count == len(rows)
+    feasible = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))
+    assert exact_runtime.solve_session_packet(pack_session_packet(feasible, ((),) * 65),
+                                             mode=mode).sat_count == 65
+
+
 def test_prepared_session_packet_rejects_every_corrupted_region(exact_runtime):
     p = BinaryListProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,) * 4)
     queries = ((), ((0, 1),), ((0, 1), (3, 1)), ((1, 0),))

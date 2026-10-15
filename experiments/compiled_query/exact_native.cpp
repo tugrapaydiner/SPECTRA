@@ -503,7 +503,8 @@ struct Index {
         if(conflict==NIL) return true;
         a.sat=false;a.certificate=proof(2,trace(parent,conflict),trace(parent,conflict^1U));return false;
     }
-    Answer solve(const std::vector<Pin>& pins) const {
+    Answer solve(const std::vector<Pin>& pins,
+                 const std::vector<uint8_t>* known_base_proof=nullptr) const {
         Answer answer;
         // Give every exact mode the same sparse request preparation, including
         // the cheap raw control. All pins were validated before this function.
@@ -517,6 +518,11 @@ struct Index {
             if(domain!=masks[v]) seeds.push_back(2*v+(first(domain)!=lo[v]));
         }
         if(bad!=NIL) {answer.sat=false;
+            // A contradiction in the fixed graph survives every restriction.
+            // Current pins are still checked first, preserving kind-1 proofs.
+            if(known_base_proof && !known_base_proof->empty()) {
+                answer.certificate=*known_base_proof;return answer;
+            }
             auto a=path(2*bad,2*bad+1,answer),b=path(2*bad+1,2*bad,answer);
             answer.certificate=proof(3,a,b);return answer;
         }
@@ -805,7 +811,17 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
             }
         }
     } else {
-        for(U row=0;row<count;++row) append(solver.solve(solver_rows.row(row)));
+        // Keep this immutable-problem proof local to this call. Do not cache
+        // request-dependent contradictions or share mutable state across calls.
+        // The observer independently checks every emitted copy below.
+        std::vector<uint8_t> base_proof;
+        for(U row=0;row<count;++row) {
+            Answer answer=solver.solve(solver_rows.row(row),&base_proof);
+            if(solver.bad!=NIL && base_proof.empty() && answer.certificate.size()>=16
+                    && load32(answer.certificate.data(),4)==3)
+                base_proof=answer.certificate;
+            append(answer);
+        }
     }
     if(!observer.verify_bank(observer_rows,result.output.data(),result.output.size()))
         throw std::logic_error(std::string("serialized ")+schema+" bank failed independent observer");
