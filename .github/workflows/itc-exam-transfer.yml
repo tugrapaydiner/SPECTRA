@@ -1,0 +1,114 @@
+name: itc-exam-transfer
+on:
+  push:
+    branches: [research/100-blitz-20261016]
+    paths:
+      - '.github/workflows/itc-exam-transfer.yml'
+      - 'spectra/exact*.py'
+      - 'spectra/exam_repair.py'
+      - 'spectra/itc2007_exam.py'
+      - 'spectra/_native/exact_binary.cpp'
+      - 'experiments/compiled_query/itc_exam_transfer.py'
+      - 'experiments/compiled_query/test_itc_exam_transfer.py'
+      - 'experiments/compiled_query/ITC_EXAM_TRANSFER_PROTOCOL.md'
+      - 'experiments/compiled_query/itc_exam_suite.py'
+      - 'experiments/compiled_query/test_itc_exam_suite.py'
+      - 'experiments/compiled_query/ITC_EXAM_SUITE_PROTOCOL.md'
+      - 'tests/public/test_exam_repair.py'
+      - 'tests/public/test_itc2007_exam.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: itc-exam-transfer-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+jobs:
+  transfer:
+    name: ITC conflict-core transfer (${{ matrix.runner }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, python: '3.11'}
+          - {runner: ubuntu-24.04, python: '3.13'}
+          - {runner: ubuntu-24.04-arm, python: '3.13'}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install the pinned test runner
+        run: python -m pip install 'pytest==8.4.2'
+      - uses: actions/checkout@v4
+        with:
+          repository: davidvanbulck/ITC-2007-CETT
+          ref: ed2d4c0cf5302b77a8b321cd0380de0bb579d538
+          path: upstream/ITC-2007-CETT
+          persist-credentials: false
+      - name: Check the public adapter and immutable evidence harness
+        run: |
+          set -euo pipefail
+          python -m pytest \
+            tests/public/test_exam_repair.py \
+            tests/public/test_itc2007_exam.py \
+            experiments/compiled_query/test_itc_exam_transfer.py \
+            -q --junitxml=transfer-contracts.xml
+      - name: Freeze the published instance only after the protocol is committed
+        run: |
+          set -euo pipefail
+          python -m experiments.compiled_query.itc_exam_transfer freeze \
+            --root itc-transfer-evidence \
+            --instance upstream/ITC-2007-CETT/examtt-instances/Instances/set9.exam \
+            --solution upstream/ITC-2007-CETT/InitMethods/SolStore/set9_OBSIFeas_0.sol \
+            --license upstream/ITC-2007-CETT/LICENSE \
+            --queries 1024 \
+            --evaluation-role development | tee freeze.log
+      - name: Run every exact engine and replay every answer
+        run: |
+          set -euo pipefail
+          python -m experiments.compiled_query.itc_exam_transfer run \
+            --root itc-transfer-evidence | tee run.log
+          python -S -m experiments.compiled_query.itc_exam_transfer audit \
+            --root itc-transfer-evidence | tee audit.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('itc-transfer-evidence/audit.json').read_text())
+          assert result['functional_complete']
+          assert result['baseline_valid_full_itc_hard_constraints']
+          assert result['queries'] == 1024
+          assert result['model']['schema'] == 'spectra.itc2007.conflict_core.v1'
+          assert result['modes']['auto']['auto_policy'] == 'structural-v2'
+          assert result['modes']['auto']['selected_mode'] == 'raw'
+          assert result['modes']['auto']['auto_policy_reason'] == 'high_pin_density'
+          print('Functional transfer complete. This is not a full ITC timetable claim.')
+          PY
+      - name: Preserve exact source and environment receipts
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p transfer-receipts
+          git rev-parse HEAD > transfer-receipts/source_commit.txt
+          git rev-parse HEAD^{tree} > transfer-receipts/source_tree.txt
+          git -C upstream/ITC-2007-CETT rev-parse HEAD > transfer-receipts/upstream_commit.txt
+          python -VV > transfer-receipts/python.txt
+          uname -a > transfer-receipts/platform.txt
+          lscpu > transfer-receipts/cpu.txt
+          cp transfer-contracts.xml freeze.log run.log audit.log transfer-receipts/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: itc-exam-transfer-${{ matrix.runner }}-py${{ matrix.python }}-${{ github.run_id }}
+          path: |
+            itc-transfer-evidence/
+            transfer-receipts/
+          retention-days: 90
+          if-no-files-found: warn
