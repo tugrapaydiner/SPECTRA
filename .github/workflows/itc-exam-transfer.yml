@@ -59,8 +59,11 @@ jobs:
           python -m pytest \
             tests/public/test_exam_repair.py \
             tests/public/test_itc2007_exam.py \
+            --confcutdir=tests/public -q \
+            --junitxml=transfer-public-contracts.xml
+          python -m pytest \
             experiments/compiled_query/test_itc_exam_transfer.py \
-            -q --junitxml=transfer-contracts.xml
+            -q --junitxml=transfer-research-contracts.xml
       - name: Freeze the published instance only after the protocol is committed
         run: |
           set -euo pipefail
@@ -102,7 +105,8 @@ jobs:
           python -VV > transfer-receipts/python.txt
           uname -a > transfer-receipts/platform.txt
           lscpu > transfer-receipts/cpu.txt
-          cp transfer-contracts.xml freeze.log run.log audit.log transfer-receipts/ 2>/dev/null || true
+          cp transfer-public-contracts.xml transfer-research-contracts.xml \
+            freeze.log run.log audit.log transfer-receipts/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
