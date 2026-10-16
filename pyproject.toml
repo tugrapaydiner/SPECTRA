@@ -19,8 +19,8 @@ Issues = "https://github.com/tugrapaydiner/SPECTRA/issues"
 Changelog = "https://github.com/tugrapaydiner/SPECTRA/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = ["pytest>=7.4"]
-dev = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66", "pytest>=7.4"]
+test = ["pytest>=7.4", "python-sat==1.9.dev15"]
+dev = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66", "pytest>=7.4", "python-sat==1.9.dev15"]
 
 # Historical top-level packages remain import-compatible; spectra is the public API.
 research = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66"]

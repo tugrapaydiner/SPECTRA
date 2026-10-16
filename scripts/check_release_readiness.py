@@ -40,6 +40,68 @@ def versions(root: Path) -> str:
     return version
 
 
+REQUIRED_TEST_DEPENDENCIES = {
+    "pytest": None,
+    "python-sat": "python-sat==1.9.dev15",
+}
+
+
+def _normalise_requirement_name(requirement: str) -> str:
+    match = re.match(r"\s*([A-Za-z0-9_.-]+)", requirement)
+    if match is None:
+        raise ValueError(f"invalid optional dependency requirement: {requirement!r}")
+    return re.sub(r"[-_.]+", "-", match.group(1)).lower()
+
+
+def optional_dependency_groups(root: Path) -> dict[str, list[str]]:
+    """Read literal optional-dependency lists without importing build tooling."""
+    project = (root / "pyproject.toml").read_text(encoding="utf-8")
+    sections = re.findall(
+        r"(?ms)^\[project\.optional-dependencies\]\s*\n(.*?)(?=^\[|\Z)",
+        project,
+    )
+    if len(sections) != 1:
+        raise ValueError("expected exactly one [project.optional-dependencies] section")
+    declared = re.findall(r"(?m)^([A-Za-z0-9_-]+)\s*=", sections[0])
+    assignments = re.findall(r"(?ms)^([A-Za-z0-9_-]+)\s*=\s*(\[[^]]*\])", sections[0])
+    if len(assignments) != len(declared):
+        raise ValueError("optional dependency groups must be literal string lists")
+    groups: dict[str, list[str]] = {}
+    for name, literal in assignments:
+        value = ast.literal_eval(literal)
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ValueError(f"optional dependency group {name!r} must be a literal string list")
+        if name in groups:
+            raise ValueError(f"duplicate optional dependency group: {name}")
+        groups[name] = value
+    return groups
+
+
+def check_test_dependencies(root: Path) -> dict[str, int]:
+    """Ensure the documented test/development installs can run public contracts."""
+    groups = optional_dependency_groups(root)
+    for group_name in ("test", "dev"):
+        if group_name not in groups:
+            raise ValueError(f"missing optional dependency group: {group_name}")
+        by_name: dict[str, str] = {}
+        for requirement in groups[group_name]:
+            name = _normalise_requirement_name(requirement)
+            if name in by_name:
+                raise ValueError(f"duplicate dependency {name!r} in {group_name} extra")
+            by_name[name] = requirement
+        for name, exact in REQUIRED_TEST_DEPENDENCIES.items():
+            if name not in by_name:
+                raise ValueError(f"{group_name} extra is missing required public-test dependency: {name}")
+            if exact is not None and re.sub(r"\s+", "", by_name[name]).lower() != exact.lower():
+                raise ValueError(
+                    f"{group_name} extra must pin {name} as {exact}; found {by_name[name]!r}"
+                )
+    return {
+        "test_extra_requirements": len(groups["test"]),
+        "dev_extra_requirements": len(groups["dev"]),
+    }
+
+
 def _without_fences(text: str) -> str:
     return re.sub(r"(?ms)^```[^\n]*\n.*?^```[^\n]*$", "", text)
 
@@ -60,6 +122,7 @@ def anchors(path: Path) -> set[str]:
 def check(root: Path = ROOT) -> dict:
     root = root.resolve(strict=True)
     version = versions(root)
+    dependency_report = check_test_dependencies(root)
     links = external = 0
     for name in GUIDES:
         path = root / name
@@ -82,8 +145,10 @@ def check(root: Path = ROOT) -> dict:
         if "check_current_installation.py" not in text:
             raise ValueError(f"current-wheel check missing from {name}")
     return {"status": "PASS", "version": version, "current_guides": len(GUIDES),
+            **dependency_report,
             "local_links_checked": links, "external_links_not_fetched": external,
-            "scope": "offline metadata and navigation only; not release or scientific approval"}
+            "scope": "offline metadata, test-install contract and navigation only; "
+                     "not release or scientific approval"}
 
 
 def main() -> None:
