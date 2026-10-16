@@ -1,0 +1,156 @@
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -19,8 +19,8 @@
+ Changelog = "https://github.com/tugrapaydiner/SPECTRA/blob/main/CHANGELOG.md"
+ 
+ [project.optional-dependencies]
+-test = ["pytest>=7.4"]
+-dev = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66", "pytest>=7.4"]
++test = ["pytest>=7.4", "python-sat==1.9.dev15"]
++dev = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66", "pytest>=7.4", "python-sat==1.9.dev15"]
+ 
+ # Historical top-level packages remain import-compatible; spectra is the public API.
+ research = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66"]
+--- a/scripts/check_release_readiness.py
++++ b/scripts/check_release_readiness.py
+@@ -40,6 +40,68 @@
+     return version
+ 
+ 
++REQUIRED_TEST_DEPENDENCIES = {
++    "pytest": None,
++    "python-sat": "python-sat==1.9.dev15",
++}
++
++
++def _normalise_requirement_name(requirement: str) -> str:
++    match = re.match(r"\s*([A-Za-z0-9_.-]+)", requirement)
++    if match is None:
++        raise ValueError(f"invalid optional dependency requirement: {requirement!r}")
++    return re.sub(r"[-_.]+", "-", match.group(1)).lower()
++
++
++def optional_dependency_groups(root: Path) -> dict[str, list[str]]:
++    """Read literal optional-dependency lists without importing build tooling."""
++    project = (root / "pyproject.toml").read_text(encoding="utf-8")
++    sections = re.findall(
++        r"(?ms)^\[project\.optional-dependencies\]\s*\n(.*?)(?=^\[|\Z)",
++        project,
++    )
++    if len(sections) != 1:
++        raise ValueError("expected exactly one [project.optional-dependencies] section")
++    declared = re.findall(r"(?m)^([A-Za-z0-9_-]+)\s*=", sections[0])
++    assignments = re.findall(r"(?ms)^([A-Za-z0-9_-]+)\s*=\s*(\[[^]]*\])", sections[0])
++    if len(assignments) != len(declared):
++        raise ValueError("optional dependency groups must be literal string lists")
++    groups: dict[str, list[str]] = {}
++    for name, literal in assignments:
++        value = ast.literal_eval(literal)
++        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
++            raise ValueError(f"optional dependency group {name!r} must be a literal string list")
++        if name in groups:
++            raise ValueError(f"duplicate optional dependency group: {name}")
++        groups[name] = value
++    return groups
++
++
++def check_test_dependencies(root: Path) -> dict[str, int]:
++    """Ensure the documented test/development installs can run public contracts."""
++    groups = optional_dependency_groups(root)
++    for group_name in ("test", "dev"):
++        if group_name not in groups:
++            raise ValueError(f"missing optional dependency group: {group_name}")
++        by_name: dict[str, str] = {}
++        for requirement in groups[group_name]:
++            name = _normalise_requirement_name(requirement)
++            if name in by_name:
++                raise ValueError(f"duplicate dependency {name!r} in {group_name} extra")
++            by_name[name] = requirement
++        for name, exact in REQUIRED_TEST_DEPENDENCIES.items():
++            if name not in by_name:
++                raise ValueError(f"{group_name} extra is missing required public-test dependency: {name}")
++            if exact is not None and re.sub(r"\s+", "", by_name[name]).lower() != exact.lower():
++                raise ValueError(
++                    f"{group_name} extra must pin {name} as {exact}; found {by_name[name]!r}"
++                )
++    return {
++        "test_extra_requirements": len(groups["test"]),
++        "dev_extra_requirements": len(groups["dev"]),
++    }
++
++
+ def _without_fences(text: str) -> str:
+     return re.sub(r"(?ms)^```[^\n]*\n.*?^```[^\n]*$", "", text)
+ 
+@@ -60,6 +122,7 @@
+ def check(root: Path = ROOT) -> dict:
+     root = root.resolve(strict=True)
+     version = versions(root)
++    dependency_report = check_test_dependencies(root)
+     links = external = 0
+     for name in GUIDES:
+         path = root / name
+@@ -82,8 +145,10 @@
+         if "check_current_installation.py" not in text:
+             raise ValueError(f"current-wheel check missing from {name}")
+     return {"status": "PASS", "version": version, "current_guides": len(GUIDES),
++            **dependency_report,
+             "local_links_checked": links, "external_links_not_fetched": external,
+-            "scope": "offline metadata and navigation only; not release or scientific approval"}
++            "scope": "offline metadata, test-install contract and navigation only; "
++                     "not release or scientific approval"}
+ 
+ 
+ def main() -> None:
+--- a/tests/public/test_release_hardening.py
++++ b/tests/public/test_release_hardening.py
+@@ -172,7 +172,12 @@
+ def guide_tree(tmp_path):
+     (tmp_path / 'spectra').mkdir()
+     (tmp_path / 'spectra/__init__.py').write_text('__version__ = "1.2.3"\n')
+-    (tmp_path / 'pyproject.toml').write_text('[project]\nname = "spectra"\nversion = "1.2.3"\n')
++    (tmp_path / 'pyproject.toml').write_text(
++        '[project]\nname = "spectra"\nversion = "1.2.3"\n'
++        '[project.optional-dependencies]\n'
++        'test = ["pytest>=7.4", "python-sat==1.9.dev15"]\n'
++        'dev = ["pytest>=7.4", "python-sat==1.9.dev15"]\n'
++    )
+     for guide in readiness.GUIDES:
+         path = tmp_path / guide; path.parent.mkdir(exist_ok=True)
+         path.write_text('# Example heading\n\n## Second heading\n')
+@@ -188,10 +193,12 @@
+     report = readiness.check(guide_tree)
+     assert report['status'] == 'PASS' and report['version'] == '1.2.3'
+     assert report['local_links_checked'] == 1 and report['external_links_not_fetched'] == 1
++    assert report['test_extra_requirements'] == 2 and report['dev_extra_requirements'] == 2
+ 
+ 
+ @pytest.mark.parametrize('case', ['missing', 'anchor', 'escape', 'version', 'duplicate_version',
+-                                  'missing_version', 'hardcoded_wheel', 'missing_check'])
++                                  'missing_version', 'hardcoded_wheel', 'missing_check',
++                                  'missing_test_sat', 'wrong_test_sat_pin', 'missing_dev_sat'])
+ def test_bad_release_metadata_fails(guide_tree, case):
+     if case in ('missing', 'anchor', 'escape'):
+         targets = {'missing': 'missing.md', 'anchor': 'docs/API.md#not-a-heading', 'escape': '../'}
+@@ -203,9 +210,20 @@
+             stream.write('version = "1.2.3"\n')
+     elif case == 'missing_version':
+         (guide_tree / 'spectra/__init__.py').write_text('')
+-    else:
++    elif case in ('hardcoded_wheel', 'missing_check'):
+         path = guide_tree / '.github/workflows/public-package.yml'
+         path.write_text('check_current_installation.py spectra-1.2.3-py3-none-any.whl' if case == 'hardcoded_wheel' else '')
++    else:
++        path = guide_tree / 'pyproject.toml'
++        project = path.read_text()
++        if case == 'missing_test_sat':
++            project = project.replace(', "python-sat==1.9.dev15"', '', 1)
++        elif case == 'wrong_test_sat_pin':
++            project = project.replace('python-sat==1.9.dev15', 'python-sat>=1.9.dev15', 1)
++        else:
++            marker = 'dev = ["pytest>=7.4", "python-sat==1.9.dev15"]'
++            project = project.replace(marker, 'dev = ["pytest>=7.4"]')
++        path.write_text(project)
+     with pytest.raises(ValueError):
+         readiness.check(guide_tree)
+ 
