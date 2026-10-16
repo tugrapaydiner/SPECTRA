@@ -30,7 +30,7 @@ python scripts/audit_workspace.py --out .release-check/workspace.json
 
 The default `python -m build` builds an sdist, then builds the wheel from that
 sdist. The installation check creates a separate virtual environment, installs
-without dependencies, and runs **11 installed-only checks outside the checkout**.
+without dependencies, and runs installed-only checks outside the checkout.
 It verifies the command, APIs and packaged native source inventory. It does not
 substitute an editable install for a wheel test. The public-package CI performs
 the same path; the indexed-efficiency workflow also checks Python 3.10 and 3.13.
@@ -66,8 +66,26 @@ With PyTorch, Ninja and a suitable compiler installed,
 An explicit binary build can use `SPECTRA_BUILD_NATIVE=1` with
 `pip wheel --no-build-isolation .`; compilation failure is an error.
 Ordinary wheels include sources for the existing JIT loaders without compiling
-during installation. Native checks are separate from the dependency-free wheel
-checks. Cross-host bitwise equality is not a blanket runtime guarantee.
+during installation. The proof-carrying exact runtime is built independently of
+PyTorch:
+
+```bash
+python -m spectra exact build exact-native-build
+python -m pytest tests/public/test_exact_api.py
+```
+
+To verify the actual installed wheel rather than the checkout, run the normal
+installation check and then use its isolated interpreter:
+
+```bash
+.release-check/install/venv/bin/python -I scripts/check_exact_installation.py \
+  --out .release-check/install/exact.json
+```
+
+On Windows use `Scripts\python.exe` from a configured MSVC x64 environment.
+Native checks are separate from dependency-free wheel checks. Build receipts bind
+source and binary identity but do not make cross-host bitwise equality a blanket
+runtime guarantee.
 
 ## Reproduce systems comparisons
 

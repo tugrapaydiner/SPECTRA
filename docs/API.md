@@ -52,6 +52,26 @@ pool and break/age move policy. This classical candidate has a retained fresh
 synthetic evaluation and independent witness checks. See [focused search](FOCUSED_GUIDE.md)
 for its measured scope, budget semantics and recovery limitations.
 
+## Proof-carrying exact queries
+
+The unreleased `spectra.exact` module supplies an explicit native build, immutable
+original-address problems, persistent sessions, prepared `SBC1` sessions, full
+`SCQ2` answer banks and independent standard-library proof replay. The public API
+version is 1 and the native ABI is 3. Ordinary import never compiles code.
+
+```python
+from spectra.exact import ExactProblem, ExactRuntime, build_exact_runtime
+
+problem = ExactProblem.create(2, 2, ((0, 1),), (3, 3))
+runtime = ExactRuntime(build_exact_runtime("exact-build"))
+with runtime.prepare(problem) as session:
+    answer = session.solve(((0, 1), (1, 1)))
+    assert answer.status == "UNSAT_VERIFIED"
+```
+
+See [Proof-carrying exact-query API](EXACT_API.md) for packet layouts, receipt
+validation, CLI replay, resource limits and the narrow claim boundary.
+
 ## Commands and exit codes
 
 ```bash

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Versioned proof-carrying exact-query API
+
+- Add dependency-light `spectra.exact` API version 1 with native ABI 3.
+- Package the exact native source in compiler-free wheels; compilation remains an
+  explicit local action and publishes a source/Python/compiler/binary receipt.
+- Return complete checked SAT colourings or portable `SBP1` UNSAT proofs through
+  persistent sessions and one-call `SBC1` to `SCQ2` execution.
+- Add strict independent Python replay, `spectra exact verify`, installed-wheel
+  native execution, receipt-tamper tests and cross-platform CI contracts.
+- Do not publish a new package version or transfer exposed synthetic performance
+  evidence into the frozen WAP claim.
+
 ### Certified repeated-query compilation
 
 - Integrate SPECTRA's prospectively frozen WAP support-query result into `main`.

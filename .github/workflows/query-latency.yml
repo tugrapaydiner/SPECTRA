@@ -1,0 +1,100 @@
+name: Query runtime checks
+on:
+  push:
+    branches: [faster-queries]
+    paths:
+      - experiments/compiled_query/exact.py
+      - experiments/compiled_query/exact_native.cpp
+      - experiments/compiled_query/query_latency.py
+      - experiments/compiled_query/test_*.py
+      - experiments/compiled_query/QUERY_LATENCY_PLAN.md
+      - experiments/compiled_query/FEASIBLE_BATCH_PLAN.md
+      - .github/workflows/query-latency.yml
+  pull_request:
+    paths:
+      - experiments/compiled_query/exact.py
+      - experiments/compiled_query/exact_native.cpp
+      - experiments/compiled_query/query_latency.py
+      - experiments/compiled_query/test_*.py
+      - experiments/compiled_query/FEASIBLE_BATCH_PLAN.md
+      - .github/workflows/query-latency.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: query-runtime-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  compare:
+    name: Query batches (${{ matrix.runner }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, python: '3.11'}
+          - {runner: ubuntu-24.04, python: '3.13'}
+          - {runner: ubuntu-24.04-arm, python: '3.13'}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install 'pytest==8.4.2' 'python-sat==1.9.dev15'
+      - name: Test answers, packet handling and evidence tampering
+        run: |
+          set -euo pipefail
+          mkdir -p query-checks
+          python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_query_latency.py -q --junitxml=query-checks/tests.xml 2>&1 | tee query-checks/tests.log
+      - name: Compare all seven engines and replay every distinct answer
+        run: |
+          set -euo pipefail
+          python -m experiments.compiled_query.query_latency run --out query-checks/comparison --baseline-commit 2afaf001c78bee5a3ea5a3918193acd012213150 --include-baseline-auto 2>&1 | tee query-checks/run.log
+          python -m experiments.compiled_query.query_latency audit --out query-checks/comparison 2>&1 | tee query-checks/audit.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: query-latency-${{ matrix.runner }}-py${{ matrix.python }}-${{ github.run_id }}
+          path: query-checks/
+          retention-days: 90
+          if-no-files-found: error
+  sanitizers:
+    name: Native safety (${{ matrix.sanitizer }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: ['undefined', 'address,undefined']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==8.4.2' 'python-sat==1.9.dev15'
+      - name: Check exact answers with the sanitizer build
+        env:
+          SANITIZER: ${{ matrix.sanitizer }}
+        run: |
+          set -euo pipefail
+          mkdir -p query-checks
+          export SPECTRA_EXACT_LIBRARY="$(python -c "from experiments.compiled_query.exact import build_exact_runtime; import os; print(build_exact_runtime('query-checks/build', sanitizer=os.environ['SANITIZER']))")"
+          export UBSAN_OPTIONS=halt_on_error=1
+          if [ "$SANITIZER" = 'address,undefined' ]; then
+            export LD_PRELOAD="$(g++ -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so)"
+            export ASAN_OPTIONS=detect_leaks=0:abort_on_error=1
+          fi
+          python -m pytest experiments/compiled_query/test_exact.py -q --junitxml=query-checks/tests.xml 2>&1 | tee query-checks/tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: query-native-safety-${{ matrix.sanitizer }}-${{ github.run_id }}
+          path: query-checks/
+          retention-days: 90
+          if-no-files-found: error

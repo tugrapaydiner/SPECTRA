@@ -1,7 +1,7 @@
 name: public-package
 on:
   pull_request:
-    branches: [main, "maintenance/**", "research/deductive-search-*", "research/focused-search-*", "research/research-engineering-*"]
+    branches: [main, "maintenance/**", "research/deductive-search-*", "research/focused-search-*", "research/research-engineering-*", "research/faster-queries-review-*", "research/exact-public-api-*"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -47,6 +47,8 @@ jobs:
           python scripts/check_current_installation.py --dist .public-package/dist --out .public-package/install | tee .public-package/install.txt
           .public-package/install/venv/bin/python -I scripts/check_focused_installation.py | tee .public-package/focused-install.txt
           .public-package/install/venv/bin/python -I scripts/check_dpll_installation.py | tee .public-package/dpll-install.txt
+          .public-package/install/venv/bin/python -I scripts/check_exact_installation.py --out .public-package/exact-install.json | tee .public-package/exact-install.txt
+          .public-package/install/venv/bin/python -I scripts/check_exam_repair_installation.py --out .public-package/exam-repair-install.json | tee .public-package/exam-repair-install.txt
       - name: Run and replay frozen compact-state comparison
         run: |
           set -o pipefail

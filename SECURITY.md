@@ -27,11 +27,18 @@ verified source in an isolated environment. Do not expose research loaders to
 uploaded third-party files. A checksum proves identity only when the expected
 checksum itself is trusted. No loader was silently rewritten in this cleanup.
 
-Native execution compiles bundled C++ with the local compiler and uses optional
-PyTorch APIs. Historical dependency pins exist for reproducibility, not as a
-claim of current vulnerability-free support. Review dependencies separately
-before deployment; do not reinterpret an updated dependency's outputs as a
-bitwise replay of the old environment.
+Native execution compiles bundled C++ with the local compiler. Some historical
+runtimes use optional PyTorch APIs; the proof-carrying exact API does not. Its
+builder emits a receipt binding source, Python ABI, compiler command and final
+binary, and the runtime checks that receipt by default. This detects accidental
+or post-build byte changes; it does not sandbox the compiler, authenticate the
+installed package, or prove the native code safe. Build only trusted source with
+a trusted toolchain.
+
+Historical dependency pins exist for reproducibility, not as a claim of current
+vulnerability-free support. Review dependencies separately before deployment; do
+not reinterpret an updated dependency's outputs as a bitwise replay of the old
+environment. Prepared-packet byte admission is not a total RSS or wall-time bound.
 
 ## Reporting
 

@@ -36,6 +36,12 @@ historical “general reasoner,” MCTS, low-bit, or neural claims.
 [Certificate reproduction](experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md) ·
 [Replication guide](experiments/wap_support/REPLICATION.md)
 
+The current unreleased tree also contains a
+[versioned proof-carrying exact-query API](docs/EXACT_API.md) with explicit native
+build receipts, complete SAT/UNSAT evidence, installed-wheel checks, automatic
+engine selection and Linux/Windows support. Its performance panels use exposed
+synthetic development graphs and do not replace the frozen WAP result above.
+
 **Package: Python 3.10+ · Flagship complete-call result: Python 3.13 · MIT-licensed project code · CPU-first · explicit verification boundaries**
 
 ## Flagship result
@@ -166,7 +172,34 @@ Independent replication is tracked in
 [issue #55](https://github.com/tugrapaydiner/SPECTRA/issues/55). Negative or
 conflicting replications are explicitly welcome.
 
-## Exact API boundary
+## Proof-carrying exact-query API
+
+The unreleased `spectra.exact` module is an installed, explicitly versioned API for
+fixed conflict graphs whose original vertex domains contain one or two colours.
+Native compilation is explicit and receipt-bound; imports remain standard-library
+only. Every completed admitted call returns a complete checked colouring or an
+independently replayable original-literal contradiction proof.
+
+```python
+from spectra.exact import (
+    ExactProblem, ExactRuntime, build_exact_runtime,
+    pack_session_packet, verify_session_output,
+)
+
+problem = ExactProblem.create(2, 2, ((0, 1),), (0b11, 0b11))
+library = build_exact_runtime("exact-native-build")
+runtime = ExactRuntime(library)
+queries = ((), ((0, 0b01), (1, 0b01)))
+packet = pack_session_packet(problem, queries)
+result = runtime.solve_session_packet(packet, mode="auto")
+assert verify_session_output(packet, result.output)
+```
+
+The API contract, packet layouts, CLI, resource accounting and claim boundary are
+documented in [Proof-carrying exact queries](docs/EXACT_API.md). This is not a
+general SAT or colouring-superiority claim.
+
+## Quotient API boundary
 
 The experimental quotient runtime is opt-in. It does not compile during import and
 does not silently fall back to another solver.

@@ -13,6 +13,12 @@ source. A source checkout is therefore not byte-identical to the v0.7.1 wheel.
 No new package, PyPI publication, or replacement release asset is implied by the
 WAP research merge.
 
+The current unreleased source additionally contains `spectra.exact` API version 1
+(native ABI 3). It packages the proof-carrying exact-query source and verifies an
+explicit local build from an installed wheel. This source availability is not a
+v0.8 release, and the exact-query development measurements remain separate from
+the confirmed WAP endpoint.
+
 ## Flagship research result
 
 SPECTRA's principal result is the certified original-address quotient for repeated
