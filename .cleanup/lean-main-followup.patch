@@ -1,0 +1,37 @@
+--- a/.github/workflows/public-package.yml
++++ b/.github/workflows/public-package.yml
+@@ -38,6 +38,8 @@
+           python -m pytest tests/public --confcutdir=tests/public -ra --junitxml=.public-package/pytest.xml | tee .public-package/pytest.txt
+       - name: Check release metadata and current navigation
+         run: python scripts/check_release_readiness.py --out .public-package/release-readiness.json
++      - name: Hydrate pinned historical replay archives
++        run: python scripts/hydrate_historical_archives.py --out .public-package/historical-archives.json
+       - name: Verify retained originals and current guide links
+         run: python scripts/audit_workspace.py --out .public-package/workspace_audit.json
+       - name: Build wheel from sdist and verify outside-checkout installation
+--- a/scripts/hydrate_historical_archives.py
++++ b/scripts/hydrate_historical_archives.py
+@@ -35,6 +35,8 @@
+         raise ValueError("unexpected historical archive manifest fields")
+     if manifest["schema"] != "spectra.historical_archives.v1":
+         raise ValueError("unsupported historical archive manifest schema")
++    if not isinstance(manifest["purpose"], str) or not manifest["purpose"].strip():
++        raise ValueError("historical archive manifest purpose must be non-empty text")
+     commit = manifest["archive_commit"]
+     if not isinstance(commit, str) or len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+         raise ValueError("archive_commit must be a lowercase 40-character Git SHA")
+@@ -141,13 +143,11 @@
+ 
+ def main() -> None:
+     parser = argparse.ArgumentParser()
+-    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+     parser.add_argument("--root", type=Path, default=ROOT)
+-    parser.add_argument("--remote", default="origin")
+     parser.add_argument("--check", action="store_true")
+     parser.add_argument("--out", type=Path)
+     args = parser.parse_args()
+-    report = hydrate(args.root, args.manifest, remote=args.remote, check_only=args.check)
++    report = hydrate(args.root, DEFAULT_MANIFEST, remote="origin", check_only=args.check)
+     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
+     if args.out:
+         args.out.parent.mkdir(parents=True, exist_ok=True)
