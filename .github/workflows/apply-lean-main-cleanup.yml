@@ -1,0 +1,238 @@
+name: Apply conservative lean-main cleanup
+on:
+  push:
+    branches: [maintenance/lean-main-20261016]
+    paths: ['.github/workflows/apply-lean-main-cleanup.yml']
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply reviewed text changes
+        run: |
+          set -euo pipefail
+          git apply --check .cleanup/lean-main-text.patch
+          git apply .cleanup/lean-main-text.patch
+          git apply --check .cleanup/lean-main-followup.patch
+          git apply .cleanup/lean-main-followup.patch
+      - name: Prove removals are generated, inactive, or archive-bound
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, re
+
+          root = Path('.')
+          build_files = sorted((root / 'build/lib').rglob('*'))
+          build_files = [p for p in build_files if p.is_file()]
+          assert len(build_files) == 167, len(build_files)
+          for built in build_files:
+              source = root / built.relative_to(root / 'build/lib')
+              assert source.is_file(), source
+              assert built.read_bytes() == source.read_bytes(), built
+
+          manifest = json.loads((root / 'results/HISTORICAL_ARCHIVES.json').read_text())
+          assert sum(v['bytes'] for v in manifest['files'].values()) == 42446238
+          for rel, record in manifest['files'].items():
+              raw = (root / rel).read_bytes()
+              assert len(raw) == record['bytes'], rel
+              assert hashlib.sha256(raw).hexdigest() == record['sha256'], rel
+
+          charts = [
+              '01_core_memory_footprint.png', '02_cache_residency.png',
+              '03_lazy_routing.png', '04_roofline.png',
+              '05_simd_scaling.png', '06_weight_stationary.png',
+          ]
+          for chart in charts:
+              for page in list(root.glob('*.md')) + list((root / 'docs').rglob('*.md')):
+                  assert chart not in page.read_text(errors='replace'), (chart, page)
+
+          dead = {
+              'cover-search.yml': 'research/cover-search-20261007',
+              'domain-quotient.yml': 'research/sparse-incidence-20261007',
+              'export-current-source.yml': 'research/quotient-application-v2-20261008',
+              'feature-admission.yml': 'research/quotient-query-20261007',
+              'kernel-coloring.yml': 'research/sparse-incidence-20261007',
+              'kernel-native-control.yml': 'research/sparse-incidence-20261007',
+              'publish-prepared-transfer.yml': 'research/prepared-transfer-20261015',
+              'sparse-checkpoint.yml': 'research/sparse-incidence-20261007',
+              'sparse-dependencies.yml': 'research/sparse-incidence-20261007',
+              'sparse-domain-controls.yml': 'research/sparse-incidence-20261007',
+              'sparse-native-controls.yml': 'research/sparse-incidence-20261007',
+          }
+          for name, branch in dead.items():
+              text = (root / '.github/workflows' / name).read_text()
+              assert branch in text, name
+              assert 'workflow_dispatch:' not in text, name
+              assert 'pull_request:' not in text, name
+          PY
+      - name: Remove only reviewed redundant material
+        run: |
+          set -euo pipefail
+          git rm -r -- build spectra.egg-info delivery
+          git rm -- \
+            assets/01_core_memory_footprint.png \
+            assets/02_cache_residency.png \
+            assets/03_lazy_routing.png \
+            assets/04_roofline.png \
+            assets/05_simd_scaling.png \
+            assets/06_weight_stationary.png
+          git rm -- \
+            .github/workflows/cover-search.yml \
+            .github/workflows/domain-quotient.yml \
+            .github/workflows/export-current-source.yml \
+            .github/workflows/feature-admission.yml \
+            .github/workflows/kernel-coloring.yml \
+            .github/workflows/kernel-native-control.yml \
+            .github/workflows/publish-prepared-transfer.yml \
+            .github/workflows/sparse-checkpoint.yml \
+            .github/workflows/sparse-dependencies.yml \
+            .github/workflows/sparse-domain-controls.yml \
+            .github/workflows/sparse-native-controls.yml
+          git rm -- \
+            results/m16/runs/34523339467-fe15894d1d57afb99a9235462c76acde3fa28d89.tar.gz \
+            results/m16/runs/accepted-34522192590.tar.gz \
+            results/m16/sources/spectra_m14_evidence.zip \
+            results/m16/sources/spectra_m14_source_evidence.zip \
+            results/m16/sources/spectra_m15_evidence.zip \
+            results/m17/runs/34534009702-33e548d3e0f52d0664c00929316b2198d5fcffe4.tar.gz
+      - name: Restore and independently verify archived evidence
+        run: |
+          set -euo pipefail
+          mkdir -p .cleanup-validation
+          python scripts/hydrate_historical_archives.py --out .cleanup-validation/hydration.json
+          python scripts/hydrate_historical_archives.py --check > .cleanup-validation/hydration-check.json
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          manifest = json.loads(Path('results/HISTORICAL_ARCHIVES.json').read_text())
+          for rel in manifest['files']:
+              result = subprocess.run(['git', 'check-ignore', '-q', rel])
+              assert result.returncode == 0, rel
+          PY
+          python scripts/audit_workspace.py --out .cleanup-validation/workspace-audit.json
+      - name: Run public contracts and build the actual distribution
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install '.[test]' build
+          python scripts/check_release_readiness.py --out .cleanup-validation/release-readiness.json
+          python -m pytest tests/public --confcutdir=tests/public -q --junitxml=.cleanup-validation/public-tests.xml
+          python -m build --outdir .cleanup-validation/dist
+          python scripts/check_current_installation.py --dist .cleanup-validation/dist --out .cleanup-validation/install
+      - name: Verify the staged tree and commit one cleanup change
+        run: |
+          set -euo pipefail
+          git rm -- \
+            .cleanup/lean-main-text.patch \
+            .cleanup/lean-main-followup.patch \
+            .github/workflows/apply-lean-main-cleanup.yml
+          git add -A
+          git diff --cached --check
+          python - <<'PY'
+          from pathlib import Path
+          import json, subprocess
+
+          changed = subprocess.check_output(
+              ['git', 'diff', '--cached', '--name-only', 'origin/main']
+          ).decode().splitlines()
+          exact = {
+              '.gitignore',
+              'docs/DEVELOPMENT.md',
+              'results/HISTORICAL_ARCHIVES.json',
+              'results/README.md',
+              'scripts/hydrate_historical_archives.py',
+              'tests/public/test_historical_archive_hydration.py',
+              '.github/workflows/compiler-baseline.yml',
+              '.github/workflows/cpu-regression.yml',
+              '.github/workflows/public-package.yml',
+              '.github/workflows/sudoku4-symmetry-audit.yml',
+              '.github/workflows/trained-fp.yml',
+              'assets/01_core_memory_footprint.png',
+              'assets/02_cache_residency.png',
+              'assets/03_lazy_routing.png',
+              'assets/04_roofline.png',
+              'assets/05_simd_scaling.png',
+              'assets/06_weight_stationary.png',
+              'results/m16/runs/34523339467-fe15894d1d57afb99a9235462c76acde3fa28d89.tar.gz',
+              'results/m16/runs/accepted-34522192590.tar.gz',
+              'results/m16/sources/spectra_m14_evidence.zip',
+              'results/m16/sources/spectra_m14_source_evidence.zip',
+              'results/m16/sources/spectra_m15_evidence.zip',
+              'results/m17/runs/34534009702-33e548d3e0f52d0664c00929316b2198d5fcffe4.tar.gz',
+          }
+          prefixes = ('build/', 'spectra.egg-info/', 'delivery/')
+          dead = {
+              '.github/workflows/' + name for name in (
+                  'cover-search.yml', 'domain-quotient.yml',
+                  'export-current-source.yml', 'feature-admission.yml',
+                  'kernel-coloring.yml', 'kernel-native-control.yml',
+                  'publish-prepared-transfer.yml', 'sparse-checkpoint.yml',
+                  'sparse-dependencies.yml', 'sparse-domain-controls.yml',
+                  'sparse-native-controls.yml',
+              )
+          }
+          unexpected = [
+              path for path in changed
+              if path not in exact and path not in dead
+              and not any(path.startswith(prefix) for prefix in prefixes)
+          ]
+          assert not unexpected, unexpected
+          assert not any(path.startswith(('spectra/', 'eval/', 'model/', 'train/', 'data/', 'common/', 'config/')) for path in changed)
+
+          tree = subprocess.check_output(['git', 'write-tree']).decode().strip()
+          listing = subprocess.check_output(['git', 'ls-tree', '-rl', tree]).decode().splitlines()
+          total = 0
+          paths = []
+          for line in listing:
+              meta, path = line.split('\t', 1)
+              fields = meta.split()
+              if fields[1] == 'blob':
+                  total += int(fields[3])
+              paths.append(path)
+          assert total < 20_000_000, total
+          assert not any(path.startswith(prefixes) for path in paths)
+          manifest = json.loads(Path('results/HISTORICAL_ARCHIVES.json').read_text())
+          assert not set(manifest['files']).intersection(paths)
+          report = {
+              'status': 'PASS',
+              'changed_paths': len(changed),
+              'staged_tree': tree,
+              'tracked_blob_bytes': total,
+              'externalized_archive_bytes': sum(v['bytes'] for v in manifest['files'].values()),
+              'externalized_archives': len(manifest['files']),
+              'package_code_changed': False,
+          }
+          Path('.cleanup-validation/tree-report.json').write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(report, indent=2, sort_keys=True))
+          PY
+          git config user.name Tugrap
+          git config user.email 106766396+tugrapaydiner@users.noreply.github.com
+          git commit -m "Shrink the default tree without discarding evidence"
+          git push origin HEAD:maintenance/lean-main-20261016
+      - name: Remove the merged continuation branch only if its tree matches main
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin refs/heads/research/flagship-finish-20261016 >/dev/null 2>&1; then
+            git fetch origin \
+              refs/heads/main:refs/remotes/origin/main \
+              refs/heads/research/flagship-finish-20261016:refs/remotes/origin/research/flagship-finish-20261016
+            test "$(git rev-parse origin/main^{tree})" = "$(git rev-parse origin/research/flagship-finish-20261016^{tree})"
+            git push origin --delete research/flagship-finish-20261016
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lean-main-cleanup-${{ github.run_id }}
+          path: .cleanup-validation/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
