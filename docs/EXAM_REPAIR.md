@@ -56,6 +56,9 @@ The research transfer protocol is documented in
 
 The selector-v2 policy and its `set10`/`set12` execution holdouts are fixed in
 [`ITC_EXAM_SUITE_PROTOCOL.md`](../experiments/compiled_query/ITC_EXAM_SUITE_PROTOCOL.md).
+The completed cross-platform measurements, retained negative repetitions and
+artifact digests are published in the
+[`2026-10-16 suite results`](../experiments/compiled_query/ITC_EXAM_SUITE_RESULTS_20261016.md).
 The suite rotates measured engine order, preserves every failed cell, and gates
 only the predeclared auto/raw overhead on holdout cases.  Passing that suite is
 application-transfer evidence, not an operator deployment or full ITC-2007
