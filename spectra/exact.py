@@ -402,11 +402,13 @@ class ExactRuntime:
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
         """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
 
-        Opt-in ``auto`` uses raw traversal below 64 requests or on a base-infeasible
-        graph. Otherwise it uses routed proofs when SCCs at least halve the
-        literal graph, and plain SCC batching when they do not. Selection uses
-        fixed-graph structure and bank length, never measured answers or timings.
-        ``info['selected_mode']`` names the actual engine. Explicit modes and the
+        Opt-in ``auto`` uses structural policy v2. It selects raw traversal below
+        64 requests, on a base-infeasible graph, or when the immutable bank carries
+        at least eight pins per request on average. Otherwise it uses routed proofs
+        when SCCs at least halve the literal graph, and plain SCC batching when they
+        do not. Selection uses only admitted graph/request geometry, never answers
+        or measured timings. ``info['selected_mode']`` and
+        ``info['auto_policy_reason']`` expose the decision. Explicit modes and the
         default retain their meaning; this policy is an experimental heuristic.
         """
         if type(packet) is not bytes:

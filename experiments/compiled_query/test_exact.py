@@ -450,7 +450,10 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
                           if index % 3 and rng.random() < .3))
     rows = tuple(rows)
     expected = []
-    with exact_runtime.prepare(p, mode='scc' if mode == 'auto' else mode) as session:
+    # The bank averages well above eight pins per request, so structural-v2
+    # intentionally selects raw rather than paying for tile64 propagation.
+    expected_mode = 'raw' if mode == 'auto' else mode
+    with exact_runtime.prepare(p, mode=expected_mode) as session:
         for query in rows:
             answer = session.solve(query)
             assert answer.status == 'SAT_VERIFIED'
@@ -459,7 +462,27 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
     for count in (64, 65, 129):
         answer = exact_runtime.solve_session_packet(pack_session_packet(p, rows[:count]), mode=mode)
         assert answer.sat_count == count and answer.proof_bytes == 0
+        if mode == 'auto':
+            assert answer.info['selected_mode'] == 'raw'
+            assert answer.info['auto_policy'] == 'structural-v2'
+            assert answer.info['auto_policy_reason'] == 'high_pin_density'
         assert decode_certified_output(answer.output, n, count) == tuple(expected[:count])
+
+
+def test_auto_structural_v2_freezes_the_eight_pin_density_boundary(exact_runtime):
+    p = BinaryListProblem.create(16, 2, (), (3,) * 16)
+    low_rows = tuple(tuple((v, 3) for v in range(7)) for _ in range(64))
+    high_rows = tuple(tuple((v, 3) for v in range(8)) for _ in range(64))
+    low = exact_runtime.solve_session_packet(pack_session_packet(p, low_rows), mode='auto')
+    high = exact_runtime.solve_session_packet(pack_session_packet(p, high_rows), mode='auto')
+    assert low.info['selected_mode'] == 'scc'
+    assert low.info['auto_policy_reason'] == 'scc_tile64'
+    assert low.info['bank_query_count'] == 64 and low.info['bank_pin_count'] == 448
+    assert high.info['selected_mode'] == 'raw'
+    assert high.info['auto_policy_reason'] == 'high_pin_density'
+    assert high.info['bank_query_count'] == 64 and high.info['bank_pin_count'] == 512
+    assert high.output == exact_runtime.solve_session_packet(
+        pack_session_packet(p, high_rows), mode='raw').output
 
 
 @pytest.mark.parametrize('count', (0, 1, 63, 64, 65, 129))
@@ -477,6 +500,8 @@ def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, coun
     selected = ('raw' if count < 64 or structure == 'odd_cycle' else
                 'route' if structure in ('chain', 'empty') else 'scc')
     assert answer.info['mode'] == 'auto'
+    assert answer.info['auto_policy'] == 'structural-v2'
+    assert answer.info['bank_query_count'] == count
     assert answer.info['selected_mode'] == selected
     assert answer.output == exact_runtime.solve_session_packet(packet, mode=selected).output
     for query, (decision, labels, certificate) in zip(rows, decode_certified_output(answer.output, n, count)):

@@ -341,12 +341,13 @@ struct ObserverSessionPacket {
 struct Answer {bool sat=true;std::vector<uint8_t> labels,certificate;W visits=0,arcs=0;};
 struct Index {
     U n,k,nc=0,bad=NIL;bool condensed,sparse,routed;W cap;W full_arcs=0;
+    const char* auto_reason="explicit_mode";
     std::vector<W> masks;
     std::vector<uint8_t> lo,hi,base;
     std::vector<U> comp,opposite;
     std::vector<U> inward,outward,representative,cross_from,cross_to;
     CSR original,dag;
-    Index(Input p,U mode,U bank_size=0):n(p.n),k(p.k),condensed(mode!=0),sparse(mode==2),routed(mode==3),cap(p.cap),masks(std::move(p.masks)),lo(n),hi(n,255),base(n) {
+    Index(Input p,U mode,U bank_size=0,U bank_pins=0):n(p.n),k(p.k),condensed(mode!=0),sparse(mode==2),routed(mode==3),cap(p.cap),masks(std::move(p.masks)),lo(n),hi(n,255),base(n) {
         std::vector<std::pair<U,U>> arcs;arcs.reserve(4*p.edges.size()+n);
         for(U v=0;v<n;++v) {lo[v]=first(masks[v]);W h=masks[v] & (masks[v]-1);
             if(h) hi[v]=first(h); else arcs.emplace_back(2*v+1,2*v);
@@ -382,11 +383,22 @@ struct Index {
             base[v]=static_cast<uint8_t>(comp[2*v]<comp[2*v+1]);
         }
         if(mode==4) {
-            // Opt-in, query-blind policy. Small banks cannot use the lane kernel;
-            // base-infeasible graphs do not need a request-propagation index.
-            // Route proofs only when SCCs at least halve the literal graph.
-            condensed=bank_size>=64 && bad==NIL;
-            routed=condensed && nc<=n;
+            // Structural auto policy v2.  set9 development evidence showed that
+            // large, heavily pinned repair banks can lose to raw traversal even
+            // when tile64 is available.  The policy therefore uses only immutable
+            // request geometry (never answers or measured timings): raw below one
+            // tile, on a base contradiction, or at eight pins per row and above.
+            // The threshold is frozen before the set10/set12 holdout transfer.
+            if(bank_size<64) {
+                condensed=false;routed=false;auto_reason="bank_below_tile64";
+            } else if(bad!=NIL) {
+                condensed=false;routed=false;auto_reason="base_infeasible";
+            } else if(W(bank_pins)>=8*W(bank_size)) {
+                condensed=false;routed=false;auto_reason="high_pin_density";
+            } else {
+                condensed=true;routed=nc<=n;
+                auto_reason=routed?"route_component_compression":"scc_tile64";
+            }
         }
         if(condensed && bad==NIL) {
             opposite.assign(nc,NIL);
@@ -990,6 +1002,7 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
         const auto* data=reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(packet));
         size_t size=static_cast<size_t>(PyBytes_GET_SIZE(packet));
         std::unique_ptr<Index> solver;std::unique_ptr<Observer> observer;BankResult result;
+        U bank_queries=0,bank_pins=0;
         {
             Released guard;
             ObserverSessionPacket observer_rows(data,size,limit);
@@ -997,8 +1010,9 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
             W observer_bytes=observer->bytes();
             if(observer_bytes>=limit) throw Resource("SBC1 observer consumes session cap");
             SolverSessionPacket solver_rows(data,size,limit-observer_bytes);
+            bank_queries=solver_rows.query_count();bank_pins=solver_rows.pin_count();
             solver=std::make_unique<Index>(solver_rows.take_input(limit-observer_bytes),
-                                           static_cast<U>(which),solver_rows.query_count());
+                                           static_cast<U>(which),bank_queries,bank_pins);
             result=run_rows(*solver,*observer,solver_rows,observer_rows,size,limit,"SBC1");
         }
         PyObject* output=PyBytes_FromStringAndSize(reinterpret_cast<const char*>(result.output.data()),
@@ -1018,11 +1032,22 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
         if(!metadata){Py_DECREF(output);return nullptr;}
         PyObject* kernel=PyUnicode_FromString(result.tiled?"tile64":"serial");
         PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);
-        if(!kernel || !tiles || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0
-                || PyDict_SetItemString(metadata,"bank_tiles",tiles)<0) {
-            Py_XDECREF(kernel);Py_XDECREF(tiles);Py_DECREF(output);Py_DECREF(metadata);return nullptr;
+        PyObject* queries=PyLong_FromUnsignedLong(bank_queries);
+        PyObject* pins=PyLong_FromUnsignedLong(bank_pins);
+        PyObject* policy=PyUnicode_FromString(which==4?"structural-v2":"explicit");
+        PyObject* reason=PyUnicode_FromString(solver->auto_reason);
+        if(!kernel || !tiles || !queries || !pins || !policy || !reason
+                || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0
+                || PyDict_SetItemString(metadata,"bank_tiles",tiles)<0
+                || PyDict_SetItemString(metadata,"bank_query_count",queries)<0
+                || PyDict_SetItemString(metadata,"bank_pin_count",pins)<0
+                || PyDict_SetItemString(metadata,"auto_policy",policy)<0
+                || PyDict_SetItemString(metadata,"auto_policy_reason",reason)<0) {
+            Py_XDECREF(kernel);Py_XDECREF(tiles);Py_XDECREF(queries);Py_XDECREF(pins);
+            Py_XDECREF(policy);Py_XDECREF(reason);Py_DECREF(output);Py_DECREF(metadata);return nullptr;
         }
-        Py_DECREF(kernel);Py_DECREF(tiles);
+        Py_DECREF(kernel);Py_DECREF(tiles);Py_DECREF(queries);Py_DECREF(pins);
+        Py_DECREF(policy);Py_DECREF(reason);
         return Py_BuildValue("NKKKKKKN",output,
             static_cast<unsigned long long>(result.sat+result.unsat),
             static_cast<unsigned long long>(result.sat),
