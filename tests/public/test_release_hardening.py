@@ -172,7 +172,12 @@ def test_wheel_inventory_checked(tmp_path, case):
 def guide_tree(tmp_path):
     (tmp_path / 'spectra').mkdir()
     (tmp_path / 'spectra/__init__.py').write_text('__version__ = "1.2.3"\n')
-    (tmp_path / 'pyproject.toml').write_text('[project]\nname = "spectra"\nversion = "1.2.3"\n')
+    (tmp_path / 'pyproject.toml').write_text(
+        '[project]\nname = "spectra"\nversion = "1.2.3"\n'
+        '[project.optional-dependencies]\n'
+        'test = ["pytest>=7.4", "python-sat==1.9.dev15"]\n'
+        'dev = ["pytest>=7.4", "python-sat==1.9.dev15"]\n'
+    )
     for guide in readiness.GUIDES:
         path = tmp_path / guide; path.parent.mkdir(exist_ok=True)
         path.write_text('# Example heading\n\n## Second heading\n')
@@ -188,10 +193,12 @@ def test_metadata_and_links_validated(guide_tree):
     report = readiness.check(guide_tree)
     assert report['status'] == 'PASS' and report['version'] == '1.2.3'
     assert report['local_links_checked'] == 1 and report['external_links_not_fetched'] == 1
+    assert report['test_extra_requirements'] == 2 and report['dev_extra_requirements'] == 2
 
 
 @pytest.mark.parametrize('case', ['missing', 'anchor', 'escape', 'version', 'duplicate_version',
-                                  'missing_version', 'hardcoded_wheel', 'missing_check'])
+                                  'missing_version', 'hardcoded_wheel', 'missing_check',
+                                  'missing_test_sat', 'wrong_test_sat_pin', 'missing_dev_sat'])
 def test_bad_release_metadata_fails(guide_tree, case):
     if case in ('missing', 'anchor', 'escape'):
         targets = {'missing': 'missing.md', 'anchor': 'docs/API.md#not-a-heading', 'escape': '../'}
@@ -203,9 +210,20 @@ def test_bad_release_metadata_fails(guide_tree, case):
             stream.write('version = "1.2.3"\n')
     elif case == 'missing_version':
         (guide_tree / 'spectra/__init__.py').write_text('')
-    else:
+    elif case in ('hardcoded_wheel', 'missing_check'):
         path = guide_tree / '.github/workflows/public-package.yml'
         path.write_text('check_current_installation.py spectra-1.2.3-py3-none-any.whl' if case == 'hardcoded_wheel' else '')
+    else:
+        path = guide_tree / 'pyproject.toml'
+        project = path.read_text()
+        if case == 'missing_test_sat':
+            project = project.replace(', "python-sat==1.9.dev15"', '', 1)
+        elif case == 'wrong_test_sat_pin':
+            project = project.replace('python-sat==1.9.dev15', 'python-sat>=1.9.dev15', 1)
+        else:
+            marker = 'dev = ["pytest>=7.4", "python-sat==1.9.dev15"]'
+            project = project.replace(marker, 'dev = ["pytest>=7.4"]')
+        path.write_text(project)
     with pytest.raises(ValueError):
         readiness.check(guide_tree)
 
