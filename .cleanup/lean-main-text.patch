@@ -1,0 +1,427 @@
+diff --git a/.github/workflows/compiler-baseline.yml b/.github/workflows/compiler-baseline.yml
+index 8edfd3b..af18a38 100644
+--- a/.github/workflows/compiler-baseline.yml
++++ b/.github/workflows/compiler-baseline.yml
+@@ -48,6 +48,8 @@ jobs:
+           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+           python -m pip install -r requirements-cpu-research.txt build
+           python -m pip freeze > .compiler/environment.txt
++      - name: Hydrate pinned historical replay archives
++        run: python scripts/hydrate_historical_archives.py --out .compiler/historical-archives.json
+       - name: Full fast regression including new adapter and corruption contracts
+         run: |
+           set -o pipefail
+diff --git a/.github/workflows/cpu-regression.yml b/.github/workflows/cpu-regression.yml
+index 1cefb3f..4c9cfd7 100644
+--- a/.github/workflows/cpu-regression.yml
++++ b/.github/workflows/cpu-regression.yml
+@@ -60,6 +60,8 @@ jobs:
+           assert pysat.__version__ == '1.9.dev15'
+           print('WAP native-SAT control dependency:', pysat.__version__)
+           PYCPU
++      - name: Hydrate pinned historical replay archives
++        run: python scripts/hydrate_historical_archives.py --out .cpu-contracts/historical-archives.json
+       - name: Full fast regression including native builds
+         run: |
+           set -o pipefail
+diff --git a/.github/workflows/sudoku4-symmetry-audit.yml b/.github/workflows/sudoku4-symmetry-audit.yml
+index 5c91380..2b3a192 100644
+--- a/.github/workflows/sudoku4-symmetry-audit.yml
++++ b/.github/workflows/sudoku4-symmetry-audit.yml
+@@ -42,6 +42,8 @@ jobs:
+           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+           python -m pip install -r requirements-cpu-research.txt
+           python -c 'import torch; assert torch.version.cuda is None and not torch.cuda.is_available()'
++      - name: Hydrate pinned historical replay archives
++        run: python scripts/hydrate_historical_archives.py --out .symmetry-hydration.json
+       - name: Record immutable source and dependencies
+         run: |
+           mkdir -p .symmetry-checks
+diff --git a/.github/workflows/trained-fp.yml b/.github/workflows/trained-fp.yml
+index 1aa0807..fe4db45 100644
+--- a/.github/workflows/trained-fp.yml
++++ b/.github/workflows/trained-fp.yml
+@@ -40,6 +40,8 @@ jobs:
+           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+           python -m pip install -r requirements-cpu-research.txt build
+           python -m pip freeze > .trained-fp/environment.lock.txt
++      - name: Hydrate pinned historical replay archives
++        run: python scripts/hydrate_historical_archives.py --out .trained-fp/historical-archives.json
+       - name: Runtime and independent evidence contracts
+         run: |
+           set -o pipefail
+diff --git a/.gitignore b/.gitignore
+index caf69df..0f93b19 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -67,3 +67,11 @@ assets/data/
+ 
+ # Disposable native-platform acceptance receipts
+ /.svm-platform/
++
++# Hydrated immutable historical evidence (tracked on archive/research-history-20261016)
++/results/m16/runs/34523339467-fe15894d1d57afb99a9235462c76acde3fa28d89.tar.gz
++/results/m16/runs/accepted-34522192590.tar.gz
++/results/m16/sources/spectra_m14_evidence.zip
++/results/m16/sources/spectra_m14_source_evidence.zip
++/results/m16/sources/spectra_m15_evidence.zip
++/results/m17/runs/34534009702-33e548d3e0f52d0664c00929316b2198d5fcffe4.tar.gz
+diff --git a/docs/DEVELOPMENT.md b/docs/DEVELOPMENT.md
+index 207f1d2..13990ef 100644
+--- a/docs/DEVELOPMENT.md
++++ b/docs/DEVELOPMENT.md
+@@ -12,7 +12,8 @@ python scripts/check_release_readiness.py
+ ```
+ 
+ The base package has no mandatory third-party dependencies; `test` adds pytest
+-without the research stack. `spectra` and `python -m spectra` are equivalent.
++and the pinned SAT wrapper required by public exact-query contracts, without the
++research stack. `spectra` and `python -m spectra` are equivalent.
+ See [API and CLI](API.md) for `UNKNOWN`, exit codes and bounded JSON input.
+ 
+ ## Build and test the actual distribution
+@@ -59,6 +60,18 @@ count. Full CPU CI additionally replays checkpoint, fixed-pool, restart,
+ controller-refit and SAT-admission evidence. Reproducing a stored claim does not
+ open a new confirmation experiment or allow selecting a more favorable result.
+ 
++Large immutable M16/M17 delivery archives are intentionally absent from ordinary
++checkouts. They remain at a pinned archive commit and are restored with strict
++size and SHA-256 checks before historical replay:
++
++```bash
++python scripts/hydrate_historical_archives.py
++python scripts/hydrate_historical_archives.py --check
++```
++
++See [`results/README.md`](../results/README.md) and the machine-readable archive
++manifest. Current package, WAP and exact-query work does not require hydration.
++
+ ## Native execution
+ 
+ With PyTorch, Ninja and a suitable compiler installed,
+diff --git a/results/HISTORICAL_ARCHIVES.json b/results/HISTORICAL_ARCHIVES.json
+new file mode 100644
+index 0000000..bb32af1
+--- /dev/null
++++ b/results/HISTORICAL_ARCHIVES.json
+@@ -0,0 +1,34 @@
++{
++  "schema": "spectra.historical_archives.v1",
++  "archive_ref": "archive/research-history-20261016",
++  "archive_commit": "abd10d3d0ef24300c3e43b8432886c8203fd465b",
++  "purpose": "Large immutable historical evidence remains reachable from the archive ref instead of inflating the default working tree.",
++  "files": {
++    "results/m16/runs/34523339467-fe15894d1d57afb99a9235462c76acde3fa28d89.tar.gz": {
++      "bytes": 6122336,
++      "sha256": "b023cc7cb3932353d92485d51d9d173f2c0ea935bc908b7be83dffeee1754991"
++    },
++    "results/m16/runs/accepted-34522192590.tar.gz": {
++      "bytes": 6109961,
++      "sha256": "0c1b66885e2649850e6cd33bc1e470cad743cc9f4af64b2bbddcaa4599a2c47b"
++    },
++    "results/m16/sources/spectra_m14_evidence.zip": {
++      "bytes": 6670698,
++      "sha256": "0306f64efb48c264aa7b387ff6b449def011fb64ad02aa74eb03ee3b4e58e314"
++    },
++    "results/m16/sources/spectra_m14_source_evidence.zip": {
++      "bytes": 6668946,
++      "sha256": "5729932600743b2cef19d9e0b9baf112ec75b627552af4d30a089266994a2f37"
++    },
++    "results/m16/sources/spectra_m15_evidence.zip": {
++      "bytes": 10624283,
++      "sha256": "c49e5c06e0f2822088cb9ce807fcc6bc37da6236962953ccc8c594be01c55b2e"
++    },
++    "results/m17/runs/34534009702-33e548d3e0f52d0664c00929316b2198d5fcffe4.tar.gz": {
++      "bytes": 6250014,
++      "sha256": "8b3504af50c29ac443a5c7cd113933b710076a5d72be1b2ef00e003bb5013bbf"
++    }
++  }
++}
+diff --git a/results/README.md b/results/README.md
+new file mode 100644
+index 0000000..d816512
+--- /dev/null
++++ b/results/README.md
+@@ -0,0 +1,18 @@
++# Retained research results
++
++Small summaries, reports, validation receipts and failure records remain on the
++default branch. Six immutable delivery archives totalling about 40.5 MiB are kept
++at the pinned archive commit recorded in `HISTORICAL_ARCHIVES.json` instead of
++being duplicated in every normal checkout.
++
++Restore and verify them only when replaying the historical M16/M17 studies:
++
++```bash
++python scripts/hydrate_historical_archives.py
++python scripts/hydrate_historical_archives.py --check
++```
++
++The helper accepts no arbitrary commit or path. It restores only the manifest's
++allow-listed files and verifies both exact byte count and SHA-256 before publishing
++each file. Current package use, public contracts, WAP reproduction and exact-query
++API work do not require these historical archives.
+diff --git a/scripts/hydrate_historical_archives.py b/scripts/hydrate_historical_archives.py
+new file mode 100644
+index 0000000..f000001
+--- /dev/null
++++ b/scripts/hydrate_historical_archives.py
+@@ -0,0 +1,146 @@
++"""Restore large immutable historical evidence from SPECTRA's pinned archive ref.
++
++The default branch intentionally excludes these byte-heavy delivery archives. This
++helper restores only the exact allow-listed files, verifies byte count and SHA-256,
++and never accepts archive metadata from the command line.
++"""
++from __future__ import annotations
++
++import argparse
++import hashlib
++import json
++import os
++from pathlib import Path, PurePosixPath
++import subprocess
++import tempfile
++from typing import Any
++
++ROOT = Path(__file__).resolve().parents[1]
++DEFAULT_MANIFEST = ROOT / "results" / "HISTORICAL_ARCHIVES.json"
++
++
++def _run(root: Path, *args: str, capture: bool = False) -> bytes:
++    completed = subprocess.run(
++        ["git", "-C", str(root), *args],
++        check=True,
++        stdout=subprocess.PIPE if capture else None,
++        stderr=subprocess.PIPE if capture else None,
++    )
++    return completed.stdout if capture else b""
++
++
++def _strict_manifest(path: Path) -> dict[str, Any]:
++    manifest = json.loads(path.read_text(encoding="utf-8"))
++    if set(manifest) != {"schema", "archive_ref", "archive_commit", "purpose", "files"}:
++        raise ValueError("unexpected historical archive manifest fields")
++    if manifest["schema"] != "spectra.historical_archives.v1":
++        raise ValueError("unsupported historical archive manifest schema")
++    commit = manifest["archive_commit"]
++    if not isinstance(commit, str) or len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
++        raise ValueError("archive_commit must be a lowercase 40-character Git SHA")
++    ref = manifest["archive_ref"]
++    if not isinstance(ref, str) or not ref.startswith("archive/") or any(x in ref for x in ("..", "~", "^", ":", "\\")):
++        raise ValueError("archive_ref is outside the archive namespace")
++    files = manifest["files"]
++    if not isinstance(files, dict) or not files:
++        raise ValueError("historical archive manifest has no files")
++    for raw_path, record in files.items():
++        pure = PurePosixPath(raw_path)
++        if pure.is_absolute() or ".." in pure.parts or not pure.parts or pure.parts[0] != "results":
++            raise ValueError(f"unsafe historical archive path: {raw_path!r}")
++        if not isinstance(record, dict) or set(record) != {"bytes", "sha256"}:
++            raise ValueError(f"invalid record for {raw_path}")
++        if type(record["bytes"]) is not int or record["bytes"] <= 0:
++            raise ValueError(f"invalid byte count for {raw_path}")
++        digest = record["sha256"]
++        if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
++            raise ValueError(f"invalid SHA-256 for {raw_path}")
++    return manifest
++
++
++def _digest(raw: bytes) -> str:
++    return hashlib.sha256(raw).hexdigest()
++
++
++def _valid(path: Path, record: dict[str, Any]) -> bool:
++    return path.is_file() and path.stat().st_size == record["bytes"] and _digest(path.read_bytes()) == record["sha256"]
++
++
++def _ensure_commit(root: Path, manifest: dict[str, Any], remote: str) -> None:
++    commit = manifest["archive_commit"]
++    try:
++        _run(root, "cat-file", "-e", f"{commit}^{{commit}}")
++        return
++    except subprocess.CalledProcessError:
++        pass
++    _run(
++        root,
++        "fetch",
++        "--no-tags",
++        remote,
++        f"refs/heads/{manifest['archive_ref']}:refs/remotes/{remote}/{manifest['archive_ref']}",
++    )
++    _run(root, "cat-file", "-e", f"{commit}^{{commit}}")
++    _run(root, "merge-base", "--is-ancestor", commit, f"refs/remotes/{remote}/{manifest['archive_ref']}")
++
++
++def hydrate(
++    root: Path = ROOT,
++    manifest_path: Path = DEFAULT_MANIFEST,
++    *,
++    remote: str = "origin",
++    check_only: bool = False,
++) -> dict[str, Any]:
++    root = root.resolve(strict=True)
++    manifest_path = manifest_path.resolve(strict=True)
++    manifest = _strict_manifest(manifest_path)
++    missing = []
++    valid = []
++    for rel, record in manifest["files"].items():
++        path = root / PurePosixPath(rel)
++        if _valid(path, record):
++            valid.append(rel)
++        else:
++            missing.append(rel)
++    if check_only:
++        if missing:
++            raise FileNotFoundError("historical archives are missing or invalid: " + ", ".join(missing))
++        return {"status": "PASS", "mode": "check", "files": len(valid), "bytes": sum(v["bytes"] for v in manifest["files"].values())}
++    if missing:
++        _ensure_commit(root, manifest, remote)
++    restored = []
++    for rel in missing:
++        record = manifest["files"][rel]
++        raw = _run(root, "show", f"{manifest['archive_commit']}:{rel}", capture=True)
++        if len(raw) != record["bytes"] or _digest(raw) != record["sha256"]:
++            raise ValueError(f"archive bytes failed verification: {rel}")
++        destination = root / PurePosixPath(rel)
++        destination.parent.mkdir(parents=True, exist_ok=True)
++        fd, temporary = tempfile.mkstemp(prefix=destination.name + ".", dir=destination.parent)
++        try:
++            with os.fdopen(fd, "wb") as stream:
++                stream.write(raw)
++                stream.flush()
++                os.fsync(stream.fileno())
++            os.replace(temporary, destination)
++        finally:
++            if os.path.exists(temporary):
++                os.unlink(temporary)
++        restored.append(rel)
++    report = {
++        "status": "PASS",
++        "mode": "hydrate",
++        "archive_commit": manifest["archive_commit"],
++        "already_present": len(valid),
++        "restored": len(restored),
++        "files": len(manifest["files"]),
++        "bytes": sum(v["bytes"] for v in manifest["files"].values()),
++    }
++    return report
++
++
++def main() -> None:
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
++    parser.add_argument("--root", type=Path, default=ROOT)
++    parser.add_argument("--remote", default="origin")
++    parser.add_argument("--check", action="store_true")
++    parser.add_argument("--out", type=Path)
++    args = parser.parse_args()
++    report = hydrate(args.root, args.manifest, remote=args.remote, check_only=args.check)
++    text = json.dumps(report, indent=2, sort_keys=True) + "\n"
++    if args.out:
++        args.out.parent.mkdir(parents=True, exist_ok=True)
++        args.out.write_text(text, encoding="utf-8")
++    print(text, end="")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/tests/public/test_historical_archive_hydration.py b/tests/public/test_historical_archive_hydration.py
+new file mode 100644
+index 0000000..f000002
+--- /dev/null
++++ b/tests/public/test_historical_archive_hydration.py
+@@ -0,0 +1,91 @@
++from __future__ import annotations
++
++import hashlib
++import json
++from pathlib import Path
++import subprocess
++
++import pytest
++
++from scripts.hydrate_historical_archives import hydrate
++
++
++def git(root: Path, *args: str) -> str:
++    return subprocess.run(
++        ["git", "-C", str(root), *args], check=True, text=True,
++        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
++    ).stdout.strip()
++
++
++def fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, bytes]]:
++    root = tmp_path / "repo"
++    root.mkdir()
++    git(root, "init", "-b", "main")
++    git(root, "config", "user.name", "Test")
++    git(root, "config", "user.email", "test@example.invalid")
++    files = {
++        "results/m16/runs/a.tar.gz": b"accepted archive\x00\x01",
++        "results/m16/sources/b.zip": b"source archive\x02\x03",
++    }
++    for rel, raw in files.items():
++        path = root / rel
++        path.parent.mkdir(parents=True, exist_ok=True)
++        path.write_bytes(raw)
++    git(root, "add", ".")
++    git(root, "commit", "-m", "archive")
++    archive_commit = git(root, "rev-parse", "HEAD")
++    git(root, "branch", "archive/test-history")
++    for rel in files:
++        (root / rel).unlink()
++    git(root, "add", "-u")
++    git(root, "commit", "-m", "lean main")
++    manifest = {
++        "schema": "spectra.historical_archives.v1",
++        "archive_ref": "archive/test-history",
++        "archive_commit": archive_commit,
++        "purpose": "test",
++        "files": {
++            rel: {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
++            for rel, raw in files.items()
++        },
++    }
++    manifest_path = root / "results" / "HISTORICAL_ARCHIVES.json"
++    manifest_path.parent.mkdir(exist_ok=True)
++    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
++    return root, manifest_path, files
++
++
++def test_hydrates_and_checks_exact_archived_bytes(tmp_path):
++    root, manifest, files = fixture(tmp_path)
++    report = hydrate(root, manifest)
++    assert report["status"] == "PASS" and report["restored"] == 2
++    assert {rel: (root / rel).read_bytes() for rel in files} == files
++    checked = hydrate(root, manifest, check_only=True)
++    assert checked == {"status": "PASS", "mode": "check", "files": 2,
++                       "bytes": sum(map(len, files.values()))}
++
++
++def test_corrupt_file_is_replaced_not_accepted(tmp_path):
++    root, manifest, files = fixture(tmp_path)
++    path = root / next(iter(files))
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_bytes(b"same-ish but wrong")
++    report = hydrate(root, manifest)
++    assert report["restored"] == 2
++    assert path.read_bytes() == files[str(path.relative_to(root))]
++
++
++@pytest.mark.parametrize("mutation", ["escape", "size", "digest", "field"])
++def test_manifest_corruption_fails_closed(tmp_path, mutation):
++    root, manifest_path, _ = fixture(tmp_path)
++    manifest = json.loads(manifest_path.read_text())
++    first = next(iter(manifest["files"]))
++    if mutation == "escape":
++        manifest["files"]["../escape.zip"] = manifest["files"].pop(first)
++    elif mutation == "size":
++        manifest["files"][first]["bytes"] = 0
++    elif mutation == "digest":
++        manifest["files"][first]["sha256"] = "nope"
++    else:
++        manifest["unexpected"] = True
++    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
++    with pytest.raises((ValueError, FileNotFoundError)):
++        hydrate(root, manifest_path)
