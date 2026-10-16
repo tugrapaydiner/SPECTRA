@@ -1,0 +1,33 @@
+name: Export flagship continuation source
+on:
+  push:
+    branches: [research/flagship-finish-20261016]
+    paths: ['.github/workflows/export-flagship-finish-source.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact branch source and inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export
+          git rev-parse HEAD > export/commit.txt
+          git rev-parse HEAD^{tree} > export/tree.txt
+          git ls-tree -r -l HEAD > export/inventory.txt
+          git archive --format=tar.gz --prefix=SPECTRA/ HEAD > export/source.tar.gz
+          sha256sum export/commit.txt export/tree.txt export/inventory.txt export/source.tar.gz > export/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spectra-flagship-finish-source-${{ github.run_id }}
+          path: export/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
