@@ -60,3 +60,8 @@ The suite rotates measured engine order, preserves every failed cell, and gates
 only the predeclared auto/raw overhead on holdout cases.  Passing that suite is
 application-transfer evidence, not an operator deployment or full ITC-2007
 optimization result.
+
+An outside runner can reproduce the source, installed-wheel, freeze, execution and
+offline-audit boundaries using the
+[independent replication guide](../experiments/compiled_query/ITC_EXAM_REPLICATION.md).
+Negative or conflicting replications are explicitly valid results.
