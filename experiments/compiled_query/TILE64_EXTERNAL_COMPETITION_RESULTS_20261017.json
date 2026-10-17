@@ -1,0 +1,145 @@
+{
+  "artifacts": {
+    "arm64": {
+      "artifact_id": 12113843750,
+      "zip_sha256": "d9ef2b0eb04f7f8018858fe6fdf411be647af362b97c08f29c0d76b4586c940e"
+    },
+    "x86_64": {
+      "artifact_id": 12114203731,
+      "zip_sha256": "004a779c97c96ad9a4de16944059dce36e116d09c682ee86f30279ae44e081d6"
+    }
+  },
+  "candidate": "exact-bank-scc",
+  "classification": "exposed development audit; not a holdout or outside replication",
+  "composite_gate": {
+    "failures": [
+      "x86-64 exact-bank-scc/exact-bank-raw complete geomean 0.929257 exceeds frozen 0.75 limit",
+      "x86-64 worst exact-bank-scc/exact-bank-raw graph ratio 0.934761 exceeds frozen 0.85 limit",
+      "ARM64 exact-bank-scc/exact-bank-raw complete geomean 0.947937 exceeds frozen 0.75 limit",
+      "ARM64 worst exact-bank-scc/exact-bank-raw graph ratio 0.949122 exceeds frozen 0.85 limit"
+    ],
+    "pass": false
+  },
+  "correctness": {
+    "arm64": {
+      "audited_sat_answers": 73728,
+      "scheduled_sessions": 72,
+      "sessions_complete": 72
+    },
+    "combined": {
+      "audited_sat_answers": 165888,
+      "failures": 0,
+      "scheduled_sessions": 162,
+      "sessions_complete": 162
+    },
+    "x86_64": {
+      "audited_sat_answers": 92160,
+      "scheduled_sessions": 90,
+      "sessions_complete": 90
+    }
+  },
+  "external_competition": {
+    "arm64": {
+      "cadical195": {
+        "geomean_complete_ratio": 0.34134162636077986,
+        "graph_ratios": [
+          0.3382069649018393,
+          0.34450534133866556
+        ],
+        "pass": true,
+        "speedup": 2.9296163221038074
+      },
+      "minicard": {
+        "geomean_complete_ratio": 0.353930725972642,
+        "graph_ratios": [
+          0.3506006815387721,
+          0.3572923995404968
+        ],
+        "pass": true,
+        "speedup": 2.8254116600130885
+      }
+    },
+    "pass": true,
+    "thresholds": {
+      "geomean_complete_ratio_max": 0.5,
+      "per_graph_complete_ratio_max": 0.67
+    },
+    "x86_64": {
+      "cadical195": {
+        "geomean_complete_ratio": 0.3491652684521519,
+        "graph_ratios": [
+          0.3447911970100936,
+          0.3535948300028503
+        ],
+        "pass": true,
+        "speedup": 2.863973282431542
+      },
+      "cudd_reduced_natural": {
+        "geomean_complete_ratio": 0.25357405530777466,
+        "graph_ratios": [
+          0.24867895405826582,
+          0.25856551379158854
+        ],
+        "pass": true,
+        "speedup": 3.9436211200166094
+      },
+      "minicard": {
+        "geomean_complete_ratio": 0.3563290606593462,
+        "graph_ratios": [
+          0.3530674921111508,
+          0.3596207589408994
+        ],
+        "pass": true,
+        "speedup": 2.806394735668245
+      }
+    }
+  },
+  "frozen_source": {
+    "audit_commit": "896f17fd922338d13d55b61cecac9bcf8252e23e",
+    "merged_main_commit_under_test": "4a647e54e7e7e0756e74b52575f86f03d2764455"
+  },
+  "internal_raw_transfer": {
+    "arm64": {
+      "complete_geomean_ratio": 0.9479365247956102,
+      "complete_speedup": 1.0549229551162358,
+      "graph_complete_ratios": [
+        0.9467529057882841,
+        0.9491216235490727
+      ],
+      "query_stage_geomean_ratio": 0.4128334908764137,
+      "query_stage_speedup": 2.422284097826165,
+      "zero_query_complete_ratio_lower_bound_range": [
+        0.9095327191225145,
+        0.9158786194712119
+      ]
+    },
+    "frozen_complete_gate_pass": false,
+    "thresholds": {
+      "geomean_complete_ratio_max": 0.75,
+      "per_graph_complete_ratio_max": 0.85
+    },
+    "x86_64": {
+      "complete_geomean_ratio": 0.9292571340206205,
+      "complete_speedup": 1.076128407724239,
+      "graph_complete_ratios": [
+        0.9237855882861509,
+        0.9347610875054425
+      ],
+      "query_stage_geomean_ratio": 0.39930424599122233,
+      "query_stage_speedup": 2.504356039384521,
+      "zero_query_complete_ratio_lower_bound_range": [
+        0.8836774129794752,
+        0.892633379929387
+      ]
+    }
+  },
+  "issue_status": {
+    "automatic_selection_paused": true,
+    "external_competition_requirement": "pass",
+    "full_composite_audit": "fail",
+    "issue_1": "open"
+  },
+  "query_count_per_graph": 1024,
+  "schema": "spectra.tile64_external_competition_result.v1",
+  "workflow_run": 39069192983
+}
