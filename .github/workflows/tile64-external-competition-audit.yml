@@ -83,10 +83,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Ignore expected untracked evidence/upstream checkout directories, but
+          # reject any modification to the committed source that will be timed.
+          git diff --quiet
+          git diff --cached --quiet
           mkdir -p audit-evidence
           git rev-parse HEAD > audit-evidence/source-commit.txt
           git rev-parse HEAD^{tree} > audit-evidence/source-tree.txt
-          git status --short > audit-evidence/git-status.txt
+          git status --short --untracked-files=no > audit-evidence/git-status.txt
           test ! -s audit-evidence/git-status.txt
           python -VV > audit-evidence/python.txt
           python -m pip freeze > audit-evidence/environment.txt
