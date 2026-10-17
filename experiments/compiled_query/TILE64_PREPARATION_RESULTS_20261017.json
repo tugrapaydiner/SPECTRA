@@ -1,0 +1,83 @@
+{
+  "artifacts": {
+    "aarch64": {
+      "id": 12112837344,
+      "zip_digest": "sha256:d6311d41439f88ea95147ca598643935b06b2d7e80a976452d82222e55c65c31"
+    },
+    "x86_64": {
+      "id": 12112812502,
+      "zip_digest": "sha256:4e1085578a501fc71f6692811470575367671d8c63f85a9b2f5d5f692be60524"
+    }
+  },
+  "base_main": "65f9981a90d0b0c8fb4a7ce9f4c1fda71aaaeffd",
+  "classification": "exposed synthetic development panel; not a holdout or external replication",
+  "date": "2026-10-17",
+  "environments": {
+    "arm": {
+      "summary": {
+        "base_infeasible_cases": 33,
+        "base_infeasible_geometric_mean_ratio": 1.001015021853662,
+        "cases": 48,
+        "classification": "exposed synthetic development panel; not a holdout",
+        "feasible_cases": 15,
+        "feasible_geometric_mean_ratio": 0.5290672576962929,
+        "feasible_max_ratio": 0.7783602561065074,
+        "feasible_upper95_graph_bootstrap_ratio": 0.5947386412356173,
+        "feasible_wins_below_0_90": 15,
+        "gate": {
+          "all_48_complete_and_replayed": true,
+          "all_feasible_cases_below_0_90": true,
+          "feasible_upper95_below_0_75": true
+        },
+        "gate_pass": true,
+        "library_sha256": "4e1d20addf9b34bcb6fe5d84a3914fec434ec75cf5c06917bacc715e10cbf71d",
+        "machine": "aarch64",
+        "platform": "Linux-6.17.0-1022-azure-aarch64-with-glibc2.39",
+        "python": "3.13.16 (main, Oct  1 2026, 02:38:15) [GCC 13.3.0]",
+        "repeats": 31,
+        "schema": "spectra.tile64_preparation_benchmark.v1",
+        "source_commit": "e4793d2834934966e18304453126c5230e1d6624"
+      }
+    },
+    "x86": {
+      "summary": {
+        "base_infeasible_cases": 33,
+        "base_infeasible_geometric_mean_ratio": 0.9979181067760343,
+        "cases": 48,
+        "classification": "exposed synthetic development panel; not a holdout",
+        "feasible_cases": 15,
+        "feasible_geometric_mean_ratio": 0.5536467814235092,
+        "feasible_max_ratio": 0.8551000620636539,
+        "feasible_upper95_graph_bootstrap_ratio": 0.6374790941749747,
+        "feasible_wins_below_0_90": 15,
+        "gate": {
+          "all_48_complete_and_replayed": true,
+          "all_feasible_cases_below_0_90": true,
+          "feasible_upper95_below_0_75": true
+        },
+        "gate_pass": true,
+        "library_sha256": "dc168590317c283df1dcaec8bffaa56d870d1bc830930ccc73cdcecd2656df13",
+        "machine": "x86_64",
+        "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "python": "3.13.16 (main, Oct  1 2026, 02:37:54) [GCC 13.3.0]",
+        "repeats": 31,
+        "schema": "spectra.tile64_preparation_benchmark.v1",
+        "source_commit": "e4793d2834934966e18304453126c5230e1d6624"
+      }
+    }
+  },
+  "local_paired_diagnostic": {
+    "byte_identical_scc_outputs": 48,
+    "candidate_baseline_scc_geometric_mean_ratio": 0.913884877870072,
+    "compiler": "GCC 14.2.0",
+    "feasible_geometric_mean_ratio": 0.5334260841252317,
+    "feasible_max_ratio": 0.8345865500646401,
+    "feasible_upper95_graph_bootstrap_ratio": 0.6200715129886449,
+    "python": "3.13.5",
+    "repeats": 31
+  },
+  "measurement_commit": "e4793d2834934966e18304453126c5230e1d6624",
+  "native_source_sha256": "570c5fe9204342535adb766d01a923001c49881e31b7bd2da42fc972a27c73d3",
+  "schema": "spectra.tile64_preparation_ci_results.v1",
+  "workflow_run": 39064845872
+}

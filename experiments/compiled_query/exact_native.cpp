@@ -179,6 +179,10 @@ struct SolverBank {
     U end(U row) const {return load32(data,offsets_at+4*W(row+1));}
     U query_count() const {return count;}
     U pin_count() const {return pins;}
+    U row_begin(U index) const {return begin(index);}
+    U row_end(U index) const {return end(index);}
+    U pin_vertex(U index) const {return load32(data,vertices_at+4*W(index));}
+    W pin_allowed(U index) const {return load64(data,masks_at+8*W(index));}
     std::vector<Pin> row(U index) const {
         U first_pin=begin(index),last_pin=end(index);std::vector<Pin> result;result.reserve(last_pin-first_pin);
         for(U i=first_pin;i<last_pin;++i)
@@ -272,8 +276,12 @@ struct SolverSessionPacket {
     }
     U query_count() const {return count;}
     U pin_count() const {return pins;}
+    U row_begin(U index) const {return load32(data,offsets_at+4*W(index));}
+    U row_end(U index) const {return load32(data,offsets_at+4*W(index+1));}
+    U pin_vertex(U index) const {return load32(data,vertices_at+4*W(index));}
+    W pin_allowed(U index) const {return load64(data,allowed_at+8*W(index));}
     std::vector<Pin> row(U index) const {
-        U begin=load32(data,offsets_at+4*W(index)),end=load32(data,offsets_at+4*W(index+1));
+        U begin=row_begin(index),end=row_end(index);
         std::vector<Pin> result;result.reserve(end-begin);
         for(U i=begin;i<end;++i)
             result.push_back({load32(data,vertices_at+4*W(i)),load64(data,allowed_at+8*W(i))});
@@ -822,27 +830,46 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
     const bool use_tiles=solver.condensed && solver.bad==NIL && count>=64;
     if(use_tiles) {
         result.tiled=true;
+        // Reuse one allocation set for the whole bank. Each request is reduced
+        // directly from the immutable packet into sorted unique roots; no
+        // temporary Pin vector or per-lane vector allocation is needed.
+        std::vector<U> seen(solver.n,0),touched;
+        std::vector<W> effective(solver.n),reached(solver.nc,0),high_choices(solver.n);
+        std::vector<U> roots,root_offsets(65,0),empty(64,NIL),conflict(64,NIL);
+        std::vector<U> replay_roots,parent;
+        touched.reserve(std::min<U>(solver.n,64));
+        roots.reserve(static_cast<size_t>(std::min<W>(pins,64*W(solver.n))));
+        replay_roots.reserve(std::min<U>(solver.n,64));
+        U epoch=0;
         for(U first_row=0;first_row<count;first_row+=64) {
             ++result.tiles;
             U lanes=std::min<U>(64,count-first_row);
-            std::vector<std::vector<U>> roots(lanes);
-            std::vector<U> empty(lanes,NIL),conflict(lanes,NIL);
-            std::vector<W> reached(solver.nc,0);
+            roots.clear();root_offsets[0]=0;
+            std::fill(empty.begin(),empty.begin()+lanes,NIL);
+            std::fill(conflict.begin(),conflict.begin()+lanes,NIL);
+            std::fill(reached.begin(),reached.end(),0);
             for(U lane=0;lane<lanes;++lane) {
-                auto restrictions=solver_rows.row(first_row+lane);
-                std::sort(restrictions.begin(),restrictions.end(),[](Pin a,Pin b){return a.vertex<b.vertex;});
-                auto& seeds=roots[lane];seeds.reserve(std::min<size_t>(restrictions.size(),solver.n));
-                for(size_t i=0;i<restrictions.size();) {
-                    U v=restrictions[i].vertex;W domain=solver.masks[v];
-                    do {domain&=restrictions[i++].allowed;}
-                    while(i<restrictions.size() && restrictions[i].vertex==v);
-                    if(!domain) {empty[lane]=v;break;}
-                    if(domain!=solver.masks[v])
-                        seeds.push_back(2*v+(first(domain)!=solver.lo[v]));
+                if(++epoch==0) {std::fill(seen.begin(),seen.end(),0);epoch=1;}
+                touched.clear();
+                U row=first_row+lane;
+                for(U pin=solver_rows.row_begin(row);pin<solver_rows.row_end(row);++pin) {
+                    U v=solver_rows.pin_vertex(pin);
+                    if(seen[v]!=epoch) {
+                        seen[v]=epoch;effective[v]=solver.masks[v];touched.push_back(v);
+                    }
+                    effective[v]&=solver_rows.pin_allowed(pin);
                 }
+                // Match scalar preparation exactly: the first empty-domain
+                // proof and seed order are by original vertex, not packet order.
+                std::sort(touched.begin(),touched.end());
+                for(U v:touched) if(!effective[v]) {empty[lane]=v;break;}
+                if(empty[lane]==NIL) for(U v:touched) if(effective[v]!=solver.masks[v])
+                    roots.push_back(2*v+(first(effective[v])!=solver.lo[v]));
+                root_offsets[lane+1]=static_cast<U>(roots.size());
                 if(empty[lane]==NIL) {
                     W bit=W(1)<<lane;
-                    for(U literal:seeds) reached[solver.comp[literal]]|=bit;
+                    for(U at=root_offsets[lane];at<root_offsets[lane+1];++at)
+                        reached[solver.comp[roots[at]]]|=bit;
                 }
             }
             for(U component=0;component<solver.nc;++component) if(reached[component]) {
@@ -864,9 +891,7 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
                 if(empty[lane]==NIL && conflict[lane]==NIL) sat_lanes|=W(1)<<lane;
             // Resolve component choices once per vertex for the whole tile.
             // The output still contains every original label for every lane.
-            std::vector<W> high_choices;
             if(sat_lanes) {
-                high_choices.resize(solver.n);
                 for(U v=0;v<solver.n;++v) {
                     W low=reached[solver.comp[2*v]],high=reached[solver.comp[2*v+1]];
                     if(low&high&sat_lanes) throw std::logic_error("SAT bit lane retains contradiction");
@@ -879,14 +904,11 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
                     answer.sat=false;answer.certificate=proof(1,{empty[lane]},{});
                 } else if(conflict[lane]!=NIL) {
                     // The batch already established a contradiction. Reuse its
-                    // prepared roots, without sorting the request again. Only
-                    // routed proofs need a second SCC walk for predecessors;
-                    // other modes can reconstruct directly in original edges.
-                    if(solver.routed) answer=solver.solve_roots(roots[lane]);
-                    else {
-                        std::vector<U> parent;
-                        solver.raw_closure(roots[lane],parent,answer);
-                    }
+                    // prepared roots, without reparsing or sorting the request.
+                    replay_roots.assign(roots.begin()+root_offsets[lane],
+                                        roots.begin()+root_offsets[lane+1]);
+                    if(solver.routed) answer=solver.solve_roots(replay_roots);
+                    else solver.raw_closure(replay_roots,parent,answer);
                     if(answer.sat)
                         throw std::logic_error("bit-lane contradiction did not replay");
                 } else {
