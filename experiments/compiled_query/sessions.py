@@ -27,7 +27,9 @@ EXACT_BANK_ARMS = ('exact-bank-scc', 'exact-bank-raw',
 EXACT_PACKET_ARMS = ('exact-packet-scc', 'exact-packet-raw',
                      'exact-packet-sparse', 'exact-packet-route')
 EXACT_ARMS = EXACT_SINGLE_ARMS + EXACT_BANK_ARMS + EXACT_PACKET_ARMS
-ALL_ARMS = ARMS + EXACT_ARMS
+OPTIONAL_ARMS = ('cadical3', 'kissat4-rebuild', 'ortools-cpsat')
+ALL_ARMS = ARMS + OPTIONAL_ARMS + EXACT_ARMS
+EXTERNAL_LIBRARY_ARMS = {'cadical3': 'cadical3', 'kissat4-rebuild': 'kissat4'}
 STATUS = {'UNSAT': 0, 'SAT_VERIFIED': 1, 'UNKNOWN': 2}
 HEADER = struct.Struct('<4sIQ')
 
@@ -119,6 +121,8 @@ def preload(arm: str) -> None:
         importlib.import_module('dd.cudd')
     elif arm in ('minicard', 'cadical195'):
         importlib.import_module('pysat.solvers')
+    elif arm == 'ortools-cpsat':
+        importlib.import_module('ortools.sat.python.cp_model')
 
 
 def query_order(count: int, order: str, seed: int) -> tuple[int, ...]:
@@ -135,7 +139,8 @@ def query_order(count: int, order: str, seed: int) -> tuple[int, ...]:
 
 def run_session(case_path: Path, runtime, arm: str, *, count: int,
                 order: str = 'forward', seed: int = 0, max_bytes: int = 512 << 20,
-                max_nodes: int = 2_000_000, exact_runtime=None) -> tuple[dict, bytes]:
+                max_nodes: int = 2_000_000, exact_runtime=None,
+                external_libraries: dict[str, Path] | None = None) -> tuple[dict, bytes]:
     if arm not in ALL_ARMS:
         raise ValueError('unknown arm')
     if arm in EXACT_PACKET_ARMS:
@@ -164,6 +169,22 @@ def run_session(case_path: Path, runtime, arm: str, *, count: int,
                                       mode=arm, max_build_bytes=max_bytes)
         elif arm in ('minicard', 'cadical195'):
             session = SATSession(p, runtime, arm, max_bytes)
+        elif arm in ('cadical3', 'kissat4-rebuild', 'ortools-cpsat'):
+            from .champion_competitors import (CaDiCaL3Session,
+                Kissat4RebuildSession, ORToolsCPSATSession)
+            external_libraries = external_libraries or {}
+            if arm == 'cadical3':
+                library = external_libraries.get('cadical3')
+                if library is None:
+                    raise ValueError('cadical3 arm requires an explicit pinned shared library')
+                session = CaDiCaL3Session(p, runtime, library, max_bytes)
+            elif arm == 'kissat4-rebuild':
+                library = external_libraries.get('kissat4')
+                if library is None:
+                    raise ValueError('kissat4 arm requires an explicit pinned shared library')
+                session = Kissat4RebuildSession(p, runtime, library, max_bytes)
+            else:
+                session = ORToolsCPSATSession(p, runtime, max_bytes)
         else:
             session = BDDSession(p, runtime, arm.removeprefix('cudd-'), max_bytes, max_nodes)
         setup_end = time.perf_counter_ns()

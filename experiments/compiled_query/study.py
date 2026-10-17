@@ -24,7 +24,8 @@ import traceback
 from .cases import canonical, digest, export_wap, load_case, synthetic_cases, write_case
 from .exact import pack_validated_session_packet
 from .sessions import (ARMS, ALL_ARMS, EXACT_ARMS, EXACT_PACKET_ARMS,
-                       preload, query_order, run_prepared_session, run_session)
+                       EXTERNAL_LIBRARY_ARMS, preload, query_order,
+                       run_prepared_session, run_session)
 
 ROOT = Path(__file__).resolve().parents[2]
 ORDERS = ('forward', 'reverse', 'shuffle')
@@ -106,7 +107,7 @@ def sources() -> dict:
 def execution_identity() -> dict:
     """Hash installed direct backend code without importing native libraries."""
     dependencies = {}
-    for name in ('dd', 'python-sat'):
+    for name in ('dd', 'python-sat', 'ortools'):
         try:
             distribution = importlib.metadata.distribution(name)
         except importlib.metadata.PackageNotFoundError:
@@ -149,7 +150,8 @@ def schedule(cases: list[dict], config: Config) -> list[dict]:
 
 
 def create_study(case_paths: list[Path], library: Path, output: Path, config: Config, *,
-                 exact_library: Path | None = None) -> dict:
+                 exact_library: Path | None = None,
+                 external_libraries: dict[str, Path] | None = None) -> dict:
     config.validate()
     if not case_paths:
         raise ValueError('no case files')
@@ -217,6 +219,23 @@ def create_study(case_paths: list[Path], library: Path, output: Path, config: Co
             raise ValueError('exact runtime source/build digest differs')
         exact = dict(library='runtime/' + exact_library.name, library_sha256=digest(exact_payload),
                      build=exact_build)
+    external_libraries = external_libraries or {}
+    required_external = {EXTERNAL_LIBRARY_ARMS[arm] for arm in config.arms
+                         if arm in EXTERNAL_LIBRARY_ARMS}
+    missing_external = required_external - set(external_libraries)
+    if missing_external:
+        raise ValueError('missing explicit external libraries: ' + ', '.join(sorted(missing_external)))
+    external_runtimes = {}
+    external_payloads = {}
+    for key in sorted(required_external):
+        path = Path(external_libraries[key])
+        payload = path.read_bytes()
+        receipt_path = path.with_name(path.name + '.receipt.json')
+        receipt = json.loads(receipt_path.read_bytes()) if receipt_path.is_file() else None
+        filename = f'runtime/external-{key}{path.suffix or ".so"}'
+        external_payloads[filename] = payload
+        external_runtimes[key] = dict(library=filename, library_sha256=digest(payload),
+                                      receipt=receipt)
     manifest = dict(schema='spectra.compiled_query.study.v1', classification='development-only',
                     config=asdict(config), cases=cases, jobs=jobs, sources=sources(),
                     execution_identity=execution_identity(),
@@ -226,6 +245,9 @@ def create_study(case_paths: list[Path], library: Path, output: Path, config: Co
     if exact is not None:
         manifest['exact_runtime'] = exact
         manifest['endpoint'] = 'validated JSON -> checked SCQ1 or proof-carrying SCQ2 + SHA256 + disposal'
+    if external_runtimes:
+        manifest['external_runtimes'] = external_runtimes
+        manifest['endpoint'] += '; pinned current external solver libraries'
     if packet_payloads:
         manifest['prepared_packet_schema'] = 'SBC1'
         manifest['endpoint'] += ('; ready SBC1 -> independently parsed/checked SCQ2 + '
@@ -241,6 +263,8 @@ def create_study(case_paths: list[Path], library: Path, output: Path, config: Co
     write_once(output / manifest['library'], native)
     if exact is not None:
         write_once(output / exact['library'], exact_payload)
+    for filename, payload in sorted(external_payloads.items()):
+        write_once(output / filename, payload)
     write_once(output / 'manifest.json', canonical(manifest))
     write_once(output / 'manifest.sha256', (digest(canonical(manifest)) + '\n').encode())
     return manifest
@@ -261,6 +285,10 @@ def read_manifest(root: Path, *, check_sources: bool = True) -> dict:
         exact = manifest['exact_runtime']
         if digest((root / exact['library']).read_bytes()) != exact['library_sha256']:
             raise ValueError('exact native library changed')
+    for key, runtime in manifest.get('external_runtimes', {}).items():
+        if (key not in EXTERNAL_LIBRARY_ARMS.values()
+                or digest((root / runtime['library']).read_bytes()) != runtime['library_sha256']):
+            raise ValueError('external solver library changed')
     for case in manifest['cases']:
         if digest((root / case['file']).read_bytes()) != case['sha256']:
             raise ValueError('case snapshot changed')
@@ -292,7 +320,7 @@ def read_manifest(root: Path, *, check_sources: bool = True) -> dict:
 def environment() -> dict:
     import resource
     versions = {}
-    for name in ('dd', 'python-sat', 'networkx', 'setuptools'):
+    for name in ('dd', 'python-sat', 'ortools', 'networkx', 'setuptools'):
         try:
             versions[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
@@ -333,11 +361,13 @@ def worker(root: Path, job_id: str):
                 preparation_ns=prepared['preparation_ns'],
                 max_bytes=config['native_bytes'])
         else:
+            external_paths = {key: root / value['library'] for key, value in
+                              manifest.get('external_runtimes', {}).items()}
             record, output = run_session(
                 root / case_record['inputs'][str(job['count'])]['file'], runtime, job['arm'],
                 count=job['count'], order=job['order'], seed=job['order_seed'],
                 max_bytes=config['native_bytes'], max_nodes=config['bdd_nodes'],
-                exact_runtime=exact_runtime)
+                exact_runtime=exact_runtime, external_libraries=external_paths)
         write_once(destination / 'outputs.bin', output)
     except Exception as exc:
         from .bdd import BackendUnavailable, CompilationLimit
@@ -441,6 +471,8 @@ def main():
     new.add_argument('--library', type=Path, required=True)
     new.add_argument('--output', type=Path, required=True)
     new.add_argument('--exact-library', type=Path)
+    new.add_argument('--cadical3-library', type=Path)
+    new.add_argument('--kissat4-library', type=Path)
     new.add_argument('--arms', nargs='+', choices=ALL_ARMS, default=list(ARMS))
     new.add_argument('--prefixes', nargs='+', type=int, default=[1, 32, 128])
     new.add_argument('--repeats', type=int, default=3)
@@ -463,9 +495,13 @@ def main():
         export_wap(args.graphs, args.output)
     elif args.command == 'new':
         paths = sorted(p for p in args.cases.glob('*.json') if not p.name.endswith('.generation.json'))
+        external = {key: value for key, value in
+                    (('cadical3', args.cadical3_library), ('kissat4', args.kissat4_library))
+                    if value is not None}
         create_study(paths, args.library, args.output,
                      Config(arms=tuple(args.arms), prefixes=tuple(args.prefixes), repeats=args.repeats,
-                            wall_seconds=args.deadline, bdd_nodes=args.bdd_nodes), exact_library=args.exact_library)
+                            wall_seconds=args.deadline, bdd_nodes=args.bdd_nodes),
+                     exact_library=args.exact_library, external_libraries=external)
     elif args.command == 'run':
         run_study(args.output, args.max_new)
     elif args.command == '_worker':
