@@ -1,72 +1,84 @@
-"""Exercise the actual publication gate against disposable Git histories."""
+"""Ensure permanent CI cannot publish releases or mutate the repository.
+
+The former version-intent contract exercised the retired
+``indexed-efficiency.yml`` publication job.  The lean active tree has no
+publication workflow, so its stronger current contract is simpler: every
+permanent workflow is read-only and contains no release/package publication
+command.  A future release workflow must introduce an explicit, separately
+reviewed publication contract rather than inheriting a dead experiment job.
+"""
+from __future__ import annotations
+
 from pathlib import Path
-import os
-import subprocess
-import sys
 
 import pytest
 import yaml
 
-pytestmark = pytest.mark.skipif(sys.version_info < (3, 11), reason="release job uses Python 3.13/tomllib")
+
 ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW_ROOT = ROOT / ".github" / "workflows"
+EXPECTED_WORKFLOWS = {
+    "cpu-regression.yml",
+    "exact-public-api.yml",
+    "itc-exam-suite.yml",
+    "public-package.yml",
+    "repository-audit.yml",
+    "svm-portability.yml",
+    "wap-support-regression.yml",
+}
+FORBIDDEN_PUBLICATION_TEXT = (
+    "gh release",
+    "release create",
+    "git push",
+    "git tag",
+    "twine upload",
+    "pypa/gh-action-pypi-publish",
+    "npm publish",
+    "docker push",
+)
 
 
-def steps():
-    workflow = yaml.safe_load((ROOT / ".github/workflows/indexed-efficiency.yml").read_text())
-    return workflow["jobs"]["publish-versioned-evidence"]["steps"]
+def workflow_paths() -> list[Path]:
+    return sorted(path for path in WORKFLOW_ROOT.glob("*.y*ml") if path.is_file())
 
 
-def run_guard(tmp_path, new_text, *, before_override=None):
-    def git(*args):
-        return subprocess.check_output(["git", *args], cwd=tmp_path, text=True).strip()
-    git("init", "-q")
-    git("config", "user.email", "contract@example.invalid")
-    git("config", "user.name", "Disposable Contract")
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="spectra"\nversion="0.7.1"\n')
-    git("add", "pyproject.toml"); git("commit", "-qm", "base")
-    before = git("rev-parse", "HEAD") if before_override is None else before_override
-    (tmp_path / "pyproject.toml").write_text(new_text)
-    gate = next(step for step in steps() if step.get("id") == "version_intent")
-    output = tmp_path / "job-output.txt"
-    env = dict(os.environ, BEFORE_SHA=before, GITHUB_OUTPUT=str(output))
-    result = subprocess.run(["bash", "-c", gate["run"]], cwd=tmp_path,
-                            env=env, text=True, capture_output=True, timeout=20)
-    return result, output.read_text() if output.exists() else ""
+def load_workflow(path: Path) -> dict:
+    value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert type(value) is dict, f"workflow is not a mapping: {path}"
+    return value
 
 
-@pytest.mark.parametrize("suffix", ["", '\n[tool.setuptools.package-data]\n"spectra._native"=["*.cpp"]\n', '\ndependencies=["example==0.7.2"]\n'])
-def test_non_version_edits_do_not_request_publication(tmp_path, suffix):
-    result, output = run_guard(tmp_path, '[project]\nname="spectra"\nversion="0.7.1"\n' + suffix)
-    assert result.returncode == 0, result.stderr
-    assert output == "changed=false\n"
+def permission_maps(value):
+    if type(value) is dict:
+        for key, child in value.items():
+            if key == "permissions":
+                yield child
+            yield from permission_maps(child)
+    elif type(value) is list:
+        for child in value:
+            yield from permission_maps(child)
 
 
-def test_explicit_version_change_requests_guarded_publication(tmp_path):
-    result, output = run_guard(tmp_path, '[project]\nname="spectra"\nversion="0.7.2"\n')
-    assert result.returncode == 0, result.stderr
-    assert output == "changed=true\n"
+def test_permanent_workflow_inventory_is_explicit_and_small():
+    observed = {path.name for path in workflow_paths()}
+    assert observed == EXPECTED_WORKFLOWS
 
 
-@pytest.mark.parametrize("before", ["0" * 40, "not-a-commit", "f" * 40])
-def test_unknown_previous_version_fails_closed(tmp_path, before):
-    result, output = run_guard(tmp_path, '[project]\nversion="0.7.2"\n', before_override=before)
-    assert result.returncode != 0
-    assert "changed=true" not in output
+@pytest.mark.parametrize("path", workflow_paths(), ids=lambda path: path.name)
+def test_permanent_workflows_have_no_write_permissions(path: Path):
+    workflow = load_workflow(path)
+    permissions = list(permission_maps(workflow))
+    assert permissions, f"workflow must declare explicit permissions: {path}"
+    for declared in permissions:
+        assert declared not in ("write-all", "write"), path
+        if type(declared) is dict:
+            writable = {name: access for name, access in declared.items()
+                        if str(access).lower() == "write"}
+            assert not writable, f"write permission in {path}: {writable}"
 
 
-@pytest.mark.parametrize("text", ['[project]\nname="spectra"\n', '[project]\nversion=true\n', '[project]\nversion=""\n'])
-def test_malformed_versions_fail_closed(tmp_path, text):
-    result, output = run_guard(tmp_path, text)
-    assert result.returncode != 0
-    assert "changed=true" not in output
-
-
-def test_every_release_side_effect_is_version_gated():
-    sequence = steps()
-    index = next(i for i, step in enumerate(sequence) if step.get("id") == "version_intent")
-    for step in sequence[index + 1:]:
-        assert step.get("if") == "steps.version_intent.outputs.changed == 'true'"
-    publish = sequence[-1]["run"]
-    assert "Refusing to overwrite an existing release" in publish
-    assert "--draft" in publish and "--verify-tag" in publish
-    assert sequence[0]["with"]["fetch-depth"] == 0
+@pytest.mark.parametrize("path", workflow_paths(), ids=lambda path: path.name)
+def test_permanent_workflows_contain_no_publication_side_effect(path: Path):
+    text = path.read_text(encoding="utf-8").lower()
+    found = [token for token in FORBIDDEN_PUBLICATION_TEXT if token in text]
+    assert not found, f"publication command in {path}: {found}"
