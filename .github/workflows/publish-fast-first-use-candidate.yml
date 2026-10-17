@@ -14,6 +14,7 @@ concurrency:
 
 env:
   BASE_COMMIT: 4a647e54e7e7e0756e74b52575f86f03d2764455
+  SOURCE_COMMIT: 415036763dc9ea918cbcf69e4a87da23d05c43d4
   CANDIDATE_BRANCH: performance/fast-first-use-sessions
   UPSTREAM_COMMIT: 4932048642da2144f387961b595112277afff82f
   PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
@@ -40,15 +41,170 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .bootstrap/fast-first-use/part* > /tmp/fast-first-use.patch
-          test "$(wc -c < /tmp/fast-first-use.patch)" -eq 27899
           git worktree add --detach /tmp/fast-first-use "$BASE_COMMIT"
           cd /tmp/fast-first-use
+          git checkout "$SOURCE_COMMIT" -- \
+            experiments/compiled_query/SESSION_PACKET_COLD_PROTOCOL_20261017.md \
+            experiments/compiled_query/session_packet_cold_benchmark.py \
+            spectra/exact.py \
+            spectra/exact_problem.py \
+            tests/public/test_exact_packet_packing.py
+          python - <<'PY'
+          from pathlib import Path
+
+          problem = Path('spectra/exact_problem.py')
+          text = problem.read_text()
+          text = text.replace('from dataclasses import dataclass',
+                              'from dataclasses import dataclass, field')
+          text = text.replace(
+              '    masks: tuple[int, ...]\n',
+              '    masks: tuple[int, ...]\n'
+              "    _admitted: bool = field(default=False, init=False, repr=False, compare=False)\n",
+          )
+          text = text.replace(
+              '        if canonical:\n            return cls(n, palette, edge_snapshot, snapshot)\n',
+              "        if canonical:\n"
+              "            result = cls(n, palette, edge_snapshot, snapshot)\n"
+              "            object.__setattr__(result, '_admitted', True)\n"
+              "            return result\n",
+          )
+          text = text.replace(
+              '        return cls(n, palette, tuple(sorted(set(copied))), snapshot)\n',
+              "        result = cls(n, palette, tuple(sorted(set(copied))), snapshot)\n"
+              "        object.__setattr__(result, '_admitted', True)\n"
+              "        return result\n",
+          )
+          problem.write_text(text)
+
+          exact = Path('spectra/exact.py')
+          text = exact.read_text()
+          text = text.replace('from itertools import chain',
+                              'from itertools import accumulate, chain')
+          old = '''def _pack_canonical_session_packet(problem: ExactProblem,
+                                             rows: tuple[tuple[tuple[int, int], ...], ...]) -> bytes:
+              offsets = [0]
+              vertices: list[int] = []
+              allowed: list[int] = []
+              for row in rows:
+                  vertices.extend(vertex for vertex, _ in row)
+                  allowed.extend(mask for _, mask in row)
+                  offsets.append(len(vertices))
+
+              return b''.join((
+          '''
+          old = '\n'.join(line[12:] if line.startswith('            ') else line
+                          for line in old.splitlines())
+          new = '''def _pack_canonical_session_packet(problem: ExactProblem,
+                                             rows: tuple[tuple[tuple[int, int], ...], ...]) -> bytes:
+              offsets = [0, *accumulate(map(len, rows))]
+              vertices = [pair[0] for row in rows for pair in row]
+              allowed = [pair[1] for row in rows for pair in row]
+
+              return b''.join((
+          '''
+          new = '\n'.join(line[12:] if line.startswith('            ') else line
+                          for line in new.splitlines())
+          if old not in text:
+              raise SystemExit('canonical packer source changed')
+          text = text.replace(old, new)
+          old = '''def pack_session_packet(problem: ExactProblem,
+                                  queries: Iterable[Iterable[Sequence[int]]]) -> bytes:
+              """Validate ordinary inputs and create one immutable prepared session packet."""
+              p = ExactProblem.create(problem.n, problem.palette,
+                                      problem.edges, problem.masks)
+              rows = tuple(p.freeze_query(query) for query in queries)
+              # ``p`` and ``rows`` were admitted immediately above; do not perform the
+              # same graph and request validation a second time before serialization.
+              return _pack_canonical_session_packet(p, rows)
+          '''
+          old = '\n'.join(line[12:] if line.startswith('            ') else line
+                          for line in old.splitlines())
+          new = '''def _admit_query_bank(problem: ExactProblem,
+                                queries: Iterable[Iterable[Sequence[int]]]) -> tuple[tuple[tuple[int, int], ...], ...]:
+              if type(queries) is tuple and len(queries) <= 1_000_000:
+                  pins = 0
+                  canonical = True
+                  for row in queries:
+                      if type(row) is not tuple:
+                          canonical = False
+                          break
+                      pins += len(row)
+                      if pins > 1_000_000:
+                          raise ValueError('session packet query bank exceeds supported bound')
+                      for item in row:
+                          if (type(item) is not tuple or len(item) != 2 or
+                                  type(item[0]) is not int or not 0 <= item[0] < problem.n or
+                                  type(item[1]) is not int or not 0 <= item[1] < 1 << 64):
+                              canonical = False
+                              break
+                      if not canonical:
+                          break
+                  if canonical:
+                      return queries
+              return tuple(problem.freeze_query(query) for query in queries)
+
+
+          def pack_session_packet(problem: ExactProblem,
+                                  queries: Iterable[Iterable[Sequence[int]]]) -> bytes:
+              """Validate ordinary inputs and create one immutable prepared session packet."""
+              if type(problem) is ExactProblem and problem._admitted:
+                  p = problem
+              else:
+                  p = ExactProblem.create(problem.n, problem.palette,
+                                          problem.edges, problem.masks)
+              rows = _admit_query_bank(p, queries)
+              return _pack_canonical_session_packet(p, rows)
+          '''
+          new = '\n'.join(line[12:] if line.startswith('            ') else line
+                          for line in new.splitlines())
+          if old not in text:
+              raise SystemExit('public packet source changed')
+          exact.write_text(text.replace(old, new))
+
+          tests = Path('tests/public/test_exact_packet_packing.py')
+          text = tests.read_text()
+          text = text.replace('    assert problem.edges is edges\n',
+                              '    assert problem.edges is edges\n    assert problem._admitted\n')
+          text = text.replace(
+              '    assert normalized.edges == ((0, 2), (1, 2))\n',
+              '    assert normalized.edges == ((0, 2), (1, 2))\n    assert normalized._admitted\n',
+          )
+          marker = '\n\ndef test_bulk_session_packet_is_byte_identical_to_scalar_reference():'
+          addition = '''
+
+          def test_direct_problem_constructor_is_revalidated_before_public_packing():
+              direct = ExactProblem(2, 2, ((0, 1),), (0b11, 0b11))
+              admitted = ExactProblem.create(2, 2, ((0, 1),), (0b11, 0b11))
+              rows = ((), ((0, 0b01),))
+              assert not direct._admitted
+              assert pack_session_packet(direct, rows) == pack_session_packet(admitted, rows)
+
+
+          def test_canonical_query_tuple_is_reused_but_still_checked():
+              problem = ExactProblem.create(2, 2, ((0, 1),), (0b11, 0b11))
+              rows = ((), ((0, 0b01), (1, 0b10)))
+              packet = pack_session_packet(problem, rows)
+              _, decoded = unpack_session_packet(packet)
+              assert decoded == rows
+              with pytest.raises(ValueError, match='vertex/uint64-mask'):
+                  pack_session_packet(problem, ((), ((2, 0b01),)))
+          '''
+          addition = '\n'.join(line[10:] if line.startswith('          ') else line
+                               for line in addition.splitlines())
+          if marker not in text:
+              raise SystemExit('packet test source changed')
+          tests.write_text(text.replace(marker, addition + marker))
+          PY
           git config user.name 'Tugrap'
           git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
-          git am /tmp/fast-first-use.patch
+          git add \
+            experiments/compiled_query/SESSION_PACKET_COLD_PROTOCOL_20261017.md \
+            experiments/compiled_query/session_packet_cold_benchmark.py \
+            spectra/exact.py spectra/exact_problem.py \
+            tests/public/test_exact_packet_packing.py
+          git commit -m 'Make first-use exact sessions fast'
           test "$(git rev-parse HEAD^)" = "$BASE_COMMIT"
-          test "$(git log -1 --format=%s)" = "Make first-use exact sessions fast"
+          test "$(git log -1 --format=%s)" = 'Make first-use exact sessions fast'
           test "$(git rev-list --count "$BASE_COMMIT"..HEAD)" -eq 1
           git diff --check "$BASE_COMMIT"..HEAD
           git push --force origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
