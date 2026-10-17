@@ -1,0 +1,50 @@
+name: fix-first-use-publisher
+
+on:
+  push:
+    branches: [audit/tile64-external-competition-20261017]
+    paths: [.github/workflows/fix-first-use-publisher.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: audit/tile64-external-competition-20261017
+          persist-credentials: true
+      - name: Remove the accidental heredoc de-indentation
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/publish-fast-first-use-candidate.yml')
+          text = path.read_text()
+          snippets = (
+              "          old = '\\n'.join(line[12:] if line.startswith('            ') else line\n"
+              "                          for line in old.splitlines())\n",
+              "          new = '\\n'.join(line[12:] if line.startswith('            ') else line\n"
+              "                          for line in new.splitlines())\n",
+              "          addition = '\\n'.join(line[10:] if line.startswith('          ') else line\n"
+              "                               for line in addition.splitlines())\n",
+          )
+          for snippet in snippets:
+              count = text.count(snippet)
+              if snippet.startswith("          old") and count != 2:
+                  raise SystemExit(f'expected two old de-indent blocks, found {count}')
+              if snippet.startswith("          new") and count != 2:
+                  raise SystemExit(f'expected two new de-indent blocks, found {count}')
+              if snippet.startswith("          addition") and count != 1:
+                  raise SystemExit(f'expected one addition de-indent block, found {count}')
+              text = text.replace(snippet, '')
+          path.write_text(text)
+          PY
+          git config user.name Tugrap
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git add .github/workflows/publish-fast-first-use-candidate.yml
+          git commit -m 'Fix the candidate rebuild script'
+          git push origin HEAD:audit/tile64-external-competition-20261017
