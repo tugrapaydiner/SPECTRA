@@ -1,0 +1,115 @@
+name: validate-fast-first-use-python311
+
+on:
+  push:
+    branches: [audit/tile64-external-competition-20261017]
+    paths: [.github/workflows/validate-fast-first-use-python311.yml]
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE: 16babd80de942537eb468aaef9a90ddbce02d35c
+  UPSTREAM_COMMIT: 4932048642da2144f387961b595112277afff82f
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  OPENBLAS_NUM_THREADS: '1'
+  OMP_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  NUMEXPR_NUM_THREADS: '1'
+
+jobs:
+  reproduce:
+    name: python311-${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86-64
+            runner: ubuntu-24.04
+          - label: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.CANDIDATE }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Install focused dependencies
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Bind source and acquire exact exposed inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p py311-evidence/graphs
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          git rev-parse HEAD > py311-evidence/source-commit.txt
+          git rev-parse HEAD^{tree} > py311-evidence/source-tree.txt
+          python -VV > py311-evidence/python.txt
+          python -m pip freeze > py311-evidence/environment.txt
+          uname -a > py311-evidence/platform.txt
+          lscpu > py311-evidence/cpu.txt
+          for name in wap05a.col wap06a.col; do
+            curl --fail --location --retry 3 --retry-all-errors \
+              "https://raw.githubusercontent.com/marijnheule/clicolcom/${UPSTREAM_COMMIT}/graphs/${name}" \
+              -o "py311-evidence/graphs/${name}"
+          done
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          inventory = json.loads(Path('experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json').read_text())
+          for name in ('wap05a.col', 'wap06a.col'):
+              record = inventory['graphs'][name]
+              data = Path('py311-evidence/graphs', name).read_bytes()
+              blob = hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
+              assert len(data) == record['bytes'] and blob == record['git_blob_sha1']
+          PY
+          python -m experiments.compiled_query.study export-wap \
+            --graphs py311-evidence/graphs --output py311-evidence/cases
+      - name: Reproduce the first-use crossover
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > py311-evidence/library.txt
+          from spectra.exact import build_exact_runtime
+          print(build_exact_runtime('py311-evidence/native'))
+          PY
+          python -m experiments.compiled_query.session_packet_cold_benchmark \
+            --library "$(cat py311-evidence/library.txt)" \
+            --cases py311-evidence/cases \
+            --out py311-evidence/benchmark \
+            --repeats 31 \
+            2>&1 | tee py311-evidence/benchmark.log
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          result = json.loads(Path('py311-evidence/benchmark/results.json').read_text())
+          assert result['summary']['gate_pass'], result['summary']
+          print(json.dumps(result['summary'], indent=2, sort_keys=True))
+          PY
+      - name: Hash receipts
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          root = Path('py311-evidence')
+          manifest = {}
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name != 'SHA256.json':
+                  manifest[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+          (root / 'SHA256.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: fast-first-use-python311-${{ matrix.label }}-${{ github.run_id }}
+          path: py311-evidence/
+          retention-days: 90
+          if-no-files-found: error
