@@ -1,0 +1,122 @@
+lection disabled only across the paired timing region.
++- Every packet and output must remain byte-identical across repetitions.
++
++## Correctness gate
++
++Before any performance statement:
++
++- the scalar-reference and bulk SBC1 serializers must be byte-identical;
++- canonical and noncanonical `ExactProblem.create` paths must agree;
++- raw and SCC SCQ2 outputs must be byte-identical on both graphs;
++- standard-library `verify_session_output` must accept both complete outputs;
++- the existing 65-row/two-tile contracts must pass;
++- malformed prepared inputs must remain rejected;
++- all exact API, installed-package, sanitizer, Windows and CPU regression gates
++  triggered by the final pull request must pass.
++
++Any wrong answer, invalid proof, malformed packet, crash, timeout, unavailable
++baseline, or missing case blocks the result.
++
++## Meaningful-win gate
++
++Ratios are complete `pack_session_packet + solve_session_packet` time for SCC
++divided by the same complete time for raw. Lower is better.
++
++The gate passes independently on x86-64 and ARM64 only if:
++
++- both graph cells complete and replay;
++- the geometric mean ratio is below `0.75`; and
++- each graph ratio is below `0.80`.
++
++The thresholds are fixed before remote timing. They are not relaxed after
++seeing results. A pass closes the remaining first-use cold-path issue for this
++exposed WAP scope; it does not authorize an automatic-selector or universal
++solver claim.
+diff --git a/experiments/compiled_query/session_packet_cold_benchmark.py b/experiments/compiled_query/session_packet_cold_benchmark.py
+new file mode 100644
+index 0000000..9c9aec9
+--- /dev/null
++++ b/experiments/compiled_query/session_packet_cold_benchmark.py
+@@ -0,0 +1,171 @@
++"""Paired first-use benchmark for the public ExactProblem -> SBC1 -> SCQ2 path.
++
++The two WAP inputs are already exposed development cases.  This benchmark is not
++new confirmation.  It charges ordinary Python validation and SBC1 packing plus
++one complete native construction/solve/check/serialization/disposal call.
++"""
++from __future__ import annotations
++
++import argparse
++import gc
++import hashlib
++import json
++import math
++import os
++from pathlib import Path
++import platform
++import random
++import statistics
++import sys
++import time
++
++from spectra.exact import (
++    ExactProblem,
++    ExactRuntime,
++    pack_session_packet,
++    verify_session_output,
++)
++from .cases import Case
++
++SCHEMA = 'spectra.session_packet_cold_benchmark.v1'
++CASES = ('wap05a.col', 'wap06a.col')
++
++
++def _digest(payload: bytes) -> str:
++    return hashlib.sha256(payload).hexdigest()
++
++
++def _gmean(values: list[float]) -> float:
++    return math.exp(statistics.fmean(math.log(value) for value in values))
++
++
++def run(library: Path, cases: Path, destination: Path, *, repeats: int = 31) -> dict:
++    if type(repeats) is not int or repeats < 9 or repeats % 2 == 0:
++        raise ValueError('repeats must be an odd exact integer of at least nine')
++    destination.mkdir(parents=True, exist_ok=False)
++    runtime = ExactRuntime(library)
++    records = []
++    try:
++        if hasattr(os, 'sched_getaffinity'):
++            cpus = sorted(os.sched_getaffinity(0))
++            if cpus:
++                os.sched_setaffinity(0, {cpus[0]})
++    except OSError:
++        pass
++
++    gc.disable()
++    try:
++        for name in CASES:
++            source = cases / (name + '.json')
++            case = Case.decode(source.read_bytes())
++            problem = ExactProblem.create(
++                case.problem.n, case.problem.palette,
++                case.problem.edges, case.problem.masks,
++            )
++            rows = case.queries
++            frozen = pack_session_packet(problem, rows)
++            first = {
++                mode: runtime.solve_session_packet(frozen, mode=mode)
++                for mode in ('raw', 'scc')
++            }
++            if first['raw'].output != first['scc'].output:
++                raise AssertionError('raw and SCC certified outputs differ')
++            if not verify_session_output(frozen, first['scc'].output):
++                raise AssertionError('independent SBC1/SCQ2 replay failed')
++            for _ in range(5):
++                for mode in ('raw', 'scc'):
++                    packet = pack_session_packet(problem, rows)
++                    runtime.solve_session_packet(packet, mode=mode)
++
++            samples = {'raw': [], 'scc': []}
++            pack_samples = {'raw': [], 'scc': []}
++            solve_samples = {'r

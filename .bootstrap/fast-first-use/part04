@@ -1,0 +1,105 @@
+ayload: bytes, n: int,
+     return tuple(rows)
+ 
+ 
++class _CertifiedBankReplay:
++    """Preprocess one checked problem, then replay every SCQ2 row.
++
++    ``verify_answer`` remains the independent scalar reference.  A bank verifier
++    must not rebuild the same edge set and literal-colour table once per row; on
++    large repeated-query banks that made evidence replay orders of magnitude
++    slower than the solver it was checking.
++    """
++
++    def __init__(self, problem: ExactProblem):
++        self.problem = problem
++        self.n = problem.n
++        self.k = problem.palette
++        self.masks = problem.masks
++        self.edges = problem.edges
++        self.edge_set = frozenset(problem.edges)
++        self.choices = tuple(
++            tuple(color for color in range(self.k) if mask >> color & 1)
++            for mask in self.masks
++        )
++
++    def _effective_domains(self, query: tuple[tuple[int, int], ...]) -> dict[int, int]:
++        domains: dict[int, int] = {}
++        for vertex, allowed in query:
++            domains[vertex] = domains.get(vertex, self.masks[vertex]) & allowed
++        return domains
++
++    def _color(self, literal: int) -> int | None:
++        choices = self.choices[literal // 2]
++        side = literal & 1
++        return choices[side] if side < len(choices) else None
++
++    def _path_ok(self, path: tuple[int, ...]) -> bool:
++        if len(set(path)) != len(path):
++            return False
++        for before, after in zip(path, path[1:]):
++            u, v = before // 2, after // 2
++            if u == v:
++                if before != 2 * u + 1 or after != 2 * u or len(self.choices[u]) != 1:
++                    return False
++            elif ((min(u, v), max(u, v)) not in self.edge_set
++                  or self._color(before) is None
++                  or self._color(after ^ 1) is None
++                  or self._color(before) != self._color(after ^ 1)):
++                return False
++        return True
++
++    def verify(self, query: tuple[tuple[int, int], ...], code: int,
++               labels: bytes, certificate: bytes) -> bool:
++        if code == 1:
++            return (
++                not certificate
++                and len(labels) == self.n
++                and all(
++                    color < self.k and (self.masks[vertex] >> color) & 1
++                    for vertex, color in enumerate(labels)
++                )
++                and all(labels[left] != labels[right] for left, right in self.edges)
++                and all((allowed >> labels[vertex]) & 1 for vertex, allowed in query)
++            )
++        if code != 0 or any(labels):
++            return False
++        kind, left, right = decode_proof(certificate, self.n)
++        if any(not 0 <= literal < 2 * self.n for literal in left + right):
++            return False
++        domains = self._effective_domains(query)
++        if kind == 1:
++            vertex = left[0]
++            return domains.get(vertex, self.masks[vertex]) == 0
++        if not self._path_ok(left) or not self._path_ok(right):
++            return False
++        if kind == 3:
++            return (left[0] == right[-1] and left[-1] == right[0]
++                    and left[-1] == (left[0] ^ 1))
++        if left[-1] != (right[-1] ^ 1):
++            return False
++        for root in (left[0], right[0]):
++            color = self._color(root)
++            if color is None or domains.get(root // 2, self.masks[root // 2]) != 1 << color:
++                return False
++        return True
++
++
+ def verify_certified_output(problem: ExactProblem,
+                             queries: Iterable[Iterable[Sequence[int]]],
+                             output: bytes) -> bool:
+@@ -586,11 +686,11 @@ def verify_certified_output(problem: ExactProblem,
+                                       problem.edges, problem.masks)
+         rows = tuple(checked.freeze_query(query) for query in queries)
+         answers = decode_certified_output(output, checked.n, len(rows))
+-        return all(verify_answer(
+-            checked, query,
+-            'SAT_VERIFIED' if code else 'UNSAT_VERIFIED',
+-            labels if code else b'', proof,
+-        ) for query, (code, labels, proof) in zip(rows, answers))
++        replay = _CertifiedBankReplay(checked)
++        return all(
++            replay.verify(query, code, labels, proof)
++            for query, (code, labels, proof) in zip(rows, answers)
++        )
+     except (ValueError, TypeError, AttributeError, OverflowError, stru

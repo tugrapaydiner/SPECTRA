@@ -1,0 +1,27 @@
+yte_identical_to_scalar_reference():
++    problem = ExactProblem.create(
++        5, 4,
++        ((0, 1), (0, 4), (1, 3), (2, 4)),
++        (0b0011, 0b0110, 0b1100, 0b1001, 0b0101),
++    )
++    rows = (
++        (),
++        ((4, 0b0101), (0, 0b0001), (4, 0b0001)),
++        ((2, (1 << 63) | 0b0100),),
++        ((1, 0),),
++    )
++    expected = _scalar_reference(problem, rows)
++    assert pack_validated_session_packet(problem, rows) == expected
++    assert pack_session_packet(problem, rows) == expected
++    decoded, decoded_rows = unpack_session_packet(expected)
++    assert decoded == problem
++    assert decoded_rows == rows
++
++
++def test_validated_packer_still_rejects_noncanonical_problem_objects():
++    malformed = ExactProblem(2, 2, ((1, 0),), (0b11, 0b11))
++    with pytest.raises(ValueError, match='sorted unique'):
++        pack_validated_session_packet(malformed, ((),))
+-- 
+2.47.3
+

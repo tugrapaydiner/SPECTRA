@@ -1,0 +1,110 @@
+ct.error):
+         return False
+ 
+diff --git a/spectra/exact_problem.py b/spectra/exact_problem.py
+index e7b5089..2f49ba2 100644
+--- a/spectra/exact_problem.py
++++ b/spectra/exact_problem.py
+@@ -29,15 +29,37 @@ class ExactProblem:
+             if (type(mask) is not int or mask <= 0 or mask & ~palette_mask
+                     or mask.bit_count() not in (1, 2)):
+                 raise ValueError('each original domain must contain one or two palette colours')
++        edge_snapshot = tuple(edges)
++        if len(edge_snapshot) > 2_000_000:
++            raise ValueError('edge count exceeds native bound')
++
++        # The installed API commonly receives its own already-canonical tuple
++        # back during packet preparation.  Validate that representation in one
++        # linear pass and retain it directly instead of rebuilding a set and
++        # sorting tens of thousands of edges again.
++        previous: tuple[int, int] | None = None
++        canonical = True
++        for edge in edge_snapshot:
++            if type(edge) is not tuple or len(edge) != 2:
++                canonical = False
++                break
++            left, right = edge
++            if (type(left) is not int or type(right) is not int
++                    or not 0 <= left < right < n
++                    or (previous is not None and edge <= previous)):
++                canonical = False
++                break
++            previous = edge
++        if canonical:
++            return cls(n, palette, edge_snapshot, snapshot)
++
+         copied: list[tuple[int, int]] = []
+-        for edge in edges:
++        for edge in edge_snapshot:
+             row = tuple(edge)
+             if (len(row) != 2 or any(type(v) is not int or not 0 <= v < n for v in row)
+                     or row[0] == row[1]):
+                 raise ValueError('edge must contain two distinct in-range exact integers')
+             copied.append((min(row), max(row)))
+-        if len(copied) > 2_000_000:
+-            raise ValueError('edge count exceeds native bound')
+         return cls(n, palette, tuple(sorted(set(copied))), snapshot)
+ 
+     def colors(self) -> tuple[tuple[int, ...], ...]:
+diff --git a/tests/public/test_exact_packet_packing.py b/tests/public/test_exact_packet_packing.py
+new file mode 100644
+index 0000000..1530c53
+--- /dev/null
++++ b/tests/public/test_exact_packet_packing.py
+@@ -0,0 +1,79 @@
++"""Canonical SBC1 packing stays byte-stable while avoiding scalar pack loops."""
++from __future__ import annotations
++
++import struct
++
++import pytest
++
++from spectra.exact import (
++    ExactProblem,
++    pack_session_packet,
++    pack_validated_session_packet,
++    unpack_session_packet,
++)
++
++_HEADER = struct.Struct('<4s7I')
++
++
++def _scalar_reference(problem: ExactProblem,
++                      rows: tuple[tuple[tuple[int, int], ...], ...]) -> bytes:
++    pins = sum(map(len, rows))
++    size = (_HEADER.size + 8 * problem.n + 8 * len(problem.edges)
++            + 4 * (len(rows) + 1) + 12 * pins)
++    payload = bytearray(size)
++    _HEADER.pack_into(payload, 0, b'SBC1', problem.n, problem.palette,
++                      len(problem.edges), len(rows), pins, 0, 0)
++    masks_at = _HEADER.size
++    edges_at = masks_at + 8 * problem.n
++    offsets_at = edges_at + 8 * len(problem.edges)
++    vertices_at = offsets_at + 4 * (len(rows) + 1)
++    allowed_at = vertices_at + 4 * pins
++    for index, mask in enumerate(problem.masks):
++        struct.pack_into('<Q', payload, masks_at + 8 * index, mask)
++    for index, (left, right) in enumerate(problem.edges):
++        struct.pack_into('<II', payload, edges_at + 8 * index, left, right)
++    cursor = 0
++    struct.pack_into('<I', payload, offsets_at, 0)
++    for row_index, row in enumerate(rows):
++        for vertex, allowed in row:
++            struct.pack_into('<I', payload, vertices_at + 4 * cursor, vertex)
++            struct.pack_into('<Q', payload, allowed_at + 8 * cursor, allowed)
++            cursor += 1
++        struct.pack_into('<I', payload, offsets_at + 4 * (row_index + 1), cursor)
++    return bytes(payload)
++
++
++def test_canonical_problem_keeps_the_admitted_edge_tuple():
++    edges = ((0, 1), (0, 2), (1, 2))
++    problem = ExactProblem.create(3, 3, edges, (0b011, 0b110, 0b101))
++    assert problem.edges is edges
++
++    normalized = ExactProblem.create(3, 3, ((2, 1), [0, 2], (1, 2)),
++                                     (0b011, 0b110, 0b101))
++    assert normalized.edges == ((0, 2), (1, 2))
++
++
++def test_bulk_session_packet_is_b
