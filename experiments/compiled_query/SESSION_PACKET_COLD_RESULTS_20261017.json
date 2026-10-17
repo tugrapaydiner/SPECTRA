@@ -1,0 +1,53 @@
+{
+  "artifacts": {
+    "arm64": {
+      "id": 12116240371,
+      "zip_sha256": "85f175214ce6991d506804a7b95b5e1c0af73d95abcb2c6d488c6e19d9b2fb67"
+    },
+    "x86_64": {
+      "id": 12115876545,
+      "zip_sha256": "492d21e9e47309b9a6eb0c7c1986c24ced14c1cf685605e68ab0b004cfced6c8"
+    }
+  },
+  "base_main": "4a647e54e7e7e0756e74b52575f86f03d2764455",
+  "candidate_commit": "415036763dc9ea918cbcf69e4a87da23d05c43d4",
+  "candidate_tree": "79b3ed08cf84d89d16f938753ab02771c5137eb4",
+  "classification": "exposed WAP development cases; not a holdout",
+  "date": "2026-10-17",
+  "environments": {
+    "arm64": {
+      "case_ratios": {
+        "wap05a.col": 0.6856913906024148,
+        "wap06a.col": 0.6729146463995194
+      },
+      "focused_public_contracts_passed": 17,
+      "gate_pass": true,
+      "geometric_mean_ratio": 0.6792729787400782,
+      "latency_reduction_percent": 32.07270212599218,
+      "max_case_ratio": 0.6856913906024148,
+      "speedup": 1.47216219590364
+    },
+    "x86_64": {
+      "case_ratios": {
+        "wap05a.col": 0.6893488363023432,
+        "wap06a.col": 0.6849896166631907
+      },
+      "focused_public_contracts_passed": 17,
+      "gate_pass": true,
+      "geometric_mean_ratio": 0.6871657697571661,
+      "latency_reduction_percent": 31.283423024283387,
+      "max_case_ratio": 0.6893488363023432,
+      "speedup": 1.455252930240767
+    }
+  },
+  "gate": {
+    "all_cases_complete_and_replayed": true,
+    "every_case_ratio_below": 0.8,
+    "geometric_mean_ratio_below": 0.75,
+    "pass": true
+  },
+  "query_count_per_case": 1024,
+  "repeats": 31,
+  "schema": "spectra.session_packet_cold_results.v1",
+  "workflow_run": 39072623159
+}
