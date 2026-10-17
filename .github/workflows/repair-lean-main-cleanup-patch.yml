@@ -1,37 +1,42 @@
-name: Repair lean-main cleanup patch
+name: Cleanup source and footprint review
 on:
   push:
     branches: [maintenance/lean-main-20261016]
     paths: ['.github/workflows/repair-lean-main-cleanup-patch.yml']
 permissions:
-  contents: write
+  contents: read
+concurrency:
+  group: cleanup-source-review-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
-  repair:
+  review:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
-      - name: Replace the malformed staging patch with the validated bytes
+          persist-credentials: false
+      - name: Preserve exact source for offline review without applying staging payloads
+        shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/lean-main.patch.gz.b64 <<'EOF'
-          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
-          EOF
-          tr -d '[:space:]' < /tmp/lean-main.patch.gz.b64 | base64 -d | gzip -dc > .cleanup/lean-main-text.patch
-          git apply --check .cleanup/lean-main-text.patch
-      - name: Retrigger the full cleanup from a clean checkout
-        run: |
-          set -euo pipefail
-          printf '\n# retriggered after exact patch-byte repair\n' >> .github/workflows/apply-lean-main-cleanup.yml
-          git rm .github/workflows/repair-lean-main-cleanup-patch.yml
-          git config user.name Tugrap
-          git config user.email 106766396+tugrapaydiner@users.noreply.github.com
-          git add .cleanup/lean-main-text.patch .github/workflows/apply-lean-main-cleanup.yml
-          git commit -m "Repair the lean-main cleanup patch bytes"
-          git push origin HEAD:maintenance/lean-main-20261016
+          mkdir -p /tmp/spectra-cleanup-review
+          git rev-parse HEAD > /tmp/spectra-cleanup-review/review_commit.txt
+          git rev-parse refs/remotes/origin/main > /tmp/spectra-cleanup-review/main_commit.txt
+          git rev-parse refs/remotes/origin/main^{tree} > /tmp/spectra-cleanup-review/main_tree.txt
+          git for-each-ref --format='%(objectname) %(refname)' > /tmp/spectra-cleanup-review/refs.txt
+          git bundle create /tmp/spectra-cleanup-review/history.bundle --all
+          git bundle verify /tmp/spectra-cleanup-review/history.bundle > /tmp/spectra-cleanup-review/bundle_verification.txt 2>&1
+          git ls-tree -r -l refs/remotes/origin/main > /tmp/spectra-cleanup-review/main_inventory.txt
+          git diff --name-status refs/remotes/origin/main HEAD > /tmp/spectra-cleanup-review/branch_changes.txt
+          git diff --exit-code refs/remotes/origin/main HEAD -- spectra common model train eval data deploy tests results experiments pyproject.toml
+          printf '%s\n' 'Read-only source export. No staged patch was applied. No remote ref, main file, solver, evidence, or workflow is rewritten by this job. This is not validation of the proposed cleanup.' > /tmp/spectra-cleanup-review/SCOPE.txt
+          cd /tmp/spectra-cleanup-review
+          sha256sum *.txt *.bundle > SHA256SUMS.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: spectra-cleanup-source-review-${{ github.run_id }}
+          path: /tmp/spectra-cleanup-review/
+          retention-days: 90
+          if-no-files-found: error
