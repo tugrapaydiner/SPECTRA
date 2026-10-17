@@ -1,74 +1,46 @@
 # Releasing SPECTRA
 
-A clean repository, passing tests, a successful benchmark and a published release
-are separate states. This guide prepares a maintenance release; it does not
-approve unsupported learned-capability, memory, L3-residency or frontier claims.
+A clean source tree, passing tests, a successful benchmark, and a published release
+are separate states. This checklist prepares a maintenance release; it does not
+approve broader scientific claims.
 
-## Choose the source and scope
+## Source and version
 
-Use the intended commit on `main`, after reviewing its exact diff and CI. Keep
-experimental PRs separate until independently accepted; [current status](STATUS.md)
-records the prepared-runtime/compiler stack. Do not silently fold it into a
-cleanup release. Review the [changelog](../CHANGELOG.md) and
-[security boundary](../SECURITY.md). Preserve all prior raw evidence and failures.
+Release from the exact reviewed commit on `main`. The existing v0.7.1 tag and assets
+must not be moved or replaced. Change both `[project].version` and
+`spectra.__version__` in one intentional release commit.
 
-The existing v0.7.1 tag and assets must not be moved or replaced. This maintenance
-branch retains the version until an intentional release-version commit is made.
-Update both `[project].version` and `spectra.__version__` together in that commit;
-never upload changed bytes under an already published version.
-
-## Local acceptance
-
-Run the complete [development test/build procedure](DEVELOPMENT.md), including
-public contracts, fast research regressions, a wheel built from the sdist,
-installed-only checks, navigation/version checks and the history-based
-workspace audit. Retain exact commands, exit statuses, environments and logs.
-Native execution and historical evidence replays are additional checks, not
-implied by successful wheel installation. A release containing `spectra.exact`
-must also pass the installed-wheel exact check on the final wheel, verify its
-packaged C++ source inventory, compile under the supported Linux and Windows
-builders, and retain the ABI/API/build-receipt results. Report excluded slow tests
-and disabled leak detection explicitly.
+## Required local acceptance
 
 ```bash
-python scripts/check_release_readiness.py
-python scripts/audit_workspace.py --out release-workspace-audit.json
+python -m pytest tests/public --confcutdir=tests/public
+python scripts/check_active_tree.py --out active-tree.json
+python scripts/check_release_readiness.py --out release-readiness.json
+python scripts/audit_workspace.py --out workspace-audit.json
+python -m build --outdir dist/current
+python scripts/check_current_installation.py \
+  --dist dist/current --out install-check
 ```
 
-The first command checks two source versions, nine current guides' local links
-and the current-wheel CI entry points. External links and all historical prose
-are outside this offline check. Neither command is a security certification or
-an approval of the scientific claims.
+A release containing `spectra.exact` must also pass the dedicated Linux x86,
+Linux ARM64, Windows, and sanitizer matrix, plus the installed exact and exam-repair
+checks. Report excluded slow tests and disabled leak detection explicitly.
 
-## GitHub acceptance and publication
+## Repository boundary
 
-Require successful checks for the **exact final PR/merge source**, not an earlier
-head. Retain source archives and Git tree hashes alongside workflow receipts.
-The full CPU workflow includes checkpoint, fixed-pool, restart, controller and
-SAT audits. The indexed-efficiency matrix and output-only checks feed the
-versioned evidence packager. Do not relax an existing failed gate to release.
+The active tree is capped by `scripts/check_active_tree.py`: no large historical
+archives, retired transport directories, stale branch-trigger workflows, or files
+larger than the declared limit may be added. Durable research evidence belongs in a
+release or a hash-bound workflow artifact. Historical bytes remain reachable from
+`archive/research-history-20261016` and their original commits.
 
-The publishing workflow only acts on a proven package-version transition in a
-push to `main`. Editing package metadata without changing the version does not
-request publication. It rejects an unknown previous commit, existing tag or
-release, mixed source evidence, incomplete checks and ambiguous wheel selection.
-It creates a new exact tag, uploads a draft, downloads/checks asset hashes, and
-only then publishes. A failed upload can leave a tag/draft: inspect and resolve
-that state deliberately; do not force-push or silently overwrite it.
+## Publication
 
-After publication, inspect the real tag, release state, five expected assets and
-SHA256SUMS. Save the publication receipt. Workflow configuration or a green PR is
-not evidence that a new release exists. PyPI publication is a separate operation
-and is not configured by this cleanup.
+Require successful checks for the exact final merge source. Retain the commit, tree,
+wheel, sdist, environment, and SHA-256 receipts. Creating a tag or draft release is
+not proof that publication completed; download and verify every final asset before
+announcing it.
 
-## Repository presentation and governance
-
-Before presenting the next release, correct GitHub's About description to:
-
-> Verified CNF search and reproducible CPU reasoning research.
-
-The older “Edge-native o1” and “entirely inside the L3 cache” wording is not
-supported by the retained evidence. About metadata is separate from README files.
-Also review protection for `main`, required successful checks and review policy.
-Record actual settings changes; this source cleanup does not itself configure
-repository administration, retire branches or certify unmerged experiments.
+The latest published package remains
+[v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1) until a
+separate versioned release is intentionally made.

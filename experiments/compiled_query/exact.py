@@ -359,18 +359,18 @@ class ExactRuntime:
                 max_bytes: int = DEFAULT_BYTES) -> 'ExactSession':
         return ExactSession(self._module, problem, mode=mode, max_bytes=max_bytes)
 
-    def solve_session_packet(self, packet: bytes, *, mode: str = 'route',
+    def solve_session_packet(self, packet: bytes, *, mode: str = 'auto',
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
         """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
 
-        Opt-in ``auto`` uses structural policy v2. It selects raw traversal below
+        The default ``auto`` mode uses structural policy v2. It selects raw traversal below
         64 requests, on a base-infeasible graph, or when the immutable bank carries
         at least eight pins per request on average. Otherwise it uses routed proofs
         when SCCs at least halve the literal graph, and plain SCC batching when they
         do not. Selection uses only admitted graph/request geometry, never answers
         or measured timings. ``info['selected_mode']`` and
-        ``info['auto_policy_reason']`` expose the decision. Explicit modes and the
-        default retain their meaning; this policy is an experimental heuristic.
+        ``info['auto_policy_reason']`` expose the decision. Explicit modes retain their meaning; the automatic policy is a conservative
+        structural heuristic rather than a measured-timing oracle.
         """
         if type(packet) is not bytes:
             raise ValueError('session packet must be immutable exact bytes')

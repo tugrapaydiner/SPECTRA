@@ -1,55 +1,40 @@
 name: repository-audit
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  inventory:
+  active-tree:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
-      - name: Inventory public branch history without modifying refs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Audit only the active source tree
         run: |
           set -euo pipefail
-          mkdir -p /tmp/spectra-repository-audit
-          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --tags
-          git bundle create /tmp/spectra-repository-audit/history.bundle --all
-          python - <<'PY'
-          import hashlib, json, subprocess
-          from pathlib import Path
-          out = Path('/tmp/spectra-repository-audit')
-          def git(*args):
-              return subprocess.check_output(['git', *args], text=True).strip()
-          main = git('rev-parse', 'origin/main')
-          records = []
-          for line in git('for-each-ref', '--format=%(refname) %(objectname)', 'refs/remotes/origin/').splitlines():
-              ref, sha = line.split()
-              branch = ref.removeprefix('refs/remotes/origin/')
-              if branch == 'HEAD':
-                  continue
-              base = git('merge-base', main, sha)
-              records.append({'branch': branch, 'sha': sha, 'tree': git('rev-parse', sha+'^{tree}'),
-                              'merged_into_main': base == sha, 'merge_base': base,
-                              'ahead': int(git('rev-list', '--count', main+'..'+sha)),
-                              'behind': int(git('rev-list', '--count', sha+'..'+main)),
-                              'date': git('show', '-s', '--format=%cI', sha),
-                              'subject': git('show', '-s', '--format=%s', sha),
-                              'changed_paths_since_base': git('diff', '--name-status', base, sha).splitlines()})
-          (out/'branches.json').write_text(json.dumps({'main': main, 'branches': records}, indent=2)+'\n')
-          (out/'source_commit.txt').write_text(git('rev-parse', 'HEAD')+'\n')
-          (out/'SHA256.json').write_text(json.dumps({p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.iterdir())}, indent=2)+'\n')
-          print(json.dumps(records, indent=2))
-          PY
+          mkdir -p repository-audit
+          git rev-parse HEAD > repository-audit/source_commit.txt
+          git rev-parse HEAD^{tree} > repository-audit/source_tree.txt
+          python scripts/check_active_tree.py --out repository-audit/active-tree.json
+          python scripts/check_release_readiness.py --out repository-audit/release-readiness.json
+          python scripts/audit_workspace.py --out repository-audit/workspace.json
+          git ls-tree -r -l HEAD > repository-audit/tracked-files.txt
+          du -sh --exclude=.git . > repository-audit/worktree-size.txt
+          sha256sum repository-audit/*.json repository-audit/*.txt > repository-audit/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: repository-audit-${{ github.run_id }}
-          path: /tmp/spectra-repository-audit/
-          retention-days: 90
+          path: repository-audit/
+          retention-days: 30
           if-no-files-found: error

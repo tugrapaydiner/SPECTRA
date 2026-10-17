@@ -86,10 +86,20 @@ and [PRIOR_ART_AUDIT_20261009.md](../experiments/wap_support/PRIOR_ART_AUDIT_202
 
 ## Other retained tracks
 
-The repository also retains bounded Boolean search, native SVM execution, neural,
-low-bit, compiler, and structured-search experiments. Each keeps its own evidence,
-controls, failures, and scope. None inherits the WAP result.
+Backward-compatible runtime modules remain in the package. Bulky historical
+evidence and alternate research branch trees are consolidated under
+`archive/research-history-20261016` rather than duplicated on `main`. Their failed
+gates and narrow claims remain unchanged; none inherits the WAP result.
 
 Use [Development](DEVELOPMENT.md) for current commands, [Releasing](RELEASING.md)
 for package publication, and the [history index](history/README.md) for superseded
 research records.
+
+## Active-tree boundary
+
+The normal checkout is capped by `scripts/check_active_tree.py`. It contains seven
+permanent workflows and excludes nested evidence archives, generated historical
+PNGs, transport directories, and stale branch-trigger automation. Compact summaries
+and the small independently checked SAT negative-result fixture remain under
+`results/`; full bytes are recoverable from archive history and cited workflow
+artifacts.

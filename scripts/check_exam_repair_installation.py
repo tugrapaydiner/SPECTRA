@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import tempfile
 
@@ -36,7 +37,13 @@ def check() -> dict:
         ("exam-0000", model.period_ids[0]),
         ("exam-0001", model.period_ids[0]),
     ))
-    with tempfile.TemporaryDirectory(prefix="spectra-exam-install-") as directory:
+    # Windows keeps a loaded extension module locked until process exit. The
+    # build directory is disposable, so a successful API check must not be
+    # converted into a failure merely because the OS defers deletion of the
+    # loaded .pyd. Linux still requires ordinary complete cleanup.
+    with tempfile.TemporaryDirectory(
+            prefix="spectra-exam-install-",
+            ignore_cleanup_errors=(os.name == "nt")) as directory:
         library = build_exact_runtime(Path(directory) / "native")
         runtime = ExactRuntime(library)
         with runtime.prepare(model.problem, mode="scc") as session:
