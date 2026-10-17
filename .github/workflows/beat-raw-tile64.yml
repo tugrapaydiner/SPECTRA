@@ -49,7 +49,8 @@ jobs:
           print(build_exact_runtime(Path('raw-tile64-evidence/native')))
           PY
           )
-          echo "SPECTRA_EXACT_LIBRARY=$PWD/$library" >> "$GITHUB_ENV"
+          library=$(realpath "$library")
+          echo "SPECTRA_EXACT_LIBRARY=$library" >> "$GITHUB_ENV"
           sha256sum "$library" > raw-tile64-evidence/library.sha256
       - name: Run exact and public contracts
         run: |
