@@ -6,6 +6,7 @@ on:
       - '.github/workflows/beat-raw-tile64.yml'
       - 'scripts/apply_raw_tile64.py'
       - 'scripts/apply_raw_tile64_v2.py'
+      - 'scripts/apply_raw_tile64_v3.py'
 permissions:
   contents: write
 concurrency:
@@ -35,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p raw-tile64-evidence
-          python scripts/apply_raw_tile64_v2.py
+          python scripts/apply_raw_tile64_v3.py
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
           git diff --check
           git diff --binary > raw-tile64-evidence/implementation.patch
