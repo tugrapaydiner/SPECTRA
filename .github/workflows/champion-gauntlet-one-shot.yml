@@ -1,0 +1,155 @@
+name: champion-gauntlet-one-shot
+on:
+  push:
+    branches: [research/champion-gauntlet-20261017]
+    paths:
+      - 'experiments/compiled_query/champion_*.py'
+      - 'experiments/compiled_query/sessions.py'
+      - 'experiments/compiled_query/study.py'
+      - 'experiments/compiled_query/test_champion_competitors.py'
+      - 'experiments/compiled_query/CHAMPION_GAUNTLET_PROTOCOL_20261017.md'
+      - '.github/workflows/champion-gauntlet-one-shot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: champion-gauntlet-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  PYTHONHASHSEED: '0'
+jobs:
+  gauntlet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/checkout@v4
+        with:
+          repository: arminbiere/cadical
+          ref: c60730422e758ef1cebe7aeddf2dda31c996bf04
+          path: upstream/cadical
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: arminbiere/kissat
+          ref: 8af8e56f174b778aef3aa45af9f739b2a5f492c2
+          path: upstream/kissat
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: tulip-control/dd
+          ref: 4442d498ddea1bec0071315f538cb5ef37443985
+          path: upstream/dd
+          persist-credentials: false
+      - name: Install pinned Python controls
+        env:
+          DD_FETCH: '1'
+          DD_CUDD: '1'
+        run: |
+          set -euo pipefail
+          python -m pip install 'setuptools==80.9.0' 'wheel==0.45.1' 'Cython==3.1.3'
+          python -m pip install --no-build-isolation ./upstream/dd
+          python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15' 'ortools==9.15.6755'
+          python - <<'PY'
+          import dd.cudd, ortools, pysat
+          assert ortools.__version__ == '9.15.6755'
+          assert pysat.__version__ == '1.9.dev15'
+          PY
+      - name: Build pinned current SAT solver libraries and receipts
+        run: |
+          set -euo pipefail
+          mkdir -p champion-build champion-evidence
+          (cd upstream/cadical && ./configure -O3 -shared && make -j2)
+          (cd upstream/kissat && ./configure -O3 -shared && make -j2)
+          test -f upstream/cadical/build/libcadical.so
+          test -f upstream/kissat/build/libkissat.so
+          cp upstream/cadical/build/libcadical.so champion-build/libcadical.so
+          cp upstream/kissat/build/libkissat.so champion-build/libkissat.so
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, subprocess
+          specs = [
+            ('cadical3', Path('champion-build/libcadical.so'), 'c60730422e758ef1cebe7aeddf2dda31c996bf04', '3.0.1', './configure -O3 -shared && make -j2'),
+            ('kissat4', Path('champion-build/libkissat.so'), '8af8e56f174b778aef3aa45af9f739b2a5f492c2', '4.0.4', './configure -O3 -shared && make -j2'),
+          ]
+          compiler = subprocess.run(['cc','--version'], text=True, capture_output=True, check=True).stdout
+          for name, path, commit, version, command in specs:
+              receipt = dict(schema='spectra.external_solver_build.v1', name=name,
+                  upstream_commit=commit, version=version, command=command,
+                  compiler=compiler, library_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+              path.with_name(path.name+'.receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True)+'\n')
+          PY
+      - name: Build SPECTRA native runtimes and run adapter contracts
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from spectra.cnf.quotient_query import build_quotient_runtime
+          from experiments.compiled_query.exact import build_exact_runtime
+          print(build_quotient_runtime('champion-build/quotient'))
+          print(build_exact_runtime('champion-build/exact'))
+          PY
+          export SPECTRA_QUOTIENT_LIBRARY="$(find champion-build/quotient -maxdepth 1 -name '*.so')"
+          export SPECTRA_EXACT_LIBRARY="$(find champion-build/exact -maxdepth 1 -name '*.so')"
+          python -m pytest \
+            experiments/compiled_query/test_champion_competitors.py \
+            experiments/compiled_query/test_study.py \
+            experiments/compiled_query/test_exact_study.py \
+            -q --junitxml=champion-evidence/contracts.xml 2>&1 | tee champion-evidence/contracts.log
+      - name: Freeze, execute and independently replay the development gauntlet
+        run: |
+          set -euo pipefail
+          quotient="$(find champion-build/quotient -maxdepth 1 -name '*.so')"
+          exact="$(find champion-build/exact -maxdepth 1 -name '*.so')"
+          python -m experiments.compiled_query.champion_gauntlet prepare \
+            --out champion-study \
+            --quotient-library "$quotient" \
+            --exact-library "$exact" \
+            --cadical3-library champion-build/libcadical.so \
+            --kissat4-library champion-build/libkissat.so
+          python -m experiments.compiled_query.champion_gauntlet run \
+            --out champion-study 2>&1 | tee champion-evidence/run.log
+          python -S -m experiments.compiled_query.champion_gauntlet report \
+            --out champion-study --report champion-report 2>&1 | tee champion-evidence/report.log
+      - name: Preserve exact identities and hashes
+        if: always()
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > champion-evidence/source_commit.txt
+          git rev-parse HEAD^{tree} > champion-evidence/source_tree.txt
+          git -C upstream/cadical rev-parse HEAD > champion-evidence/cadical_commit.txt
+          git -C upstream/kissat rev-parse HEAD > champion-evidence/kissat_commit.txt
+          git -C upstream/dd rev-parse HEAD > champion-evidence/dd_commit.txt
+          python -VV > champion-evidence/python.txt
+          uname -a > champion-evidence/platform.txt
+          lscpu > champion-evidence/cpu.txt
+          python -m pip freeze > champion-evidence/environment.txt
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root=Path('champion-evidence')
+          with (root/'sha256.txt').open('w') as out:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file() and p.name != 'sha256.txt':
+                      out.write(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(root))+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spectra-champion-gauntlet-${{ github.run_id }}
+          path: |
+            champion-study/
+            champion-report/
+            champion-evidence/
+            champion-build/*.receipt.json
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: warn
