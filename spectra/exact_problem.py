@@ -29,15 +29,37 @@ class ExactProblem:
             if (type(mask) is not int or mask <= 0 or mask & ~palette_mask
                     or mask.bit_count() not in (1, 2)):
                 raise ValueError('each original domain must contain one or two palette colours')
+        edge_snapshot = tuple(edges)
+        if len(edge_snapshot) > 2_000_000:
+            raise ValueError('edge count exceeds native bound')
+
+        # The installed API commonly receives its own already-canonical tuple
+        # back during packet preparation.  Validate that representation in one
+        # linear pass and retain it directly instead of rebuilding a set and
+        # sorting tens of thousands of edges again.
+        previous: tuple[int, int] | None = None
+        canonical = True
+        for edge in edge_snapshot:
+            if type(edge) is not tuple or len(edge) != 2:
+                canonical = False
+                break
+            left, right = edge
+            if (type(left) is not int or type(right) is not int
+                    or not 0 <= left < right < n
+                    or (previous is not None and edge <= previous)):
+                canonical = False
+                break
+            previous = edge
+        if canonical:
+            return cls(n, palette, edge_snapshot, snapshot)
+
         copied: list[tuple[int, int]] = []
-        for edge in edges:
+        for edge in edge_snapshot:
             row = tuple(edge)
             if (len(row) != 2 or any(type(v) is not int or not 0 <= v < n for v in row)
                     or row[0] == row[1]):
                 raise ValueError('edge must contain two distinct in-range exact integers')
             copied.append((min(row), max(row)))
-        if len(copied) > 2_000_000:
-            raise ValueError('edge count exceeds native bound')
         return cls(n, palette, tuple(sorted(set(copied))), snapshot)
 
     def colors(self) -> tuple[tuple[int, ...], ...]:
