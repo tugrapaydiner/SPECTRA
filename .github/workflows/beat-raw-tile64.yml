@@ -1,0 +1,105 @@
+name: beat-raw-tile64
+on:
+  push:
+    branches: [research/beat-raw-tile64-20261017]
+    paths:
+      - '.github/workflows/beat-raw-tile64.yml'
+      - 'scripts/apply_raw_tile64.py'
+permissions:
+  contents: write
+concurrency:
+  group: beat-raw-tile64
+  cancel-in-progress: false
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+jobs:
+  implement-test-benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/beat-raw-tile64-20261017
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install focused test dependencies
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Apply exact guarded patch
+        run: |
+          set -euo pipefail
+          python scripts/apply_raw_tile64.py
+          cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
+          cmp spectra/exact.py experiments/compiled_query/exact.py
+          git diff --check
+          mkdir -p raw-tile64-evidence
+          git diff --binary > raw-tile64-evidence/implementation.patch
+          git rev-parse HEAD > raw-tile64-evidence/transport_commit.txt
+      - name: Build one receipt-bound native library
+        run: |
+          set -euo pipefail
+          library=$(python - <<'PY'
+          from pathlib import Path
+          from experiments.compiled_query.exact import build_exact_runtime
+          print(build_exact_runtime(Path('raw-tile64-evidence/native')))
+          PY
+          )
+          echo "SPECTRA_EXACT_LIBRARY=$PWD/$library" >> "$GITHUB_ENV"
+          sha256sum "$library" > raw-tile64-evidence/library.sha256
+      - name: Run exact and public contracts
+        run: |
+          set -euo pipefail
+          python -m pytest \
+            experiments/compiled_query/test_raw_tile64.py \
+            experiments/compiled_query/test_exact.py \
+            experiments/compiled_query/test_linear_construction.py \
+            -q --junitxml=raw-tile64-evidence/compiled-query-tests.xml \
+            2>&1 | tee raw-tile64-evidence/compiled-query-tests.log
+          python -m pytest tests/public/test_exact_api.py \
+            --confcutdir=tests/public -q \
+            --junitxml=raw-tile64-evidence/public-tests.xml \
+            2>&1 | tee raw-tile64-evidence/public-tests.log
+      - name: Run fixed raw-control benchmark gate
+        run: |
+          set -euo pipefail
+          python -m experiments.compiled_query.raw_tile64_benchmark \
+            --library "$SPECTRA_EXACT_LIBRARY" \
+            --out raw-tile64-evidence/benchmark.json \
+            2>&1 | tee raw-tile64-evidence/benchmark.log
+      - name: Record identities
+        if: always()
+        run: |
+          set -euo pipefail
+          python -VV > raw-tile64-evidence/python.txt
+          uname -a > raw-tile64-evidence/platform.txt
+          python -m pip freeze > raw-tile64-evidence/environment.txt
+          sha256sum spectra/_native/exact_binary.cpp spectra/exact.py \
+            experiments/compiled_query/test_raw_tile64.py \
+            experiments/compiled_query/raw_tile64_benchmark.py \
+            > raw-tile64-evidence/source.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: raw-tile64-${{ github.run_id }}
+          path: raw-tile64-evidence/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Commit only after every correctness and speed gate passes
+        if: success()
+        run: |
+          set -euo pipefail
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git add \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/exact_native.cpp \
+            spectra/exact.py \
+            experiments/compiled_query/exact.py \
+            experiments/compiled_query/test_exact.py
+          git commit -m 'Add a 64-lane raw implication bank engine'
+          git push origin HEAD:research/beat-raw-tile64-20261017
