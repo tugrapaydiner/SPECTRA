@@ -1,0 +1,252 @@
+name: tile64-external-competition-audit
+
+on:
+  push:
+    branches: [audit/tile64-external-competition-20261017]
+    paths: [.github/workflows/tile64-external-competition-audit.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tile64-external-competition-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  NUMEXPR_NUM_THREADS: '1'
+  UPSTREAM_COMMIT: 4932048642da2144f387961b595112277afff82f
+  DD_COMMIT: 4442d498ddea1bec0071315f538cb5ef37443985
+
+jobs:
+  audit:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86-64-full
+            runner: ubuntu-24.04
+            cudd: true
+            arms: exact-bank-scc exact-bank-raw minicard cadical195 cudd-reduced-natural
+          - label: arm64-native
+            runner: ubuntu-24.04-arm
+            cudd: false
+            arms: exact-bank-scc exact-bank-raw minicard cadical195
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: actions/checkout@v4
+        if: matrix.cudd
+        with:
+          repository: tulip-control/dd
+          ref: ${{ env.DD_COMMIT }}
+          path: upstream-dd
+          persist-credentials: false
+
+      - name: Install pinned competitors and audit dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'setuptools==80.9.0' 'wheel==0.45.1' 'Cython==3.1.3'
+          if [ '${{ matrix.cudd }}' = 'true' ]; then
+            DD_FETCH=1 DD_CUDD=1 python -m pip install --no-build-isolation ./upstream-dd
+          fi
+          python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+          python - <<'PY'
+          from pysat.solvers import Solver
+          for name in ('minicard', 'cadical195'):
+              solver = Solver(name=name)
+              solver.delete()
+              print(name, 'available')
+          PY
+          if [ '${{ matrix.cudd }}' = 'true' ]; then
+            python -c 'import dd.cudd; print("native CUDD available")'
+          fi
+
+      - name: Freeze source and environment receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-evidence
+          git rev-parse HEAD > audit-evidence/source-commit.txt
+          git rev-parse HEAD^{tree} > audit-evidence/source-tree.txt
+          git status --short > audit-evidence/git-status.txt
+          test ! -s audit-evidence/git-status.txt
+          python -VV > audit-evidence/python.txt
+          python -m pip freeze > audit-evidence/environment.txt
+          uname -a > audit-evidence/platform.txt
+          lscpu > audit-evidence/cpu.txt
+          sha256sum \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/exact_native.cpp \
+            experiments/compiled_query/study.py \
+            experiments/compiled_query/sessions.py \
+            experiments/compiled_query/audit.py \
+            experiments/compiled_query/tile64_external_gate.py \
+            experiments/compiled_query/TILE64_EXTERNAL_COMPETITION_PROTOCOL_20261017.md \
+            > audit-evidence/source-sha256.txt
+          cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
+
+      - name: Test the exact bank and frozen gate logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q --confcutdir=experiments/compiled_query \
+            experiments/compiled_query/test_tile64_external_gate.py \
+            tests/public/test_exact_bank_tile64.py \
+            2>&1 | tee audit-evidence/contracts.log
+
+      - name: Acquire and verify exposed WAP development graphs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-evidence/graphs
+          for name in wap05a.col wap06a.col; do
+            curl --fail --location --retry 3 --retry-all-errors \
+              "https://raw.githubusercontent.com/marijnheule/clicolcom/${UPSTREAM_COMMIT}/graphs/${name}" \
+              -o "audit-evidence/graphs/${name}"
+          done
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+
+          inventory = json.loads(Path('experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json').read_text())
+          records = []
+          for name in ('wap05a.col', 'wap06a.col'):
+              record = inventory['graphs'][name]
+              data = Path('audit-evidence/graphs', name).read_bytes()
+              blob = hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
+              assert record['role'] in ('development', 'development_consumed')
+              assert len(data) == record['bytes']
+              assert blob == record['git_blob_sha1']
+              records.append({
+                  'name': name,
+                  'bytes': len(data),
+                  'git_blob_sha1': blob,
+                  'sha256': hashlib.sha256(data).hexdigest(),
+              })
+          Path('audit-evidence/graph-acquisition.json').write_text(
+              json.dumps({'upstream_commit': inventory['commit'], 'graphs': records}, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+          python -m experiments.compiled_query.study export-wap \
+            --graphs audit-evidence/graphs --output audit-evidence/cases
+
+      - name: Build exact and observer runtimes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > audit-evidence/quotient-library.txt
+          from pathlib import Path
+          from spectra.cnf.quotient_query import build_quotient_runtime
+          print(build_quotient_runtime(Path('audit-evidence/quotient-native')))
+          PY
+          python - <<'PY' > audit-evidence/exact-library.txt
+          from pathlib import Path
+          from experiments.compiled_query.exact import build_exact_runtime
+          print(build_exact_runtime(Path('audit-evidence/exact-native')))
+          PY
+          test -f "$(cat audit-evidence/quotient-library.txt)"
+          test -f "$(cat audit-evidence/exact-library.txt)"
+
+      - name: Execute fixed paired competition matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r -a arms <<< '${{ matrix.arms }}'
+          python -m experiments.compiled_query.study new \
+            --cases audit-evidence/cases \
+            --library "$(cat audit-evidence/quotient-library.txt)" \
+            --exact-library "$(cat audit-evidence/exact-library.txt)" \
+            --output audit-evidence/study \
+            --arms "${arms[@]}" \
+            --prefixes 1024 \
+            --repeats 9 \
+            --deadline 120 \
+            --bdd-nodes 5000000
+          python -m experiments.compiled_query.study run \
+            --output audit-evidence/study \
+            2>&1 | tee audit-evidence/measurement.log
+          python -m experiments.compiled_query.study audit \
+            --output audit-evidence/study \
+            > audit-evidence/audit.json
+
+      - name: Apply predeclared meaningful-win gate
+        id: gate
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          extra=()
+          if [ '${{ matrix.cudd }}' = 'true' ]; then
+            extra+=(--expect-cudd)
+          fi
+          python -m experiments.compiled_query.tile64_external_gate \
+            --audit audit-evidence/audit.json \
+            --out audit-evidence/gate.json \
+            --label '${{ matrix.label }}' \
+            "${extra[@]}" \
+            2>&1 | tee audit-evidence/gate.log
+          code=${PIPESTATUS[0]}
+          echo "$code" > audit-evidence/gate-exit-code.txt
+          exit "$code"
+
+      - name: Hash retained evidence
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+
+          root = Path('audit-evidence')
+          manifest = {}
+          if root.exists():
+              for path in sorted(root.rglob('*')):
+                  if path.is_file() and path.name != 'SHA256.json':
+                      manifest[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+          (root / 'SHA256.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tile64-external-competition-${{ matrix.label }}-${{ github.run_id }}
+          path: audit-evidence/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Enforce complete audit and frozen gate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f audit-evidence/gate.json
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          result = json.loads(Path('audit-evidence/gate.json').read_text())
+          print(json.dumps(result, indent=2, sort_keys=True))
+          if not result['pass']:
+              raise SystemExit('Frozen external competition gate failed: ' + '; '.join(result['failures']))
+          PY
