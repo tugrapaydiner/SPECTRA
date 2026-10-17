@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           library=$(python - <<'PY'
           from pathlib import Path
-          from experiments.compiled_query.exact import build_exact_runtime
+          from spectra.exact import build_exact_runtime
           print(build_exact_runtime(Path('raw-tile64-evidence/native')))
           PY
           )
