@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/beat-raw-tile64.yml'
       - 'scripts/apply_raw_tile64.py'
+      - 'scripts/apply_raw_tile64_v2.py'
 permissions:
   contents: write
 concurrency:
@@ -33,11 +34,10 @@ jobs:
       - name: Apply exact guarded patch
         run: |
           set -euo pipefail
-          python scripts/apply_raw_tile64.py
-          cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
-          cmp spectra/exact.py experiments/compiled_query/exact.py
-          git diff --check
           mkdir -p raw-tile64-evidence
+          python scripts/apply_raw_tile64_v2.py
+          cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
+          git diff --check
           git diff --binary > raw-tile64-evidence/implementation.patch
           git rev-parse HEAD > raw-tile64-evidence/transport_commit.txt
       - name: Build one receipt-bound native library
@@ -75,6 +75,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          mkdir -p raw-tile64-evidence
           python -VV > raw-tile64-evidence/python.txt
           uname -a > raw-tile64-evidence/platform.txt
           python -m pip freeze > raw-tile64-evidence/environment.txt
@@ -100,6 +101,7 @@ jobs:
             experiments/compiled_query/exact_native.cpp \
             spectra/exact.py \
             experiments/compiled_query/exact.py \
-            experiments/compiled_query/test_exact.py
+            experiments/compiled_query/test_exact.py \
+            experiments/compiled_query/raw_tile64_benchmark.py
           git commit -m 'Add a 64-lane raw implication bank engine'
           git push origin HEAD:research/beat-raw-tile64-20261017
