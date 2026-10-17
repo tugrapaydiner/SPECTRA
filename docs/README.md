@@ -43,8 +43,8 @@ or use the WAP result to promote them.
 
 ## Preserved history
 
-The [history index](history/README.md) links retired documents and workflows at
-immutable commits. Raw evidence and negative outcomes remain in Git history and
-under their experiment directories. Transport-only patch chunks and one-shot
-application workflows are intentionally absent from the current working tree after
-merge; their original bytes remain recoverable from the research commits.
+The [history index](history/README.md) identifies the consolidated archive branch
+and immutable source commits. Large evidence archives, generated historical figures,
+and one-shot workflows are intentionally absent from the active checkout; compact
+summaries and current tests remain. This keeps ordinary clones and CI small without
+rewriting or promoting any historical result.

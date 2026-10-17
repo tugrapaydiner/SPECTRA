@@ -46,11 +46,16 @@ Thumbs.db
 # Regenerated benchmark + telemetry data (reproduce via scripts/bench_*.py)
 assets/data/
 
-# Explicitly retained, hash-bound scientific archives are durable evidence.
-!results/m16/runs/
-!results/m16/runs/*
-!results/m17/runs/
-!results/m17/runs/*
+# Large scientific archives belong in releases/workflow artifacts or the
+# dedicated history branch, not the active checkout.
+results/**/*.zip
+results/**/*.tar.gz
+results/**/*.tgz
+experiments/**/*.zip
+experiments/**/*.tar.gz
+experiments/**/*.tgz
+!results/sat_workload/pilot.zip
+assets/0[1-6]_*.png
 
 # Disposable local release-validation outputs (never scientific evidence)
 /.release-check/

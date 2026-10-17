@@ -30,6 +30,20 @@
   network traces, independent-team replication, and external adoption explicitly
   unclaimed.
 
+### Active-tree slimdown
+
+- Consolidate routine CI to seven permanent workflows and remove branch-specific,
+  one-shot, acquisition, publication, and superseded benchmark automation.
+- Remove nested historical source/evidence archives and six generated PNGs from the
+  active checkout while preserving their exact bytes on
+  `archive/research-history-20261016` and original commits.
+- Add a fail-closed active-tree budget (14 MiB, 950 files, 2 MiB per file) and
+  archive/workflow guards to prevent repository bloat from returning.
+- Make the structural `auto` selector the default for one-call proof-carrying exact
+  sessions; explicit raw/SCC/sparse/route modes remain available.
+- Replace full-history PR bundling and routine historical evidence replay with
+  current source, package, native, and semantic contracts.
+
 ### Merge cleanup
 
 - Remove transport-only Base64 patch chunks and their one-shot apply workflows from

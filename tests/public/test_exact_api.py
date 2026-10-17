@@ -136,6 +136,17 @@ def test_native_session_returns_checked_sat_and_unsat(exact_runtime):
         assert session.info['native_abi'] == EXACT_NATIVE_ABI
 
 
+def test_one_call_default_uses_structural_auto_policy(exact_runtime):
+    problem = tiny_problem()
+    packet = pack_session_packet(problem, ((),) * 3)
+    result = exact_runtime.solve_session_packet(packet)
+    assert result.info['mode'] == 'auto'
+    assert result.info['auto_policy'] == 'structural-v2'
+    assert result.info['selected_mode'] == 'raw'
+    assert result.info['auto_policy_reason'] == 'bank_below_tile64'
+    assert verify_session_output(packet, result.output)
+
+
 def test_one_call_packet_output_is_independently_replayable(exact_runtime):
     problem = tiny_problem()
     queries = ((), ((0, 1),), ((0, 1), (1, 1)))

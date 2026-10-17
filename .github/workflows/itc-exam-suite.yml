@@ -1,22 +1,5 @@
 name: itc-exam-suite
 on:
-  push:
-    branches: [research/100-blitz-20261016]
-    paths:
-      - '.github/workflows/itc-exam-suite.yml'
-      - 'spectra/exact*.py'
-      - 'spectra/exam_repair.py'
-      - 'spectra/itc2007_exam.py'
-      - 'spectra/_native/exact_binary.cpp'
-      - 'experiments/compiled_query/exact.py'
-      - 'experiments/compiled_query/exact_native.cpp'
-      - 'experiments/compiled_query/test_exact.py'
-      - 'experiments/compiled_query/itc_exam_transfer.py'
-      - 'experiments/compiled_query/itc_exam_suite.py'
-      - 'experiments/compiled_query/test_itc_exam_transfer.py'
-      - 'experiments/compiled_query/test_itc_exam_suite.py'
-      - 'experiments/compiled_query/ITC_EXAM_TRANSFER_PROTOCOL.md'
-      - 'experiments/compiled_query/ITC_EXAM_SUITE_PROTOCOL.md'
   workflow_dispatch:
 permissions:
   contents: read

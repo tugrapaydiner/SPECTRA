@@ -182,8 +182,12 @@ def guide_tree(tmp_path):
         path = tmp_path / guide; path.parent.mkdir(exist_ok=True)
         path.write_text('# Example heading\n\n## Second heading\n')
     workflows = tmp_path / '.github/workflows'; workflows.mkdir(parents=True)
-    for name in ('public-package.yml', 'indexed-efficiency.yml'):
-        (workflows / name).write_text('python scripts/check_current_installation.py\n')
+    requirements = {
+        'public-package.yml': 'python scripts/check_current_installation.py\n',
+        'exact-public-api.yml': 'python scripts/check_exact_installation.py\n',
+    }
+    for name, content in requirements.items():
+        (workflows / name).write_text(content)
     return tmp_path
 
 

@@ -44,6 +44,11 @@ synthetic development graphs and do not replace the frozen WAP result above.
 
 **Package: Python 3.10+ · Flagship complete-call result: Python 3.13 · MIT-licensed project code · CPU-first · explicit verification boundaries**
 
+The active checkout is intentionally lean: current source, tests, compact summaries,
+and seven permanent workflows. Bulky historical evidence and retired experiment
+branch histories remain available from `archive/research-history-20261016` and the
+original immutable commits rather than being duplicated in every clone.
+
 ## Flagship result
 
 ### Problem
@@ -254,9 +259,11 @@ PASS, but they determine how broadly the result may be advertised.
 
 ## Other project tracks
 
-The repository also preserves bounded Boolean-search, CPU SVM, neural, low-bit,
-compiler, and deployment experiments. Each has its own evidence and limitations.
-**None inherits the WAP result.** In particular:
+The public package retains backward-compatible bounded CNF, CPU SVM, neural,
+low-bit, compiler, and deployment modules. Their full historical branch and bulky
+evidence trees are preserved on `archive/research-history-20261016`, not copied
+into the active checkout. Each track keeps its own limitations and **none inherits
+the WAP result**. In particular:
 
 | Track | Retained value | Not established |
 |---|---|---|
@@ -296,9 +303,9 @@ python -m pytest tests/public --confcutdir=tests/public
 python scripts/check_release_readiness.py
 ```
 
-Historical slow retraining and large evidence replays remain separate. Test passes
-are implementation evidence, not proof of generalization or support for every
-platform/input. Read [SECURITY.md](SECURITY.md) before accepting external inputs,
+Historical slow retraining and large evidence replays live in the dedicated archive
+branch and are not routine pull-request gates. Test passes are implementation
+evidence, not proof of generalization or support for every platform/input. Read [SECURITY.md](SECURITY.md) before accepting external inputs,
 native libraries, or checkpoints, and [CONTRIBUTING.md](CONTRIBUTING.md) before
 changing numerical code or retained experiments.
 

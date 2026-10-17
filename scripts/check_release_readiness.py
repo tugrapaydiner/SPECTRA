@@ -1,7 +1,8 @@
 """Offline release metadata and current-guide checks; not scientific approval.
 
-Historical protocols are not rewritten or required to look like current guides.
-Run audit_workspace.py separately with full Git history to verify retained bytes.
+Retired evidence archives live in the dedicated history branch rather than the
+active checkout. Run ``audit_workspace.py`` and ``check_active_tree.py`` for the
+current-tree integrity and size boundaries.
 """
 from __future__ import annotations
 
@@ -138,12 +139,16 @@ def check(root: Path = ROOT) -> dict:
             if parsed.fragment and target.suffix == ".md" and unquote(parsed.fragment) not in anchors(target):
                 raise ValueError(f"broken local heading anchor: {name}: {link}")
             links += 1
-    for name in ("public-package.yml", "indexed-efficiency.yml"):
+    workflow_requirements = {
+        "public-package.yml": "check_current_installation.py",
+        "exact-public-api.yml": "check_exact_installation.py",
+    }
+    for name, required in workflow_requirements.items():
         text = (root / ".github/workflows" / name).read_text(encoding="utf-8")
         if re.search(r"spectra-[0-9]+\.[0-9]+\.[0-9]+[^\s]*\.whl", text):
             raise ValueError(f"hard-coded wheel version in {name}")
-        if "check_current_installation.py" not in text:
-            raise ValueError(f"current-wheel check missing from {name}")
+        if required not in text:
+            raise ValueError(f"required installed-wheel check missing from {name}: {required}")
     return {"status": "PASS", "version": version, "current_guides": len(GUIDES),
             **dependency_report,
             "local_links_checked": links, "external_links_not_fetched": external,

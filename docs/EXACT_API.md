@@ -101,9 +101,9 @@ assert result.query_count == len(queries)
 assert verify_session_output(packet, result.output)
 ```
 
-The opt-in `auto` mode uses only graph structure and request-bank length. It does
-not inspect measured timings or cached answers. The result metadata names the
-selected engine. Explicit modes retain their meaning.
+The default `auto` mode uses only graph structure and request-bank length. It does
+not inspect measured timings or cached answers. The result metadata names the selected engine. Explicit modes retain their meaning,
+and callers can still force `raw`, `scc`, `sparse`, or `route` for controlled comparisons.
 
 `pack_session_packet` accepts ordinary Python inputs. `pack_validated_session_packet`
 is for already admitted immutable inputs and still rechecks exact types, bounds,
