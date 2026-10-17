@@ -1,0 +1,34 @@
+name: export-measured-main
+
+on:
+  push:
+    branches: [audit/tile64-external-competition-20261017]
+    paths: [.github/workflows/export-measured-main.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Archive the exact merged source
+        run: |
+          set -euo pipefail
+          mkdir source-export
+          git archive --format=tar.gz --prefix=SPECTRA/ \
+            --output=source-export/SPECTRA-main-4a647e54.tar.gz \
+            4a647e54e7e7e0756e74b52575f86f03d2764455
+          sha256sum source-export/SPECTRA-main-4a647e54.tar.gz \
+            > source-export/SHA256.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: SPECTRA-main-source-4a647e54
+          path: source-export/
+          retention-days: 7
+          if-no-files-found: error
