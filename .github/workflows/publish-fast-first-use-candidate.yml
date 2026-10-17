@@ -44,6 +44,8 @@ jobs:
           test "$(wc -c < /tmp/fast-first-use.patch)" -eq 27899
           git worktree add --detach /tmp/fast-first-use "$BASE_COMMIT"
           cd /tmp/fast-first-use
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
           git am /tmp/fast-first-use.patch
           test "$(git rev-parse HEAD^)" = "$BASE_COMMIT"
           test "$(git log -1 --format=%s)" = "Make first-use exact sessions fast"
