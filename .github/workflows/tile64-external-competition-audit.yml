@@ -111,10 +111,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pytest -q --confcutdir=experiments/compiled_query \
-            experiments/compiled_query/test_tile64_external_gate.py \
-            tests/public/test_exact_bank_tile64.py \
-            2>&1 | tee audit-evidence/contracts.log
+          {
+            python -m pytest -q --confcutdir=experiments/compiled_query \
+              experiments/compiled_query/test_tile64_external_gate.py
+            python -m pytest -q --confcutdir=tests/public \
+              tests/public/test_exact_bank_tile64.py
+          } 2>&1 | tee audit-evidence/contracts.log
 
       - name: Acquire and verify exposed WAP development graphs
         shell: bash
