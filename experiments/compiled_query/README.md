@@ -84,8 +84,9 @@ scq2_bytes = answer.output
 
 For the new, opt-in engine policy, use
 `runtime.solve_session_packet(packet, mode='auto')` and inspect
-`answer.info['selected_mode']`. It chooses raw for fewer than 64 requests or an
-impossible fixed graph, then route or SCC according to graph compression.
+`answer.info['selected_mode']`. It keeps base-infeasible, high-pin, and short weakly compressed banks on raw;
+it chooses SCC for feasible low-pin banks at 64 requests, or from eight requests
+when literal contraction is at least fourfold.
 Existing defaults are unchanged. This policy is specific to the one-call packet
 endpoint; it is not a mode for persistent `prepare` sessions.
 
