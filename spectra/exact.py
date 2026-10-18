@@ -6,6 +6,7 @@ checked against the original graph, domains, and current restrictions.
 """
 from __future__ import annotations
 
+from array import array
 from dataclasses import dataclass
 import hashlib
 import importlib.util
@@ -210,13 +211,109 @@ def pack_frozen_query_bank(n: int,
     return bytes(payload)
 
 
+def _finish_session_packet(problem: ExactProblem, row_count: int,
+                           offsets: array, vertices: array, allowed: array) -> bytes:
+    pins = len(vertices)
+    if (len(offsets) != row_count + 1 or len(allowed) != pins
+            or offsets[-1] != pins):
+        raise AssertionError('session packet array accounting differs')
+    if offsets.itemsize != 4 or vertices.itemsize != 4 or allowed.itemsize != 8:
+        raise RuntimeError('platform integer arrays cannot encode SBC1')
+    if sys.byteorder != 'little':
+        offsets.byteswap()
+        vertices.byteswap()
+        allowed.byteswap()
+
+    fixed = problem._sbc1_fixed
+    expected_fixed = 8 * problem.n + 8 * len(problem.edges)
+    if len(fixed) != expected_fixed:
+        raise AssertionError('admitted fixed-graph bytes differ')
+    payload = b''.join((
+        SESSION_PACKET_HEADER.pack(
+            SESSION_PACKET_MAGIC, problem.n, problem.palette,
+            len(problem.edges), row_count, pins, 0, 0,
+        ),
+        fixed,
+        offsets.tobytes(),
+        vertices.tobytes(),
+        allowed.tobytes(),
+    ))
+    expected = (SESSION_PACKET_HEADER.size + expected_fixed
+                + 4 * (row_count + 1) + 12 * pins)
+    if len(payload) != expected:
+        raise AssertionError('session packet byte accounting differs')
+    return payload
+
+
+def _pack_admitted_session_packet(problem: ExactProblem,
+                                  queries: Iterable[Iterable[Sequence[int]]]) -> bytes:
+    """Validate and serialize one request bank in a single pin pass."""
+    try:
+        row_hint = len(queries)  # type: ignore[arg-type]
+    except TypeError:
+        row_hint = None
+    if row_hint is not None and row_hint > 1_000_000:
+        raise ValueError('session packet query bank exceeds supported bound')
+
+    offsets = array('I', [0])
+    vertices = array('I')
+    allowed = array('Q')
+    row_count = 0
+    for query in queries:
+        row_count += 1
+        if row_count > 1_000_000:
+            raise ValueError('session packet query bank exceeds supported bound')
+        try:
+            pin_hint = len(query)  # type: ignore[arg-type]
+        except TypeError:
+            pin_hint = None
+        if pin_hint is not None and pin_hint > 1_000_000 - len(vertices):
+            raise ValueError('session packet query bank exceeds supported bound')
+        for item in query:
+            pair = item if type(item) is tuple else tuple(item)
+            if len(pair) != 2:
+                raise ValueError(
+                    'query must contain in-range vertex/uint64-mask pairs'
+                )
+            vertex, mask = pair
+            if (type(vertex) is not int or not 0 <= vertex < problem.n
+                    or type(mask) is not int or not 0 <= mask < 1 << 64):
+                raise ValueError(
+                    'query must contain in-range vertex/uint64-mask pairs'
+                )
+            if len(vertices) == 1_000_000:
+                raise ValueError('session packet query bank exceeds supported bound')
+            vertices.append(vertex)
+            allowed.append(mask)
+        offsets.append(len(vertices))
+    return _finish_session_packet(problem, row_count, offsets, vertices, allowed)
+
+
+def _pack_canonical_session_packet(
+        problem: ExactProblem,
+        rows: tuple[tuple[tuple[int, int], ...], ...]) -> bytes:
+    """Serialize already checked immutable rows without a second validation pass."""
+    if len(rows) > 1_000_000:
+        raise ValueError('session packet query bank exceeds supported bound')
+    offsets = array('I', [0])
+    vertices = array('I')
+    allowed = array('Q')
+    for row in rows:
+        if len(row) > 1_000_000 - len(vertices):
+            raise ValueError('session packet query bank exceeds supported bound')
+        vertices.extend(vertex for vertex, _ in row)
+        allowed.extend(mask for _, mask in row)
+        offsets.append(len(vertices))
+    return _finish_session_packet(problem, len(rows), offsets, vertices, allowed)
+
+
 def pack_session_packet(problem: ExactProblem,
                         queries: Iterable[Iterable[Sequence[int]]]) -> bytes:
-    """Validate ordinary inputs and create one immutable prepared session packet."""
-    p = ExactProblem.create(problem.n, problem.palette,
-                                 problem.edges, problem.masks)
-    rows = tuple(p.freeze_query(query) for query in queries)
-    return pack_validated_session_packet(p, rows)
+    """Validate ordinary inputs and create one immutable session packet."""
+    admitted = problem if type(problem) is ExactProblem else ExactProblem.create(
+        problem.n, problem.palette, problem.edges, problem.masks
+    )
+    return _pack_admitted_session_packet(admitted, queries)
 
 
 def pack_validated_session_packet(problem: ExactProblem,
@@ -254,32 +351,12 @@ def pack_validated_session_packet(problem: ExactProblem,
     pins = sum(map(len, rows))
     if len(rows) > 1_000_000 or pins > 1_000_000:
         raise ValueError('session packet query bank exceeds supported bound')
-    edge_count = len(problem.edges)
-    size = (SESSION_PACKET_HEADER.size + 8 * n + 8 * edge_count +
-            4 * (len(rows) + 1) + 12 * pins)
-    payload = bytearray(size)
-    SESSION_PACKET_HEADER.pack_into(payload, 0, SESSION_PACKET_MAGIC, n,
-                                    palette_value, edge_count, len(rows), pins, 0, 0)
-    masks_at = SESSION_PACKET_HEADER.size
-    edges_at = masks_at + 8 * n
-    offsets_at = edges_at + 8 * edge_count
-    vertices_at = offsets_at + 4 * (len(rows) + 1)
-    allowed_at = vertices_at + 4 * pins
-    for index, mask in enumerate(problem.masks):
-        struct.pack_into('<Q', payload, masks_at + 8 * index, mask)
-    for index, (left, right) in enumerate(problem.edges):
-        struct.pack_into('<II', payload, edges_at + 8 * index, left, right)
-    cursor = 0
-    struct.pack_into('<I', payload, offsets_at, 0)
-    for row_index, row in enumerate(rows):
-        for vertex, allowed in row:
-            struct.pack_into('<I', payload, vertices_at + 4 * cursor, vertex)
-            struct.pack_into('<Q', payload, allowed_at + 8 * cursor, allowed)
-            cursor += 1
-        struct.pack_into('<I', payload, offsets_at + 4 * (row_index + 1), cursor)
-    if cursor != pins:
-        raise AssertionError('session packet pin accounting differs')
-    return bytes(payload)
+    payload = _pack_canonical_session_packet(problem, rows)
+    expected = (SESSION_PACKET_HEADER.size + 8 * n + 8 * len(problem.edges) +
+                4 * (len(rows) + 1) + 12 * pins)
+    if len(payload) != expected:
+        raise AssertionError('session packet byte accounting differs')
+    return payload
 
 
 def unpack_session_packet(payload: bytes) -> tuple[ExactProblem,
@@ -577,6 +654,90 @@ def decode_certified_output(payload: bytes, n: int,
     return tuple(rows)
 
 
+class _CertifiedBankReplay:
+    """Preprocess one checked problem, then replay every SCQ2 row.
+
+    ``verify_answer`` remains the independent scalar reference.  A bank verifier
+    must not rebuild the same edge set and literal-colour table once per row; on
+    large repeated-query banks that made evidence replay orders of magnitude
+    slower than the solver it was checking.
+    """
+
+    def __init__(self, problem: ExactProblem):
+        self.problem = problem
+        self.n = problem.n
+        self.k = problem.palette
+        self.masks = problem.masks
+        self.edges = problem.edges
+        self.edge_set = frozenset(problem.edges)
+        self.choices = tuple(
+            tuple(color for color in range(self.k) if mask >> color & 1)
+            for mask in self.masks
+        )
+
+    def _effective_domains(self, query: tuple[tuple[int, int], ...]) -> dict[int, int]:
+        domains: dict[int, int] = {}
+        for vertex, allowed in query:
+            domains[vertex] = domains.get(vertex, self.masks[vertex]) & allowed
+        return domains
+
+    def _color(self, literal: int) -> int | None:
+        choices = self.choices[literal // 2]
+        side = literal & 1
+        return choices[side] if side < len(choices) else None
+
+    def _path_ok(self, path: tuple[int, ...]) -> bool:
+        if len(set(path)) != len(path):
+            return False
+        for before, after in zip(path, path[1:]):
+            u, v = before // 2, after // 2
+            if u == v:
+                if before != 2 * u + 1 or after != 2 * u or len(self.choices[u]) != 1:
+                    return False
+            elif ((min(u, v), max(u, v)) not in self.edge_set
+                  or self._color(before) is None
+                  or self._color(after ^ 1) is None
+                  or self._color(before) != self._color(after ^ 1)):
+                return False
+        return True
+
+    def verify(self, query: tuple[tuple[int, int], ...], code: int,
+               labels: bytes, certificate: bytes) -> bool:
+        if code == 1:
+            return (
+                not certificate
+                and len(labels) == self.n
+                and all(
+                    color < self.k and (self.masks[vertex] >> color) & 1
+                    for vertex, color in enumerate(labels)
+                )
+                and all(labels[left] != labels[right] for left, right in self.edges)
+                and all((allowed >> labels[vertex]) & 1 for vertex, allowed in query)
+            )
+        if code != 0 or any(labels):
+            return False
+        kind, left, right = decode_proof(certificate, self.n)
+        if any(not 0 <= literal < 2 * self.n for literal in left + right):
+            return False
+        domains = self._effective_domains(query)
+        if kind == 1:
+            vertex = left[0]
+            return (vertex < self.n and
+                    domains.get(vertex, self.masks[vertex]) == 0)
+        if not self._path_ok(left) or not self._path_ok(right):
+            return False
+        if kind == 3:
+            return (left[0] == right[-1] and left[-1] == right[0]
+                    and left[-1] == (left[0] ^ 1))
+        if left[-1] != (right[-1] ^ 1):
+            return False
+        for root in (left[0], right[0]):
+            color = self._color(root)
+            if color is None or domains.get(root // 2, self.masks[root // 2]) != 1 << color:
+                return False
+        return True
+
+
 def verify_certified_output(problem: ExactProblem,
                             queries: Iterable[Iterable[Sequence[int]]],
                             output: bytes) -> bool:
@@ -586,12 +747,12 @@ def verify_certified_output(problem: ExactProblem,
                                       problem.edges, problem.masks)
         rows = tuple(checked.freeze_query(query) for query in queries)
         answers = decode_certified_output(output, checked.n, len(rows))
-        return all(verify_answer(
-            checked, query,
-            'SAT_VERIFIED' if code else 'UNSAT_VERIFIED',
-            labels if code else b'', proof,
-        ) for query, (code, labels, proof) in zip(rows, answers))
-    except (ValueError, TypeError, AttributeError, OverflowError, struct.error):
+        replay = _CertifiedBankReplay(checked)
+        return all(
+            replay.verify(query, code, labels, proof)
+            for query, (code, labels, proof) in zip(rows, answers)
+        )
+    except (ValueError, TypeError, AttributeError, IndexError, OverflowError, struct.error):
         return False
 
 

@@ -75,6 +75,8 @@ with runtime.prepare(problem, mode="scc") as session:
 sorted unique `(left, right)` pairs. Each domain mask must contain exactly one or
 two colours from a palette of at most 64 colours.
 
+Problem admission also encodes the immutable mask/edge portion of `SBC1` once. The cached bytes are excluded from equality and `repr`, contain no solver state, and are bounded by 16.8 MiB at the public maximum of 100,000 vertices and 2,000,000 edges. This moves fixed-graph serialization to the explicit problem admission boundary instead of repeating it for every request bank.
+
 Persistent modes are `raw`, `scc`, `sparse`, and `route`. They share the same
 answer contract. `route` changes proof reconstruction, not the mathematical
 problem. Persistent sessions own a solver and a separately constructed observer;
@@ -110,6 +112,8 @@ is for already admitted immutable inputs and still rechecks exact types, bounds,
 edge ordering and query geometry. The strict decoder rejects reversed, duplicate,
 unsorted, truncated, overlong, or reserved-bit-modified packets rather than
 repairing them.
+
+For an admitted `ExactProblem`, the ordinary packer validates each current pin once while writing the query arrays and reuses the fixed graph bytes. No query answer, solver state, SCC identifier, or timing measurement is cached.
 
 ## Independent replay and CLI
 

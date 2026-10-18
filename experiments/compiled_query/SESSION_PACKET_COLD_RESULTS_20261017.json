@@ -1,0 +1,96 @@
+{
+  "artifacts": {
+    "arm64": {
+      "id": 12120583068,
+      "zip_sha256": "bc916075ea0d22b3d1b052144e8d05f6f5e08fff555d629442e69476bc8c1b47"
+    },
+    "x86_64": {
+      "id": 12121051137,
+      "zip_sha256": "14e9e98c3b56b525184aeaabc7186cd51ce1aa24d6a86979aaa0eddc9ab6b2c2"
+    }
+  },
+  "base_main": "4a647e54e7e7e0756e74b52575f86f03d2764455",
+  "classification": "exposed WAP development cases; not a holdout",
+  "date": "2026-10-18",
+  "environments": {
+    "arm64": {
+      "application": {
+        "case_ratios": {
+          "wap05a.col": 0.7459221718349464,
+          "wap06a.col": 0.7370882158732558
+        },
+        "gate_pass": true,
+        "geometric_mean_ratio": 0.7414920382702195,
+        "latency_reduction_percent": 25.85079617297805,
+        "max_case_ratio": 0.7459221718349464,
+        "speedup": 1.3486321475990999
+      },
+      "bank": {
+        "case_ratios": {
+          "wap05a.col": 0.5388618203875651,
+          "wap06a.col": 0.5320603550243298
+        },
+        "gate_pass": true,
+        "geometric_mean_ratio": 0.535450288509087,
+        "latency_reduction_percent": 46.45497114909129,
+        "max_case_ratio": 0.5388618203875651,
+        "speedup": 1.8675870037990074
+      },
+      "focused_public_contracts_passed": 19
+    },
+    "x86_64": {
+      "application": {
+        "case_ratios": {
+          "wap05a.col": 0.6608796786938683,
+          "wap06a.col": 0.6537832605154758
+        },
+        "gate_pass": true,
+        "geometric_mean_ratio": 0.6573218930972079,
+        "latency_reduction_percent": 34.26781069027921,
+        "max_case_ratio": 0.6608796786938683,
+        "speedup": 1.5213246515921466
+      },
+      "bank": {
+        "case_ratios": {
+          "wap05a.col": 0.47552612122705734,
+          "wap06a.col": 0.47552222748773243
+        },
+        "gate_pass": true,
+        "geometric_mean_ratio": 0.4755241743534095,
+        "latency_reduction_percent": 52.447582564659044,
+        "max_case_ratio": 0.47552612122705734,
+        "speedup": 2.1029425083587867
+      },
+      "focused_public_contracts_passed": 19
+    }
+  },
+  "executable_source_sha256": {
+    "experiments/compiled_query/SESSION_PACKET_COLD_PROTOCOL_20261017.md": "40e7c13789ba7383d4f6c3d6c8877416ddff3119e147587be6b98e828e0754ca",
+    "experiments/compiled_query/session_packet_cold_benchmark.py": "6f1bb00f185e5b6f2f70136b3f2d6ac92a0468e318032dd1831ee63fbb4f9457",
+    "spectra/_native/exact_binary.cpp": "570c5fe9204342535adb766d01a923001c49881e31b7bd2da42fc972a27c73d3",
+    "spectra/exact.py": "998e8bae939ecd925d4d305589acdec75030285fcec06337ad776d89e2801426",
+    "spectra/exact_problem.py": "21107ea4c729d5c6cc37555c694c0f4551ba39764222899fbd62f9d5a0f89b87",
+    "spectra/exact_proof.py": "136a09d42b23054d813ea4c5a2927b428cbcbbca53fc6d8a5c87219d91944312"
+  },
+  "gate": {
+    "application": {
+      "all_cases_complete_and_replayed": true,
+      "every_case_ratio_below": 0.8,
+      "geometric_mean_ratio_below": 0.75,
+      "pass": true
+    },
+    "bank": {
+      "all_cases_complete_and_replayed": true,
+      "every_case_ratio_below": 0.65,
+      "geometric_mean_ratio_below": 0.6,
+      "pass": true
+    },
+    "pass": true
+  },
+  "measured_source_commit": "3d9eb74af6573d6482b250e719d0b066f3d01746",
+  "measured_source_tree": "17b2c54e20d21a2e88fac7f43add28d108e4ba8e",
+  "query_count_per_case": 1024,
+  "repeats": 31,
+  "schema": "spectra.session_packet_cold_results.v2",
+  "workflow_run": 39085921452
+}
