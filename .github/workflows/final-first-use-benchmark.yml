@@ -146,7 +146,7 @@ jobs:
           library="$(cat evidence/exact-library.txt)"
           test -f "$library"
           sha256sum "$library" > evidence/exact-library-sha256.txt
-          cat "${library}.build.json" > evidence/exact-build-receipt.json
+          cat "$(dirname "$library")/build.json" > evidence/exact-build-receipt.json
 
       - name: Run the frozen paired benchmark
         shell: bash
