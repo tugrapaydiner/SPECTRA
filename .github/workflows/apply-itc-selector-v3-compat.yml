@@ -1,3 +1,4 @@
+# One-shot checked transport; removed by its successful commit.
 name: apply-itc-selector-v3-compat
 
 on:
@@ -23,7 +24,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Update the independent ITC replay policy inventory
+      - name: Update the independent ITC replay inventory
         run: python scripts/enable_itc_selector_v3.py
 
       - name: Run focused ITC and selector contracts
@@ -44,6 +45,6 @@ jobs:
           git config user.name 'Tugrap'
           git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
           git add experiments/compiled_query/itc_exam_transfer.py
-          git commit -m 'Replay ITC evidence with selector v3' \
-            -m 'Accept the new structural policy identity in the independent ITC audit while retaining structural-v2 compatibility for existing evidence.'
+          git commit -m 'Keep ITC evidence replayable with selector v3' \
+            -m 'Recognize the new structural policy identity and remove a stale workflow path from the frozen source inventory. Existing structural-v2 evidence remains accepted.'
           git push origin HEAD:performance/automatic-engine-selection
