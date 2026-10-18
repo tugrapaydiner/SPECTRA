@@ -1,8 +1,9 @@
-"""Frozen development and confirmation benchmark for structural auto policy v3."""
+"""Frozen development and confirmation benchmark for structural auto policy v4."""
 from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+from dataclasses import dataclass
 import gc
 import hashlib
 import json
@@ -26,16 +27,24 @@ from .binary_list import BinaryListProblem
 from .cases import Case
 from .transfer_panel import FAMILIES, make_case, topology
 
-COUNTS = (1, 8, 32, 63, 64, 65, 128, 1024)
-CONFIRMATION_COUNTS = (1, 8, 64, 128, 1024)
 MODES = ("raw", "scc", "route", "auto")
-REPEATS = 17
+DEVELOPMENT_COUNTS = (1, 8, 32, 63, 64, 65, 128, 1024)
+CONFIRMATION_COUNTS = (1, 8, 32, 64, 128, 1024)
 WARMUPS = 2
-SCHEMA = "spectra.auto_selector_benchmark.v1"
+SCHEMA = "spectra.auto_selector_benchmark.v2"
+POLICY = "structural-v4"
 
 
-def seed_for(label: str) -> int:
-    payload = ("SPECTRA-auto-selector-v3-confirmation/" + label).encode()
+@dataclass(frozen=True)
+class PanelCase:
+    case: Case
+    family: str
+    regime: str
+    counts: tuple[int, ...]
+
+
+def seed_for(namespace: str, label: str) -> int:
+    payload = (namespace + "/" + label).encode()
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big")
 
 
@@ -46,21 +55,123 @@ def gmean(values: Iterable[float]) -> float:
     return math.exp(statistics.fmean(math.log(value) for value in values))
 
 
-def confirmation_case(family: str, replica: int) -> Case:
-    """Generate one query-blind case after the v3 policy has been frozen."""
-    if family not in FAMILIES or replica not in range(4):
-        raise ValueError("fixed confirmation family/replica required")
-    n = 256 if replica < 2 else 1024
-    rng = random.Random(seed_for(f"{family}/{replica}"))
+def _known_bipartite_problem(
+    family: str,
+    label: str,
+    *,
+    n: int,
+    strong_contraction: bool,
+    base_infeasible: bool,
+    namespace: str,
+) -> tuple[BinaryListProblem, list[int], random.Random]:
+    rng = random.Random(seed_for(namespace, label))
     candidate_edges = topology(family, n, rng)
-
     side = [rng.randrange(2) for _ in range(n)]
     side[0], side[1] = 0, 1
     edges = {edge for edge in candidate_edges if side[edge[0]] != side[edge[1]]}
     left = [vertex for vertex, value in enumerate(side) if value == 0]
     right = [vertex for vertex, value in enumerate(side) if value == 1]
-    # Preserve connectivity pressure without sacrificing the known reference
-    # colouring: every vertex receives one deterministic opposite-side bridge.
+    for vertex in range(n):
+        pool = right if side[vertex] == 0 else left
+        other = pool[(vertex * 17 + len(label) * 13) % len(pool)]
+        if vertex != other:
+            edges.add((min(vertex, other), max(vertex, other)))
+
+    palette = 8
+    if strong_contraction:
+        masks = [3] * n
+    else:
+        masks = []
+        for vertex in range(n):
+            reference = side[vertex]
+            if vertex % 13 == 0:
+                masks.append(1 << reference)
+            else:
+                alternate = rng.randrange(2, palette)
+                masks.append((1 << reference) | (1 << alternate))
+
+    if base_infeasible:
+        masks[:3] = [3, 3, 3]
+        edges.update(((0, 1), (0, 2), (1, 2)))
+
+    return (
+        BinaryListProblem.create(n, palette, tuple(sorted(edges)), masks),
+        side,
+        rng,
+    )
+
+
+def _queries(
+    problem: BinaryListProblem,
+    side: list[int],
+    rng: random.Random,
+    *,
+    width: int,
+    base_infeasible: bool,
+) -> tuple[tuple[tuple[int, int], ...], ...]:
+    rows = []
+    for index in range(1024):
+        row: list[tuple[int, int]] = []
+        if width:
+            for vertex in rng.sample(range(problem.n), min(width, problem.n)):
+                allowed = problem.masks[vertex] if index % 5 == 0 else 1 << side[vertex]
+                row.append((vertex, allowed))
+        if not base_infeasible and (index + 1) % 31 == 0:
+            row.append(((index * 29) % problem.n, 0))
+        if row and (index + 1) % 17 == 0:
+            row.append(row[0])
+        rows.append(tuple(row))
+    return tuple(rows)
+
+
+def generated_case(
+    family: str,
+    regime: str,
+    *,
+    n: int,
+    width: int,
+    strong_contraction: bool = False,
+    base_infeasible: bool = False,
+    namespace: str,
+) -> Case:
+    label = f"{family}/{regime}/n{n}/w{width}"
+    problem, side, rng = _known_bipartite_problem(
+        family,
+        label,
+        n=n,
+        strong_contraction=strong_contraction,
+        base_infeasible=base_infeasible,
+        namespace=namespace,
+    )
+    rows = _queries(
+        problem,
+        side,
+        rng,
+        width=width,
+        base_infeasible=base_infeasible,
+    )
+    name = f"auto-v4-{family}-{regime}-n{n}"
+    return Case(
+        name,
+        name,
+        f"{namespace}; generated query-blind before timing",
+        problem,
+        rows,
+    )
+
+
+def v3_confirmation_case(family: str, replica: int) -> Case:
+    """Recreate the panel that rejected v3; it is development evidence for v4."""
+    if family not in FAMILIES or replica not in range(4):
+        raise ValueError("fixed v3 confirmation family/replica required")
+    n = 256 if replica < 2 else 1024
+    rng = random.Random(seed_for("SPECTRA-auto-selector-v3-confirmation", f"{family}/{replica}"))
+    candidate_edges = topology(family, n, rng)
+    side = [rng.randrange(2) for _ in range(n)]
+    side[0], side[1] = 0, 1
+    edges = {edge for edge in candidate_edges if side[edge[0]] != side[edge[1]]}
+    left = [vertex for vertex, value in enumerate(side) if value == 0]
+    right = [vertex for vertex, value in enumerate(side) if value == 1]
     for vertex in range(n):
         pool = right if side[vertex] == 0 else left
         other = pool[(vertex * 17 + replica * 13) % len(pool)]
@@ -69,7 +180,7 @@ def confirmation_case(family: str, replica: int) -> Case:
 
     palette = 8
     if replica == 0:
-        masks = [3] * n  # strong two-colour contraction
+        masks = [3] * n
     else:
         masks = []
         for vertex in range(n):
@@ -77,55 +188,85 @@ def confirmation_case(family: str, replica: int) -> Case:
             if vertex % 11 == 0:
                 masks.append(1 << reference)
             else:
-                alternate = rng.randrange(2, palette)
-                masks.append((1 << reference) | (1 << alternate))
-
+                masks.append((1 << reference) | (1 << rng.randrange(2, palette)))
     if replica == 3:
-        # One prospectively specified base-infeasible regime.
         masks[:3] = [3, 3, 3]
         edges.update(((0, 1), (0, 2), (1, 2)))
 
     problem = BinaryListProblem.create(n, palette, tuple(sorted(edges)), masks)
-    widths = {
-        0: (0, 1, 2, 4),
-        1: (2, 4, 6, 7),
-        2: (8, 12, 16, 24),
-        3: (0, 1, 2, 4),
-    }[replica]
-    queries = []
+    widths = {0: (0, 1, 2, 4), 1: (2, 4, 6, 7), 2: (8, 12, 16, 24), 3: (0, 1, 2, 4)}[replica]
+    rows = []
     for index in range(1024):
         width = widths[index % len(widths)]
         row = []
         if width:
             for vertex in rng.sample(range(n), min(width, n)):
-                if index % 5 == 0:
-                    allowed = masks[vertex]
-                else:
-                    allowed = 1 << side[vertex]
+                allowed = masks[vertex] if index % 5 == 0 else 1 << side[vertex]
                 row.append((vertex, allowed))
-        # Deterministic mixed outcomes on otherwise feasible replicas.
         if replica != 3 and (index + 1) % 31 == 0:
-            vertex = (index * 29) % n
-            row.append((vertex, 0))
+            row.append(((index * 29) % n, 0))
         if row and (index + 1) % 17 == 0:
-            row.append(row[0])  # duplicate-pin normalization path
-        queries.append(tuple(row))
+            row.append(row[0])
+        rows.append(tuple(row))
+    name = f"v3-failure-{family}-r{replica}-n{n}"
+    return Case(name, name, "retained failed-v3 confirmation; v4 development only", problem, tuple(rows))
 
-    name = f"confirm-{family}-r{replica}-n{n}"
-    return Case(
-        name,
-        name,
-        "prospective auto-selector-v3 confirmation; generated without solver calls",
-        problem,
-        tuple(queries),
+
+def development_cases() -> tuple[PanelCase, ...]:
+    result: list[PanelCase] = []
+    for family in FAMILIES:
+        for replica in range(6):
+            case = make_case(family, replica)
+            result.append(PanelCase(case, family, f"legacy-r{replica}", DEVELOPMENT_COUNTS))
+        for replica in range(4):
+            case = v3_confirmation_case(family, replica)
+            result.append(PanelCase(case, family, f"v3-failure-r{replica}", CONFIRMATION_COUNTS))
+        for regime, n, width in (
+            ("density-below", 512, 14),
+            ("density-above", 384, 14),
+            ("density-low-large", 1536, 28),
+        ):
+            case = generated_case(
+                family,
+                regime,
+                n=n,
+                width=width,
+                namespace="SPECTRA-auto-selector-v4-density-development",
+            )
+            result.append(PanelCase(case, family, regime, CONFIRMATION_COUNTS))
+    return tuple(result)
+
+
+def confirmation_cases() -> tuple[PanelCase, ...]:
+    result: list[PanelCase] = []
+    namespace = "SPECTRA-auto-selector-v4-confirmation"
+    regimes = (
+        ("strong-sparse", 320, 2, True, False),
+        ("below-density", 512, 14, False, False),
+        ("above-density", 384, 14, False, False),
+        ("low-density-large", 1536, 28, False, False),
+        ("base-infeasible", 512, 4, False, True),
     )
+    for family in FAMILIES:
+        for regime, n, width, strong, infeasible in regimes:
+            case = generated_case(
+                family,
+                regime,
+                n=n,
+                width=width,
+                strong_contraction=strong,
+                base_infeasible=infeasible,
+                namespace=namespace,
+            )
+            result.append(PanelCase(case, family, regime, CONFIRMATION_COUNTS))
+    return tuple(result)
 
 
-def cases(panel: str) -> tuple[Case, ...]:
+def panel_cases(panel: str) -> tuple[PanelCase, ...]:
     if panel == "development":
-        return tuple(make_case(family, replica) for family in FAMILIES for replica in range(6))
+        return development_cases()
     if panel == "confirmation":
-        return tuple(confirmation_case(family, replica) for family in FAMILIES for replica in range(4))
+        return confirmation_cases()
     raise ValueError("panel must be development or confirmation")
 
 
@@ -133,91 +274,125 @@ def decisions(payload: bytes, n: int, count: int) -> tuple[int, ...]:
     return tuple(row[0] for row in decode_certified_output(payload, n, count))
 
 
-def run(library: Path, panel: str, destination: Path, repeats: int = REPEATS) -> dict:
+def expected_policy(*, base: bool, pins: int, count: int, vertices: int,
+                    components: int) -> tuple[str, str]:
+    if not base:
+        return "raw", "base_infeasible"
+    if pins >= 8 * count and 32 * pins >= vertices * count:
+        return "raw", "dense_pin_fraction"
+    if count >= 64:
+        return "scc", "scc_tile64"
+    if count >= 8 and 2 * components <= vertices:
+        return "scc", "scc_strong_compression"
+    return "raw", "short_weak_compression"
+
+
+def run(library: Path, panel: str, destination: Path, repeats: int) -> dict:
     if destination.exists():
         raise FileExistsError(destination)
     if repeats < 9 or repeats % 2 == 0:
         raise ValueError("odd repeats >= 9 required")
     destination.mkdir(parents=True)
     runtime = ExactRuntime(library)
-    selected_counts = COUNTS if panel == "development" else CONFIRMATION_COUNTS
     records = []
+    rule_failures: list[str] = []
 
     gc.disable()
     try:
-        for case in cases(panel):
+        for spec in panel_cases(panel):
+            case = spec.case
             problem = ExactProblem.create(
                 case.problem.n,
                 case.problem.palette,
                 case.problem.edges,
                 case.problem.masks,
             )
-            family = case.name.split("-r", 1)[0].replace("confirm-", "")
-            for count in selected_counts:
+            for count in spec.counts:
                 rows = case.queries[:count]
                 packet = pack_session_packet(problem, rows)
-                first = {
-                    mode: runtime.solve_session_packet(packet, mode=mode)
-                    for mode in MODES
-                }
-                reference_decisions = decisions(first["raw"].output, problem.n, count)
+                first = {mode: runtime.solve_session_packet(packet, mode=mode) for mode in MODES}
+                reference = decisions(first["raw"].output, problem.n, count)
                 for mode, answer in first.items():
                     if not verify_session_output(packet, answer.output):
                         raise AssertionError(f"independent replay failed: {case.name}/{count}/{mode}")
-                    if decisions(answer.output, problem.n, count) != reference_decisions:
+                    if decisions(answer.output, problem.n, count) != reference:
                         raise AssertionError(f"decision disagreement: {case.name}/{count}/{mode}")
-                selected = first["auto"].info["selected_mode"]
-                reason = first["auto"].info["auto_policy_reason"]
-                if selected in ("raw", "scc") and first["auto"].output != first[selected].output:
+                info = first["auto"].info
+                selected = info["selected_mode"]
+                reason = info["auto_policy_reason"]
+                if info["auto_policy"] != POLICY:
+                    rule_failures.append(f"{case.name}/{count}: policy={info['auto_policy']}")
+                pins = sum(map(len, rows))
+                expected_mode, expected_reason = expected_policy(
+                    base=bool(info["base_satisfiable"]),
+                    pins=pins,
+                    count=count,
+                    vertices=problem.n,
+                    components=int(info["components"]),
+                )
+                if (selected, reason) != (expected_mode, expected_reason):
+                    rule_failures.append(
+                        f"{case.name}/{count}: got {selected}/{reason}, "
+                        f"expected {expected_mode}/{expected_reason}"
+                    )
+                if selected not in ("raw", "scc"):
+                    raise AssertionError("automatic policy selected an unsupported mode")
+                if first["auto"].output != first[selected].output:
                     raise AssertionError("auto output differs from selected explicit engine")
 
                 for _ in range(WARMUPS):
                     for mode in MODES:
-                        warm_packet = pack_session_packet(problem, rows)
-                        runtime.solve_session_packet(warm_packet, mode=mode)
+                        current = pack_session_packet(problem, rows)
+                        runtime.solve_session_packet(current, mode=mode)
 
                 samples = {mode: [] for mode in MODES}
-                output_hashes = {mode: set() for mode in MODES}
-                schedule = random.Random(seed_for(f"schedule/{panel}/{case.name}/{count}"))
+                hashes = {mode: set() for mode in MODES}
+                schedule = random.Random(seed_for(
+                    "SPECTRA-auto-selector-v4-schedule",
+                    f"{panel}/{case.name}/{count}",
+                ))
                 for _ in range(repeats):
                     order = list(MODES)
                     schedule.shuffle(order)
                     for mode in order:
                         started = time.perf_counter_ns()
-                        current_packet = pack_session_packet(problem, rows)
-                        answer = runtime.solve_session_packet(current_packet, mode=mode)
+                        current = pack_session_packet(problem, rows)
+                        answer = runtime.solve_session_packet(current, mode=mode)
                         elapsed = time.perf_counter_ns() - started
                         samples[mode].append(elapsed)
-                        output_hashes[mode].add(hashlib.sha256(answer.output).hexdigest())
-                        if not verify_session_output(current_packet, answer.output):
+                        hashes[mode].add(hashlib.sha256(answer.output).hexdigest())
+                        if not verify_session_output(current, answer.output):
                             raise AssertionError("timed output replay failed")
-
-                if any(len(values) != 1 for values in output_hashes.values()):
+                if any(len(values) != 1 for values in hashes.values()):
                     raise AssertionError("output bytes changed across repetitions")
                 medians = {mode: statistics.median(values) for mode, values in samples.items()}
                 oracle = min(("raw", "scc", "route"), key=medians.get)
-                pins = sum(map(len, rows))
-                info = first["auto"].info
                 record = {
                     "panel": panel,
                     "case": case.name,
-                    "family": family,
+                    "family": spec.family,
+                    "regime": spec.regime,
                     "count": count,
                     "vertices": problem.n,
                     "edges": len(problem.edges),
                     "pins": pins,
                     "pins_per_request": pins / count,
-                    "base_satisfiable": bool(info.get("base_satisfiable", True)),
-                    "components": info.get("scc_components"),
+                    "pin_density": pins / (count * problem.n),
+                    "base_satisfiable": bool(info["base_satisfiable"]),
+                    "components": int(info["components"]),
                     "selected_mode": selected,
                     "selection_reason": reason,
+                    "expected_mode": expected_mode,
+                    "expected_reason": expected_reason,
                     "oracle_mode": oracle,
                     "medians_ns": medians,
                     "selection_regret": medians[selected] / medians[oracle],
                     "realized_regret": medians["auto"] / medians[oracle],
                     "auto_raw_ratio": medians["auto"] / medians["raw"],
                     "samples_ns": samples,
-                    "output_sha256": {mode: next(iter(values)) for mode, values in output_hashes.items()},
+                    "output_sha256": {
+                        mode: next(iter(values)) for mode, values in hashes.items()
+                    },
                 }
                 records.append(record)
                 print(
@@ -234,37 +409,44 @@ def run(library: Path, panel: str, destination: Path, repeats: int = REPEATS) ->
 
     realized = [row["realized_regret"] for row in records]
     selection = [row["selection_regret"] for row in records]
-    grouped = defaultdict(list)
-    family_raw = defaultdict(list)
+    grouped: dict[tuple[str, int], list[float]] = defaultdict(list)
+    family_raw: dict[str, list[float]] = defaultdict(list)
     for row in records:
         grouped[(row["family"], row["count"])].append(row["realized_regret"])
         family_raw[row["family"]].append(row["auto_raw_ratio"])
 
-    limits = (
-        {"global": 1.03, "group": 1.05, "fraction": .95, "worst": 1.10, "selection": 1.02}
-        if panel == "development"
-        else {"global": 1.05, "group": 1.07, "fraction": .90, "worst": 1.12, "selection": 1.03}
-    )
-    rule_failures = []
-    for row in records:
-        selected, reason, count = row["selected_mode"], row["selection_reason"], row["count"]
-        if reason in ("base_infeasible", "high_pin_density", "short_weak_compression") and selected != "raw":
-            rule_failures.append(f"{row['case']}/{count}: {reason} selected {selected}")
-        if reason in ("scc_tile64", "scc_strong_compression") and selected != "scc":
-            rule_failures.append(f"{row['case']}/{count}: {reason} selected {selected}")
-        if count < 8 and selected != "raw":
-            rule_failures.append(f"{row['case']}/{count}: sub-eight bank selected {selected}")
+    if panel == "development":
+        limits = {
+            "global": 1.025,
+            "selection": 1.015,
+            "group": 1.05,
+            "fraction": 0.97,
+            "worst": 1.10,
+            "family_raw": None,
+        }
+    else:
+        limits = {
+            "global": 1.04,
+            "selection": 1.025,
+            "group": 1.06,
+            "fraction": 0.95,
+            "worst": 1.10,
+            "family_raw": 1.03,
+        }
 
     summary = {
         "schema": SCHEMA,
-        "classification": f"{panel} selector panel; confirmation is project-owned, not external replication",
+        "policy": POLICY,
+        "classification": (
+            "exposed development evidence" if panel == "development"
+            else "fresh project-owned prospective confirmation; not external replication"
+        ),
         "panel": panel,
         "python": sys.version,
         "platform": platform.platform(),
         "machine": platform.machine(),
         "cases": len({row["case"] for row in records}),
         "cells": len(records),
-        "counts": list(selected_counts),
         "repeats": repeats,
         "global_realized_regret_geomean": gmean(realized),
         "global_selection_regret_geomean": gmean(selection),
@@ -285,12 +467,13 @@ def run(library: Path, panel: str, destination: Path, repeats: int = REPEATS) ->
     }
     checks = {
         "global_realized_regret": summary["global_realized_regret_geomean"] <= limits["global"],
+        "selection_regret": summary["global_selection_regret_geomean"] <= limits["selection"],
         "group_regret": summary["worst_group_regret"] <= limits["group"],
         "fraction_within_1_05": summary["fraction_within_1_05"] >= limits["fraction"],
         "worst_cell": summary["worst_realized_regret"] <= limits["worst"],
-        "selection_regret": summary["global_selection_regret_geomean"] <= limits["selection"],
         "family_not_slower_than_raw": (
-            True if panel == "development" else summary["worst_family_auto_raw_ratio"] <= 1.05
+            True if limits["family_raw"] is None
+            else summary["worst_family_auto_raw_ratio"] <= limits["family_raw"]
         ),
         "structural_rules": not rule_failures,
     }
@@ -298,7 +481,8 @@ def run(library: Path, panel: str, destination: Path, repeats: int = REPEATS) ->
     summary["pass"] = all(checks.values())
     payload = {"summary": summary, "records": records}
     destination.joinpath("results.json").write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
     if not summary["pass"]:
@@ -311,7 +495,7 @@ def main(argv=None) -> int:
     parser.add_argument("--library", type=Path, required=True)
     parser.add_argument("--panel", choices=("development", "confirmation"), required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--repeats", type=int, default=REPEATS)
+    parser.add_argument("--repeats", type=int, default=17)
     args = parser.parse_args(argv)
     run(args.library.resolve(), args.panel, args.out.resolve(), repeats=args.repeats)
     return 0
