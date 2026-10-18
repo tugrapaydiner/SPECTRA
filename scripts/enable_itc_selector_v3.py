@@ -2,6 +2,12 @@ from pathlib import Path
 
 path = Path("experiments/compiled_query/itc_exam_transfer.py")
 text = path.read_text(encoding="utf-8")
+
+old_workflow = '    Path(".github/workflows/itc-exam-transfer.yml"),\n'
+if text.count(old_workflow) != 1:
+    raise RuntimeError("stale ITC transfer workflow inventory entry differs")
+text = text.replace(old_workflow, "")
+
 old_allowed = 'or policy not in ("explicit", "structural-v2")'
 new_allowed = 'or policy not in ("explicit", "structural-v2", "structural-v3")'
 old_auto = 'or (mode == "auto" and policy != "structural-v2")'
