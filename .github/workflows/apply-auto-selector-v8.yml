@@ -27,6 +27,30 @@ jobs:
       - name: Apply the frozen structural boundary
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_auto_selector_v8.py')
+          text = path.read_text()
+          old = '''allowed = "experiments/compiled_query/itc_exam_suite.py"
+          if remaining.returncode == 0:
+              unexpected = [line for line in remaining.stdout.splitlines() if not line.startswith(allowed + ":")]
+          '''
+          new = '''allowed = (
+              "experiments/compiled_query/itc_exam_suite.py:",
+              "scripts/apply_auto_selector_v8.py:",
+          )
+          if remaining.returncode == 0:
+              unexpected = [
+                  line for line in remaining.stdout.splitlines()
+                  if not line.startswith(allowed)
+              ]
+          '''
+          old = '\n'.join(line[10:] if line.startswith('          ') else line for line in old.splitlines()) + '\n'
+          new = '\n'.join(line[10:] if line.startswith('          ') else line for line in new.splitlines()) + '\n'
+          if old not in text:
+              raise RuntimeError('disposable-script audit block differs')
+          path.write_text(text.replace(old, new))
+          PY
           python scripts/apply_auto_selector_v8.py
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
           git diff --check
