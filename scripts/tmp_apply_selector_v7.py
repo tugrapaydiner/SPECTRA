@@ -71,3 +71,13 @@ def test_auto_structural_v7_dense_long_boundary(exact_runtime):
 if "test_auto_structural_v7_dense_long_boundary" not in text:
     text = text.replace(marker, new_test + marker)
 research_test.write_text(text, encoding="utf-8")
+
+public_exact = Path("tests/public/test_exact_api.py")
+public_exact.write_text(
+    public_exact.read_text(encoding="utf-8").replace("structural-v6", "structural-v7"),
+    encoding="utf-8",
+)
+
+old_public = Path("tests/public/test_auto_selector_v6.py")
+if old_public.exists():
+    old_public.unlink()
