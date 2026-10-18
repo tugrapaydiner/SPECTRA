@@ -31,8 +31,8 @@ MODES = ("raw", "scc", "route", "auto")
 DEVELOPMENT_COUNTS = (1, 8, 32, 63, 64, 65, 128, 1024)
 CONFIRMATION_COUNTS = (1, 8, 32, 64, 128, 1024)
 WARMUPS = 2
-SCHEMA = "spectra.auto_selector_benchmark.v2"
-POLICY = "structural-v4"
+SCHEMA = "spectra.auto_selector_benchmark.v3"
+POLICY = "structural-v5"
 
 
 @dataclass(frozen=True)
@@ -81,6 +81,7 @@ def _known_bipartite_problem(
     strong_contraction: bool,
     base_infeasible: bool,
     namespace: str,
+    minimum_edge_factor: float = 0.0,
 ) -> tuple[BinaryListProblem, list[int], random.Random]:
     rng = random.Random(seed_for(namespace, label))
     candidate_edges = _topology_at_size(family, n, rng)
@@ -94,6 +95,13 @@ def _known_bipartite_problem(
         other = pool[(vertex * 17 + len(label) * 13) % len(pool)]
         if vertex != other:
             edges.add((min(vertex, other), max(vertex, other)))
+
+    if minimum_edge_factor:
+        target = math.ceil(minimum_edge_factor * n)
+        while len(edges) < target:
+            a = left[rng.randrange(len(left))]
+            b = right[rng.randrange(len(right))]
+            edges.add((min(a, b), max(a, b)))
 
     palette = 8
     if strong_contraction:
@@ -151,6 +159,7 @@ def generated_case(
     strong_contraction: bool = False,
     base_infeasible: bool = False,
     namespace: str,
+    minimum_edge_factor: float = 0.0,
 ) -> Case:
     label = f"{family}/{regime}/n{n}/w{width}"
     problem, side, rng = _known_bipartite_problem(
@@ -160,6 +169,7 @@ def generated_case(
         strong_contraction=strong_contraction,
         base_infeasible=base_infeasible,
         namespace=namespace,
+        minimum_edge_factor=minimum_edge_factor,
     )
     rows = _queries(
         problem,
@@ -257,16 +267,17 @@ def development_cases() -> tuple[PanelCase, ...]:
 
 def confirmation_cases() -> tuple[PanelCase, ...]:
     result: list[PanelCase] = []
-    namespace = "SPECTRA-auto-selector-v4-confirmation"
+    namespace = "SPECTRA-auto-selector-v5-confirmation"
     regimes = (
-        ("strong-sparse", 320, 2, True, False),
-        ("below-density", 512, 14, False, False),
-        ("above-density", 384, 14, False, False),
-        ("low-density-large", 1536, 28, False, False),
-        ("base-infeasible", 512, 4, False, True),
+        ("strong-sparse", 320, 2, True, False, 0.0),
+        ("below-density", 640, 25, False, False, 0.0),
+        ("above-density", 448, 19, False, False, 0.0),
+        ("edge-heavy-warmup", 768, 12, False, False, 5.0),
+        ("low-density-large", 1280, 24, False, False, 0.0),
+        ("base-infeasible", 512, 4, False, True, 0.0),
     )
     for family in FAMILIES:
-        for regime, n, width, strong, infeasible in regimes:
+        for regime, n, width, strong, infeasible, edge_factor in regimes:
             case = generated_case(
                 family,
                 regime,
@@ -275,6 +286,7 @@ def confirmation_cases() -> tuple[PanelCase, ...]:
                 strong_contraction=strong,
                 base_infeasible=infeasible,
                 namespace=namespace,
+                minimum_edge_factor=edge_factor,
             )
             result.append(PanelCase(case, family, regime, CONFIRMATION_COUNTS))
     return tuple(result)
@@ -293,11 +305,13 @@ def decisions(payload: bytes, n: int, count: int) -> tuple[int, ...]:
 
 
 def expected_policy(*, base: bool, pins: int, count: int, vertices: int,
-                    components: int) -> tuple[str, str]:
+                    edges: int, components: int) -> tuple[str, str]:
     if not base:
         return "raw", "base_infeasible"
-    if pins >= 8 * count and 32 * pins >= vertices * count:
+    if pins >= 8 * count and 24 * pins >= vertices * count:
         return "raw", "dense_pin_fraction"
+    if count <= 128 and components == 2 * vertices and edges >= 4 * vertices:
+        return "raw", "dense_uncompressed_warmup"
     if count >= 64:
         return "scc", "scc_tile64"
     if count >= 8 and 2 * components <= vertices:
@@ -346,6 +360,7 @@ def run(library: Path, panel: str, destination: Path, repeats: int) -> dict:
                     pins=pins,
                     count=count,
                     vertices=problem.n,
+                    edges=len(problem.edges),
                     components=int(info["components"]),
                 )
                 if (selected, reason) != (expected_mode, expected_reason):
@@ -366,7 +381,7 @@ def run(library: Path, panel: str, destination: Path, repeats: int) -> dict:
                 samples = {mode: [] for mode in MODES}
                 hashes = {mode: set() for mode in MODES}
                 schedule = random.Random(seed_for(
-                    "SPECTRA-auto-selector-v4-schedule",
+                    "SPECTRA-auto-selector-v5-schedule",
                     f"{panel}/{case.name}/{count}",
                 ))
                 for _ in range(repeats):

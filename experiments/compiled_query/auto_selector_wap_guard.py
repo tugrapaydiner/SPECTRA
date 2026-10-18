@@ -17,8 +17,8 @@ from .cases import Case
 CASES = ("wap05a.col", "wap06a.col")
 COUNTS = (64, 128, 1024)
 REPEATS = 31
-SCHEMA = "spectra.auto_selector_wap_guard.v2"
-POLICY = "structural-v4"
+SCHEMA = "spectra.auto_selector_wap_guard.v3"
+POLICY = "structural-v5"
 
 
 def gmean(values):
@@ -67,7 +67,7 @@ def run(library: Path, cases: Path, destination: Path, repeats: int = REPEATS) -
                 samples = {"raw": [], "auto": []}
                 hashes = {"raw": set(), "auto": set()}
                 rng = random.Random(int.from_bytes(hashlib.sha256(
-                    f"SPECTRA-auto-wap-v4/{name}/{count}".encode()
+                    f"SPECTRA-auto-wap-v5/{name}/{count}".encode()
                 ).digest()[:8], "big"))
                 for _ in range(repeats):
                     order = ["raw", "auto"]
