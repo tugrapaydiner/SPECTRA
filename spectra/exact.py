@@ -498,29 +498,8 @@ class ExactRuntime:
         if type(max_bytes) is not int or not (1 << 20) <= max_bytes <= MAX_BYTES:
             raise ValueError('max_bytes must be an exact uint64 of at least 1 MiB')
         native_mode = {'raw': 0, 'scc': 1, 'sparse': 2, 'route': 3, 'auto': 4}[mode]
-        direct_reason = None
-        if mode == 'auto' and len(packet) >= SESSION_PACKET_HEADER.size:
-            magic, vertices, _palette, _edges, rows, pins, _r0, _r1 = (
-                SESSION_PACKET_HEADER.unpack_from(packet)
-            )
-            if magic == SESSION_PACKET_MAGIC:
-                if rows <= 8 and vertices > 512:
-                    native_mode = 0
-                    direct_reason = 'large_tiny_bank'
-                elif (rows and pins >= 8 * rows
-                      and 24 * pins >= vertices * rows
-                      and (rows < 64 or vertices < 96)):
-                    native_mode = 0
-                    direct_reason = (
-                        'dense_sub96_high_pin' if vertices < 96
-                        else 'dense_pin_short'
-                    )
         values = self._module.solve_session_packet(packet, native_mode, max_bytes)
         output, count, sat, unsat, proof_bytes, visits, arcs, info = values
-        if direct_reason is not None:
-            info = {**info, 'auto_policy': 'structural-v9',
-                    'selected_mode': 'raw',
-                    'auto_policy_reason': direct_reason}
         info = {**info, 'backend': 'native-exact-binary', 'mode': mode,
                 'exact_api_version': EXACT_API_VERSION, 'native_abi': EXACT_NATIVE_ABI,
                 'prepared_input': True, 'input_schema': 'SBC1',

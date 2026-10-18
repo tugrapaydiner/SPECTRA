@@ -527,9 +527,9 @@ def run(root: Path) -> dict:
                                     "bank_pin_count", "bank_tiles"))
                 or current["selected_mode"] not in ("raw", "scc", "route")
                 or current["bank_kernel"] not in ("serial", "tile64")
-                or current["auto_policy"] not in ("explicit", "structural-v9")
+                or current["auto_policy"] not in ("explicit", "structural-v10")
                 or type(current["auto_policy_reason"]) is not str
-                or (mode == "auto" and current["auto_policy"] != "structural-v9")
+                or (mode == "auto" and current["auto_policy"] != "structural-v10")
                 or (mode != "auto" and (current["selected_mode"] != mode
                                          or current["auto_policy"] != "explicit"))):
             raise AssertionError(f"{mode} returned inconsistent metadata")
@@ -635,9 +635,9 @@ def audit(root: Path) -> dict:
                        for name in ("visited", "arcs_scanned", "bank_pin_count", "bank_tiles"))
                 or item.get("bank_kernel") not in ("serial", "tile64")
                 or selected not in ("raw", "scc", "route")
-                or policy not in ("explicit", "structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v9")
+                or policy not in ("explicit", "structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v10")
                 or type(reason) is not str
-                or (mode == "auto" and policy not in ("structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v9"))
+                or (mode == "auto" and policy not in ("structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v10"))
                 or (mode != "auto" and (selected != mode or policy != "explicit"))):
             raise ValueError(f"{mode} metadata differs from certified output")
         if decisions is None:

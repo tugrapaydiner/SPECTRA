@@ -17,7 +17,7 @@ from .cases import Case
 CASES = ("wap05a.col", "wap06a.col")
 COUNT = 1024
 REPEATS = 31
-POLICY = "structural-v9"
+POLICY = "structural-v10"
 
 
 def run(library: Path, cases: Path, destination: Path) -> dict:
