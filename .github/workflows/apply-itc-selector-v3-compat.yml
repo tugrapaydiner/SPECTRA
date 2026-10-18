@@ -1,4 +1,4 @@
-# One-shot checked transport; removed by its successful commit.
+# One-shot checked transport; removed after all runtime and audit checks pass.
 name: apply-itc-selector-v3-compat
 
 on:
