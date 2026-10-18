@@ -1,0 +1,211 @@
+name: final-first-use-benchmark
+
+on:
+  push:
+    branches: [audit/tile64-external-competition-20261017]
+    paths: [.github/workflows/final-first-use-benchmark.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-first-use-benchmark
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_COMMIT: bc950cce4f49cc0b9309d97ab6e2042691779f80
+  UPSTREAM_COMMIT: 4932048642da2144f387961b595112277afff82f
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  NUMEXPR_NUM_THREADS: '1'
+
+jobs:
+  benchmark:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86-64
+            runner: ubuntu-24.04
+          - label: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.CANDIDATE_COMMIT }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Install the pinned test dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -q 'pytest==9.0.2' 'python-sat==1.9.dev15'
+          python - <<'PY'
+          from pysat.solvers import Solver
+          for name in ('minicard', 'cadical195'):
+              solver = Solver(name=name)
+              solver.delete()
+          PY
+
+      - name: Freeze source and environment identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
+          git diff --quiet
+          git diff --cached --quiet
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/source-commit.txt
+          git rev-parse HEAD^{tree} > evidence/source-tree.txt
+          python -VV > evidence/python.txt
+          python -m pip freeze > evidence/environment.txt
+          uname -a > evidence/platform.txt
+          lscpu > evidence/cpu.txt
+          sha256sum \
+            spectra/exact.py \
+            spectra/exact_problem.py \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/session_packet_cold_benchmark.py \
+            experiments/compiled_query/SESSION_PACKET_COLD_PROTOCOL_20261017.md \
+            tests/public/test_exact_packet_packing.py \
+            > evidence/source-sha256.txt
+
+      - name: Run focused correctness contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q spectra experiments/compiled_query
+          python -m pytest -q --confcutdir=tests/public \
+            tests/public/test_exact_packet_packing.py \
+            tests/public/test_exact_api.py \
+            tests/public/test_exact_bank_tile64.py \
+            2>&1 | tee evidence/contracts.log
+
+      - name: Acquire and verify the exposed WAP development graphs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/graphs
+          for name in wap05a.col wap06a.col; do
+            curl --fail --location --retry 3 --retry-all-errors \
+              "https://raw.githubusercontent.com/marijnheule/clicolcom/${UPSTREAM_COMMIT}/graphs/${name}" \
+              -o "evidence/graphs/${name}"
+          done
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+
+          inventory = json.loads(
+              Path('experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json').read_text()
+          )
+          assert inventory['commit'] == '4932048642da2144f387961b595112277afff82f'
+          rows = []
+          for name in ('wap05a.col', 'wap06a.col'):
+              record = inventory['graphs'][name]
+              data = Path('evidence/graphs', name).read_bytes()
+              blob = hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
+              assert record['role'] in ('development', 'development_consumed')
+              assert len(data) == record['bytes']
+              assert blob == record['git_blob_sha1']
+              rows.append({
+                  'name': name,
+                  'bytes': len(data),
+                  'git_blob_sha1': blob,
+                  'sha256': hashlib.sha256(data).hexdigest(),
+              })
+          Path('evidence/graph-acquisition.json').write_text(
+              json.dumps({'upstream_commit': inventory['commit'], 'graphs': rows},
+                         indent=2, sort_keys=True) + '\n'
+          )
+          PY
+          python -m experiments.compiled_query.study export-wap \
+            --graphs evidence/graphs --output evidence/cases
+
+      - name: Build the exact runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > evidence/exact-library.txt
+          from pathlib import Path
+          from spectra.exact import build_exact_runtime
+          print(build_exact_runtime(Path('evidence/exact-native')))
+          PY
+          library="$(cat evidence/exact-library.txt)"
+          test -f "$library"
+          sha256sum "$library" > evidence/exact-library-sha256.txt
+          cat "${library}.build.json" > evidence/exact-build-receipt.json
+
+      - name: Run the frozen paired benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m experiments.compiled_query.session_packet_cold_benchmark \
+            --library "$(cat evidence/exact-library.txt)" \
+            --cases evidence/cases \
+            --out evidence/benchmark \
+            --repeats 31 \
+            2>&1 | tee evidence/benchmark.log
+
+      - name: Check the predeclared gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          value = json.loads(Path('evidence/benchmark/results.json').read_text())
+          summary = value['summary']
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          assert summary['schema'] == 'spectra.session_packet_cold_benchmark.v2'
+          assert summary['cases'] == 2
+          assert summary['repeats'] == 31
+          assert summary['gate_pass'] is True
+          assert summary['bank_geometric_mean_ratio'] < .60
+          assert summary['bank_max_case_ratio'] < .65
+          assert summary['application_geometric_mean_ratio'] < .75
+          assert summary['application_max_case_ratio'] < .80
+          PY
+
+      - name: Hash the retained evidence
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+
+          root = Path('evidence')
+          manifest = {}
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name != 'SHA256.json':
+                  manifest[str(path.relative_to(root))] = hashlib.sha256(
+                      path.read_bytes()
+                  ).hexdigest()
+          root.joinpath('SHA256.json').write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: final-first-use-${{ matrix.label }}-${{ github.run_id }}
+          path: evidence/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
