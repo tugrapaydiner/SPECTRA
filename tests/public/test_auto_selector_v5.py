@@ -57,10 +57,10 @@ def dense_uncompressed_problem(n: int = 64) -> ExactProblem:
         for left in range(half)
         for offset in range(8)
     }
-    masks = tuple(
-        (1 << (vertex % 2)) | (1 << (2 + vertex % 2))
-        for vertex in range(n)
-    )
+    # Opposite partitions have disjoint colour pairs, so the many admitted
+    # original edges create no implication arcs. The graph is edge-heavy while
+    # its literal graph remains completely uncompressed.
+    masks = tuple(5 if vertex < half else 10 for vertex in range(n))
     return ExactProblem.create(n, 4, tuple(sorted(edges)), masks)
 
 
