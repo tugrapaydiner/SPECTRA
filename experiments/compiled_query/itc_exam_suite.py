@@ -1,7 +1,7 @@
 """Prospective multi-instance ITC-2007 exam-repair transfer suite.
 
-The selector-v2 rule is developed from the exposed synthetic panel and the
-published ``set9`` transfer only.  ``set10`` and ``set12`` are fixed holdout
+The structural-v7 selector is developed from the exposed synthetic panel,
+the retained failed-v3 confirmation, and the published ``set9`` transfer.  ``set10`` and ``set12`` are fixed holdout
 instances: their execution results must not be used to retune the policy.  This
 suite remains a bounded conflict-core repair study, not a full timetabling claim.
 """
@@ -18,7 +18,7 @@ from typing import Iterable
 from experiments.compiled_query import itc_exam_transfer as transfer
 
 SCHEMA = "spectra.itc2007.exam_repair_suite.v1"
-DEFAULT_HOLDOUT_MAX_RATIO = 1.15
+DEFAULT_HOLDOUT_MAX_RATIO = 1.05
 
 
 @dataclass(frozen=True)
@@ -137,9 +137,10 @@ def freeze(root: Path, upstream_root: Path, *, cases: Iterable[SuiteCase] = DEFA
             "dataset_repository": transfer.DATASET_REPOSITORY,
             "dataset_commit": transfer.DATASET_COMMIT,
             "query_count_per_case": query_count,
-            "selector_policy": "structural-v2",
+            "selector_policy": "structural-v7",
             "selector_development_sources": [
                 "exposed synthetic graph panel",
+                "retained failed-v3 confirmation and v4 density sweep",
                 "set9 development transfer",
             ],
             "holdout_policy": (
@@ -170,7 +171,7 @@ def load_manifest(root: Path) -> dict:
     if (manifest.get("schema") != SCHEMA
             or manifest.get("dataset_repository") != transfer.DATASET_REPOSITORY
             or manifest.get("dataset_commit") != transfer.DATASET_COMMIT
-            or manifest.get("selector_policy") != "structural-v2"
+            or manifest.get("selector_policy") not in ("structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v7")
             or type(manifest.get("query_count_per_case")) is not int
             or manifest["query_count_per_case"] < 1):
         raise ValueError("suite manifest identity differs")
