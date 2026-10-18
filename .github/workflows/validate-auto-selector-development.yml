@@ -3,7 +3,13 @@ name: validate-auto-selector-v4-development
 on:
   push:
     branches: [performance/automatic-engine-selection]
-    paths: [.github/workflows/validate-auto-selector-development.yml]
+    paths:
+      - .github/workflows/validate-auto-selector-development.yml
+      - experiments/compiled_query/auto_selector_benchmark.py
+      - experiments/compiled_query/AUTO_SELECTOR_V4_PROTOCOL_20261018.md
+      - spectra/_native/exact_binary.cpp
+      - experiments/compiled_query/exact_native.cpp
+      - tests/public/test_auto_selector_v4.py
 
 permissions:
   contents: read
