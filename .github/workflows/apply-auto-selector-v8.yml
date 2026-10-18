@@ -25,191 +25,12 @@ jobs:
         with:
           python-version: '3.13'
       - name: Apply the frozen structural boundary
-        shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          import subprocess
-
-          def replace(path: str, old: str, new: str, *, count: int | None = None) -> None:
-              target = Path(path)
-              text = target.read_text()
-              found = text.count(old)
-              if count is not None and found != count:
-                  raise RuntimeError(f'{path}: expected {count} occurrences, found {found}: {old!r}')
-              if count is None and found == 0:
-                  raise RuntimeError(f'{path}: missing expected text: {old!r}')
-              target.write_text(text.replace(old, new))
-
-          # Keep public and research native mirrors byte-identical.
-          for path in ('spectra/_native/exact_binary.cpp',
-                       'experiments/compiled_query/exact_native.cpp'):
-              replace(path, '&& (bank_size<64 || n<256)) {',
-                      '&& (bank_size<64 || n<128)) {', count=2)
-              replace(path,
-                      'auto_reason=n<256?"dense_small_high_pin":"dense_pin_short";',
-                      'auto_reason=n<128?"dense_tiny_high_pin":"dense_pin_short";',
-                      count=2)
-
-          # Promote executable policy metadata to v8 while preserving historical docs.
-          matches = subprocess.check_output([
-              'git', 'grep', '-l', 'structural-v7', '--', '*.py', '*.cpp'
-          ], text=True).splitlines()
-          for path in matches:
-              target = Path(path)
-              target.write_text(target.read_text().replace('structural-v7', 'structural-v8'))
-
-          benchmark = Path('experiments/compiled_query/auto_selector_benchmark.py')
-          text = benchmark.read_text()
-          text = text.replace(
-              'SCHEMA = "spectra.auto_selector_benchmark.v4"',
-              'SCHEMA = "spectra.auto_selector_benchmark.v5"',
-          )
-          text = text.replace('name = f"auto-v7-', 'name = f"auto-v8-')
-          text = text.replace(
-              'SPECTRA-auto-selector-v7-confirmation',
-              'SPECTRA-auto-selector-v8-confirmation',
-          )
-          old_confirmation = '''def confirmation_cases() -> tuple[PanelCase, ...]:
-              result: list[PanelCase] = []
-              namespace = "SPECTRA-auto-selector-v8-confirmation"
-              regimes = (
-                  ("strong-sparse", 352, 2, True, False, 0.0),
-                  ("below-density", 704, 27, False, False, 0.0),
-                  ("above-density", 480, 21, False, False, 0.0),
-                  ("edge-heavy-warmup", 832, 13, False, False, 5.0),
-                  ("low-density-large", 1408, 26, False, False, 0.0),
-                  ("small-high-pin", 224, 12, False, False, 0.0),
-                  ("base-infeasible", 576, 4, False, True, 0.0),
-              )
-              for family in FAMILIES:
-                  for regime, n, width, strong, infeasible, edge_factor in regimes:
-                      case = generated_case(
-                          family,
-                          regime,
-                          n=n,
-                          width=width,
-                          strong_contraction=strong,
-                          base_infeasible=infeasible,
-                          namespace=namespace,
-                          minimum_edge_factor=edge_factor,
-                      )
-                      result.append(PanelCase(case, family, regime, CONFIRMATION_COUNTS))
-              return tuple(result)
-          '''
-          new_confirmation = '''def confirmation_cases() -> tuple[PanelCase, ...]:
-              result: list[PanelCase] = []
-              namespace = "SPECTRA-auto-selector-v8-confirmation"
-              regimes = (
-                  ("strong-sparse", 320, 3, True, False, 0.0),
-                  ("dense-small", 96, 12, False, False, 0.0),
-                  ("dense-boundary-low", 120, 12, False, False, 0.0),
-                  ("dense-boundary-high", 128, 12, False, False, 0.0),
-                  ("dense-medium", 192, 12, False, False, 0.0),
-                  ("edge-heavy-warmup", 768, 12, False, False, 5.0),
-                  ("base-infeasible", 448, 4, False, True, 0.0),
-              )
-              for family in FAMILIES:
-                  for regime, n, width, strong, infeasible, edge_factor in regimes:
-                      case = generated_case(
-                          family,
-                          regime,
-                          n=n,
-                          width=width,
-                          strong_contraction=strong,
-                          base_infeasible=infeasible,
-                          namespace=namespace,
-                          minimum_edge_factor=edge_factor,
-                      )
-                      result.append(PanelCase(case, family, regime, CONFIRMATION_COUNTS))
-              return tuple(result)
-          '''
-          # Normalize indentation from this embedded literal before replacement.
-          old_confirmation = '\n'.join(line[10:] if line.startswith('          ') else line
-                                       for line in old_confirmation.splitlines()) + '\n'
-          new_confirmation = '\n'.join(line[10:] if line.startswith('          ') else line
-                                       for line in new_confirmation.splitlines()) + '\n'
-          if old_confirmation not in text:
-              raise RuntimeError('confirmation panel block differs')
-          text = text.replace(old_confirmation, new_confirmation)
-          text = text.replace(
-              'and (count < 64 or vertices < 256)):\n'
-              '        return "raw", "dense_small_high_pin" if vertices < 256 else "dense_pin_short"',
-              'and (count < 64 or vertices < 128)):\n'
-              '        return "raw", "dense_tiny_high_pin" if vertices < 128 else "dense_pin_short"',
-          )
-          benchmark.write_text(text)
-
-          # Replace the old boundary contract with explicit tests around 128 vertices.
-          old_test = Path('tests/public/test_auto_selector_v7.py')
-          new_test = Path('tests/public/test_auto_selector_v8.py')
-          old_test.rename(new_test)
-          text = new_test.read_text().replace('selector-v7-runtime', 'selector-v8-runtime')
-          old_block = '''def test_small_high_pin_bank_stays_raw_even_when_long(exact_runtime):
-              problem = independent_problem(192)
-              row = tuple((vertex, 3) for vertex in range(8))
-              answer = solve(exact_runtime, problem, (row,) * 1024)
-              assert answer.info["selected_mode"] == "raw"
-              assert answer.info["auto_policy_reason"] == "dense_small_high_pin"
-          '''
-          new_block = '''def test_dense_long_bank_below_128_vertices_stays_raw(exact_runtime):
-              problem = independent_problem(120)
-              row = tuple((vertex, 3) for vertex in range(8))
-              answer = solve(exact_runtime, problem, (row,) * 1024)
-              assert answer.info["selected_mode"] == "raw"
-              assert answer.info["auto_policy_reason"] == "dense_tiny_high_pin"
-
-
-          def test_dense_long_bank_switches_to_scc_at_128_vertices(exact_runtime):
-              problem = independent_problem(128)
-              row = tuple((vertex, 3) for vertex in range(8))
-              answer = solve(exact_runtime, problem, (row,) * 64)
-              assert answer.info["selected_mode"] == "scc"
-              assert answer.info["auto_policy_reason"] == "scc_long_bank"
-
-
-          def test_dense_medium_long_bank_uses_scc(exact_runtime):
-              problem = independent_problem(192)
-              row = tuple((vertex, 3) for vertex in range(8))
-              answer = solve(exact_runtime, problem, (row,) * 1024)
-              assert answer.info["selected_mode"] == "scc"
-              assert answer.info["auto_policy_reason"] == "scc_long_bank"
-          '''
-          old_block = '\n'.join(line[10:] if line.startswith('          ') else line
-                                for line in old_block.splitlines()) + '\n'
-          new_block = '\n'.join(line[10:] if line.startswith('          ') else line
-                                for line in new_block.splitlines()) + '\n'
-          if old_block not in text:
-              raise RuntimeError('old dense selector test differs')
-          new_test.write_text(text.replace(old_block, new_block))
-
-          # Preserve old evidence compatibility while admitting v8 manifests.
-          suite = Path('experiments/compiled_query/itc_exam_suite.py')
-          text = suite.read_text()
-          text = text.replace(
-              '"structural-v5", "structural-v6", "structural-v8")',
-              '"structural-v5", "structural-v6", "structural-v7", "structural-v8")',
-          )
-          suite.write_text(text)
-
-          # Ensure no executable code still advertises v7.
-          remaining = subprocess.run(
-              ['git', 'grep', '-n', 'structural-v7', '--', '*.py', '*.cpp'],
-              text=True, capture_output=True,
-          )
-          if remaining.returncode == 0:
-              raise RuntimeError('executable v7 references remain:\n' + remaining.stdout)
-          if remaining.returncode not in (0, 1):
-              raise RuntimeError(remaining.stderr)
-          PY
-
+          python scripts/apply_auto_selector_v8.py
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
           git diff --check
-
       - name: Run focused selector and transfer contracts
-        shell: bash
         run: |
           set -euo pipefail
           python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
@@ -221,12 +42,10 @@ jobs:
             experiments/compiled_query/test_exact.py \
             experiments/compiled_query/test_itc_exam_transfer.py \
             experiments/compiled_query/test_itc_exam_suite.py
-
       - name: Commit the implementation
-        shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/apply-auto-selector-v8.yml
+          git rm .github/workflows/apply-auto-selector-v8.yml scripts/apply_auto_selector_v8.py
           git config user.name 'Tugrap'
           git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
           git add -A
