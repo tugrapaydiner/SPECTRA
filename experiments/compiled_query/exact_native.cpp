@@ -391,21 +391,25 @@ struct Index {
             base[v]=static_cast<uint8_t>(comp[2*v]<comp[2*v+1]);
         }
         if(mode==4) {
-            // Structural auto policy v2.  set9 development evidence showed that
-            // large, heavily pinned repair banks can lose to raw traversal even
-            // when tile64 is available.  The policy therefore uses only immutable
-            // request geometry (never answers or measured timings): raw below one
-            // tile, on a base contradiction, or at eight pins per row and above.
-            // The threshold is frozen before the set10/set12 holdout transfer.
-            if(bank_size<64) {
-                condensed=false;routed=false;auto_reason="bank_below_tile64";
+            // Structural auto policy v6. Large tiny banks take the exact raw
+            // path directly at the public boundary; keep the same rule here for
+            // native callers. Remaining choices use immutable geometry only.
+            if(bank_size<=8 && n>512) {
+                condensed=false;routed=false;auto_reason="large_tiny_bank";
             } else if(bad!=NIL) {
                 condensed=false;routed=false;auto_reason="base_infeasible";
-            } else if(W(bank_pins)>=8*W(bank_size)) {
-                condensed=false;routed=false;auto_reason="high_pin_density";
+            } else if(W(bank_pins)>=8*W(bank_size)
+                    && W(24)*W(bank_pins)>=W(n)*W(bank_size)) {
+                condensed=false;routed=false;auto_reason="dense_pin_fraction";
+            } else if(bank_size<=128 && W(nc)==2*W(n)
+                    && W(p.edges.size())>=4*W(n)) {
+                condensed=false;routed=false;auto_reason="dense_uncompressed_warmup";
+            } else if(bank_size>=64) {
+                condensed=true;routed=false;auto_reason="scc_tile64";
+            } else if(bank_size>=8 && W(2)*W(nc)<=W(n)) {
+                condensed=true;routed=false;auto_reason="scc_strong_compression";
             } else {
-                condensed=true;routed=nc<=n;
-                auto_reason=routed?"route_component_compression":"scc_tile64";
+                condensed=false;routed=false;auto_reason="short_weak_compression";
             }
         }
         if(condensed && bad==NIL) {
@@ -1056,7 +1060,7 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
         PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);
         PyObject* queries=PyLong_FromUnsignedLong(bank_queries);
         PyObject* pins=PyLong_FromUnsignedLong(bank_pins);
-        PyObject* policy=PyUnicode_FromString(which==4?"structural-v2":"explicit");
+        PyObject* policy=PyUnicode_FromString(which==4?"structural-v6":"explicit");
         PyObject* reason=PyUnicode_FromString(solver->auto_reason);
         if(!kernel || !tiles || !queries || !pins || !policy || !reason
                 || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0
