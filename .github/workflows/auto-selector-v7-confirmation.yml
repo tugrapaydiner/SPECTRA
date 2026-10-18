@@ -1,0 +1,131 @@
+name: auto-selector-v7-confirmation
+
+on:
+  push:
+    branches: [performance/automatic-engine-selection-v7]
+    paths: [.github/workflows/auto-selector-v7-confirmation.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-selector-v7-confirmation
+  cancel-in-progress: false
+
+env:
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  NUMEXPR_NUM_THREADS: '1'
+
+jobs:
+  confirmation:
+    name: confirmation-${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86-64
+            runner: ubuntu-24.04
+          - label: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Install focused dependencies
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+
+      - name: Bind source and run selector contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p confirmation-evidence
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --quiet
+          git diff --cached --quiet
+          git rev-parse HEAD > confirmation-evidence/source-commit.txt
+          git rev-parse HEAD^{tree} > confirmation-evidence/source-tree.txt
+          python -VV > confirmation-evidence/python.txt
+          python -m pip freeze > confirmation-evidence/environment.txt
+          uname -a > confirmation-evidence/platform.txt
+          lscpu > confirmation-evidence/cpu.txt
+          cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
+          sha256sum \
+            spectra/exact.py \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/auto_selector_benchmark.py \
+            experiments/compiled_query/AUTO_SELECTOR_V7_PROTOCOL_20261018.md \
+            tests/public/test_auto_selector_v7.py \
+            > confirmation-evidence/source-sha256.txt
+          python -m pytest -q --confcutdir=tests/public \
+            tests/public/test_auto_selector_v7.py \
+            tests/public/test_exact_api.py \
+            tests/public/test_exact_bank_tile64.py \
+            2>&1 | tee confirmation-evidence/contracts.log
+
+      - name: Build receipt-bound runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > confirmation-evidence/library.txt
+          from spectra.exact import build_exact_runtime
+          print(build_exact_runtime('confirmation-evidence/native'))
+          PY
+
+      - name: Run the untouched confirmation panel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m experiments.compiled_query.auto_selector_benchmark \
+            --library "$(cat confirmation-evidence/library.txt)" \
+            --panel confirmation \
+            --out confirmation-evidence/results \
+            --repeats 31 \
+            2>&1 | tee confirmation-evidence/benchmark.log
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          result = json.loads(Path('confirmation-evidence/results/results.json').read_text())
+          summary = result['summary']
+          assert summary['policy'] == 'structural-v7'
+          assert summary['panel'] == 'confirmation'
+          assert summary['pass'], summary
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+
+      - name: Hash retained evidence
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          root = Path('confirmation-evidence')
+          manifest = {}
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name != 'SHA256.json':
+                  manifest[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+          (root / 'SHA256.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+          PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: auto-selector-v7-confirmation-${{ matrix.label }}-${{ github.run_id }}
+          path: confirmation-evidence/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
