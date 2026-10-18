@@ -1,0 +1,36 @@
+name: fix-auto-selector-v8-apply
+
+on:
+  push:
+    branches: [performance/automatic-engine-selection-v8]
+    paths: [.github/workflows/fix-auto-selector-v8-apply.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Correct the mirror occurrence count and retrigger the apply workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/apply-auto-selector-v8.yml')
+          text = path.read_text()
+          if text.count('count=2)') != 2:
+              raise RuntimeError('unexpected apply workflow occurrence count')
+          path.write_text(text.replace('count=2)', 'count=1)'))
+          PY
+          git rm .github/workflows/fix-auto-selector-v8-apply.yml
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix the v8 apply check'
+          git push origin HEAD:performance/automatic-engine-selection-v8
