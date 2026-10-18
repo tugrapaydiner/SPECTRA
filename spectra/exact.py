@@ -479,13 +479,12 @@ class ExactRuntime:
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
         """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
 
-        The default ``auto`` mode uses structural policy v6. Banks of
+        The default ``auto`` mode uses structural policy v7. Banks of
         at most eight requests on graphs above 512 vertices take the exact raw
-        path directly. Other base-infeasible graphs stay raw. A request bank also
-        stays raw when it averages at least eight pins per request and those pins
-        cover at least one original vertex in 24, or when an uncompressed graph
-        with at least four original edges per vertex has at most 128 requests.
-        Feasible banks of at least 64 requests otherwise use SCC; banks from eight
+        path directly, and fixed contradictions stay raw. Dense high-pin work
+        stays raw before 64 requests and at every length below 256 vertices.
+        At exactly 64 requests, dense uncompressed graphs also remain raw.
+        Other feasible banks of at least 64 requests use SCC; banks from eight
         requests use SCC earlier when SCCs compress the literal graph by at least
         fourfold. Selection uses immutable graph/request geometry only, never
         answers or measured timings. ``info['selected_mode']`` and
@@ -510,7 +509,7 @@ class ExactRuntime:
         values = self._module.solve_session_packet(packet, native_mode, max_bytes)
         output, count, sat, unsat, proof_bytes, visits, arcs, info = values
         if direct_reason is not None:
-            info = {**info, 'auto_policy': 'structural-v6',
+            info = {**info, 'auto_policy': 'structural-v7',
                     'selected_mode': 'raw',
                     'auto_policy_reason': direct_reason}
         info = {**info, 'backend': 'native-exact-binary', 'mode': mode,

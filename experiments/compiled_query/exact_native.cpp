@@ -391,21 +391,23 @@ struct Index {
             base[v]=static_cast<uint8_t>(comp[2*v]<comp[2*v+1]);
         }
         if(mode==4) {
-            // Structural auto policy v6. Large tiny banks take the exact raw
-            // path directly at the public boundary; keep the same rule here for
-            // native callers. Remaining choices use immutable geometry only.
+            // Structural auto policy v7. Short, contradictory, and small
+            // high-pin banks stay raw. Long feasible banks use the tile64 SCC
+            // engine, except for the measured 64-request dense warmup boundary.
             if(bank_size<=8 && n>512) {
                 condensed=false;routed=false;auto_reason="large_tiny_bank";
             } else if(bad!=NIL) {
                 condensed=false;routed=false;auto_reason="base_infeasible";
             } else if(W(bank_pins)>=8*W(bank_size)
-                    && W(24)*W(bank_pins)>=W(n)*W(bank_size)) {
-                condensed=false;routed=false;auto_reason="dense_pin_fraction";
-            } else if(bank_size<=128 && W(nc)==2*W(n)
+                    && W(24)*W(bank_pins)>=W(n)*W(bank_size)
+                    && (bank_size<64 || n<256)) {
+                condensed=false;routed=false;
+                auto_reason=n<256?"dense_small_high_pin":"dense_pin_short";
+            } else if(bank_size==64 && W(nc)==2*W(n)
                     && W(p.edges.size())>=4*W(n)) {
-                condensed=false;routed=false;auto_reason="dense_uncompressed_warmup";
+                condensed=false;routed=false;auto_reason="dense_uncompressed_tile64";
             } else if(bank_size>=64) {
-                condensed=true;routed=false;auto_reason="scc_tile64";
+                condensed=true;routed=false;auto_reason="scc_long_bank";
             } else if(bank_size>=8 && W(2)*W(nc)<=W(n)) {
                 condensed=true;routed=false;auto_reason="scc_strong_compression";
             } else {
@@ -1060,7 +1062,7 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
         PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);
         PyObject* queries=PyLong_FromUnsignedLong(bank_queries);
         PyObject* pins=PyLong_FromUnsignedLong(bank_pins);
-        PyObject* policy=PyUnicode_FromString(which==4?"structural-v6":"explicit");
+        PyObject* policy=PyUnicode_FromString(which==4?"structural-v7":"explicit");
         PyObject* reason=PyUnicode_FromString(solver->auto_reason);
         if(!kernel || !tiles || !queries || !pins || !policy || !reason
                 || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0

@@ -24,14 +24,14 @@ def exact_runtime(tmp_path_factory):
     compiler = "cl" if sys.platform == "win32" else "g++"
     if sys.platform not in ("linux", "win32") or shutil.which(compiler) is None:
         pytest.skip("supported native compiler is unavailable")
-    return ExactRuntime(build_exact_runtime(tmp_path_factory.mktemp("selector-v6-runtime")))
+    return ExactRuntime(build_exact_runtime(tmp_path_factory.mktemp("selector-v7-runtime")))
 
 
 def solve(runtime, problem, rows):
     packet = pack_session_packet(problem, rows)
     answer = runtime.solve_session_packet(packet, mode="auto")
     assert verify_session_output(packet, answer.output)
-    assert answer.info["auto_policy"] == "structural-v6"
+    assert answer.info["auto_policy"] == "structural-v7"
     assert answer.info["mode"] == "auto"
     return answer
 
@@ -70,7 +70,7 @@ def test_large_tiny_bank_uses_the_direct_raw_path(exact_runtime):
     explicit = exact_runtime.solve_session_packet(packet, mode="raw")
     assert automatic.output == explicit.output
     assert automatic.info["mode"] == "auto"
-    assert automatic.info["auto_policy"] == "structural-v6"
+    assert automatic.info["auto_policy"] == "structural-v7"
     assert automatic.info["selected_mode"] == "raw"
     assert automatic.info["auto_policy_reason"] == "large_tiny_bank"
     assert verify_session_output(packet, automatic.output)
@@ -103,7 +103,7 @@ def test_auto_keeps_a_short_weakly_compressed_bank_on_raw(exact_runtime):
 def test_auto_uses_tile64_scc_for_a_long_feasible_bank(exact_runtime):
     answer = solve(exact_runtime, independent_problem(128), ((),) * 64)
     assert answer.info["selected_mode"] == "scc"
-    assert answer.info["auto_policy_reason"] == "scc_tile64"
+    assert answer.info["auto_policy_reason"] == "scc_long_bank"
 
 
 def test_high_absolute_but_low_density_pins_use_scc(exact_runtime):
@@ -111,7 +111,7 @@ def test_high_absolute_but_low_density_pins_use_scc(exact_runtime):
     row = tuple((vertex, 3) for vertex in range(16))
     answer = solve(exact_runtime, problem, (row,) * 64)
     assert answer.info["selected_mode"] == "scc"
-    assert answer.info["auto_policy_reason"] == "scc_tile64"
+    assert answer.info["auto_policy_reason"] == "scc_long_bank"
 
 
 def test_pin_density_below_one_in_24_uses_scc(exact_runtime):
@@ -119,31 +119,38 @@ def test_pin_density_below_one_in_24_uses_scc(exact_runtime):
     row = tuple((vertex, 3) for vertex in range(8))
     answer = solve(exact_runtime, problem, (row,) * 64)
     assert answer.info["selected_mode"] == "scc"
-    assert answer.info["auto_policy_reason"] == "scc_tile64"
+    assert answer.info["auto_policy_reason"] == "scc_long_bank"
 
 
-def test_pin_density_at_one_in_24_uses_raw(exact_runtime):
+def test_small_high_pin_bank_stays_raw_even_when_long(exact_runtime):
     problem = independent_problem(192)
     row = tuple((vertex, 3) for vertex in range(8))
-    answer = solve(exact_runtime, problem, (row,) * 64)
+    answer = solve(exact_runtime, problem, (row,) * 1024)
     assert answer.info["selected_mode"] == "raw"
-    assert answer.info["auto_policy_reason"] == "dense_pin_fraction"
+    assert answer.info["auto_policy_reason"] == "dense_small_high_pin"
 
 
-def test_dense_uncompressed_graph_uses_raw_through_128_requests(exact_runtime):
-    problem = dense_uncompressed_problem()
-    for count in (64, 128):
-        answer = solve(exact_runtime, problem, ((),) * count)
-        assert answer.info["components"] == 2 * problem.n
-        assert answer.info["selected_mode"] == "raw"
-        assert answer.info["auto_policy_reason"] == "dense_uncompressed_warmup"
-
-
-def test_dense_uncompressed_graph_uses_scc_after_warmup_boundary(exact_runtime):
-    problem = dense_uncompressed_problem()
-    answer = solve(exact_runtime, problem, ((),) * 129)
+def test_large_high_pin_bank_uses_scc_at_tile64(exact_runtime):
+    problem = independent_problem(448)
+    row = tuple((vertex, 3) for vertex in range(19))
+    answer = solve(exact_runtime, problem, (row,) * 64)
     assert answer.info["selected_mode"] == "scc"
-    assert answer.info["auto_policy_reason"] == "scc_tile64"
+    assert answer.info["auto_policy_reason"] == "scc_long_bank"
+
+
+def test_dense_uncompressed_graph_uses_raw_at_tile64(exact_runtime):
+    problem = dense_uncompressed_problem()
+    answer = solve(exact_runtime, problem, ((),) * 64)
+    assert answer.info["components"] == 2 * problem.n
+    assert answer.info["selected_mode"] == "raw"
+    assert answer.info["auto_policy_reason"] == "dense_uncompressed_tile64"
+
+
+def test_dense_uncompressed_graph_uses_scc_after_tile64(exact_runtime):
+    problem = dense_uncompressed_problem()
+    answer = solve(exact_runtime, problem, ((),) * 128)
+    assert answer.info["selected_mode"] == "scc"
+    assert answer.info["auto_policy_reason"] == "scc_long_bank"
 
 
 def test_auto_keeps_a_base_contradiction_on_raw(exact_runtime):

@@ -1,4 +1,4 @@
-"""Frozen development and confirmation benchmark for structural auto policy v4."""
+"""Frozen development and confirmation benchmark for structural auto policy v7."""
 from __future__ import annotations
 
 import argparse
@@ -32,7 +32,7 @@ DEVELOPMENT_COUNTS = (1, 8, 32, 63, 64, 65, 128, 1024)
 CONFIRMATION_COUNTS = (1, 8, 32, 64, 128, 1024)
 WARMUPS = 2
 SCHEMA = "spectra.auto_selector_benchmark.v4"
-POLICY = "structural-v6"
+POLICY = "structural-v7"
 
 
 @dataclass(frozen=True)
@@ -178,7 +178,7 @@ def generated_case(
         width=width,
         base_infeasible=base_infeasible,
     )
-    name = f"auto-v4-{family}-{regime}-n{n}"
+    name = f"auto-v7-{family}-{regime}-n{n}"
     return Case(
         name,
         name,
@@ -267,14 +267,15 @@ def development_cases() -> tuple[PanelCase, ...]:
 
 def confirmation_cases() -> tuple[PanelCase, ...]:
     result: list[PanelCase] = []
-    namespace = "SPECTRA-auto-selector-v6-confirmation"
+    namespace = "SPECTRA-auto-selector-v7-confirmation"
     regimes = (
-        ("strong-sparse", 320, 2, True, False, 0.0),
-        ("below-density", 640, 25, False, False, 0.0),
-        ("above-density", 448, 19, False, False, 0.0),
-        ("edge-heavy-warmup", 768, 12, False, False, 5.0),
-        ("low-density-large", 1280, 24, False, False, 0.0),
-        ("base-infeasible", 512, 4, False, True, 0.0),
+        ("strong-sparse", 352, 2, True, False, 0.0),
+        ("below-density", 704, 27, False, False, 0.0),
+        ("above-density", 480, 21, False, False, 0.0),
+        ("edge-heavy-warmup", 832, 13, False, False, 5.0),
+        ("low-density-large", 1408, 26, False, False, 0.0),
+        ("small-high-pin", 224, 12, False, False, 0.0),
+        ("base-infeasible", 576, 4, False, True, 0.0),
     )
     for family in FAMILIES:
         for regime, n, width, strong, infeasible, edge_factor in regimes:
@@ -310,12 +311,13 @@ def expected_policy(*, base: bool, pins: int, count: int, vertices: int,
         return "raw", "large_tiny_bank"
     if not base:
         return "raw", "base_infeasible"
-    if pins >= 8 * count and 24 * pins >= vertices * count:
-        return "raw", "dense_pin_fraction"
-    if count <= 128 and components == 2 * vertices and edges >= 4 * vertices:
-        return "raw", "dense_uncompressed_warmup"
+    if (pins >= 8 * count and 24 * pins >= vertices * count
+            and (count < 64 or vertices < 256)):
+        return "raw", "dense_small_high_pin" if vertices < 256 else "dense_pin_short"
+    if count == 64 and components == 2 * vertices and edges >= 4 * vertices:
+        return "raw", "dense_uncompressed_tile64"
     if count >= 64:
-        return "scc", "scc_tile64"
+        return "scc", "scc_long_bank"
     if count >= 8 and 2 * components <= vertices:
         return "scc", "scc_strong_compression"
     return "raw", "short_weak_compression"
@@ -383,7 +385,7 @@ def run(library: Path, panel: str, destination: Path, repeats: int) -> dict:
                 samples = {mode: [] for mode in MODES}
                 hashes = {mode: set() for mode in MODES}
                 schedule = random.Random(seed_for(
-                    "SPECTRA-auto-selector-v6-schedule",
+                    "SPECTRA-auto-selector-v7-schedule",
                     f"{panel}/{case.name}/{count}",
                 ))
                 for _ in range(repeats):
