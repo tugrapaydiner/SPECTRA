@@ -450,7 +450,7 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
                           if index % 3 and rng.random() < .3))
     rows = tuple(rows)
     expected = []
-    # The bank averages well above eight pins per request, so structural-v7
+    # The bank averages well above eight pins per request, so structural-v8
     # intentionally selects raw rather than paying for tile64 propagation.
     expected_mode = 'raw' if mode == 'auto' else mode
     with exact_runtime.prepare(p, mode=expected_mode) as session:
@@ -464,8 +464,8 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
         assert answer.sat_count == count and answer.proof_bytes == 0
         if mode == 'auto':
             assert answer.info['selected_mode'] == 'raw'
-            assert answer.info['auto_policy'] == 'structural-v7'
-            assert answer.info['auto_policy_reason'] == 'dense_small_high_pin'
+            assert answer.info['auto_policy'] == 'structural-v8'
+            assert answer.info['auto_policy_reason'] == 'dense_tiny_high_pin'
         assert decode_certified_output(answer.output, n, count) == tuple(expected[:count])
 
 
@@ -479,8 +479,8 @@ def test_auto_structural_v2_freezes_the_eight_pin_density_boundary(exact_runtime
     assert low.info['auto_policy_reason'] == 'scc_long_bank'
     assert low.info['bank_query_count'] == 64 and low.info['bank_pin_count'] == 448
     assert high.info['selected_mode'] == 'raw'
-    assert high.info['auto_policy'] == 'structural-v7'
-    assert high.info['auto_policy_reason'] == 'dense_small_high_pin'
+    assert high.info['auto_policy'] == 'structural-v8'
+    assert high.info['auto_policy_reason'] == 'dense_tiny_high_pin'
     assert high.info['bank_query_count'] == 64 and high.info['bank_pin_count'] == 512
     assert high.output == exact_runtime.solve_session_packet(
         pack_session_packet(p, high_rows), mode='raw').output
@@ -509,7 +509,7 @@ def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, coun
     elif (pins >= 8 * count and 24 * pins >= n * count
           and (count < 64 or n < 256)):
         selected = 'raw'
-        reason = 'dense_small_high_pin' if n < 256 else 'dense_pin_short'
+        reason = 'dense_tiny_high_pin' if n < 256 else 'dense_pin_short'
     else:
         components = {'empty': 0, 'independent': 18, 'chain': 2}[structure]
         if count == 64 and components == 2 * n and len(edges) >= 4 * n:
@@ -522,7 +522,7 @@ def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, coun
             selected, reason = 'raw', 'short_weak_compression'
 
     assert answer.info['mode'] == 'auto'
-    assert answer.info['auto_policy'] == 'structural-v7'
+    assert answer.info['auto_policy'] == 'structural-v8'
     assert answer.info['auto_policy_reason'] == reason
     assert answer.info['bank_query_count'] == count
     assert answer.info['selected_mode'] == selected

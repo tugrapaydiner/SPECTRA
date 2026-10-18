@@ -509,7 +509,7 @@ class ExactRuntime:
         values = self._module.solve_session_packet(packet, native_mode, max_bytes)
         output, count, sat, unsat, proof_bytes, visits, arcs, info = values
         if direct_reason is not None:
-            info = {**info, 'auto_policy': 'structural-v7',
+            info = {**info, 'auto_policy': 'structural-v8',
                     'selected_mode': 'raw',
                     'auto_policy_reason': direct_reason}
         info = {**info, 'backend': 'native-exact-binary', 'mode': mode,

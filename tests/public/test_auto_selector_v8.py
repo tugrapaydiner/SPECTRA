@@ -24,14 +24,14 @@ def exact_runtime(tmp_path_factory):
     compiler = "cl" if sys.platform == "win32" else "g++"
     if sys.platform not in ("linux", "win32") or shutil.which(compiler) is None:
         pytest.skip("supported native compiler is unavailable")
-    return ExactRuntime(build_exact_runtime(tmp_path_factory.mktemp("selector-v7-runtime")))
+    return ExactRuntime(build_exact_runtime(tmp_path_factory.mktemp("selector-v8-runtime")))
 
 
 def solve(runtime, problem, rows):
     packet = pack_session_packet(problem, rows)
     answer = runtime.solve_session_packet(packet, mode="auto")
     assert verify_session_output(packet, answer.output)
-    assert answer.info["auto_policy"] == "structural-v7"
+    assert answer.info["auto_policy"] == "structural-v8"
     assert answer.info["mode"] == "auto"
     return answer
 
@@ -70,7 +70,7 @@ def test_large_tiny_bank_uses_the_direct_raw_path(exact_runtime):
     explicit = exact_runtime.solve_session_packet(packet, mode="raw")
     assert automatic.output == explicit.output
     assert automatic.info["mode"] == "auto"
-    assert automatic.info["auto_policy"] == "structural-v7"
+    assert automatic.info["auto_policy"] == "structural-v8"
     assert automatic.info["selected_mode"] == "raw"
     assert automatic.info["auto_policy_reason"] == "large_tiny_bank"
     assert verify_session_output(packet, automatic.output)
@@ -122,13 +122,28 @@ def test_pin_density_below_one_in_24_uses_scc(exact_runtime):
     assert answer.info["auto_policy_reason"] == "scc_long_bank"
 
 
-def test_small_high_pin_bank_stays_raw_even_when_long(exact_runtime):
-    problem = independent_problem(192)
+def test_dense_long_bank_below_128_vertices_stays_raw(exact_runtime):
+    problem = independent_problem(120)
     row = tuple((vertex, 3) for vertex in range(8))
     answer = solve(exact_runtime, problem, (row,) * 1024)
     assert answer.info["selected_mode"] == "raw"
-    assert answer.info["auto_policy_reason"] == "dense_small_high_pin"
+    assert answer.info["auto_policy_reason"] == "dense_tiny_high_pin"
 
+
+def test_dense_long_bank_switches_to_scc_at_128_vertices(exact_runtime):
+    problem = independent_problem(128)
+    row = tuple((vertex, 3) for vertex in range(8))
+    answer = solve(exact_runtime, problem, (row,) * 64)
+    assert answer.info["selected_mode"] == "scc"
+    assert answer.info["auto_policy_reason"] == "scc_long_bank"
+
+
+def test_dense_medium_long_bank_uses_scc(exact_runtime):
+    problem = independent_problem(192)
+    row = tuple((vertex, 3) for vertex in range(8))
+    answer = solve(exact_runtime, problem, (row,) * 1024)
+    assert answer.info["selected_mode"] == "scc"
+    assert answer.info["auto_policy_reason"] == "scc_long_bank"
 
 def test_large_high_pin_bank_uses_scc_at_tile64(exact_runtime):
     problem = independent_problem(448)
