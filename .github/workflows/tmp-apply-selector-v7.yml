@@ -37,6 +37,7 @@ jobs:
             experiments/compiled_query/auto_selector_benchmark.py \
             experiments/compiled_query/auto_selector_wap_guard.py \
             experiments/compiled_query/itc_exam_suite.py \
+            experiments/compiled_query/itc_exam_transfer.py \
             experiments/compiled_query/test_exact.py \
             tests/public/test_auto_selector_v7.py \
             tests/public/test_exact_api.py
@@ -45,6 +46,7 @@ jobs:
             experiments/compiled_query/exact.py \
             spectra/_native/exact_binary.cpp \
             experiments/compiled_query/exact_native.cpp \
+            experiments/compiled_query/itc_exam_transfer.py \
             tests/public/test_auto_selector_v7.py \
             tests/public/test_exact_api.py \
             experiments/compiled_query/test_exact.py; then
@@ -85,6 +87,7 @@ jobs:
             experiments/compiled_query/auto_selector_benchmark.py \
             experiments/compiled_query/auto_selector_wap_guard.py \
             experiments/compiled_query/itc_exam_suite.py \
+            experiments/compiled_query/itc_exam_transfer.py \
             experiments/compiled_query/test_exact.py \
             experiments/compiled_query/test_itc_exam_transfer.py \
             tests/public/test_auto_selector_v7.py \
