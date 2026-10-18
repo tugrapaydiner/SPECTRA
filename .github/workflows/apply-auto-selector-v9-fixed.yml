@@ -1,4 +1,5 @@
 name: apply-auto-selector-v9-fixed
+# Final rerun from the complete v9 contract patch.
 
 on:
   push:
