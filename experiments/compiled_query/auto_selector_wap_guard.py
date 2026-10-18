@@ -1,4 +1,4 @@
-"""Real WAP regression guard for structural automatic engine selection."""
+"""Real WAP regression guard for structural automatic engine selection v4."""
 from __future__ import annotations
 
 import argparse
@@ -17,7 +17,8 @@ from .cases import Case
 CASES = ("wap05a.col", "wap06a.col")
 COUNTS = (64, 128, 1024)
 REPEATS = 31
-SCHEMA = "spectra.auto_selector_wap_guard.v1"
+SCHEMA = "spectra.auto_selector_wap_guard.v2"
+POLICY = "structural-v4"
 
 
 def gmean(values):
@@ -49,7 +50,7 @@ def run(library: Path, cases: Path, destination: Path, repeats: int = REPEATS) -
                 }
                 if first["auto"].info["selected_mode"] != "scc":
                     raise AssertionError(f"{name}/{count}: auto did not select SCC")
-                if first["auto"].info["auto_policy"] != "structural-v3":
+                if first["auto"].info["auto_policy"] != POLICY:
                     raise AssertionError(f"{name}/{count}: policy identity differs")
                 if first["auto"].output != first["scc"].output:
                     raise AssertionError(f"{name}/{count}: auto output differs from SCC")
@@ -66,7 +67,7 @@ def run(library: Path, cases: Path, destination: Path, repeats: int = REPEATS) -
                 samples = {"raw": [], "auto": []}
                 hashes = {"raw": set(), "auto": set()}
                 rng = random.Random(int.from_bytes(hashlib.sha256(
-                    f"SPECTRA-auto-wap-v3/{name}/{count}".encode()
+                    f"SPECTRA-auto-wap-v4/{name}/{count}".encode()
                 ).digest()[:8], "big"))
                 for _ in range(repeats):
                     order = ["raw", "auto"]
@@ -103,6 +104,7 @@ def run(library: Path, cases: Path, destination: Path, repeats: int = REPEATS) -
     ratios = [row["auto_raw_ratio"] for row in long_rows]
     summary = {
         "schema": SCHEMA,
+        "policy": POLICY,
         "classification": "exposed WAP development guard; not a holdout",
         "cases": len(CASES),
         "counts": list(COUNTS),
