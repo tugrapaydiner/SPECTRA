@@ -33,7 +33,7 @@ The comparison oracle is the fastest paired median among the explicit modes:
 - `sparse`; and
 - `route`.
 
-All explicit modes must return byte-identical certified output for the same bank. `auto` must return byte-identical output to its reported `selected_mode`.
+All explicit modes and `auto` must agree on every decision and every SAT label. Different explicit modes may emit different but independently valid UNSAT paths. `auto` must be byte-identical to the explicit mode reported by `info['selected_mode']` for the same immutable packet.
 
 The oracle is an evaluation device only. It is not available to the runtime selector.
 
