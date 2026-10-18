@@ -1,0 +1,605 @@
+name: finish-first-use-fast-path
+
+on:
+  push:
+    branches: [audit/tile64-external-competition-20261017]
+    paths: [.github/workflows/finish-first-use-fast-path.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finish-first-use-fast-path
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: performance/fast-first-use-sessions
+  EXPECTED_HEAD: 16babd80de942537eb468aaef9a90ddbce02d35c
+
+jobs:
+  finish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify the branch has not moved
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --short)"
+
+      - name: Complete and harden the public first-use path
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          problem_path = Path('spectra/exact_problem.py')
+          original = problem_path.read_text()
+          class_start = original.index('@dataclass')
+          methods_start = original.index('    def colors', class_start)
+          imports = original[:class_start]
+          imports = imports.replace(
+              'from dataclasses import dataclass\n',
+              'from array import array\nfrom dataclasses import dataclass, field\nimport sys\n',
+          )
+          methods = original[methods_start:]
+          replacement = '''@dataclass(frozen=True, slots=True)
+          class ExactProblem:
+              """A fixed simple conflict graph with one or two colours per vertex.
+
+              Construction owns and canonicalizes the inputs. The immutable graph
+              portion of SBC1 is encoded once with the admitted problem, so later
+              request banks do not serialize the same fixed graph again.
+              """
+
+              n: int
+              palette: int
+              edges: tuple[tuple[int, int], ...]
+              masks: tuple[int, ...]
+              _sbc1_fixed: bytes = field(default=b'', init=False, repr=False, compare=False)
+
+              def __post_init__(self) -> None:
+                  n, palette = self.n, self.palette
+                  if type(n) is not int or not 0 <= n <= 100_000:
+                      raise ValueError('n must be an exact integer in [0, 100000]')
+                  if type(palette) is not int or not 1 <= palette <= 64:
+                      raise ValueError('palette must be an exact integer in [1, 64]')
+                  snapshot = tuple(self.masks)
+                  if len(snapshot) != n:
+                      raise ValueError('mask count differs from vertex count')
+                  palette_mask = (1 << palette) - 1 if palette < 64 else (1 << 64) - 1
+                  for mask in snapshot:
+                      if (type(mask) is not int or mask <= 0 or mask & ~palette_mask
+                              or mask.bit_count() not in (1, 2)):
+                          raise ValueError(
+                              'each original domain must contain one or two palette colours'
+                          )
+
+                  edge_snapshot = tuple(self.edges)
+                  if len(edge_snapshot) > 2_000_000:
+                      raise ValueError('edge count exceeds native bound')
+                  previous: tuple[int, int] | None = None
+                  canonical = True
+                  for edge in edge_snapshot:
+                      if type(edge) is not tuple or len(edge) != 2:
+                          canonical = False
+                          break
+                      left, right = edge
+                      if (type(left) is not int or type(right) is not int
+                              or not 0 <= left < right < n
+                              or (previous is not None and edge <= previous)):
+                          canonical = False
+                          break
+                      previous = edge
+                  if not canonical:
+                      copied: list[tuple[int, int]] = []
+                      for edge in edge_snapshot:
+                          row = tuple(edge)
+                          if (len(row) != 2 or any(
+                                  type(value) is not int or not 0 <= value < n
+                                  for value in row
+                              ) or row[0] == row[1]):
+                              raise ValueError(
+                                  'edge must contain two distinct in-range exact integers'
+                              )
+                          copied.append((min(row), max(row)))
+                      edge_snapshot = tuple(sorted(set(copied)))
+
+                  masks_array = array('Q', snapshot)
+                  edges_array = array(
+                      'I', (value for edge in edge_snapshot for value in edge)
+                  )
+                  if masks_array.itemsize != 8 or edges_array.itemsize != 4:
+                      raise RuntimeError('platform integer arrays cannot encode SBC1')
+                  if sys.byteorder != 'little':
+                      masks_array.byteswap()
+                      edges_array.byteswap()
+
+                  object.__setattr__(self, 'edges', edge_snapshot)
+                  object.__setattr__(self, 'masks', snapshot)
+                  object.__setattr__(
+                      self, '_sbc1_fixed', masks_array.tobytes() + edges_array.tobytes()
+                  )
+
+              @classmethod
+              def create(cls, n: int, palette: int, edges: Iterable[Sequence[int]],
+                         masks: Iterable[int]) -> 'ExactProblem':
+                  return cls(n, palette, edges, masks)  # type: ignore[arg-type]
+
+          '''
+          replacement = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in replacement.splitlines()
+          ) + '\n'
+          problem_path.write_text(imports + replacement + methods)
+
+          exact_path = Path('spectra/exact.py')
+          text = exact_path.read_text()
+          text = text.replace('from itertools import chain\n', '')
+          begin = text.index('def _little_endian_array_bytes')
+          end = text.index('def pack_validated_session_packet', begin)
+          packet_code = '''def _finish_session_packet(problem: ExactProblem, row_count: int,
+                                     offsets: array, vertices: array, allowed: array) -> bytes:
+              pins = len(vertices)
+              if (len(offsets) != row_count + 1 or len(allowed) != pins
+                      or offsets[-1] != pins):
+                  raise AssertionError('session packet array accounting differs')
+              if offsets.itemsize != 4 or vertices.itemsize != 4 or allowed.itemsize != 8:
+                  raise RuntimeError('platform integer arrays cannot encode SBC1')
+              if sys.byteorder != 'little':
+                  offsets.byteswap()
+                  vertices.byteswap()
+                  allowed.byteswap()
+              fixed = problem._sbc1_fixed
+              expected_fixed = 8 * problem.n + 8 * len(problem.edges)
+              if len(fixed) != expected_fixed:
+                  raise AssertionError('admitted fixed-graph bytes differ')
+              payload = b''.join((
+                  SESSION_PACKET_HEADER.pack(
+                      SESSION_PACKET_MAGIC, problem.n, problem.palette,
+                      len(problem.edges), row_count, pins, 0, 0,
+                  ),
+                  fixed,
+                  offsets.tobytes(),
+                  vertices.tobytes(),
+                  allowed.tobytes(),
+              ))
+              expected = (SESSION_PACKET_HEADER.size + expected_fixed
+                          + 4 * (row_count + 1) + 12 * pins)
+              if len(payload) != expected:
+                  raise AssertionError('session packet byte accounting differs')
+              return payload
+
+
+          def _pack_admitted_session_packet(problem: ExactProblem,
+                                            queries: Iterable[Iterable[Sequence[int]]]) -> bytes:
+              """Validate and serialize one request bank in a single pin pass."""
+              offsets = array('I', [0])
+              vertices = array('I')
+              allowed = array('Q')
+              row_count = 0
+              for query in queries:
+                  row_count += 1
+                  if row_count > 1_000_000:
+                      raise ValueError('session packet query bank exceeds supported bound')
+                  for item in query:
+                      pair = item if type(item) is tuple else tuple(item)
+                      if len(pair) != 2:
+                          raise ValueError(
+                              'query must contain in-range vertex/uint64-mask pairs'
+                          )
+                      vertex, mask = pair
+                      if (type(vertex) is not int or not 0 <= vertex < problem.n
+                              or type(mask) is not int or not 0 <= mask < 1 << 64):
+                          raise ValueError(
+                              'query must contain in-range vertex/uint64-mask pairs'
+                          )
+                      if len(vertices) == 1_000_000:
+                          raise ValueError(
+                              'session packet query bank exceeds supported bound'
+                          )
+                      vertices.append(vertex)
+                      allowed.append(mask)
+                  offsets.append(len(vertices))
+              return _finish_session_packet(
+                  problem, row_count, offsets, vertices, allowed
+              )
+
+
+          def _pack_canonical_session_packet(
+                  problem: ExactProblem,
+                  rows: tuple[tuple[tuple[int, int], ...], ...]) -> bytes:
+              if len(rows) > 1_000_000:
+                  raise ValueError('session packet query bank exceeds supported bound')
+              offsets = array('I', [0])
+              vertices = array('I')
+              allowed = array('Q')
+              for row in rows:
+                  if len(vertices) + len(row) > 1_000_000:
+                      raise ValueError(
+                          'session packet query bank exceeds supported bound'
+                      )
+                  vertices.extend(vertex for vertex, _ in row)
+                  allowed.extend(mask for _, mask in row)
+                  offsets.append(len(vertices))
+              return _finish_session_packet(
+                  problem, len(rows), offsets, vertices, allowed
+              )
+
+
+          def pack_session_packet(problem: ExactProblem,
+                                  queries: Iterable[Iterable[Sequence[int]]]) -> bytes:
+              """Validate ordinary inputs and create one immutable session packet."""
+              admitted = problem if type(problem) is ExactProblem else ExactProblem.create(
+                  problem.n, problem.palette, problem.edges, problem.masks
+              )
+              return _pack_admitted_session_packet(admitted, queries)
+
+
+          '''
+          packet_code = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in packet_code.splitlines()
+          ) + '\n'
+          text = text[:begin] + packet_code + text[end:]
+          text = text.replace(
+              '            return domains.get(vertex, self.masks[vertex]) == 0\n',
+              '            return (vertex < self.n and\n'
+              '                    domains.get(vertex, self.masks[vertex]) == 0)\n',
+          )
+          verify_at = text.index('def verify_certified_output')
+          catch = ('    except (ValueError, TypeError, AttributeError, OverflowError, '
+                   'struct.error):\n')
+          catch_at = text.index(catch, verify_at)
+          text = (text[:catch_at]
+                  + '    except (ValueError, TypeError, AttributeError, IndexError, '
+                    'OverflowError, struct.error):\n'
+                  + text[catch_at + len(catch):])
+          exact_path.write_text(text)
+
+          tests = '''"""Canonical SBC1 packing remains byte-stable and fails closed."""
+          from __future__ import annotations
+
+          import struct
+
+          import pytest
+
+          from spectra.exact import (
+              ExactProblem,
+              _pack_canonical_session_packet,
+              pack_session_packet,
+              pack_validated_session_packet,
+              unpack_session_packet,
+              verify_certified_output,
+          )
+
+          _HEADER = struct.Struct('<4s7I')
+          _PROOF_HEADER = struct.Struct('<4sIII')
+          _OUTPUT_HEADER = struct.Struct('<4sIQ')
+
+
+          def _scalar_reference(problem: ExactProblem,
+                                rows: tuple[tuple[tuple[int, int], ...], ...]) -> bytes:
+              pins = sum(map(len, rows))
+              size = (_HEADER.size + 8 * problem.n + 8 * len(problem.edges)
+                      + 4 * (len(rows) + 1) + 12 * pins)
+              payload = bytearray(size)
+              _HEADER.pack_into(payload, 0, b'SBC1', problem.n, problem.palette,
+                                len(problem.edges), len(rows), pins, 0, 0)
+              masks_at = _HEADER.size
+              edges_at = masks_at + 8 * problem.n
+              offsets_at = edges_at + 8 * len(problem.edges)
+              vertices_at = offsets_at + 4 * (len(rows) + 1)
+              allowed_at = vertices_at + 4 * pins
+              for index, mask in enumerate(problem.masks):
+                  struct.pack_into('<Q', payload, masks_at + 8 * index, mask)
+              for index, (left, right) in enumerate(problem.edges):
+                  struct.pack_into('<II', payload, edges_at + 8 * index, left, right)
+              cursor = 0
+              struct.pack_into('<I', payload, offsets_at, 0)
+              for row_index, row in enumerate(rows):
+                  for vertex, mask in row:
+                      struct.pack_into('<I', payload, vertices_at + 4 * cursor, vertex)
+                      struct.pack_into('<Q', payload, allowed_at + 8 * cursor, mask)
+                      cursor += 1
+                  struct.pack_into('<I', payload, offsets_at + 4 * (row_index + 1), cursor)
+              return bytes(payload)
+
+
+          def test_problem_construction_owns_canonical_fixed_bytes():
+              edges = ((0, 1), (0, 2), (1, 2))
+              problem = ExactProblem.create(3, 3, edges, (0b011, 0b110, 0b101))
+              assert problem.edges is edges
+              assert len(problem._sbc1_fixed) == 8 * problem.n + 8 * len(problem.edges)
+
+              direct = ExactProblem(3, 3, ((2, 1), [0, 2], (1, 2)),
+                                    (0b011, 0b110, 0b101))
+              assert direct.edges == ((0, 2), (1, 2))
+              with pytest.raises(ValueError, match='distinct'):
+                  ExactProblem(2, 2, ((0, 0),), (0b11, 0b11))
+
+
+          def test_bulk_session_packet_is_byte_identical_to_scalar_reference():
+              problem = ExactProblem.create(
+                  5, 4,
+                  ((0, 1), (0, 4), (1, 3), (2, 4)),
+                  (0b0011, 0b0110, 0b1100, 0b1001, 0b0101),
+              )
+              rows = (
+                  (),
+                  ((4, 0b0101), (0, 0b0001), (4, 0b0001)),
+                  ((2, (1 << 63) | 0b0100),),
+                  ((1, 0),),
+              )
+              expected = _scalar_reference(problem, rows)
+              assert pack_validated_session_packet(problem, rows) == expected
+              assert pack_session_packet(problem, rows) == expected
+              decoded, decoded_rows = unpack_session_packet(expected)
+              assert decoded == problem
+              assert decoded_rows == rows
+
+
+          def test_validated_packer_rechecks_even_a_forged_problem_object():
+              malformed = object.__new__(ExactProblem)
+              for name, value in (
+                  ('n', 2), ('palette', 2), ('edges', ((1, 0),)),
+                  ('masks', (0b11, 0b11)), ('_sbc1_fixed', b''),
+              ):
+                  object.__setattr__(malformed, name, value)
+              with pytest.raises(ValueError, match='sorted unique'):
+                  pack_validated_session_packet(malformed, ((),))
+
+
+          def test_internal_packet_limits_are_checked_before_large_allocation():
+              problem = ExactProblem.create(1, 1, (), (1,))
+
+              class TooManyRows:
+                  def __len__(self):
+                      return 1_000_001
+
+              class TooManyPins:
+                  def __len__(self):
+                      return 1_000_001
+
+              with pytest.raises(ValueError, match='supported bound'):
+                  _pack_canonical_session_packet(problem, TooManyRows())
+              with pytest.raises(ValueError, match='supported bound'):
+                  _pack_canonical_session_packet(problem, (TooManyPins(),))
+
+
+          def test_empty_domain_proof_with_out_of_range_vertex_fails_cleanly():
+              problem = ExactProblem.create(1, 1, (), (1,))
+              proof = _PROOF_HEADER.pack(b'SBP1', 1, 1, 0) + struct.pack('<I', 1)
+              output = (_OUTPUT_HEADER.pack(b'SCQ2', 1, 1) + b'\\x00\\x00'
+                        + struct.pack('<I', len(proof)) + proof)
+              assert verify_certified_output(problem, ((),), output) is False
+          '''
+          tests = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in tests.splitlines()
+          ) + '\n'
+          Path('tests/public/test_exact_packet_packing.py').write_text(tests)
+
+          docs_path = Path('docs/EXACT_API.md')
+          docs = docs_path.read_text()
+          marker = (
+              '`ExactProblem.create` owns immutable, canonical inputs. Edges are converted to\n'
+              'sorted unique `(left, right)` pairs. Each domain mask must contain exactly one or\n'
+              'two colours from a palette of at most 64 colours.\n'
+          )
+          addition = marker + (
+              '\nProblem admission also encodes the immutable mask/edge portion of `SBC1` once. '
+              'The cached bytes are excluded from equality and repr, contain no solver state, '
+              'and are bounded by 16.8 MiB at the public maximum of 100,000 vertices and '
+              '2,000,000 edges. This moves fixed-graph serialization to the explicit problem '
+              'admission boundary instead of repeating it for every request bank.\n'
+          )
+          if marker not in docs:
+              raise SystemExit('exact API problem paragraph changed')
+          docs = docs.replace(marker, addition)
+          packet_marker = (
+              '`pack_session_packet` accepts ordinary Python inputs. `pack_validated_session_packet`\n'
+              'is for already admitted immutable inputs and still rechecks exact types, bounds,\n'
+              'edge ordering and query geometry. The strict decoder rejects reversed, duplicate,\n'
+              'unsorted, truncated, overlong, or reserved-bit-modified packets rather than\n'
+              'repairing them.\n'
+          )
+          packet_addition = packet_marker + (
+              '\nFor an admitted `ExactProblem`, the ordinary packer validates each current pin '
+              'once while writing the query arrays and reuses the fixed graph bytes. No query '
+              'answer, solver state, SCC identifier, or timing measurement is cached.\n'
+          )
+          if packet_marker not in docs:
+              raise SystemExit('exact API packet paragraph changed')
+          docs_path.write_text(docs.replace(packet_marker, packet_addition))
+
+          protocol = '''# First-use exact-session protocol — final pass, 17 October 2026
+
+          ## Question
+
+          Can the installed SPECTRA API turn an already admitted fixed problem and
+          an ordinary 1,024-request bank into a complete, independently checked
+          answer bank while using at most 60% of the time required by its own
+          optimized raw engine?
+
+          The measured path is:
+
+          ```python
+          packet = pack_session_packet(problem, requests)
+          answer = runtime.solve_session_packet(packet, mode="scc")
+          ```
+
+          Both public calls are timed. The `ExactProblem` admission step is measured
+          and retained separately because an application creates the immutable fixed
+          graph once and may submit many banks. Its cached fixed SBC1 bytes and size
+          are reported; no native solver or answer state exists at admission.
+
+          ## Classification
+
+          Development evidence on the already exposed WAP05 and WAP06 graph/query
+          banks. It is not a new holdout, outside replication, operator traffic, or
+          a universal SAT or colouring claim. The earlier JSON-bound failed gate and
+          the first 0.75 session-packet pass remain in Git history and are not edited.
+
+          ## Frozen implementation scope
+
+          The candidate may:
+
+          1. enforce `ExactProblem` invariants at construction so a valid immutable
+             instance is not re-admitted for every bank;
+          2. encode masks and canonical edges once during problem admission;
+          3. validate and serialize each request pin in one pass; and
+          4. preprocess immutable replay data once per output bank.
+
+          It may not change exact API 1, native ABI 3, SBC1/SBQ1/SCQ2/SBP1 bytes,
+          solver logic, raw mode, decisions, complete labels, proofs, default modes,
+          limits, or independent checking.
+
+          ## Inputs and schedule
+
+          - Upstream graphs: `wap05a.col` and `wap06a.col` at clicolcom commit
+            `4932048642da2144f387961b595112277afff82f`.
+          - Exactly 1,024 historically SAT-accepted restrictions per graph.
+          - Explicit `raw` and `scc` modes only.
+          - CPython 3.13 on GitHub Ubuntu 24.04 x86-64 and native ARM64.
+          - Five untimed warmups; 31 paired repetitions per graph.
+          - Deterministically shuffled mode order in every pair.
+          - Garbage collection disabled only during paired timing.
+          - Stable packet and output bytes required across repetitions.
+
+          ## Complete timed boundary
+
+          The timer includes request validation, SBC1 request-array serialization,
+          two independent native parses, fresh solver and observer construction, all
+          decisions, full labels or proofs, independent native checking, SCQ2
+          serialization, immutable Python-byte ownership, and disposal.
+
+          Process startup, compilation, graph acquisition, case reconstruction,
+          one standard-library replay, evidence writing, and the separately reported
+          immutable problem-admission step remain outside the paired bank timer.
+
+          ## Correctness gate
+
+          - Bulk and scalar SBC1 bytes must match.
+          - Direct and factory problem construction must enforce the same invariants.
+          - Raw and SCC SCQ2 bytes must be identical.
+          - Standard-library replay must accept every complete bank.
+          - SAT, empty-domain UNSAT, implication-path UNSAT, 65-row/two-tile,
+            malformed-input, limit, proof-mutation, Windows, sanitizer, package,
+            CPU-regression and WAP-regression contracts must pass.
+          - Any wrong answer, invalid proof, malformed packet, crash, timeout or
+            missing case blocks the result.
+
+          ## Predeclared meaningful-win gate
+
+          Ratios are complete `pack_session_packet + solve_session_packet` time for
+          SCC divided by the same time for raw. The gate passes independently on
+          x86-64 and ARM64 only if:
+
+          - both graph cells complete and replay;
+          - the geometric-mean ratio is below `0.60`; and
+          - every graph ratio is below `0.65`.
+
+          These thresholds are fixed before the final remote timing and are not
+          relaxed afterward. A pass closes the first-use long-bank issue only for
+          this exposed WAP scope; it does not authorize selector or universal claims.
+          '''
+          protocol = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in protocol.splitlines()
+          ) + '\n'
+          Path('experiments/compiled_query/SESSION_PACKET_COLD_PROTOCOL_20261017.md').write_text(
+              protocol
+          )
+
+          benchmark_path = Path('experiments/compiled_query/session_packet_cold_benchmark.py')
+          benchmark = benchmark_path.read_text()
+          benchmark = benchmark.replace(
+              "SCHEMA = 'spectra.session_packet_cold_benchmark.v1'\n",
+              "SCHEMA = 'spectra.session_packet_cold_benchmark.v2'\n"
+              "MEAN_LIMIT = .60\nCASE_LIMIT = .65\n",
+          )
+          old_problem = '''            problem = ExactProblem.create(
+                  case.problem.n, case.problem.palette,
+                  case.problem.edges, case.problem.masks,
+              )
+              rows = case.queries
+          '''
+          old_problem = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in old_problem.splitlines()
+          ) + '\n'
+          new_problem = '''            admitted_at = time.perf_counter_ns()
+              problem = ExactProblem.create(
+                  case.problem.n, case.problem.palette,
+                  case.problem.edges, case.problem.masks,
+              )
+              admitted_ns = time.perf_counter_ns() - admitted_at
+              rows = case.queries
+          '''
+          new_problem = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in new_problem.splitlines()
+          ) + '\n'
+          if old_problem not in benchmark:
+              raise SystemExit('benchmark problem block changed')
+          benchmark = benchmark.replace(old_problem, new_problem)
+          benchmark = benchmark.replace(
+              "                'packet_bytes': len(frozen),\n",
+              "                'problem_admission_ns': admitted_ns,\n"
+              "                'fixed_problem_bytes': len(problem._sbc1_fixed),\n"
+              "                'packet_bytes': len(frozen),\n",
+          )
+          benchmark = benchmark.replace(
+              "            'geometric_mean_below_0_75': _gmean(ratios) < .75,\n"
+              "            'every_case_below_0_80': max(ratios) < .80,\n",
+              "            'geometric_mean_below_limit': _gmean(ratios) < MEAN_LIMIT,\n"
+              "            'every_case_below_limit': max(ratios) < CASE_LIMIT,\n",
+          )
+          benchmark = benchmark.replace(
+              "        'max_case_ratio': max(ratios),\n",
+              "        'max_case_ratio': max(ratios),\n"
+              "        'geometric_mean_limit': MEAN_LIMIT,\n"
+              "        'per_case_limit': CASE_LIMIT,\n",
+          )
+          benchmark_path.write_text(benchmark)
+          PY
+
+      - name: Run focused contracts before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -q 'pytest==9.0.2' 'python-sat==1.9.dev15'
+          python -m compileall -q spectra experiments/compiled_query
+          python -m pytest -q --confcutdir=tests/public \
+            tests/public/test_exact_packet_packing.py \
+            tests/public/test_exact_api.py \
+            tests/public/test_exact_bank_tile64.py
+          git diff --check
+
+      - name: Publish one clear follow-up commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name Tugrap
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git add \
+            spectra/exact.py \
+            spectra/exact_problem.py \
+            tests/public/test_exact_packet_packing.py \
+            docs/EXACT_API.md \
+            experiments/compiled_query/SESSION_PACKET_COLD_PROTOCOL_20261017.md \
+            experiments/compiled_query/session_packet_cold_benchmark.py
+          git commit -m 'Finish the first-use fast path'
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_HEAD"
+          git push origin "HEAD:$TARGET_BRANCH"
+          git rev-parse HEAD
+          git rev-parse HEAD^{tree}
