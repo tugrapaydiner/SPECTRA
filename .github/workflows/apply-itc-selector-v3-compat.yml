@@ -30,10 +30,11 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
         run: |
-          python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15' 'numpy==2.2.6'
-          python -m pytest -q \
+          python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+          python -m pytest -q --confcutdir=experiments/compiled_query \
             experiments/compiled_query/test_itc_exam_transfer.py \
-            experiments/compiled_query/test_itc_exam_suite.py \
+            experiments/compiled_query/test_itc_exam_suite.py
+          python -m pytest -q --confcutdir=tests/public \
             tests/public/test_auto_selector_v3.py
 
       - name: Publish the compatibility update
