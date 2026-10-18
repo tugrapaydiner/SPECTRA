@@ -3,7 +3,10 @@ name: apply-auto-selector-v5
 on:
   push:
     branches: [performance/automatic-engine-selection]
-    paths: [.github/workflows/apply-auto-selector-v5.yml]
+    paths:
+      - .github/workflows/apply-auto-selector-v5.yml
+      - scripts/apply_auto_selector_v5.py
+      - tests/public/test_auto_selector_v5.py
 
 permissions:
   contents: write
