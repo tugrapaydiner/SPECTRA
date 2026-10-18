@@ -1,0 +1,95 @@
+name: publish-reviewed-first-use
+
+on:
+  push:
+    branches: [audit/tile64-external-competition-20261017]
+    paths: [.github/workflows/publish-reviewed-first-use.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-reviewed-first-use
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: performance/fast-first-use-sessions
+  EXPECTED_HEAD: 16babd80de942537eb468aaef9a90ddbce02d35c
+  TRANSPORT_BRANCH: audit/tile64-external-competition-20261017
+  PAYLOAD_SHA256: d0ddbb9ec4eb54c9483d086e5dc9cb8a7c25f60a98a50c739aadf7245ea6cf24
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Rebuild the reviewed patch exactly
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --short)"
+          git fetch --no-tags origin \
+            "refs/heads/$TRANSPORT_BRANCH:refs/remotes/origin/$TRANSPORT_BRANCH"
+
+          : > /tmp/first-use-final.b64
+          for part in 00 01 02 03 04; do
+            git show "origin/$TRANSPORT_BRANCH:.delivery/first-use-final/$part" \
+              >> /tmp/first-use-final.b64
+          done
+          base64 --decode /tmp/first-use-final.b64 > /tmp/first-use-final.tar.xz
+          echo "$PAYLOAD_SHA256  /tmp/first-use-final.tar.xz" | sha256sum --check
+
+          tar -tJf /tmp/first-use-final.tar.xz | sort > /tmp/actual-paths
+          cat > /tmp/expected-paths <<'EOF'
+          docs/EXACT_API.md
+          experiments/compiled_query/SESSION_PACKET_COLD_PROTOCOL_20261017.md
+          experiments/compiled_query/session_packet_cold_benchmark.py
+          spectra/exact.py
+          spectra/exact_problem.py
+          tests/public/test_exact_packet_packing.py
+          EOF
+          sed -i 's/^          //' /tmp/expected-paths
+          sort -o /tmp/expected-paths /tmp/expected-paths
+          diff -u /tmp/expected-paths /tmp/actual-paths
+
+          tar -xJf /tmp/first-use-final.tar.xz -C .
+          git diff --name-only | sort > /tmp/changed-paths
+          diff -u /tmp/expected-paths /tmp/changed-paths
+          git diff --check
+
+      - name: Run focused contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -q 'pytest==9.0.2' 'python-sat==1.9.dev15'
+          python -m compileall -q spectra experiments/compiled_query
+          python -m pytest -q --confcutdir=tests/public \
+            tests/public/test_exact_packet_packing.py \
+            tests/public/test_exact_api.py \
+            tests/public/test_exact_bank_tile64.py
+
+      - name: Publish one clear implementation commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name Tugrap
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git add \
+            docs/EXACT_API.md \
+            experiments/compiled_query/SESSION_PACKET_COLD_PROTOCOL_20261017.md \
+            experiments/compiled_query/session_packet_cold_benchmark.py \
+            spectra/exact.py \
+            spectra/exact_problem.py \
+            tests/public/test_exact_packet_packing.py
+          git commit -m 'Finish the first-use fast path'
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_HEAD"
+          git push origin "HEAD:$TARGET_BRANCH"
+          git rev-parse HEAD
+          git rev-parse HEAD^{tree}
