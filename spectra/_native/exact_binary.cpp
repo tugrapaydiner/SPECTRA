@@ -391,14 +391,15 @@ struct Index {
             base[v]=static_cast<uint8_t>(comp[2*v]<comp[2*v+1]);
         }
         if(mode==4) {
-            // Structural auto policy v3. The optimized tile64 SCC engine wins
-            // long low-pin banks even when contraction is modest. Strong SCC
-            // contraction also pays before one complete 64-row tile. Selection
-            // uses only immutable graph/request geometry, never answers or time.
+            // Structural auto policy v4. Absolute pin count is not enough: a
+            // large graph can carry many pins while still remaining sparse.
+            // Use raw only when both the absolute and graph-relative density
+            // tests fire. Selection consults immutable geometry only.
             if(bad!=NIL) {
                 condensed=false;routed=false;auto_reason="base_infeasible";
-            } else if(W(bank_pins)>=8*W(bank_size)) {
-                condensed=false;routed=false;auto_reason="high_pin_density";
+            } else if(W(bank_pins)>=8*W(bank_size)
+                    && W(32)*W(bank_pins)>=W(n)*W(bank_size)) {
+                condensed=false;routed=false;auto_reason="dense_pin_fraction";
             } else if(bank_size>=64) {
                 condensed=true;routed=false;auto_reason="scc_tile64";
             } else if(bank_size>=8 && W(2)*W(nc)<=W(n)) {
@@ -1055,7 +1056,7 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
         PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);
         PyObject* queries=PyLong_FromUnsignedLong(bank_queries);
         PyObject* pins=PyLong_FromUnsignedLong(bank_pins);
-        PyObject* policy=PyUnicode_FromString(which==4?"structural-v3":"explicit");
+        PyObject* policy=PyUnicode_FromString(which==4?"structural-v4":"explicit");
         PyObject* reason=PyUnicode_FromString(solver->auto_reason);
         if(!kernel || !tiles || !queries || !pins || !policy || !reason
                 || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0
