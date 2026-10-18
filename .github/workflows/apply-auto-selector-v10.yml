@@ -53,6 +53,72 @@ jobs:
           python scripts/apply_auto_selector_v10.py
           python - <<'PY'
           from pathlib import Path
+          path = Path('experiments/compiled_query/test_exact.py')
+          text = path.read_text()
+          start = text.index("@pytest.mark.parametrize('count', (0, 1, 63, 64, 65, 129))")
+          end = text.index("\ndef test_auto_does_not_hide_malformed_packets_or_resource_limits", start)
+          function = '''@pytest.mark.parametrize('count', (0, 1, 63, 64, 65, 129))
+          @pytest.mark.parametrize('structure', ('empty', 'independent', 'chain', 'odd_cycle'))
+          def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, count, structure):
+              n = 0 if structure == 'empty' else 9
+              edges = () if structure in ('empty', 'independent') else tuple(
+                  (v, v + 1) for v in range(n - 1)
+              )
+              if structure == 'odd_cycle':
+                  edges += ((0, n - 1),)
+              p = BinaryListProblem.create(n, 2, edges, (3,) * n)
+              requests = ((),) if not n else (
+                  (), ((0, 1),), ((0, 1), (1, 1)), ((0, 0),)
+              )
+              rows = tuple(requests[i % len(requests)] for i in range(count))
+              packet = pack_session_packet(p, rows)
+              answer = exact_runtime.solve_session_packet(packet, mode='auto')
+              pins = sum(map(len, rows))
+
+              if structure == 'odd_cycle':
+                  selected, reason = 'raw', 'base_infeasible'
+              else:
+                  components = {'empty': 0, 'independent': 18, 'chain': 2}[structure]
+                  high_pin = bool(count and pins >= 8 * count
+                                  and 24 * pins >= n * count)
+                  if high_pin and count < 64:
+                      selected, reason = 'raw', 'dense_pin_short'
+                  elif high_pin and n < 96 and components < 2 * n:
+                      selected, reason = 'raw', 'dense_small_compressed'
+                  elif count == 64 and components == 2 * n and len(edges) >= 4 * n:
+                      selected, reason = 'raw', 'dense_uncompressed_tile64'
+                  elif count >= 64:
+                      selected, reason = 'scc', 'scc_long_bank'
+                  elif count >= 8 and 2 * components <= n:
+                      selected, reason = 'scc', 'scc_strong_compression'
+                  else:
+                      selected, reason = 'raw', 'short_weak_compression'
+
+              assert answer.info['mode'] == 'auto'
+              assert answer.info['auto_policy'] == 'structural-v10'
+              assert answer.info['auto_policy_reason'] == reason
+              assert answer.info['bank_query_count'] == count
+              assert answer.info['selected_mode'] == selected
+              assert answer.output == exact_runtime.solve_session_packet(
+                  packet, mode=selected
+              ).output
+              for query, (decision, labels, certificate) in zip(
+                      rows, decode_certified_output(answer.output, n, count)):
+                  assert bool(decision) == bool(brute(p, query))
+                  assert verify_answer(
+                      p,
+                      query,
+                      'SAT_VERIFIED' if decision else 'UNSAT_VERIFIED',
+                      labels if decision else b'',
+                      certificate,
+                  )
+          '''
+          function = '\n'.join(line[10:] if line.startswith('          ') else line
+                               for line in function.splitlines()) + '\n'
+          path.write_text(text[:start] + function + text[end:])
+          PY
+          python - <<'PY'
+          from pathlib import Path
           for name in ('spectra/_native/exact_binary.cpp',
                        'experiments/compiled_query/exact_native.cpp'):
               path = Path(name)
@@ -69,6 +135,7 @@ jobs:
             spectra/exact.py \
             experiments/compiled_query/exact.py \
             experiments/compiled_query/auto_selector_benchmark.py \
+            experiments/compiled_query/test_exact.py \
             scripts/apply_auto_selector_v10.py
 
       - name: Run focused contracts
