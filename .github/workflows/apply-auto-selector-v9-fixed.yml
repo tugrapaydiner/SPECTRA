@@ -66,6 +66,7 @@ jobs:
               "reason = 'dense_tiny_high_pin' if n < 256 else 'dense_pin_short'",
               "reason = 'dense_sub96_high_pin' if n < 96 else 'dense_pin_short'",
           )
+          text = text.replace("'dense_tiny_high_pin'", "'dense_sub96_high_pin'")
           exact_tests.write_text(text)
 
           transfer = Path('experiments/compiled_query/itc_exam_transfer.py')
@@ -73,6 +74,12 @@ jobs:
           if 'structural-v8' not in text:
               raise RuntimeError('ITC transfer policy markers differ')
           transfer.write_text(text.replace('structural-v8', 'structural-v9'))
+
+          transfer_tests = Path('experiments/compiled_query/test_itc_exam_transfer.py')
+          text = transfer_tests.read_text()
+          if 'structural-v8' not in text:
+              raise RuntimeError('ITC transfer test policy markers differ')
+          transfer_tests.write_text(text.replace('structural-v8', 'structural-v9'))
           PY
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
           git diff --check
