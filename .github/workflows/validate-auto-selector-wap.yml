@@ -1,17 +1,15 @@
-name: validate-auto-selector-wap
+name: validate-auto-selector-v4-wap
 
 on:
   push:
-    branches:
-      - performance/automatic-engine-selection
-    paths:
-      - .github/workflows/validate-auto-selector-wap.yml
+    branches: [performance/automatic-engine-selection]
+    paths: [.github/workflows/validate-auto-selector-wap.yml]
 
 permissions:
   contents: read
 
 concurrency:
-  group: validate-auto-selector-wap
+  group: validate-auto-selector-v4-wap
   cancel-in-progress: false
 
 env:
@@ -28,7 +26,7 @@ jobs:
   wap-guard:
     name: wap-${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -66,8 +64,10 @@ jobs:
           sha256sum \
             spectra/_native/exact_binary.cpp \
             experiments/compiled_query/auto_selector_wap_guard.py \
-            experiments/compiled_query/AUTO_SELECTOR_V3_PROTOCOL_20261018.md \
+            experiments/compiled_query/AUTO_SELECTOR_V4_PROTOCOL_20261018.md \
             > wap-selector-evidence/source-sha256.txt
+          cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
+          grep -qi 'Structural auto policy v4' spectra/_native/exact_binary.cpp
 
       - name: Acquire and verify exposed WAP development inputs
         shell: bash
@@ -115,6 +115,14 @@ jobs:
             --out wap-selector-evidence/results \
             --repeats 31 \
             2>&1 | tee wap-selector-evidence/benchmark.log
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          result = json.loads(Path('wap-selector-evidence/results/results.json').read_text())
+          assert result['summary']['policy'] == 'structural-v4'
+          assert result['summary']['pass'], result['summary']
+          print(json.dumps(result['summary'], indent=2, sort_keys=True))
+          PY
 
       - name: Hash retained evidence
         if: always()
@@ -134,7 +142,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: auto-selector-wap-${{ matrix.label }}-${{ github.run_id }}
+          name: auto-selector-v4-wap-${{ matrix.label }}-${{ github.run_id }}
           path: wap-selector-evidence/
           include-hidden-files: true
           retention-days: 90
