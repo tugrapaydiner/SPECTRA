@@ -479,14 +479,16 @@ class ExactRuntime:
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
         """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
 
-        The default ``auto`` mode uses structural policy v4. It keeps a
-        base-infeasible graph on raw traversal. A request bank also stays on raw
+        The default ``auto`` mode uses structural policy v5. It keeps a
+        base-infeasible graph on raw traversal. A request bank also stays raw
         when it averages at least eight pins per request and those pins cover at
-        least one original vertex in 32. Feasible banks of at least 64 requests
-        use SCC; banks from eight requests use SCC earlier when SCCs compress the
-        literal graph by at least fourfold. Selection uses immutable graph/request
-        geometry only, never answers or measured timings. ``info['selected_mode']``
-        and ``info['auto_policy_reason']`` expose the decision. Explicit modes keep
+        least one original vertex in 24, or when an uncompressed graph with at
+        least four original edges per vertex has at most 128 requests. Feasible
+        banks of at least 64 requests otherwise use SCC; banks from eight
+        requests use SCC earlier when SCCs compress the literal graph by at least
+        fourfold. Selection uses immutable graph/request geometry only, never
+        answers or measured timings. ``info['selected_mode']`` and
+        ``info['auto_policy_reason']`` expose the decision. Explicit modes keep
         their meaning; the automatic policy is a frozen structural dispatcher.
         """
         if type(packet) is not bytes:
