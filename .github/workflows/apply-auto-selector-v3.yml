@@ -1,3 +1,4 @@
+# One-shot checked transport; removed by its own successful commit.
 name: apply-auto-selector-v3
 
 on:
