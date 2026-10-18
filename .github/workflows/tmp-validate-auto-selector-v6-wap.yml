@@ -1,0 +1,168 @@
+name: tmp-validate-auto-selector-v6-wap
+
+on:
+  push:
+    branches: [performance/automatic-engine-selection]
+    paths: [.github/workflows/tmp-validate-auto-selector-v6-wap.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tmp-validate-auto-selector-v6-wap
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_COMMIT: 4932048642da2144f387961b595112277afff82f
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  NUMEXPR_NUM_THREADS: '1'
+
+jobs:
+  wap-guard:
+    name: wap-${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86-64
+            runner: ubuntu-24.04
+          - label: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Install focused dependencies
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+
+      - name: Freeze selector and environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p wap-selector-evidence/graphs
+          git diff --quiet
+          git diff --cached --quiet
+          git rev-parse HEAD > wap-selector-evidence/source-commit.txt
+          git rev-parse HEAD^{tree} > wap-selector-evidence/source-tree.txt
+          python -VV > wap-selector-evidence/python.txt
+          python -m pip freeze > wap-selector-evidence/environment.txt
+          uname -a > wap-selector-evidence/platform.txt
+          lscpu > wap-selector-evidence/cpu.txt
+          sha256sum \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/auto_selector_wap_guard.py \
+            experiments/compiled_query/AUTO_SELECTOR_V6_PROTOCOL_20261018.md \
+            > wap-selector-evidence/source-sha256.txt
+          cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
+          grep -qi 'Structural auto policy v6' spectra/_native/exact_binary.cpp
+
+      - name: Run focused selector contracts
+        run: |
+          python -m pytest -q --confcutdir=tests/public \
+            tests/public/test_auto_selector_v6.py \
+            tests/public/test_exact_api.py
+
+      - name: Acquire and verify exposed WAP inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in wap05a.col wap06a.col; do
+            curl --fail --location --retry 3 --retry-all-errors \
+              "https://raw.githubusercontent.com/marijnheule/clicolcom/${UPSTREAM_COMMIT}/graphs/${name}" \
+              -o "wap-selector-evidence/graphs/${name}"
+          done
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          inventory = json.loads(Path('experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json').read_text())
+          rows = []
+          for name in ('wap05a.col', 'wap06a.col'):
+              record = inventory['graphs'][name]
+              data = Path('wap-selector-evidence/graphs', name).read_bytes()
+              blob = hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
+              assert record['role'] in ('development', 'development_consumed')
+              assert len(data) == record['bytes']
+              assert blob == record['git_blob_sha1']
+              rows.append({'name': name, 'bytes': len(data), 'git_blob_sha1': blob,
+                           'sha256': hashlib.sha256(data).hexdigest()})
+          Path('wap-selector-evidence/graph-acquisition.json').write_text(
+              json.dumps({'upstream_commit': inventory['commit'], 'graphs': rows},
+                         indent=2, sort_keys=True) + '\n')
+          PY
+          python -m experiments.compiled_query.study export-wap \
+            --graphs wap-selector-evidence/graphs \
+            --output wap-selector-evidence/cases
+
+      - name: Build and run the frozen WAP guard
+        id: benchmark
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY' > wap-selector-evidence/library.txt
+          from spectra.exact import build_exact_runtime
+          print(build_exact_runtime('wap-selector-evidence/native'))
+          PY
+          python -m experiments.compiled_query.auto_selector_wap_guard \
+            --library "$(cat wap-selector-evidence/library.txt)" \
+            --cases wap-selector-evidence/cases \
+            --out wap-selector-evidence/results \
+            --repeats 31 \
+            2>&1 | tee wap-selector-evidence/benchmark.log
+          code=${PIPESTATUS[0]}
+          echo "$code" > wap-selector-evidence/benchmark-exit-code.txt
+          exit "$code"
+
+      - name: Hash retained evidence
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          root = Path('wap-selector-evidence')
+          manifest = {}
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name != 'SHA256.json':
+                  manifest[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+          (root / 'SHA256.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+          PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: auto-selector-v6-wap-${{ matrix.label }}-${{ github.run_id }}
+          path: wap-selector-evidence/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Enforce the frozen gate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f wap-selector-evidence/results/results.json
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          result = json.loads(Path('wap-selector-evidence/results/results.json').read_text())
+          summary = result['summary']
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          assert summary['policy'] == 'structural-v6'
+          assert summary['pass'], summary
+          PY
