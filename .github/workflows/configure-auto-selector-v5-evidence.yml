@@ -3,7 +3,9 @@ name: configure-auto-selector-v5-evidence
 on:
   push:
     branches: [performance/automatic-engine-selection]
-    paths: [.github/workflows/configure-auto-selector-v5-evidence.yml]
+    paths:
+      - .github/workflows/configure-auto-selector-v5-evidence.yml
+      - scripts/configure_auto_selector_v5_evidence.py
 
 permissions:
   contents: write
