@@ -45,7 +45,7 @@ jobs:
           text = text.replace('    )\n    if text.count(old_regimes) != 1:\n',
                               '    ))\n    if text.count(old_regimes) != 1:\n', 1)
           old_guard = '''    if text.count(old_policy) != 1:\n        raise RuntimeError("exact packet reference policy differs")\n    exact_tests.write_text(text.replace(old_policy, new_policy))\n'''
-          new_guard = '''    function_start = text.index("def test_auto_packet_exposes_and_matches_its_selected_engine")\n    policy_start = text.index("    if structure == 'odd_cycle':", function_start)\n    policy_end = text.index("\\n\\n    assert answer.info['mode'] == 'auto'", policy_start)\n    text = text[:policy_start] + new_policy.rstrip() + text[policy_end:]\n    exact_tests.write_text(text)\n'''
+          new_guard = '''    function_start = text.index("def test_auto_packet_exposes_and_matches_its_selected_engine")\n    policy_start = text.index("    if structure == 'odd_cycle':", function_start)\n    policy_end = text.index("\\n\\n    assert answer.info['mode'] == 'auto'", policy_start)\n    text = text[:policy_start] + _indent4(new_policy.rstrip()) + text[policy_end:]\n    exact_tests.write_text(text)\n'''
           if text.count(old_guard) != 1:
               raise RuntimeError('test migration guard differs')
           path.write_text(text.replace(old_guard, new_guard))
