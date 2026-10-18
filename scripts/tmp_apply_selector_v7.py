@@ -30,6 +30,7 @@ NEW_DENSE = '''            } else if(W(bank_pins)>=8*W(bank_size)
 for path in NATIVE_FILES:
     text = path.read_text(encoding="utf-8")
     text = text.replace("Structural auto policy v6", "Structural auto policy v7")
+    text = text.replace('"structural-v6"', '"structural-v7"')
     if text.count(OLD_DENSE) != 1:
         raise RuntimeError(f"dense v6 block differs in {path}")
     text = text.replace(OLD_DENSE, NEW_DENSE)
