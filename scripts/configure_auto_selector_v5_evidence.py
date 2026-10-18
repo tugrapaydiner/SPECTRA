@@ -58,7 +58,7 @@ replacements = {
         return "raw", "dense_pin_fraction"
     if count >= 64:
         return "scc", "scc_tile64"
-    if count >=8 and 2 * components <= vertices:
+    if count >= 8 and 2 * components <= vertices:
         return "scc", "scc_strong_compression"
     return "raw", "short_weak_compression"
 ''':
