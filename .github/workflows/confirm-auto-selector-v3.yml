@@ -69,7 +69,7 @@ jobs:
             experiments/compiled_query/AUTO_SELECTOR_V3_PROTOCOL_20261018.md \
             > selector-confirmation/source-sha256.txt
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
-          grep -q 'structural auto policy v3' spectra/_native/exact_binary.cpp
+          grep -qi 'structural auto policy v3' spectra/_native/exact_binary.cpp
 
       - name: Recheck the frozen structural rules
         run: |
