@@ -1,0 +1,106 @@
+name: auto-selector-v7-wap-guard
+
+on:
+  push:
+    branches: [performance/automatic-engine-selection-v7]
+    paths: [.github/workflows/auto-selector-v7-wap-guard.yml]
+
+permissions:
+  contents: read
+
+env:
+  UPSTREAM_COMMIT: 4932048642da2144f387961b595112277afff82f
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  NUMEXPR_NUM_THREADS: '1'
+
+jobs:
+  guard:
+    name: wap-${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86-64
+            runner: ubuntu-24.04
+          - label: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Install focused dependencies
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Freeze source and acquire exposed WAP inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p wap-evidence/graphs
+          git rev-parse HEAD > wap-evidence/source-commit.txt
+          git rev-parse HEAD^{tree} > wap-evidence/source-tree.txt
+          python -VV > wap-evidence/python.txt
+          uname -a > wap-evidence/platform.txt
+          lscpu > wap-evidence/cpu.txt
+          for name in wap05a.col wap06a.col; do
+            curl --fail --location --retry 3 --retry-all-errors \
+              "https://raw.githubusercontent.com/marijnheule/clicolcom/${UPSTREAM_COMMIT}/graphs/${name}" \
+              -o "wap-evidence/graphs/${name}"
+          done
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          inventory = json.loads(Path('experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json').read_text())
+          for name in ('wap05a.col', 'wap06a.col'):
+              data = Path('wap-evidence/graphs', name).read_bytes()
+              record = inventory['graphs'][name]
+              blob = hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
+              assert len(data) == record['bytes'] and blob == record['git_blob_sha1']
+          PY
+          python -m experiments.compiled_query.study export-wap \
+            --graphs wap-evidence/graphs --output wap-evidence/cases
+      - name: Build and run the WAP selector guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > wap-evidence/library.txt
+          from spectra.exact import build_exact_runtime
+          print(build_exact_runtime('wap-evidence/native'))
+          PY
+          python -m experiments.compiled_query.auto_selector_wap_guard \
+            --library "$(cat wap-evidence/library.txt)" \
+            --cases wap-evidence/cases \
+            --out wap-evidence/results \
+            --repeats 31 \
+            2>&1 | tee wap-evidence/guard.log
+      - name: Hash retained evidence
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          root = Path('wap-evidence')
+          manifest = {}
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name != 'SHA256.json':
+                  manifest[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+          (root / 'SHA256.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: auto-selector-v7-wap-${{ matrix.label }}-${{ github.run_id }}
+          path: wap-evidence/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
