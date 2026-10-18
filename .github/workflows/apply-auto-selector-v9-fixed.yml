@@ -99,7 +99,7 @@ jobs:
       - name: Commit the correction
         run: |
           set -euo pipefail
-          git rm .github/workflows/apply-auto-selector-v9.yml \
+          git rm -f .github/workflows/apply-auto-selector-v9.yml \
             .github/workflows/apply-auto-selector-v9-fixed.yml \
             scripts/apply_auto_selector_v9.py
           git config user.name 'Tugrap'
