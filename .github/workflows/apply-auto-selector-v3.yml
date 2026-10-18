@@ -31,32 +31,13 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          import re
 
-          old = '''        if(mode==4) {
-              // Structural auto policy v2.  set9 development evidence showed that
-              // large, heavily pinned repair banks can lose to raw traversal even
-              // when tile64 is available.  The policy therefore uses only immutable
-              // request geometry (never answers or measured timings): raw below one
-              // tile, on a base contradiction, or at eight pins per row and above.
-              // The threshold is frozen before the set10/set12 holdout transfer.
-              if(bank_size<64) {
-                  condensed=false;routed=false;auto_reason="bank_below_tile64";
-              } else if(bad!=NIL) {
-                  condensed=false;routed=false;auto_reason="base_infeasible";
-              } else if(W(bank_pins)>=8*W(bank_size)) {
-                  condensed=false;routed=false;auto_reason="high_pin_density";
-              } else {
-                  condensed=true;routed=nc<=n;
-                  auto_reason=routed?"route_component_compression":"scc_tile64";
-              }
-          }
-          '''
-          new = '''        if(mode==4) {
-              // Structural auto policy v3.  The optimized tile64 SCC engine wins
-              // long low-pin banks even when SCC contraction is modest, while
-              // short weakly compressed banks still favor raw traversal. Strong
-              // contraction pays before a full 64-row tile. Selection uses only
-              // immutable graph/request geometry, never answers or timings.
+          replacement = '''        if(mode==4) {
+              // Structural auto policy v3. The optimized tile64 SCC engine wins
+              // long low-pin banks even when contraction is modest. Strong SCC
+              // contraction also pays before one complete 64-row tile. Selection
+              // uses only immutable graph/request geometry, never answers or time.
               if(bad!=NIL) {
                   condensed=false;routed=false;auto_reason="base_infeasible";
               } else if(W(bank_pins)>=8*W(bank_size)) {
@@ -69,37 +50,48 @@ jobs:
                   condensed=false;routed=false;auto_reason="short_weak_compression";
               }
           }
-          '''
+'''
+          selector = re.compile(
+              r'        if\(mode==4\) \{\n'
+              r'.*?'
+              r'        \}\n'
+              r'        if\(condensed && bad==NIL\) \{',
+              re.DOTALL,
+          )
           for name in (
               'spectra/_native/exact_binary.cpp',
               'experiments/compiled_query/exact_native.cpp',
           ):
               path = Path(name)
               text = path.read_text()
-              if old not in text:
-                  raise RuntimeError(f'expected selector block missing from {name}')
-              text = text.replace(old, new)
-              text = text.replace(
+              updated, count = selector.subn(
+                  replacement + '        if(condensed && bad==NIL) {', text, count=1
+              )
+              if count != 1:
+                  raise RuntimeError(f'expected one selector block in {name}, got {count}')
+              updated = updated.replace(
                   'which==4?"structural-v2":"explicit"',
                   'which==4?"structural-v3":"explicit"',
               )
-              path.write_text(text)
+              if updated.count('structural-v3') != 1:
+                  raise RuntimeError(f'policy identity differs in {name}')
+              path.write_text(updated)
 
+          old_doc = '''The default ``auto`` mode uses structural policy v2. It selects raw traversal below
+        64 requests, on a base-infeasible graph, or when the immutable bank carries
+        at least eight pins per request on average. Otherwise it uses routed proofs
+        when SCCs at least halve the literal graph, and plain SCC batching when they
+        do not.'''
+          new_doc = '''The default ``auto`` mode uses structural policy v3. It keeps base-infeasible,
+        high-pin, and short weakly compressed banks on raw traversal. It selects SCC
+        for every feasible low-pin bank of at least 64 requests, and from eight
+        requests when SCCs compress the literal graph by at least fourfold.'''
           for name in ('spectra/exact.py', 'experiments/compiled_query/exact.py'):
               path = Path(name)
               text = path.read_text()
-              text = text.replace(
-                  'The default ``auto`` mode uses structural policy v2. It selects raw traversal below\n'
-                  '        64 requests, on a base-infeasible graph, or when the immutable bank carries\n'
-                  '        at least eight pins per request on average. Otherwise it uses routed proofs\n'
-                  '        when SCCs at least halve the literal graph, and plain SCC batching when they\n'
-                  '        do not.',
-                  'The default ``auto`` mode uses structural policy v3. It keeps base-infeasible,\n'
-                  '        high-pin, and short weakly compressed banks on raw traversal. It selects SCC\n'
-                  '        for every feasible low-pin bank of at least 64 requests, and from eight\n'
-                  '        requests when SCCs compress the literal graph by at least fourfold.',
-              )
-              path.write_text(text)
+              if old_doc not in text:
+                  raise RuntimeError(f'auto-policy documentation missing from {name}')
+              path.write_text(text.replace(old_doc, new_doc))
 
           test = Path('tests/public/test_exact_api.py')
           text = test.read_text()
@@ -109,14 +101,14 @@ jobs:
 
           readme = Path('experiments/compiled_query/README.md')
           text = readme.read_text()
-          text = text.replace(
-              'It chooses raw for fewer than 64 requests or an\n'
-              'impossible fixed graph, then route or SCC according to graph compression.',
-              'It keeps base-infeasible, high-pin, and short weakly compressed banks on raw; '
-              'it chooses SCC for feasible low-pin banks at 64 requests, or from eight requests '
-              'when literal contraction is at least fourfold.',
-          )
-          readme.write_text(text)
+          old_readme = '''It chooses raw for fewer than 64 requests or an
+impossible fixed graph, then route or SCC according to graph compression.'''
+          new_readme = '''It keeps base-infeasible, high-pin, and short weakly compressed banks on raw;
+it chooses SCC for feasible low-pin banks at 64 requests, or from eight requests
+when literal contraction is at least fourfold.'''
+          if old_readme not in text:
+              raise RuntimeError('README selector description differs')
+          readme.write_text(text.replace(old_readme, new_readme))
           PY
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
 
@@ -149,5 +141,5 @@ jobs:
             tests/public/test_exact_api.py \
             tests/public/test_auto_selector_v3.py
           git commit -m 'Choose the right exact engine automatically' \
-            -m 'Use SCC for long low-pin banks and strongly compressed short banks, while keeping raw for base contradictions, high-pin requests, and weakly compressed short calls. Explicit engines and all proof formats remain unchanged.'
+            -m 'Use SCC for long low-pin banks and strongly compressed short banks, while keeping raw for base contradictions, high-pin requests, and weakly compressed short calls. Explicit engines and proof formats remain unchanged.'
           git push origin HEAD:performance/automatic-engine-selection
