@@ -1,4 +1,4 @@
-name: validate-auto-selector-v4-development
+name: validate-auto-selector-v5-development
 
 on:
   push:
@@ -6,16 +6,16 @@ on:
     paths:
       - .github/workflows/validate-auto-selector-development.yml
       - experiments/compiled_query/auto_selector_benchmark.py
-      - experiments/compiled_query/AUTO_SELECTOR_V4_PROTOCOL_20261018.md
+      - experiments/compiled_query/AUTO_SELECTOR_V5_PROTOCOL_20261018.md
       - spectra/_native/exact_binary.cpp
       - experiments/compiled_query/exact_native.cpp
-      - tests/public/test_auto_selector_v4.py
+      - tests/public/test_auto_selector_v5.py
 
 permissions:
   contents: read
 
 concurrency:
-  group: validate-auto-selector-v4-development
+  group: validate-auto-selector-v5-development
   cancel-in-progress: false
 
 env:
@@ -30,7 +30,7 @@ env:
 jobs:
   development:
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -61,16 +61,16 @@ jobs:
             spectra/_native/exact_binary.cpp \
             experiments/compiled_query/exact_native.cpp \
             experiments/compiled_query/auto_selector_benchmark.py \
-            experiments/compiled_query/AUTO_SELECTOR_V4_PROTOCOL_20261018.md \
+            experiments/compiled_query/AUTO_SELECTOR_V5_PROTOCOL_20261018.md \
             > selector-development/source-sha256.txt
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
-          grep -qi 'Structural auto policy v4' spectra/_native/exact_binary.cpp
+          grep -qi 'Structural auto policy v5' spectra/_native/exact_binary.cpp
 
       - name: Run focused selector contracts
         run: |
           set -euo pipefail
           python -m pytest -q --confcutdir=tests/public \
-            tests/public/test_auto_selector_v4.py \
+            tests/public/test_auto_selector_v5.py \
             tests/public/test_exact_api.py \
             tests/public/test_exact_bank_tile64.py \
             tests/public/test_exact_packet_packing.py
@@ -82,7 +82,7 @@ jobs:
           print(build_exact_runtime('selector-development/native'))
           PY
 
-      - name: Run the complete v4 development oracle gate
+      - name: Run the complete v5 development oracle gate
         shell: bash
         run: |
           set -euo pipefail
@@ -90,13 +90,13 @@ jobs:
             --library "$(cat selector-development/library.txt)" \
             --panel development \
             --out selector-development/results \
-            --repeats 9 \
+            --repeats 17 \
             2>&1 | tee selector-development/benchmark.log
           python - <<'PY'
           from pathlib import Path
           import json
           result = json.loads(Path('selector-development/results/results.json').read_text())
-          assert result['summary']['policy'] == 'structural-v4'
+          assert result['summary']['policy'] == 'structural-v5'
           assert result['summary']['pass'], result['summary']
           print(json.dumps(result['summary'], indent=2, sort_keys=True))
           PY
@@ -119,7 +119,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: auto-selector-v4-development-${{ github.run_id }}
+          name: auto-selector-v5-development-${{ github.run_id }}
           path: selector-development/
           include-hidden-files: true
           retention-days: 90
