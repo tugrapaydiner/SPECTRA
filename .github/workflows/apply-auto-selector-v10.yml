@@ -51,6 +51,18 @@ jobs:
           path.write_text(text.replace(old_guard, new_guard))
           PY
           python scripts/apply_auto_selector_v10.py
+          python - <<'PY'
+          from pathlib import Path
+          for name in ('spectra/_native/exact_binary.cpp',
+                       'experiments/compiled_query/exact_native.cpp'):
+              path = Path(name)
+              text = path.read_text()
+              old = 'which==4?"structural-v9":"explicit"'
+              new = 'which==4?"structural-v10":"explicit"'
+              if text.count(old) != 1:
+                  raise RuntimeError(f'{name}: selector receipt anchor differs')
+              path.write_text(text.replace(old, new))
+          PY
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
           git diff --check
           python -m py_compile \
