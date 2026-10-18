@@ -27,6 +27,21 @@ jobs:
       - name: Apply the frozen correction
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_auto_selector_v9.py')
+          text = path.read_text()
+          old_end = "                direct_reason = 'large_tiny_bank' ''',"
+          new_end = "                direct_reason = 'large_tiny_bank'\n        ''',"
+          if text.count(old_end) != 1:
+              raise RuntimeError('old direct-dispatch anchor differs')
+          text = text.replace(old_end, new_end)
+          old_end = "                    )''',"
+          new_end = "                    )\n        ''',"
+          if text.count(old_end) != 1:
+              raise RuntimeError('new direct-dispatch anchor differs')
+          path.write_text(text.replace(old_end, new_end))
+          PY
           python scripts/apply_auto_selector_v9.py
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
           git diff --check
