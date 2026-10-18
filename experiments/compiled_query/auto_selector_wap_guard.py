@@ -1,4 +1,4 @@
-"""Real WAP regression guard for structural automatic engine selection v4."""
+"""Real WAP regression guard for structural automatic engine selection v7."""
 from __future__ import annotations
 
 import argparse
@@ -18,7 +18,7 @@ CASES = ("wap05a.col", "wap06a.col")
 COUNTS = (64, 128, 1024)
 REPEATS = 31
 SCHEMA = "spectra.auto_selector_wap_guard.v4"
-POLICY = "structural-v6"
+POLICY = "structural-v7"
 
 
 def gmean(values):
@@ -67,7 +67,7 @@ def run(library: Path, cases: Path, destination: Path, repeats: int = REPEATS) -
                 samples = {"raw": [], "auto": []}
                 hashes = {"raw": set(), "auto": set()}
                 rng = random.Random(int.from_bytes(hashlib.sha256(
-                    f"SPECTRA-auto-wap-v6/{name}/{count}".encode()
+                    f"SPECTRA-auto-wap-v7/{name}/{count}".encode()
                 ).digest()[:8], "big"))
                 for _ in range(repeats):
                     order = ["raw", "auto"]

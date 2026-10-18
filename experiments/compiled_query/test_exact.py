@@ -465,7 +465,7 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
         if mode == 'auto':
             assert answer.info['selected_mode'] == 'raw'
             assert answer.info['auto_policy'] == 'structural-v7'
-            assert answer.info['auto_policy_reason'] == 'dense_pin_fraction'
+            assert answer.info['auto_policy_reason'] == 'dense_small_high_pin'
         assert decode_certified_output(answer.output, n, count) == tuple(expected[:count])
 
 
@@ -476,11 +476,11 @@ def test_auto_structural_v2_freezes_the_eight_pin_density_boundary(exact_runtime
     low = exact_runtime.solve_session_packet(pack_session_packet(p, low_rows), mode='auto')
     high = exact_runtime.solve_session_packet(pack_session_packet(p, high_rows), mode='auto')
     assert low.info['selected_mode'] == 'scc'
-    assert low.info['auto_policy_reason'] == 'scc_tile64'
+    assert low.info['auto_policy_reason'] == 'scc_long_bank'
     assert low.info['bank_query_count'] == 64 and low.info['bank_pin_count'] == 448
     assert high.info['selected_mode'] == 'raw'
     assert high.info['auto_policy'] == 'structural-v7'
-    assert high.info['auto_policy_reason'] == 'dense_pin_fraction'
+    assert high.info['auto_policy_reason'] == 'dense_small_high_pin'
     assert high.info['bank_query_count'] == 64 and high.info['bank_pin_count'] == 512
     assert high.output == exact_runtime.solve_session_packet(
         pack_session_packet(p, high_rows), mode='raw').output
@@ -506,14 +506,16 @@ def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, coun
 
     if structure == 'odd_cycle':
         selected, reason = 'raw', 'base_infeasible'
-    elif pins >= 8 * count and 24 * pins >= n * count:
-        selected, reason = 'raw', 'dense_pin_fraction'
+    elif (pins >= 8 * count and 24 * pins >= n * count
+          and (count < 64 or n < 256)):
+        selected = 'raw'
+        reason = 'dense_small_high_pin' if n < 256 else 'dense_pin_short'
     else:
         components = {'empty': 0, 'independent': 18, 'chain': 2}[structure]
-        if count <= 128 and components == 2 * n and len(edges) >= 4 * n:
-            selected, reason = 'raw', 'dense_uncompressed_warmup'
+        if count == 64 and components == 2 * n and len(edges) >= 4 * n:
+            selected, reason = 'raw', 'dense_uncompressed_tile64'
         elif count >= 64:
-            selected, reason = 'scc', 'scc_tile64'
+            selected, reason = 'scc', 'scc_long_bank'
         elif count >= 8 and 2 * components <= n:
             selected, reason = 'scc', 'scc_strong_compression'
         else:

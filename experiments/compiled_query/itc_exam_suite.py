@@ -171,7 +171,7 @@ def load_manifest(root: Path) -> dict:
     if (manifest.get("schema") != SCHEMA
             or manifest.get("dataset_repository") != transfer.DATASET_REPOSITORY
             or manifest.get("dataset_commit") != transfer.DATASET_COMMIT
-            or manifest.get("selector_policy") not in ("structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v7")
+            or manifest.get("selector_policy") not in ("structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v7")
             or type(manifest.get("query_count_per_case")) is not int
             or manifest["query_count_per_case"] < 1):
         raise ValueError("suite manifest identity differs")
