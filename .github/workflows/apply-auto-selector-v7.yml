@@ -20,7 +20,11 @@ jobs:
         with:
           python-version: '3.13'
       - name: Apply the frozen selector rule
-        run: python scripts/apply_auto_selector_v7.py
+        run: |
+          python scripts/apply_auto_selector_v7.py
+          sed -i 's/structural-v6/structural-v7/g' \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/exact_native.cpp
       - name: Run focused contracts
         run: |
           python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
