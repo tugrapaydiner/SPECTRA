@@ -1,0 +1,165 @@
+name: diagnose-automatic-selector
+
+on:
+  push:
+    branches: [performance/automatic-engine-selection]
+    paths: [.github/workflows/diagnose-automatic-selector.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnose-automatic-selector
+  cancel-in-progress: false
+
+env:
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  NUMEXPR_NUM_THREADS: '1'
+
+jobs:
+  structural-panel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Install the focused benchmark environment
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+
+      - name: Record the immutable diagnosis inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p selector-diagnosis
+          git diff --quiet
+          git diff --cached --quiet
+          git rev-parse HEAD > selector-diagnosis/source-commit.txt
+          git rev-parse HEAD^{tree} > selector-diagnosis/source-tree.txt
+          python -VV > selector-diagnosis/python.txt
+          uname -a > selector-diagnosis/platform.txt
+          lscpu > selector-diagnosis/cpu.txt
+          sha256sum \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/exact_native.cpp \
+            experiments/compiled_query/query_latency.py \
+            experiments/compiled_query/transfer_panel.py \
+            experiments/compiled_query/AUTO_SELECTOR_V3_PROTOCOL_20261018.md \
+            > selector-diagnosis/source-sha256.txt
+
+      - name: Run the exposed structural diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m experiments.compiled_query.query_latency run \
+            --out selector-diagnosis/panel \
+            --baseline-commit ac71b3a7777f4869424247df6481ef32f9996a6b \
+            2>&1 | tee selector-diagnosis/run.log
+          python -m experiments.compiled_query.query_latency audit \
+            --out selector-diagnosis/panel \
+            --baseline-commit ac71b3a7777f4869424247df6481ef32f9996a6b \
+            2>&1 | tee selector-diagnosis/audit.log
+
+      - name: Extract selector regret and oracle decisions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import math
+          import statistics
+
+          root = Path('selector-diagnosis/panel')
+          audit = json.loads((root / 'audit.json').read_text())
+          rows = []
+          for case in audit.get('cases', []):
+              name = case.get('case') or case.get('name')
+              family = case.get('family')
+              cells = case.get('cells', case.get('counts', {}))
+              if isinstance(cells, dict):
+                  iterable = cells.items()
+              else:
+                  iterable = []
+              for count_key, cell in iterable:
+                  try:
+                      count = int(count_key)
+                  except (TypeError, ValueError):
+                      continue
+                  medians = {}
+                  for mode, arm in (
+                      ('raw', 'candidate-raw'),
+                      ('scc', 'candidate-scc'),
+                      ('route', 'candidate-route'),
+                      ('auto', 'candidate-auto'),
+                  ):
+                      value = cell.get(arm)
+                      if isinstance(value, dict):
+                          value = value.get('median_complete_ns', value.get('median_ns'))
+                      if isinstance(value, (int, float)) and value > 0:
+                          medians[mode] = float(value)
+                  if not {'raw', 'scc', 'route', 'auto'} <= medians.keys():
+                      continue
+                  oracle = min(('raw', 'scc', 'route'), key=medians.get)
+                  rows.append({
+                      'case': name,
+                      'family': family,
+                      'count': count,
+                      'oracle': oracle,
+                      'auto_ns': medians['auto'],
+                      'oracle_ns': medians[oracle],
+                      'regret': medians['auto'] / medians[oracle],
+                      'medians_ns': medians,
+                  })
+          # The historical audit schema stores detailed records differently on
+          # some commits. Retain the whole audit even if this convenience table
+          # cannot be populated; a follow-up parser will consume raw records.
+          summary = {
+              'schema': 'spectra.auto_selector_diagnosis.v1',
+              'rows': rows,
+              'row_count': len(rows),
+              'global_regret_geomean': (
+                  math.exp(statistics.fmean(math.log(row['regret']) for row in rows))
+                  if rows else None
+              ),
+              'worst_regret': max((row['regret'] for row in rows), default=None),
+          }
+          Path('selector-diagnosis/selector-summary.json').write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+
+      - name: Hash the retained diagnosis
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          root = Path('selector-diagnosis')
+          manifest = {}
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name != 'SHA256.json':
+                  manifest[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+          (root / 'SHA256.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+          PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: automatic-selector-diagnosis-${{ github.run_id }}
+          path: selector-diagnosis/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
