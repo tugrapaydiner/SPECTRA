@@ -71,8 +71,8 @@ jobs:
         run: |
           set -euo pipefail
           git rm .github/workflows/apply-auto-selector-v8.yml \
-            scripts/apply_auto_selector_v8.py \
             scripts/update_v8_reason_expectations.py
+          git rm -f scripts/apply_auto_selector_v8.py
           git config user.name 'Tugrap'
           git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
           git add -A
