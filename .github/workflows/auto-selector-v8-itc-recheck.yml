@@ -1,0 +1,93 @@
+name: auto-selector-v8-itc-recheck
+
+on:
+  push:
+    branches: [performance/automatic-engine-selection-v8]
+    paths: [.github/workflows/auto-selector-v8-itc-recheck.yml]
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_COMMIT: 32b9e38ffa849dfd2ff06b2ba105da72f5c33055
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+
+jobs:
+  itc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: davidvanbulck/ITC-2007-CETT
+          ref: ed2d4c0cf5302b77a8b321cd0380de0bb579d538
+          path: upstream/ITC-2007-CETT
+          persist-credentials: false
+      - name: Install focused dependencies
+        run: python -m pip install 'build==1.3.0' 'pytest==9.0.2'
+      - name: Reproduce and enforce the frozen ITC guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q --confcutdir=experiments/compiled_query \
+            experiments/compiled_query/test_itc_exam_transfer.py \
+            experiments/compiled_query/test_itc_exam_suite.py
+          python -m experiments.compiled_query.itc_exam_suite freeze \
+            --root itc-v8-evidence \
+            --upstream-root upstream/ITC-2007-CETT \
+            --queries 1024 \
+            --holdout-max-auto-raw-ratio 1.05 | tee freeze.log
+          python -m experiments.compiled_query.itc_exam_suite run \
+            --root itc-v8-evidence | tee run.log
+          python -S -m experiments.compiled_query.itc_exam_suite audit \
+            --root itc-v8-evidence | tee audit.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('itc-v8-evidence/suite-audit.json').read_text())
+          assert result['functional_complete'], result
+          assert result['selector_policy'] == 'structural-v8', result
+          assert result['selector_guard_pass'], result['holdout_failures']
+          expected = {
+              'set9-development': 'scc',
+              'set10-holdout': 'scc',
+              'set12-holdout': 'raw',
+          }
+          for case in result['cases']:
+              assert case['auto_selected_mode'] == expected[case['name']], case
+          print(json.dumps(result, indent=2, sort_keys=True))
+          PY
+      - name: Retain evidence and receipts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p itc-v8-receipts
+          git rev-parse HEAD > itc-v8-receipts/source-commit.txt
+          git rev-parse HEAD^{tree} > itc-v8-receipts/source-tree.txt
+          python -VV > itc-v8-receipts/python.txt
+          uname -a > itc-v8-receipts/platform.txt
+          lscpu > itc-v8-receipts/cpu.txt
+          cp freeze.log run.log audit.log itc-v8-receipts/ 2>/dev/null || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: auto-selector-v8-itc-recheck-${{ github.run_id }}
+          path: |
+            itc-v8-evidence/
+            itc-v8-receipts/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: warn
