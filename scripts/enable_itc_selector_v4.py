@@ -18,6 +18,10 @@ for old, new in replacements.items():
     if text.count(old) != 1:
         raise RuntimeError(f"expected one transfer policy clause: {old}")
     text = text.replace(old, new)
+dead_path = '    Path(".github/workflows/itc-exam-transfer.yml"),\n'
+if text.count(dead_path) != 1:
+    raise RuntimeError("retired ITC transfer workflow inventory entry differs")
+text = text.replace(dead_path, "")
 transfer.write_text(text, encoding="utf-8")
 
 suite = Path("experiments/compiled_query/itc_exam_suite.py")
