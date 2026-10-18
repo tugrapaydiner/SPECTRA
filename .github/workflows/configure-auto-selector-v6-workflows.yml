@@ -1,0 +1,52 @@
+name: configure-auto-selector-v6-workflows
+
+on:
+  push:
+    branches: [performance/automatic-engine-selection]
+    paths: [.github/workflows/configure-auto-selector-v6-workflows.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: configure-auto-selector-v6-workflows
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Configure v6 development and real-workload guards
+        run: python scripts/configure_auto_selector_v6_workflows.py
+
+      - name: Check workflow identities
+        run: |
+          set -euo pipefail
+          grep -q 'structural-v6' .github/workflows/validate-auto-selector-development.yml
+          grep -q -- '--repeats 31' .github/workflows/validate-auto-selector-development.yml
+          grep -q 'structural-v6' .github/workflows/validate-auto-selector-wap.yml
+          grep -q 'structural-v6' .github/workflows/validate-auto-selector-v4-itc.yml
+          grep -q 'test_auto_selector_v6.py' .github/workflows/validate-auto-selector-development.yml
+
+      - name: Publish the final validation workflows
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/configure-auto-selector-v6-workflows.yml
+          git rm scripts/configure_auto_selector_v6_workflows.py
+          git add \
+            .github/workflows/validate-auto-selector-development.yml \
+            .github/workflows/validate-auto-selector-wap.yml \
+            .github/workflows/validate-auto-selector-v4-itc.yml
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git commit -m 'Run the final selector validation matrix'
+          git push origin HEAD:performance/automatic-engine-selection
