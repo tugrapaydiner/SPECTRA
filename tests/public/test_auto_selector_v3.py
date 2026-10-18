@@ -1,6 +1,31 @@
 from __future__ import annotations
 
-from spectra.exact import ExactProblem, pack_session_packet, verify_session_output
+import os
+from pathlib import Path
+import shutil
+import sys
+
+import pytest
+
+from spectra.exact import (
+    ExactProblem,
+    ExactRuntime,
+    build_exact_runtime,
+    pack_session_packet,
+    verify_session_output,
+)
+
+
+@pytest.fixture(scope="session")
+def exact_runtime(tmp_path_factory):
+    supplied = os.environ.get("SPECTRA_EXACT_LIBRARY")
+    if supplied is not None:
+        return ExactRuntime(Path(supplied).resolve())
+    compiler = "cl" if sys.platform == "win32" else "g++"
+    if sys.platform not in ("linux", "win32") or shutil.which(compiler) is None:
+        pytest.skip("supported native compiler is unavailable")
+    library = build_exact_runtime(tmp_path_factory.mktemp("selector-v3-runtime"))
+    return ExactRuntime(library)
 
 
 def solve(runtime, problem, rows):
