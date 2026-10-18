@@ -45,13 +45,34 @@ jobs:
           python scripts/apply_auto_selector_v9.py
           python - <<'PY'
           from pathlib import Path
-          path = Path('tests/public/test_exact_api.py')
-          text = path.read_text()
+
+          public = Path('tests/public/test_exact_api.py')
+          text = public.read_text()
           old = "assert result.info['auto_policy'] == 'structural-v8'"
-          new = "assert result.info['auto_policy'] == 'structural-v9'"
           if text.count(old) != 1:
               raise RuntimeError('public auto-policy contract differs')
-          path.write_text(text.replace(old, new))
+          public.write_text(text.replace(old, "assert result.info['auto_policy'] == 'structural-v9'"))
+
+          exact_tests = Path('experiments/compiled_query/test_exact.py')
+          text = exact_tests.read_text()
+          if 'structural-v8' not in text:
+              raise RuntimeError('exact test policy markers differ')
+          text = text.replace('structural-v8', 'structural-v9')
+          text = text.replace(
+              'and (count < 64 or n < 256)):',
+              'and (count < 64 or n < 96)):',
+          )
+          text = text.replace(
+              "reason = 'dense_tiny_high_pin' if n < 256 else 'dense_pin_short'",
+              "reason = 'dense_sub96_high_pin' if n < 96 else 'dense_pin_short'",
+          )
+          exact_tests.write_text(text)
+
+          transfer = Path('experiments/compiled_query/itc_exam_transfer.py')
+          text = transfer.read_text()
+          if 'structural-v8' not in text:
+              raise RuntimeError('ITC transfer policy markers differ')
+          transfer.write_text(text.replace('structural-v8', 'structural-v9'))
           PY
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
           git diff --check
