@@ -55,6 +55,24 @@ def gmean(values: Iterable[float]) -> float:
     return math.exp(statistics.fmean(math.log(value) for value in values))
 
 
+def _topology_at_size(family: str, n: int, rng: random.Random):
+    """Preserve the family generator while admitting protocol sizes like 320/384.
+
+    The established topology helper is defined only for powers of two. Generate
+    the next power-of-two supergraph, then take its first ``n`` vertices. The
+    later opposite-side bridge pass restores deterministic connectivity pressure,
+    so this does not inspect requests, answers, selector decisions, or timings.
+    """
+    if n < 8:
+        raise ValueError("selector panel requires n >= 8")
+    super_n = 1 << (n - 1).bit_length()
+    return tuple(
+        (left, right)
+        for left, right in topology(family, super_n, rng)
+        if left < n and right < n
+    )
+
+
 def _known_bipartite_problem(
     family: str,
     label: str,
@@ -65,7 +83,7 @@ def _known_bipartite_problem(
     namespace: str,
 ) -> tuple[BinaryListProblem, list[int], random.Random]:
     rng = random.Random(seed_for(namespace, label))
-    candidate_edges = topology(family, n, rng)
+    candidate_edges = _topology_at_size(family, n, rng)
     side = [rng.randrange(2) for _ in range(n)]
     side[0], side[1] = 0, 1
     edges = {edge for edge in candidate_edges if side[edge[0]] != side[edge[1]]}
