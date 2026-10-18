@@ -141,7 +141,7 @@ def test_one_call_default_uses_structural_auto_policy(exact_runtime):
     packet = pack_session_packet(problem, ((),) * 3)
     result = exact_runtime.solve_session_packet(packet)
     assert result.info['mode'] == 'auto'
-    assert result.info['auto_policy'] == 'structural-v8'
+    assert result.info['auto_policy'] == 'structural-v9'
     assert result.info['selected_mode'] == 'raw'
     assert result.info['auto_policy_reason'] == 'short_weak_compression'
     assert verify_session_output(packet, result.output)

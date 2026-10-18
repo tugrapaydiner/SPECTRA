@@ -400,9 +400,9 @@ struct Index {
                 condensed=false;routed=false;auto_reason="base_infeasible";
             } else if(W(bank_pins)>=8*W(bank_size)
                     && W(24)*W(bank_pins)>=W(n)*W(bank_size)
-                    && (bank_size<64 || n<128)) {
+                    && (bank_size<64 || n<96)) {
                 condensed=false;routed=false;
-                auto_reason=n<128?"dense_tiny_high_pin":"dense_pin_short";
+                auto_reason=n<96?"dense_sub96_high_pin":"dense_pin_short";
             } else if(bank_size==64 && W(nc)==2*W(n)
                     && W(p.edges.size())>=4*W(n)) {
                 condensed=false;routed=false;auto_reason="dense_uncompressed_tile64";
@@ -1062,7 +1062,7 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
         PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);
         PyObject* queries=PyLong_FromUnsignedLong(bank_queries);
         PyObject* pins=PyLong_FromUnsignedLong(bank_pins);
-        PyObject* policy=PyUnicode_FromString(which==4?"structural-v8":"explicit");
+        PyObject* policy=PyUnicode_FromString(which==4?"structural-v9":"explicit");
         PyObject* reason=PyUnicode_FromString(solver->auto_reason);
         if(!kernel || !tiles || !queries || !pins || !policy || !reason
                 || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0

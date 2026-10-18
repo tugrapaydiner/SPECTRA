@@ -1,6 +1,6 @@
 """Prospective multi-instance ITC-2007 exam-repair transfer suite.
 
-The structural-v8 selector is developed from the exposed synthetic panel,
+The structural-v9 selector is developed from the exposed synthetic panel,
 the retained failed-v3 confirmation, and the published ``set9`` transfer.  ``set10`` and ``set12`` are fixed holdout
 instances: their execution results must not be used to retune the policy.  This
 suite remains a bounded conflict-core repair study, not a full timetabling claim.
@@ -141,7 +141,7 @@ def freeze(root: Path, upstream_root: Path, *, cases: Iterable[SuiteCase] = DEFA
             "dataset_repository": transfer.DATASET_REPOSITORY,
             "dataset_commit": transfer.DATASET_COMMIT,
             "query_count_per_case": query_count,
-            "selector_policy": "structural-v8",
+            "selector_policy": "structural-v9",
             "selector_development_sources": [
                 "exposed synthetic graph panel",
                 "retained failed-v3 confirmation and v4 density sweep",
@@ -175,7 +175,7 @@ def load_manifest(root: Path) -> dict:
     if (manifest.get("schema") != SCHEMA
             or manifest.get("dataset_repository") != transfer.DATASET_REPOSITORY
             or manifest.get("dataset_commit") != transfer.DATASET_COMMIT
-            or manifest.get("selector_policy") not in ("structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v7", "structural-v8")
+            or manifest.get("selector_policy") not in ("structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v7", "structural-v8", "structural-v9")
             or type(manifest.get("query_count_per_case")) is not int
             or manifest["query_count_per_case"] < 1):
         raise ValueError("suite manifest identity differs")

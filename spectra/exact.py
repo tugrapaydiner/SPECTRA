@@ -479,10 +479,10 @@ class ExactRuntime:
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
         """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
 
-        The default ``auto`` mode uses structural policy v7. Banks of
+        The default ``auto`` mode uses structural policy v9. Banks of
         at most eight requests on graphs above 512 vertices take the exact raw
         path directly, and fixed contradictions stay raw. Dense high-pin work
-        stays raw before 64 requests and at every length below 256 vertices.
+        stays raw before 64 requests and at every length below 96 vertices.
         At exactly 64 requests, dense uncompressed graphs also remain raw.
         Other feasible banks of at least 64 requests use SCC; banks from eight
         requests use SCC earlier when SCCs compress the literal graph by at least
@@ -500,16 +500,25 @@ class ExactRuntime:
         native_mode = {'raw': 0, 'scc': 1, 'sparse': 2, 'route': 3, 'auto': 4}[mode]
         direct_reason = None
         if mode == 'auto' and len(packet) >= SESSION_PACKET_HEADER.size:
-            magic, vertices, _palette, _edges, rows, _pins, _r0, _r1 = (
+            magic, vertices, _palette, _edges, rows, pins, _r0, _r1 = (
                 SESSION_PACKET_HEADER.unpack_from(packet)
             )
-            if magic == SESSION_PACKET_MAGIC and rows <= 8 and vertices > 512:
-                native_mode = 0
-                direct_reason = 'large_tiny_bank'
+            if magic == SESSION_PACKET_MAGIC:
+                if rows <= 8 and vertices > 512:
+                    native_mode = 0
+                    direct_reason = 'large_tiny_bank'
+                elif (rows and pins >= 8 * rows
+                      and 24 * pins >= vertices * rows
+                      and (rows < 64 or vertices < 96)):
+                    native_mode = 0
+                    direct_reason = (
+                        'dense_sub96_high_pin' if vertices < 96
+                        else 'dense_pin_short'
+                    )
         values = self._module.solve_session_packet(packet, native_mode, max_bytes)
         output, count, sat, unsat, proof_bytes, visits, arcs, info = values
         if direct_reason is not None:
-            info = {**info, 'auto_policy': 'structural-v8',
+            info = {**info, 'auto_policy': 'structural-v9',
                     'selected_mode': 'raw',
                     'auto_policy_reason': direct_reason}
         info = {**info, 'backend': 'native-exact-binary', 'mode': mode,

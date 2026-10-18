@@ -31,8 +31,8 @@ MODES = ("raw", "scc", "route", "auto")
 DEVELOPMENT_COUNTS = (1, 8, 32, 63, 64, 65, 128, 1024)
 CONFIRMATION_COUNTS = (1, 8, 32, 64, 128, 1024)
 WARMUPS = 2
-SCHEMA = "spectra.auto_selector_benchmark.v5"
-POLICY = "structural-v8"
+SCHEMA = "spectra.auto_selector_benchmark.v6"
+POLICY = "structural-v9"
 
 
 @dataclass(frozen=True)
@@ -178,7 +178,7 @@ def generated_case(
         width=width,
         base_infeasible=base_infeasible,
     )
-    name = f"auto-v8-{family}-{regime}-n{n}"
+    name = f"auto-v9-{family}-{regime}-n{n}"
     return Case(
         name,
         name,
@@ -267,15 +267,16 @@ def development_cases() -> tuple[PanelCase, ...]:
 
 def confirmation_cases() -> tuple[PanelCase, ...]:
     result: list[PanelCase] = []
-    namespace = "SPECTRA-auto-selector-v8-confirmation"
+    namespace = "SPECTRA-auto-selector-v9-confirmation"
     regimes = (
-        ("strong-sparse", 320, 3, True, False, 0.0),
-        ("dense-small", 96, 12, False, False, 0.0),
-        ("dense-boundary-low", 120, 12, False, False, 0.0),
-        ("dense-boundary-high", 128, 12, False, False, 0.0),
-        ("dense-medium", 192, 12, False, False, 0.0),
-        ("edge-heavy-warmup", 768, 12, False, False, 5.0),
-        ("base-infeasible", 448, 4, False, True, 0.0),
+        ("strong-sparse", 336, 3, True, False, 0.0),
+        ("dense-sub96-small", 80, 12, False, False, 0.0),
+        ("dense-sub96-boundary", 95, 12, False, False, 0.0),
+        ("dense-at96", 96, 12, False, False, 0.0),
+        ("dense-above96", 112, 12, False, False, 0.0),
+        ("dense-medium", 176, 12, False, False, 0.0),
+        ("edge-heavy-warmup", 736, 12, False, False, 5.0),
+        ("base-infeasible", 432, 4, False, True, 0.0),
     )
     for family in FAMILIES:
         for regime, n, width, strong, infeasible, edge_factor in regimes:
@@ -311,8 +312,8 @@ def expected_policy(*, base: bool, pins: int, count: int, vertices: int,
     if not base:
         return "raw", "base_infeasible"
     if (pins >= 8 * count and 24 * pins >= vertices * count
-            and (count < 64 or vertices < 128)):
-        return "raw", "dense_tiny_high_pin" if vertices < 128 else "dense_pin_short"
+            and (count < 64 or vertices < 96)):
+        return "raw", "dense_sub96_high_pin" if vertices < 96 else "dense_pin_short"
     if count == 64 and components == 2 * vertices and edges >= 4 * vertices:
         return "raw", "dense_uncompressed_tile64"
     if count >= 64:

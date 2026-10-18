@@ -18,7 +18,7 @@ CASES = ("wap05a.col", "wap06a.col")
 COUNTS = (64, 128, 1024)
 REPEATS = 31
 SCHEMA = "spectra.auto_selector_wap_guard.v4"
-POLICY = "structural-v8"
+POLICY = "structural-v9"
 
 
 def gmean(values):
