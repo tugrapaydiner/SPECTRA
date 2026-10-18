@@ -3,7 +3,9 @@ name: apply-itc-selector-v4-compat
 on:
   push:
     branches: [performance/automatic-engine-selection]
-    paths: [.github/workflows/apply-itc-selector-v4-compat.yml]
+    paths:
+      - .github/workflows/apply-itc-selector-v4-compat.yml
+      - scripts/enable_itc_selector_v4.py
 
 permissions:
   contents: write
