@@ -40,14 +40,17 @@ jobs:
             experiments/compiled_query/test_exact.py \
             tests/public/test_auto_selector_v7.py \
             tests/public/test_exact_api.py
-          ! grep -nE 'structural-v6' \
+          if grep -nE 'structural-v6' \
             spectra/exact.py \
             experiments/compiled_query/exact.py \
             spectra/_native/exact_binary.cpp \
             experiments/compiled_query/exact_native.cpp \
             tests/public/test_auto_selector_v7.py \
             tests/public/test_exact_api.py \
-            experiments/compiled_query/test_exact.py
+            experiments/compiled_query/test_exact.py; then
+            echo 'stale v6 executable identity remains' >&2
+            exit 1
+          fi
           git diff --check
 
       - name: Build and run selector contracts
@@ -74,7 +77,7 @@ jobs:
           set -euo pipefail
           git config user.name 'Tugrap'
           git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
-          git add \
+          git add -A \
             spectra/_native/exact_binary.cpp \
             spectra/exact.py \
             experiments/compiled_query/exact_native.cpp \
