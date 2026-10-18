@@ -1,15 +1,20 @@
-name: validate-auto-selector-v4-wap
+name: validate-auto-selector-v5-wap
 
 on:
   push:
     branches: [performance/automatic-engine-selection]
-    paths: [.github/workflows/validate-auto-selector-wap.yml]
+    paths:
+      - .github/workflows/validate-auto-selector-wap.yml
+      - experiments/compiled_query/auto_selector_wap_guard.py
+      - experiments/compiled_query/AUTO_SELECTOR_V5_PROTOCOL_20261018.md
+      - spectra/_native/exact_binary.cpp
+      - tests/public/test_auto_selector_v5.py
 
 permissions:
   contents: read
 
 concurrency:
-  group: validate-auto-selector-v4-wap
+  group: validate-auto-selector-v5-wap
   cancel-in-progress: false
 
 env:
@@ -64,10 +69,16 @@ jobs:
           sha256sum \
             spectra/_native/exact_binary.cpp \
             experiments/compiled_query/auto_selector_wap_guard.py \
-            experiments/compiled_query/AUTO_SELECTOR_V4_PROTOCOL_20261018.md \
+            experiments/compiled_query/AUTO_SELECTOR_V5_PROTOCOL_20261018.md \
             > wap-selector-evidence/source-sha256.txt
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
-          grep -qi 'Structural auto policy v4' spectra/_native/exact_binary.cpp
+          grep -qi 'Structural auto policy v5' spectra/_native/exact_binary.cpp
+
+      - name: Run focused selector contracts
+        run: |
+          python -m pytest -q --confcutdir=tests/public \
+            tests/public/test_auto_selector_v5.py \
+            tests/public/test_exact_api.py
 
       - name: Acquire and verify exposed WAP development inputs
         shell: bash
@@ -119,7 +130,7 @@ jobs:
           from pathlib import Path
           import json
           result = json.loads(Path('wap-selector-evidence/results/results.json').read_text())
-          assert result['summary']['policy'] == 'structural-v4'
+          assert result['summary']['policy'] == 'structural-v5'
           assert result['summary']['pass'], result['summary']
           print(json.dumps(result['summary'], indent=2, sort_keys=True))
           PY
@@ -142,7 +153,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: auto-selector-v4-wap-${{ matrix.label }}-${{ github.run_id }}
+          name: auto-selector-v5-wap-${{ matrix.label }}-${{ github.run_id }}
           path: wap-selector-evidence/
           include-hidden-files: true
           retention-days: 90
