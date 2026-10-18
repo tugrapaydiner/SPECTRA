@@ -1,0 +1,43 @@
+{
+  "artifacts": {
+    "arm64": {
+      "artifact_id": 12125269318,
+      "zip_sha256": "b1a7dd203f6747eeaa5ff862cb4868316fa2d9f5394ba278418a120af8a3dd0a"
+    },
+    "x86_64": {
+      "artifact_id": 12125586385,
+      "zip_sha256": "af7bea5698344cbb52aba0c6f57ab11cc5841cc555b9c142e573ce75d46a17c5"
+    }
+  },
+  "classification": "failed prospective project-owned confirmation; now development evidence",
+  "environments": {
+    "arm64": {
+      "cells": 288,
+      "fraction_within_1_05": 0.9236111111111112,
+      "global_realized_regret_geomean": 1.0142929277839228,
+      "global_selection_regret_geomean": 1.0074542878131034,
+      "pass": false,
+      "rule_failures": [],
+      "worst_family_auto_raw_ratio": 0.8822163446391995,
+      "worst_group_regret": 1.029424712663712,
+      "worst_realized_regret": 1.09113844866112
+    },
+    "x86_64": {
+      "cells": 288,
+      "fraction_within_1_05": 0.9479166666666666,
+      "global_realized_regret_geomean": 1.010577696737279,
+      "global_selection_regret_geomean": 1.0053203816603493,
+      "pass": false,
+      "rule_failures": [],
+      "worst_family_auto_raw_ratio": 0.8732581366348441,
+      "worst_group_regret": 1.01902944645223,
+      "worst_realized_regret": 1.088852473215337
+    }
+  },
+  "failed_check": "fraction_within_1_05",
+  "failure_mechanism": "dense long banks with at least 128 vertices were routed to raw even when SCC tile64 was faster",
+  "policy": "structural-v6",
+  "schema": "spectra.auto_selector_confirmation_failure.v1",
+  "status": "failed",
+  "workflow_run": 39096807922
+}
