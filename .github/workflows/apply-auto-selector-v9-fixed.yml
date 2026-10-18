@@ -43,6 +43,16 @@ jobs:
           path.write_text(text.replace(old_end, new_end))
           PY
           python scripts/apply_auto_selector_v9.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/public/test_exact_api.py')
+          text = path.read_text()
+          old = "assert result.info['auto_policy'] == 'structural-v8'"
+          new = "assert result.info['auto_policy'] == 'structural-v9'"
+          if text.count(old) != 1:
+              raise RuntimeError('public auto-policy contract differs')
+          path.write_text(text.replace(old, new))
+          PY
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
           git diff --check
       - name: Run focused contracts
