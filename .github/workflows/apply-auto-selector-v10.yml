@@ -29,6 +29,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_auto_selector_v10.py')
+          text = path.read_text()
+          anchor = 'from textwrap import dedent\n'
+          helper = '''from textwrap import dedent\n\n\ndef _indent4(value: str) -> str:\n    return "\\n".join(("    " + line) if line else line for line in value.split("\\n"))\n'''
+          if text.count(anchor) != 1:
+              raise RuntimeError('migration import anchor differs')
+          text = text.replace(anchor, helper)
+          text = text.replace('    old_regimes = dedent(\n',
+                              '    old_regimes = _indent4(dedent(\n', 1)
+          text = text.replace('    )\n    new_regimes = dedent(\n',
+                              '    ))\n    new_regimes = _indent4(dedent(\n', 1)
+          text = text.replace('    )\n    if text.count(old_regimes) != 1:\n',
+                              '    ))\n    if text.count(old_regimes) != 1:\n', 1)
+          path.write_text(text)
+          PY
           python scripts/apply_auto_selector_v10.py
           cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
           git diff --check
