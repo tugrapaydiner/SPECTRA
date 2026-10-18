@@ -61,7 +61,7 @@ jobs:
             --solution upstream/ITC-2007-CETT/InitMethods/SolStore/set9_OBSIFeas_0.sol \
             --queries 1024 \
             --license upstream/ITC-2007-CETT/LICENSE \
-            --role development \
+            --evaluation-role development \
             --dataset-instance-path examtt-instances/Instances/set9.exam \
             --dataset-solution-path InitMethods/SolStore/set9_OBSIFeas_0.sol
           python - <<'PY' > balanced-evidence/library.txt
