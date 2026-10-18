@@ -79,6 +79,12 @@ public_exact.write_text(
     encoding="utf-8",
 )
 
+itc_transfer = Path("experiments/compiled_query/itc_exam_transfer.py")
+itc_transfer.write_text(
+    itc_transfer.read_text(encoding="utf-8").replace("structural-v6", "structural-v7"),
+    encoding="utf-8",
+)
+
 old_public = Path("tests/public/test_auto_selector_v6.py")
 if old_public.exists():
     old_public.unlink()
