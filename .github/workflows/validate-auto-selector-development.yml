@@ -1,0 +1,107 @@
+name: validate-auto-selector-development
+
+on:
+  push:
+    branches:
+      - performance/automatic-engine-selection
+    paths:
+      - .github/workflows/validate-auto-selector-development.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-auto-selector-development
+  cancel-in-progress: false
+
+env:
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONHASHSEED: '0'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  NUMEXPR_NUM_THREADS: '1'
+
+jobs:
+  development:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Install focused dependencies
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+
+      - name: Freeze source and environment receipts
+        run: |
+          mkdir -p selector-development
+          git diff --quiet
+          git diff --cached --quiet
+          git rev-parse HEAD > selector-development/source-commit.txt
+          git rev-parse HEAD^{tree} > selector-development/source-tree.txt
+          python -VV > selector-development/python.txt
+          python -m pip freeze > selector-development/environment.txt
+          uname -a > selector-development/platform.txt
+          lscpu > selector-development/cpu.txt
+          sha256sum \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/exact_native.cpp \
+            experiments/compiled_query/auto_selector_benchmark.py \
+            experiments/compiled_query/AUTO_SELECTOR_V3_PROTOCOL_20261018.md \
+            > selector-development/source-sha256.txt
+          cmp spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
+
+      - name: Run focused selector contracts
+        run: |
+          python -m pytest -q --confcutdir=tests/public \
+            tests/public/test_auto_selector_v3.py \
+            tests/public/test_exact_api.py \
+            tests/public/test_exact_bank_tile64.py
+
+      - name: Build the candidate runtime
+        run: |
+          python - <<'PY' > selector-development/library.txt
+          from spectra.exact import build_exact_runtime
+          print(build_exact_runtime('selector-development/native'))
+          PY
+
+      - name: Run the complete development oracle gate
+        run: |
+          python -m experiments.compiled_query.auto_selector_benchmark \
+            --library "$(cat selector-development/library.txt)" \
+            --panel development \
+            --out selector-development/results \
+            --repeats 17 \
+            2>&1 | tee selector-development/benchmark.log
+
+      - name: Hash retained evidence
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          root = Path('selector-development')
+          manifest = {}
+          for path in sorted(root.rglob('*')):
+              if path.is_file() and path.name != 'SHA256.json':
+                  manifest[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+          (root / 'SHA256.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+          PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: auto-selector-development-${{ github.run_id }}
+          path: selector-development/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
