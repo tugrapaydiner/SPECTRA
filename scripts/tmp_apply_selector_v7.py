@@ -73,11 +73,14 @@ if "test_auto_structural_v7_dense_long_boundary" not in text:
     text = text.replace(marker, new_test + marker)
 research_test.write_text(text, encoding="utf-8")
 
-public_exact = Path("tests/public/test_exact_api.py")
-public_exact.write_text(
-    public_exact.read_text(encoding="utf-8").replace("structural-v6", "structural-v7"),
-    encoding="utf-8",
-)
+for test_path in (
+    Path("tests/public/test_exact_api.py"),
+    Path("experiments/compiled_query/test_itc_exam_transfer.py"),
+):
+    test_path.write_text(
+        test_path.read_text(encoding="utf-8").replace("structural-v6", "structural-v7"),
+        encoding="utf-8",
+    )
 
 itc_transfer = Path("experiments/compiled_query/itc_exam_transfer.py")
 itc_transfer.write_text(
