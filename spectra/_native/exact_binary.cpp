@@ -391,11 +391,12 @@ struct Index {
             base[v]=static_cast<uint8_t>(comp[2*v]<comp[2*v+1]);
         }
         if(mode==4) {
-            // Structural auto policy v5. Dense request banks stay raw, but the
-            // density threshold is graph-relative. A separate warmup guard
-            // handles edge-heavy graphs with no SCC contraction before the
-            // quotient amortises. Selection consults immutable geometry only.
-            if(bad!=NIL) {
+            // Structural auto policy v6. Large tiny banks take the exact raw
+            // path directly at the public boundary; keep the same rule here for
+            // native callers. Remaining choices use immutable geometry only.
+            if(bank_size<=8 && n>512) {
+                condensed=false;routed=false;auto_reason="large_tiny_bank";
+            } else if(bad!=NIL) {
                 condensed=false;routed=false;auto_reason="base_infeasible";
             } else if(W(bank_pins)>=8*W(bank_size)
                     && W(24)*W(bank_pins)>=W(n)*W(bank_size)) {
@@ -1059,7 +1060,7 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
         PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);
         PyObject* queries=PyLong_FromUnsignedLong(bank_queries);
         PyObject* pins=PyLong_FromUnsignedLong(bank_pins);
-        PyObject* policy=PyUnicode_FromString(which==4?"structural-v5":"explicit");
+        PyObject* policy=PyUnicode_FromString(which==4?"structural-v6":"explicit");
         PyObject* reason=PyUnicode_FromString(solver->auto_reason);
         if(!kernel || !tiles || !queries || !pins || !policy || !reason
                 || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0

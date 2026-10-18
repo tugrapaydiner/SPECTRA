@@ -31,8 +31,8 @@ MODES = ("raw", "scc", "route", "auto")
 DEVELOPMENT_COUNTS = (1, 8, 32, 63, 64, 65, 128, 1024)
 CONFIRMATION_COUNTS = (1, 8, 32, 64, 128, 1024)
 WARMUPS = 2
-SCHEMA = "spectra.auto_selector_benchmark.v3"
-POLICY = "structural-v5"
+SCHEMA = "spectra.auto_selector_benchmark.v4"
+POLICY = "structural-v6"
 
 
 @dataclass(frozen=True)
@@ -267,7 +267,7 @@ def development_cases() -> tuple[PanelCase, ...]:
 
 def confirmation_cases() -> tuple[PanelCase, ...]:
     result: list[PanelCase] = []
-    namespace = "SPECTRA-auto-selector-v5-confirmation"
+    namespace = "SPECTRA-auto-selector-v6-confirmation"
     regimes = (
         ("strong-sparse", 320, 2, True, False, 0.0),
         ("below-density", 640, 25, False, False, 0.0),
@@ -306,6 +306,8 @@ def decisions(payload: bytes, n: int, count: int) -> tuple[int, ...]:
 
 def expected_policy(*, base: bool, pins: int, count: int, vertices: int,
                     edges: int, components: int) -> tuple[str, str]:
+    if count <= 8 and vertices > 512:
+        return "raw", "large_tiny_bank"
     if not base:
         return "raw", "base_infeasible"
     if pins >= 8 * count and 24 * pins >= vertices * count:
@@ -381,7 +383,7 @@ def run(library: Path, panel: str, destination: Path, repeats: int) -> dict:
                 samples = {mode: [] for mode in MODES}
                 hashes = {mode: set() for mode in MODES}
                 schedule = random.Random(seed_for(
-                    "SPECTRA-auto-selector-v5-schedule",
+                    "SPECTRA-auto-selector-v6-schedule",
                     f"{panel}/{case.name}/{count}",
                 ))
                 for _ in range(repeats):

@@ -479,12 +479,13 @@ class ExactRuntime:
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
         """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
 
-        The default ``auto`` mode uses structural policy v5. It keeps a
-        base-infeasible graph on raw traversal. A request bank also stays raw
-        when it averages at least eight pins per request and those pins cover at
-        least one original vertex in 24, or when an uncompressed graph with at
-        least four original edges per vertex has at most 128 requests. Feasible
-        banks of at least 64 requests otherwise use SCC; banks from eight
+        The default ``auto`` mode uses structural policy v6. Banks of
+        at most eight requests on graphs above 512 vertices take the exact raw
+        path directly. Other base-infeasible graphs stay raw. A request bank also
+        stays raw when it averages at least eight pins per request and those pins
+        cover at least one original vertex in 24, or when an uncompressed graph
+        with at least four original edges per vertex has at most 128 requests.
+        Feasible banks of at least 64 requests otherwise use SCC; banks from eight
         requests use SCC earlier when SCCs compress the literal graph by at least
         fourfold. Selection uses immutable graph/request geometry only, never
         answers or measured timings. ``info['selected_mode']`` and
@@ -497,9 +498,21 @@ class ExactRuntime:
             raise ValueError('mode must be scc, raw, sparse, route or auto')
         if type(max_bytes) is not int or not (1 << 20) <= max_bytes <= MAX_BYTES:
             raise ValueError('max_bytes must be an exact uint64 of at least 1 MiB')
-        values = self._module.solve_session_packet(
-            packet, {'raw': 0, 'scc': 1, 'sparse': 2, 'route': 3, 'auto': 4}[mode], max_bytes)
+        native_mode = {'raw': 0, 'scc': 1, 'sparse': 2, 'route': 3, 'auto': 4}[mode]
+        direct_reason = None
+        if mode == 'auto' and len(packet) >= SESSION_PACKET_HEADER.size:
+            magic, vertices, _palette, _edges, rows, _pins, _r0, _r1 = (
+                SESSION_PACKET_HEADER.unpack_from(packet)
+            )
+            if magic == SESSION_PACKET_MAGIC and rows <= 8 and vertices > 512:
+                native_mode = 0
+                direct_reason = 'large_tiny_bank'
+        values = self._module.solve_session_packet(packet, native_mode, max_bytes)
         output, count, sat, unsat, proof_bytes, visits, arcs, info = values
+        if direct_reason is not None:
+            info = {**info, 'auto_policy': 'structural-v6',
+                    'selected_mode': 'raw',
+                    'auto_policy_reason': direct_reason}
         info = {**info, 'backend': 'native-exact-binary', 'mode': mode,
                 'exact_api_version': EXACT_API_VERSION, 'native_abi': EXACT_NATIVE_ABI,
                 'prepared_input': True, 'input_schema': 'SBC1',
