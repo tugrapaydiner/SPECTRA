@@ -1,0 +1,49 @@
+{
+  "classification": "project-owned development and prospective confirmation evidence; not outside replication",
+  "date": "2026-10-18",
+  "development": {
+    "artifact_id": 12122076171,
+    "cells": 384,
+    "fraction_within_1_05": 0.984375,
+    "global_realized_regret_geomean": 1.0051010322365144,
+    "global_selection_regret_geomean": 1.0043233331406218,
+    "pass": true,
+    "worst_group_regret": 1.0196936066974411,
+    "worst_realized_regret": 1.0781106594991479,
+    "workflow_run": 39088861752
+  },
+  "prospective_confirmation": {
+    "arm64": {
+      "artifact_id": 12122157779,
+      "artifact_zip_sha256": "d2f3ea4f73202c616c0437e1f6302461cde96c03e5ced99dbafed4b39158a9c7",
+      "cells": 160,
+      "fraction_within_1_05": 0.875,
+      "global_realized_regret_geomean": 1.0163219166456148,
+      "global_selection_regret_geomean": 1.0147536333519245,
+      "pass": false,
+      "worst_group_regret": 1.0371240101730956,
+      "worst_realized_regret": 1.1502479342086416
+    },
+    "source_commit": "81b4b6fe60abbcacf80722a117eccd556d0d83fb",
+    "workflow_run": 39089238933,
+    "x86_64": {
+      "artifact_id": 12122306101,
+      "artifact_zip_sha256": "317d6b60306db5ea30c43dbbc4f661994dff0a4e0a8672ef91b3c82467580b65",
+      "cells": 160,
+      "fraction_within_1_05": 0.90625,
+      "global_realized_regret_geomean": 1.0114533213338337,
+      "global_selection_regret_geomean": 1.0109368781598087,
+      "pass": false,
+      "worst_group_regret": 1.0334927901990314,
+      "worst_realized_regret": 1.1306118638483864
+    }
+  },
+  "root_cause": {
+    "failed_regime": "15.09 pins per request over 1024 vertices (1.47% density)",
+    "reason": "absolute high-pin threshold selected raw despite low graph-relative density",
+    "wap_guard": "failed before timing at wap05a.col/64 because auto selected raw"
+  },
+  "schema": "spectra.auto_selector_v3.result.v1",
+  "status": "failed_and_superseded",
+  "workflow_status_note": "confirmation command was piped through tee without pipefail; stored summary.pass=false is authoritative"
+}
