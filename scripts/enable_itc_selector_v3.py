@@ -8,11 +8,19 @@ if text.count(old_workflow) != 1:
     raise RuntimeError("stale ITC transfer workflow inventory entry differs")
 text = text.replace(old_workflow, "")
 
-old_allowed = 'or policy not in ("explicit", "structural-v2")'
-new_allowed = 'or policy not in ("explicit", "structural-v2", "structural-v3")'
-old_auto = 'or (mode == "auto" and policy != "structural-v2")'
-new_auto = 'or (mode == "auto" and policy not in ("structural-v2", "structural-v3"))'
-if text.count(old_allowed) != 1 or text.count(old_auto) != 1:
-    raise RuntimeError("ITC selector-policy audit block differs")
-text = text.replace(old_allowed, new_allowed).replace(old_auto, new_auto)
+replacements = {
+    'or current["auto_policy"] not in ("explicit", "structural-v2")':
+        'or current["auto_policy"] not in ("explicit", "structural-v2", "structural-v3")',
+    'or (mode == "auto" and current["auto_policy"] != "structural-v2")':
+        'or (mode == "auto" and current["auto_policy"] not in ("structural-v2", "structural-v3"))',
+    'or policy not in ("explicit", "structural-v2")':
+        'or policy not in ("explicit", "structural-v2", "structural-v3")',
+    'or (mode == "auto" and policy != "structural-v2")':
+        'or (mode == "auto" and policy not in ("structural-v2", "structural-v3"))',
+}
+for old, new in replacements.items():
+    if text.count(old) != 1:
+        raise RuntimeError(f"ITC selector-policy check differs: {old}")
+    text = text.replace(old, new)
+
 path.write_text(text, encoding="utf-8")
