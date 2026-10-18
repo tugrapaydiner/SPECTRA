@@ -59,7 +59,6 @@ SOURCE_PATHS = (
     Path("experiments/compiled_query/test_itc_exam_suite.py"),
     Path("experiments/compiled_query/ITC_EXAM_TRANSFER_PROTOCOL.md"),
     Path("experiments/compiled_query/ITC_EXAM_SUITE_PROTOCOL.md"),
-    Path(".github/workflows/itc-exam-transfer.yml"),
     Path(".github/workflows/itc-exam-suite.yml"),
 )
 
@@ -528,9 +527,9 @@ def run(root: Path) -> dict:
                                     "bank_pin_count", "bank_tiles"))
                 or current["selected_mode"] not in ("raw", "scc", "route")
                 or current["bank_kernel"] not in ("serial", "tile64")
-                or current["auto_policy"] not in ("explicit", "structural-v2")
+                or current["auto_policy"] not in ("explicit", "structural-v4")
                 or type(current["auto_policy_reason"]) is not str
-                or (mode == "auto" and current["auto_policy"] != "structural-v2")
+                or (mode == "auto" and current["auto_policy"] != "structural-v4")
                 or (mode != "auto" and (current["selected_mode"] != mode
                                          or current["auto_policy"] != "explicit"))):
             raise AssertionError(f"{mode} returned inconsistent metadata")
@@ -636,9 +635,9 @@ def audit(root: Path) -> dict:
                        for name in ("visited", "arcs_scanned", "bank_pin_count", "bank_tiles"))
                 or item.get("bank_kernel") not in ("serial", "tile64")
                 or selected not in ("raw", "scc", "route")
-                or policy not in ("explicit", "structural-v2")
+                or policy not in ("explicit", "structural-v2", "structural-v3", "structural-v4")
                 or type(reason) is not str
-                or (mode == "auto" and policy != "structural-v2")
+                or (mode == "auto" and policy not in ("structural-v2", "structural-v3", "structural-v4"))
                 or (mode != "auto" and (selected != mode or policy != "explicit"))):
             raise ValueError(f"{mode} metadata differs from certified output")
         if decisions is None:
