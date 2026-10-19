@@ -450,8 +450,7 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
                           if index % 3 and rng.random() < .3))
     rows = tuple(rows)
     expected = []
-    # The bank averages well above eight pins per request, so structural-v2
-    # intentionally selects raw rather than paying for tile64 propagation.
+    # This small compressed bank is proof-heavy, so structural-v10 keeps raw.
     expected_mode = 'raw' if mode == 'auto' else mode
     with exact_runtime.prepare(p, mode=expected_mode) as session:
         for query in rows:
@@ -464,51 +463,84 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
         assert answer.sat_count == count and answer.proof_bytes == 0
         if mode == 'auto':
             assert answer.info['selected_mode'] == 'raw'
-            assert answer.info['auto_policy'] == 'structural-v2'
-            assert answer.info['auto_policy_reason'] == 'high_pin_density'
+            assert answer.info['auto_policy'] == 'structural-v10'
+            assert answer.info['auto_policy_reason'] == 'dense_small_compressed'
         assert decode_certified_output(answer.output, n, count) == tuple(expected[:count])
 
 
-def test_auto_structural_v2_freezes_the_eight_pin_density_boundary(exact_runtime):
-    p = BinaryListProblem.create(16, 2, (), (3,) * 16)
-    low_rows = tuple(tuple((v, 3) for v in range(7)) for _ in range(64))
-    high_rows = tuple(tuple((v, 3) for v in range(8)) for _ in range(64))
-    low = exact_runtime.solve_session_packet(pack_session_packet(p, low_rows), mode='auto')
-    high = exact_runtime.solve_session_packet(pack_session_packet(p, high_rows), mode='auto')
-    assert low.info['selected_mode'] == 'scc'
-    assert low.info['auto_policy_reason'] == 'scc_tile64'
-    assert low.info['bank_query_count'] == 64 and low.info['bank_pin_count'] == 448
-    assert high.info['selected_mode'] == 'raw'
-    assert high.info['auto_policy_reason'] == 'high_pin_density'
-    assert high.info['bank_query_count'] == 64 and high.info['bank_pin_count'] == 512
-    assert high.output == exact_runtime.solve_session_packet(
-        pack_session_packet(p, high_rows), mode='raw').output
-
+def test_auto_distinguishes_small_compressed_and_uncompressed_dense_banks(exact_runtime):
+    independent = BinaryListProblem.create(16, 2, (), (3,) * 16)
+    path = BinaryListProblem.create(
+        16, 2, tuple((vertex, vertex + 1) for vertex in range(15)), (3,) * 16
+    )
+    rows = tuple(tuple((vertex, 3) for vertex in range(8)) for _ in range(64))
+    uncompressed = exact_runtime.solve_session_packet(
+        pack_session_packet(independent, rows), mode='auto')
+    compressed = exact_runtime.solve_session_packet(
+        pack_session_packet(path, rows), mode='auto')
+    assert uncompressed.info['components'] == 2 * independent.n
+    assert uncompressed.info['selected_mode'] == 'scc'
+    assert uncompressed.info['auto_policy_reason'] == 'scc_long_bank'
+    assert compressed.info['components'] < 2 * path.n
+    assert compressed.info['selected_mode'] == 'raw'
+    assert compressed.info['auto_policy'] == 'structural-v10'
+    assert compressed.info['auto_policy_reason'] == 'dense_small_compressed'
 
 @pytest.mark.parametrize('count', (0, 1, 63, 64, 65, 129))
 @pytest.mark.parametrize('structure', ('empty', 'independent', 'chain', 'odd_cycle'))
 def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, count, structure):
     n = 0 if structure == 'empty' else 9
-    edges = () if structure in ('empty', 'independent') else tuple((v, v+1) for v in range(n-1))
+    edges = () if structure in ('empty', 'independent') else tuple(
+        (v, v + 1) for v in range(n - 1)
+    )
     if structure == 'odd_cycle':
-        edges += ((0, n-1),)
+        edges += ((0, n - 1),)
     p = BinaryListProblem.create(n, 2, edges, (3,) * n)
-    requests = ((),) if not n else ((), ((0, 1),), ((0, 1), (1, 1)), ((0, 0),))
+    requests = ((),) if not n else (
+        (), ((0, 1),), ((0, 1), (1, 1)), ((0, 0),)
+    )
     rows = tuple(requests[i % len(requests)] for i in range(count))
     packet = pack_session_packet(p, rows)
     answer = exact_runtime.solve_session_packet(packet, mode='auto')
-    selected = ('raw' if count < 64 or structure == 'odd_cycle' else
-                'route' if structure in ('chain', 'empty') else 'scc')
+    pins = sum(map(len, rows))
+
+    if structure == 'odd_cycle':
+        selected, reason = 'raw', 'base_infeasible'
+    else:
+        components = {'empty': 0, 'independent': 18, 'chain': 2}[structure]
+        high_pin = bool(count and pins >= 8 * count
+                        and 24 * pins >= n * count)
+        if high_pin and count < 64:
+            selected, reason = 'raw', 'dense_pin_short'
+        elif high_pin and n < 96 and components < 2 * n:
+            selected, reason = 'raw', 'dense_small_compressed'
+        elif count == 64 and components == 2 * n and len(edges) >= 4 * n:
+            selected, reason = 'raw', 'dense_uncompressed_tile64'
+        elif count >= 64:
+            selected, reason = 'scc', 'scc_long_bank'
+        elif count >= 8 and 2 * components <= n:
+            selected, reason = 'scc', 'scc_strong_compression'
+        else:
+            selected, reason = 'raw', 'short_weak_compression'
+
     assert answer.info['mode'] == 'auto'
-    assert answer.info['auto_policy'] == 'structural-v2'
+    assert answer.info['auto_policy'] == 'structural-v10'
+    assert answer.info['auto_policy_reason'] == reason
     assert answer.info['bank_query_count'] == count
     assert answer.info['selected_mode'] == selected
-    assert answer.output == exact_runtime.solve_session_packet(packet, mode=selected).output
-    for query, (decision, labels, certificate) in zip(rows, decode_certified_output(answer.output, n, count)):
+    assert answer.output == exact_runtime.solve_session_packet(
+        packet, mode=selected
+    ).output
+    for query, (decision, labels, certificate) in zip(
+            rows, decode_certified_output(answer.output, n, count)):
         assert bool(decision) == bool(brute(p, query))
-        assert verify_answer(p, query, 'SAT_VERIFIED' if decision else 'UNSAT_VERIFIED',
-                             labels if decision else b'', certificate)
-
+        assert verify_answer(
+            p,
+            query,
+            'SAT_VERIFIED' if decision else 'UNSAT_VERIFIED',
+            labels if decision else b'',
+            certificate,
+        )
 
 def test_auto_does_not_hide_malformed_packets_or_resource_limits(exact_runtime):
     p = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))

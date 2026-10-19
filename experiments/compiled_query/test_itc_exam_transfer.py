@@ -86,6 +86,7 @@ def test_freeze_run_and_independent_audit(tmp_path, monkeypatch):
     assert manifest["dataset_solution_path"] == "fixtures/custom.sol"
     assert manifest["evaluation_role"] == "holdout"
     assert manifest["warmups"] == 0 and manifest["repeats"] == 2
+    assert manifest["timing_schedule"] == transfer.timing_schedule(0, 2)
     record = transfer.run(root)
     assert tuple(record["modes"]) == transfer.MODES
     assert record["warmups"] == 0
@@ -104,7 +105,7 @@ def test_freeze_run_and_independent_audit(tmp_path, monkeypatch):
     assert result["warmups"] == 0 and result["repeats"] == 2
     assert result["auto_vs_raw_median_ratio"] > 0
     assert all(item["sat"] + item["unsat"] == 8 for item in result["modes"].values())
-    assert result["modes"]["auto"]["auto_policy"] == "structural-v2"
+    assert result["modes"]["auto"]["auto_policy"] == "structural-v10"
     assert result["modes"]["auto"]["bank_query_count"] == 8
     assert result["modes"]["raw"]["auto_policy"] == "explicit"
     assert json.loads((root / "audit.json").read_text()) == result

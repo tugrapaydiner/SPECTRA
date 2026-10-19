@@ -31,14 +31,14 @@ from spectra.exact import (
 from spectra.exact_proof import decode_proof
 from spectra.itc2007_exam import ITCExamInstance, parse_itc2007_exam
 
-SCHEMA = "spectra.itc2007.exam_repair_transfer.v1"
+SCHEMA = "spectra.itc2007.exam_repair_transfer.v2"
 DATASET_REPOSITORY = "davidvanbulck/ITC-2007-CETT"
 DATASET_COMMIT = "ed2d4c0cf5302b77a8b321cd0380de0bb579d538"
 DEFAULT_INSTANCE = "examtt-instances/Instances/set9.exam"
 DEFAULT_SOLUTION = "InitMethods/SolStore/set9_OBSIFeas_0.sol"
 MODES = ("auto", "raw", "scc", "route")
-WARMUPS = 1
-REPEATS = 5
+WARMUPS = 8
+REPEATS = 32
 MAX_INPUT_BYTES = 64 << 20
 SOURCE_PATHS = (
     Path("pyproject.toml"), Path("README.md"),
@@ -59,9 +59,17 @@ SOURCE_PATHS = (
     Path("experiments/compiled_query/test_itc_exam_suite.py"),
     Path("experiments/compiled_query/ITC_EXAM_TRANSFER_PROTOCOL.md"),
     Path("experiments/compiled_query/ITC_EXAM_SUITE_PROTOCOL.md"),
-    Path(".github/workflows/itc-exam-transfer.yml"),
+    Path("experiments/compiled_query/ITC_EXAM_TRANSFER_REVALIDATION_20261019.md"),
+    Path("experiments/compiled_query/AUTO_SELECTOR_V10_REVALIDATION_20261019.md"),
     Path(".github/workflows/itc-exam-suite.yml"),
 )
+
+def timing_schedule(warmups: int, repeats: int) -> str:
+    return (
+        f"{warmups} warmups per mode; {repeats} measured repetitions "
+        "rotate modes by repetition"
+    )
+
 
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -377,7 +385,7 @@ def freeze(root: Path, instance_path: Path, solution_path: Path, *, query_count:
             "modes": MODES,
             "warmups": WARMUPS,
             "repeats": REPEATS,
-            "timing_schedule": "one warmup per mode; measured modes rotate by repetition",
+            "timing_schedule": timing_schedule(WARMUPS, REPEATS),
             "timing_scope": (
                 "ready immutable SBC1 through construction, decisions, full evidence, "
                 "independent native check, SCQ2 materialization and disposal"
@@ -403,7 +411,7 @@ def load_manifest(root: Path) -> dict:
             or type(manifest.get("repeats")) is not int or manifest["repeats"] < 1
             or type(manifest.get("query_count")) is not int or manifest["query_count"] < 1
             or manifest.get("timing_schedule")
-            != "one warmup per mode; measured modes rotate by repetition"):
+            != timing_schedule(manifest["warmups"], manifest["repeats"])):
         raise ValueError("transfer manifest schema, modes or schedule differ")
     if (manifest.get("dataset_repository") != DATASET_REPOSITORY
             or manifest.get("dataset_commit") != DATASET_COMMIT
@@ -528,9 +536,9 @@ def run(root: Path) -> dict:
                                     "bank_pin_count", "bank_tiles"))
                 or current["selected_mode"] not in ("raw", "scc", "route")
                 or current["bank_kernel"] not in ("serial", "tile64")
-                or current["auto_policy"] not in ("explicit", "structural-v2")
+                or current["auto_policy"] not in ("explicit", "structural-v10")
                 or type(current["auto_policy_reason"]) is not str
-                or (mode == "auto" and current["auto_policy"] != "structural-v2")
+                or (mode == "auto" and current["auto_policy"] != "structural-v10")
                 or (mode != "auto" and (current["selected_mode"] != mode
                                          or current["auto_policy"] != "explicit"))):
             raise AssertionError(f"{mode} returned inconsistent metadata")
@@ -636,9 +644,9 @@ def audit(root: Path) -> dict:
                        for name in ("visited", "arcs_scanned", "bank_pin_count", "bank_tiles"))
                 or item.get("bank_kernel") not in ("serial", "tile64")
                 or selected not in ("raw", "scc", "route")
-                or policy not in ("explicit", "structural-v2")
+                or policy not in ("explicit", "structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v10")
                 or type(reason) is not str
-                or (mode == "auto" and policy != "structural-v2")
+                or (mode == "auto" and policy not in ("structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v10"))
                 or (mode != "auto" and (selected != mode or policy != "explicit"))):
             raise ValueError(f"{mode} metadata differs from certified output")
         if decisions is None:

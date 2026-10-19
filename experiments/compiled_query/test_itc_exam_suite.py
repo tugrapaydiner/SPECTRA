@@ -53,7 +53,16 @@ def test_suite_freeze_run_and_audit(tmp_path, monkeypatch):
     result = suite.audit(root)
     assert result["functional_complete"]
     assert result["holdout_gate_pass"]
+    assert result["selector_guard_pass"]
+    assert result["selector_failures"] == []
     assert result["holdout_failures"] == []
+    assert result["development_failures"] == []
+    assert result["cases"][0]["selector_guard_pass"]
+    assert result["cases"][0]["holdout_gate_pass"] is None
+    assert all(
+        case["holdout_gate_pass"] is True
+        for case in result["cases"][1:]
+    )
     assert all(case["queries"] == 8 for case in result["cases"])
     assert all(case["auto_vs_raw_paired_median_ratio"] > 0 for case in result["cases"])
     assert json.loads((root / "suite-audit.json").read_text()) == result

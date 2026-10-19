@@ -1,91 +1,55 @@
 # Prospective ITC-2007 exam-repair suite protocol
 
-**Status:** frozen before executing the `set10` and `set12` result panels.  The
-selector may be falsified by these holdouts, but it must not be retuned inside the
-same suite.
+**Status:** the `set10` and `set12` executions are frozen holdouts.
+Their outcomes may falsify the selector but may not retune it inside
+the same suite. `set9` is development evidence and is reported
+separately from the holdout gate.
 
-## Purpose
+## Fixed cases
 
-The first application transfer used `set9` and exposed an important limitation:
-the original automatic policy selected the SCC engine even though the explicit raw
-engine was faster on that dense repair bank.  The structural-v2 policy adds one
-answer-independent rule:
+| Case | Role | Expected engine |
+|---|---|---|
+| `set9-development` | Development | `scc` |
+| `set10-holdout` | Prospective holdout | `scc` |
+| `set12-holdout` | Prospective holdout | `raw` |
 
-> For a bank of at least 64 requests, use raw traversal when the immutable request
-> packet contains at least eight pins per request on average.
+Every case uses the published ITC-2007 instance and feasible schedule
+from `davidvanbulck/ITC-2007-CETT` at commit
+`ed2d4c0cf5302b77a8b321cd0380de0bb579d538`. The original hard
+constraints are checked before deriving the bounded conflict-core
+repair problem. No upstream data is committed to SPECTRA.
 
-The threshold was chosen from the already exposed synthetic development panel and
-the `set9` development transfer.  It depends only on packet geometry, not SAT/UNSAT
-answers, proof sizes, or measured times.  Short banks, base-infeasible graphs and
-the prior SCC/component rules retain their previous ordering.
+## Frozen selector identity
 
-## Fixed external source
+The suite evaluates `structural-v10`. Selection depends only on the
+immutable graph and request geometry. It never observes answers,
+proof sizes, or measured times. The two holdout results cannot alter
+the policy, expected engines, cases, query banks, or thresholds.
 
-Every workflow checks out `davidvanbulck/ITC-2007-CETT` at commit
-`ed2d4c0cf5302b77a8b321cd0380de0bb579d538` and retains its `LICENSE` in each
-case directory.  No upstream data is committed to SPECTRA.
+## Timing schedule
 
-The fixed cases are:
+Each mode receives eight untimed warmups. There are 32 measured
+repetitions. The four modes rotate through complete four-position
+blocks, so every mode appears first, second, third, and fourth an
+equal number of times.
 
-| Case | Role | Instance | Published feasible schedule |
-|---|---|---|---|
-| `set9-development` | Development | `examtt-instances/Instances/set9.exam` | `InitMethods/SolStore/set9_OBSIFeas_0.sol` |
-| `set10-holdout` | Prospective holdout | `examtt-instances/Instances/set10.exam` | `InitMethods/SolStore/set10_OBSIFeas_0.sol` |
-| `set12-holdout` | Prospective holdout | `examtt-instances/Instances/set12.exam` | `InitMethods/SolStore/set12_OBSIFeas_0.sol` |
+Per repetition, the suite pairs `auto` with the relevant explicit
+control and reports medians of paired ratios. The predeclared limits
+are:
 
-The bytes are public, so “holdout” means **execution holdout**, not secret data:
-no selector-v2 answer or timing from `set10` or `set12` may influence the committed
-policy or acceptance threshold.
+- an expected `scc` case must select `scc`, have paired
+  `auto/scc <= 1.03`, and demonstrate `scc/raw <= 0.98`;
+- an expected `raw` holdout must select `raw` and have paired
+  `auto/raw <= 1.05`.
 
-## Per-case construction
+The strict `selector_guard_pass` covers every case. The
+`holdout_gate_pass` covers only true holdouts. Development failures
+are retained under `development_failures`; they are never mislabeled
+as holdout failures.
 
-Each case uses the exact construction in
-[`ITC_EXAM_TRANSFER_PROTOCOL.md`](ITC_EXAM_TRANSFER_PROTOCOL.md): validate the
-published schedule against all original hard constraints, freeze exams involved in
-unsupported hard constraints, assign one deterministic duration-compatible
-alternative to eligible exams, build the shared-student/`EXCLUSION` conflict core,
-and generate 1,024 unique deterministic repair events.
+## Evidence boundary
 
-Every event is answered by `auto`, `raw`, `scc`, and `route`.  Completed answers
-must include a full assignment or portable contradiction proof and must replay from
-the original `SBC1` packet without native code.
-
-## Timing schedule and prospective gate
-
-Each engine receives one untimed warmup.  In each of five measured repetitions the
-engine order rotates, preventing one mode from always running first or last:
-
-1. `auto, raw, scc, route`
-2. `raw, scc, route, auto`
-3. `scc, route, auto, raw`
-4. `route, auto, raw, scc`
-5. repeat from the first order
-
-For every holdout, pair `auto` and `raw` by repetition and compute the median of the
-five `auto_elapsed / raw_elapsed` ratios.  The predeclared guardrail is:
-
-```text
-paired-median auto/raw ratio <= 1.15
-```
-
-This is a bounded overhead guardrail, not a speedup claim.  Development-case timing
-is reported but cannot pass or fail the prospective gate.  Failed holdouts remain
-in the artifact and may not be removed, renamed, rerun under a changed threshold,
-or converted to development cases.
-
-## Evidence and audit
-
-The suite manifest binds:
-
-- source commit and per-case source inventory;
-- upstream repository and commit;
-- exact instance and solution paths and SHA-256 identities;
-- development/holdout role;
-- selector policy and threshold;
-- per-case manifest hashes.
-
-The suite audit reruns every child audit, checks every result and proof, checks the
-rotated timing schedule, computes paired ratios from recorded repetitions, and
-publishes all failures.  A successful result is still project-owned execution, not
-outside-team replication, operator adoption, full ITC-2007 feasibility, or
-algorithmic-priority evidence.
+Every completed answer contains a full assignment or portable
+contradiction proof and is replayed from the original `SBC1` packet.
+The evidence remains a bounded conflict-core repair study, not full
+ITC-2007 feasibility, optimization, outside replication, or adoption.
