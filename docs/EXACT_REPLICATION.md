@@ -26,7 +26,7 @@ replication.
 
 ## Requirements
 
-- GIL-enabled CPython on a supported Linux or Windows x64 environment;
+- GIL-enabled CPython on Linux x86-64 or ARM64, or Windows x64;
 - a local C++17 compiler (`g++` on Linux or an x64 MSVC developer environment on
   Windows);
 - enough space for a small native build and evidence directory; and

@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 record = load_file(args.witness, max_bytes=args.max_json_bytes)
                 if type(record) is not dict or type(record.get("witness")) is not list:
-                    raise ValueError("expected a JSON object containing a Boolean-list witness field")
+                    raise ValueError("expected a JSON object containing a Boolean-list witness")
                 if "formula_sha256" in record and record["formula_sha256"] != problem.sha256():
                     raise ValueError("witness report belongs to a different formula")
                 violated = problem.violated(tuple(record["witness"]))

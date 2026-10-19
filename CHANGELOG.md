@@ -89,3 +89,6 @@ output-only CPU inference interface with checked final-output equivalence.
 Measurements retain small-case regressions, increased cold allocation and the
 `UNKNOWN` large-case outcomes. No external SAT superiority or learned-capability
 improvement was established. See [the efficiency guide](docs/EFFICIENCY_GUIDE.md).
+
+Earlier packaging and compact-state work is described in
+[current status](docs/STATUS.md) and the [history index](docs/history/README.md).

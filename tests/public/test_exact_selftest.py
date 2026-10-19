@@ -14,8 +14,8 @@ import sys
 
 import pytest
 
-from spectra.evidence import verify
-from spectra.exact_selftest import AUDIT_SCHEMA, SCHEMA
+from spectra.evidence import capture, verify
+from spectra.exact_selftest import AUDIT_SCHEMA, SCHEMA, verify_exact_selftest
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -33,6 +33,22 @@ def _run(*arguments: object) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         check=False,
     )
+
+
+def _refresh_manifest(root: Path) -> None:
+    path = root / "SHA256.json"
+    old = json.loads(path.read_text(encoding="utf-8"))
+    manifest = capture(root, old["artifacts"])
+    path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_audit_refuses_an_already_loaded_native_module(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, "_spectra_exact_binary", object())
+    with pytest.raises(RuntimeError, match="fresh process"):
+        verify_exact_selftest(tmp_path)
 
 
 @pytest.mark.skipif(
@@ -138,6 +154,21 @@ def test_cli_exact_selftest_and_fresh_no_native_audit(tmp_path):
     assert extra.returncode == 2
     assert "unbound or missing" in extra.stderr.lower()
     unbound.unlink()
+
+    report_path = root / "selftest.json"
+    original_report = report_path.read_text(encoding="utf-8")
+    forged = json.loads(original_report)
+    forged["platform"] = "forged-platform"
+    report_path.write_text(
+        json.dumps(forged, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    _refresh_manifest(root)
+    environment_mismatch = _run("exact", "audit", root)
+    assert environment_mismatch.returncode == 2
+    assert "reported platform differs" in environment_mismatch.stderr.lower()
+    report_path.write_text(original_report, encoding="utf-8")
+    _refresh_manifest(root)
 
     output = root / cases["mixed-current-query"]["output"]
     payload = output.read_bytes()

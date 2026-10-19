@@ -65,6 +65,15 @@ def test_cli_exact_compare_accepts_environment_changes_but_rejects_semantic_drif
         json.dumps(second_report, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    second_receipt_path = second / second_report["build"]["receipt"]
+    second_receipt = json.loads(
+        second_receipt_path.read_text(encoding="utf-8")
+    )
+    second_receipt["platform"] = "different-test-platform"
+    second_receipt_path.write_text(
+        json.dumps(second_receipt, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     _refresh_manifest(second)
 
     compared = _run("exact", "compare", first, second)

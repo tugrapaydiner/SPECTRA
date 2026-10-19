@@ -445,6 +445,13 @@ def verify_exact_selftest(
     )
     _require(receipt["exact_api_version"] == EXACT_API_VERSION, "receipt API differs")
     _require(receipt["native_abi"] == EXACT_NATIVE_ABI, "receipt ABI differs")
+    _require(receipt["python_implementation"] == "CPython", "receipt Python implementation differs")
+    _require(report["python"] == receipt["python_version"], "reported Python version differs")
+    _require(
+        report["python_executable"] == receipt["python_executable"],
+        "reported Python executable differs",
+    )
+    _require(report["platform"] == receipt["platform"], "reported platform differs")
     _require(receipt["library_name"] == library_path.name, "receipt library name differs")
     normalized_command = [item.replace("\\", "/") for item in receipt["command"]]
     _require(
