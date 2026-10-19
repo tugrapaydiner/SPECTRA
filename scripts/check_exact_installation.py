@@ -25,8 +25,26 @@ def require(condition, message):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path)
+    parser.add_argument(
+        "--evidence-dir",
+        type=Path,
+        help=(
+            "retain the complete self-test bundle at this new path; when omitted "
+            "the bundle is checked in a disposable directory"
+        ),
+    )
     args = parser.parse_args(argv)
     output = args.out.resolve() if args.out is not None else None
+    retained_evidence = (
+        args.evidence_dir.resolve() if args.evidence_dir is not None else None
+    )
+    if retained_evidence is not None:
+        require(
+            not retained_evidence.exists(),
+            "evidence directory already exists: " + str(retained_evidence),
+        )
+        retained_evidence.parent.mkdir(parents=True, exist_ok=True)
+
     previous = Path.cwd()
     with tempfile.TemporaryDirectory(
             prefix="spectra-exact-installed-",
@@ -77,7 +95,7 @@ def main(argv=None):
                 )
                 return json.loads(completed.stdout)
 
-            evidence_root = root / "selftest"
+            evidence_root = retained_evidence or (root / "selftest")
             selftest = installed_command("exact", "selftest", evidence_root)
             require(selftest["schema"] == exact_selftest.SCHEMA,
                     "installed self-test schema differs")
@@ -162,6 +180,7 @@ def main(argv=None):
                 "manifest_verified": True,
                 "manifest_artifacts": manifest_check["artifacts"],
                 "retained_source": True,
+                "evidence_retained": retained_evidence is not None,
                 "audit_process_isolated": True,
                 "audit_native_execution": audit["native_execution"],
                 "audit_native_module_loaded": audit["native_module_loaded"],
