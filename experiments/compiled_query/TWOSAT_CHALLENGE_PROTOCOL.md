@@ -55,32 +55,49 @@ UNSAT. Resource failure remains an exception; it is never relabelled UNSAT.
 Before timing, all of the following must pass:
 
 1. exhaustive decision agreement with a brute-force oracle for every one-, two-
-   and three-variable palette-2 graph/domain combination in the test panel;
-2. a fixed randomized four-variable panel;
-3. standard-library replay of every emitted `SCQ2` bank;
-4. explicit exercise of empty-domain, query-implication and base-contradiction
+   and three-variable palette-2 graph/domain combination and every per-vertex
+   restriction vector, including empty domains;
+2. a fixed randomized four-variable panel with duplicate and mixed restrictions;
+3. arbitrary palette positions through bit 63, including SAT and base-UNSAT cases;
+4. standard-library replay of every emitted `SCQ2` bank;
+5. explicit exercise of empty-domain, query-implication and base-contradiction
    proofs;
-5. explicit exercise of scalar raw, scalar SCC and tile64 SCC kernels;
-6. malformed packet, memory-bound and build-receipt failures remain visible;
-7. Linux x86-64 Python 3.11/3.13, native ARM64, Windows/MSVC, UBSan and
+6. explicit exercise of scalar raw, scalar SCC and multi-tile tile64 SCC kernels;
+7. malformed packets, tampered build receipts and an actual native index rejection
+   at the 1 MiB memory cap remain visible;
+8. Linux x86-64 Python 3.11/3.13, native ARM64, Windows/MSVC, UBSan and
    ASan+UBSan; and
-8. no source sharing with `spectra/_native/exact_binary.cpp` beyond public format
-   constants and mathematical contract.
+9. no source sharing with `spectra/_native/exact_binary.cpp` beyond public format
+   constants and the mathematical contract.
 
 ## Phase B development comparison
 
 Only after Phase A passes, compare complete calls on exposed development cases.
-Both systems receive identical `SBC1` bytes. Timed work includes native parsing,
-construction, every query, complete labels/proofs, serialization, disposal, and
-one common standard-library replay of each output bank. Compilation, packet
-creation and artifact transport are reported separately.
+Both systems receive identical immutable `SBC1` bytes. The six mandatory arms are
+SPECTRA `raw`, `scc`, and `auto`, plus challenger `raw`, `scc`, and `auto`.
+
+Two endpoints must be reported separately:
+
+1. **service:** native parsing, construction, every query, complete labels/proofs,
+   serialization, Python ownership of the returned bytes, and disposal; and
+2. **verified service:** the same complete call followed by one standard-library
+   replay of that arm's own output bank.
+
+Compilation, packet creation and artifact transport are reported separately. A
+shared replay must never be added once to a whole comparison because that can hide
+arm-specific output/proof costs.
 
 Required banks include 1, 8, 64 and 1,024 queries; SAT and UNSAT mixtures; weak and
-strong SCC compression; sparse and dense implication graphs; and low/high pin
-density. Every timeout, resource failure and malformed result remains in the
-matrix.
+strong SCC compression; sparse and dense implication graphs; arbitrary palette
+positions; and low/high pin density. Every timeout, resource failure and malformed
+result remains in the matrix.
 
-Development timing selects no final winner and cannot be converted into a holdout.
+Timing uses complete position-balanced blocks across all six arms, identical batch
+sizes within a cell, deterministic schedules, raw per-repetition samples, and
+semantic replay rather than requiring byte-identical SAT assignments. No
+performance threshold is attached to this exposed development phase, and the
+fastest explicit challenger may be reported only as a descriptive post-hoc oracle.
+Development timing cannot be converted into a holdout.
 
 ## Phase C prospective competition result
 
