@@ -27,8 +27,9 @@ rejects a mutated output, and writes a hash/size manifest.
 
 `audit` must run in a fresh process. It refuses an already-loaded native module,
 executes no native code, verifies the exact frozen inventory and build receipt,
-reconstructs the request packets, replays every witness and proof, and repeats the
-tamper checks.
+requires the reported Python version, executable and platform to agree with that
+receipt, reconstructs the request packets, replays every witness and proof, and
+repeats the tamper checks.
 
 `compare` audits two or more complete bundles and permits only environment-level
 differences: platform, Python build, compiler and native-library bytes. The exact
