@@ -59,6 +59,13 @@ def main(argv: list[str] | None = None) -> int:
     exact_verify.add_argument("packet", type=Path)
     exact_verify.add_argument("output", type=Path)
     exact_verify.add_argument("--max-bytes", type=int, default=EXACT_FILE_MAX_BYTES)
+    exact_selftest = exact_actions.add_parser(
+        "selftest",
+        help="Build and exercise SAT/UNSAT/replay paths; emits evidence, not a benchmark",
+    )
+    exact_selftest.add_argument("directory", type=Path)
+    exact_selftest.add_argument("--compiler")
+    exact_selftest.add_argument("--max-bytes", type=int, default=512 << 20)
     evidence = commands.add_parser("evidence", help="Verify a portable hash/size manifest, not scientific validity")
     evidence.add_argument("root", type=Path)
     evidence.add_argument("manifest", type=Path)
@@ -82,30 +89,41 @@ def main(argv: list[str] | None = None) -> int:
             from .evidence import verify
             _emit(verify(args.root, load_file(args.manifest, max_bytes=args.max_json_bytes)), None)
         elif args.command == "exact":
-            from .exact import (EXACT_API_VERSION, EXACT_NATIVE_ABI, build_exact_runtime,
-                                decode_certified_output, unpack_session_packet,
-                                verify_session_output)
-            if args.action == "build":
-                library = build_exact_runtime(args.directory, compiler=args.compiler)
-                record = json.loads(library.with_name("build.json").read_text(encoding="utf-8"))
-                _emit({"status": "BUILT", "library": str(library),
-                       "build_receipt": str(library.with_name("build.json")),
-                       "exact_api_version": EXACT_API_VERSION,
-                       "native_abi": EXACT_NATIVE_ABI,
-                       "source_sha256": record["source_sha256"],
-                       "library_sha256": record["library_sha256"]}, None)
+            if args.action == "selftest":
+                from .exact_selftest import run_exact_selftest
+                _emit(
+                    run_exact_selftest(
+                        args.directory,
+                        compiler=args.compiler,
+                        max_bytes=args.max_bytes,
+                    ),
+                    None,
+                )
             else:
-                packet = _read_binary(args.packet, max_bytes=args.max_bytes)
-                output = _read_binary(args.output, max_bytes=args.max_bytes)
-                problem, rows = unpack_session_packet(packet)
-                decoded = decode_certified_output(output, problem.n, len(rows))
-                verified = verify_session_output(packet, output)
-                _emit({"verified": verified, "queries": len(decoded),
-                       "sat": sum(code == 1 for code, _, _ in decoded),
-                       "unsat": sum(code == 0 for code, _, _ in decoded),
-                       "exact_api_version": EXACT_API_VERSION,
-                       "native_abi": EXACT_NATIVE_ABI}, None)
-                return 0 if verified else 1
+                from .exact import (EXACT_API_VERSION, EXACT_NATIVE_ABI, build_exact_runtime,
+                                    decode_certified_output, unpack_session_packet,
+                                    verify_session_output)
+                if args.action == "build":
+                    library = build_exact_runtime(args.directory, compiler=args.compiler)
+                    record = json.loads(library.with_name("build.json").read_text(encoding="utf-8"))
+                    _emit({"status": "BUILT", "library": str(library),
+                           "build_receipt": str(library.with_name("build.json")),
+                           "exact_api_version": EXACT_API_VERSION,
+                           "native_abi": EXACT_NATIVE_ABI,
+                           "source_sha256": record["source_sha256"],
+                           "library_sha256": record["library_sha256"]}, None)
+                else:
+                    packet = _read_binary(args.packet, max_bytes=args.max_bytes)
+                    output = _read_binary(args.output, max_bytes=args.max_bytes)
+                    problem, rows = unpack_session_packet(packet)
+                    decoded = decode_certified_output(output, problem.n, len(rows))
+                    verified = verify_session_output(packet, output)
+                    _emit({"verified": verified, "queries": len(decoded),
+                           "sat": sum(code == 1 for code, _, _ in decoded),
+                           "unsat": sum(code == 0 for code, _, _ in decoded),
+                           "exact_api_version": EXACT_API_VERSION,
+                           "native_abi": EXACT_NATIVE_ABI}, None)
+                    return 0 if verified else 1
         else:
             from .cnf import read_dimacs, solve, solve_indexed, solve_deductive, solve_focused
             with args.input.open(encoding="utf-8") as stream:
@@ -122,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 record = load_file(args.witness, max_bytes=args.max_json_bytes)
                 if type(record) is not dict or type(record.get("witness")) is not list:
-                    raise ValueError("expected a JSON object containing a Boolean-list witness")
+                    raise ValueError("expected a JSON object containing a Boolean-list witness field")
                 if "formula_sha256" in record and record["formula_sha256"] != problem.sha256():
                     raise ValueError("witness report belongs to a different formula")
                 violated = problem.violated(tuple(record["witness"]))

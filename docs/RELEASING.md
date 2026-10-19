@@ -20,7 +20,15 @@ python scripts/audit_workspace.py --out workspace-audit.json
 python -m build --outdir dist/current
 python scripts/check_current_installation.py \
   --dist dist/current --out install-check
+spectra exact selftest release-selftest
+spectra evidence release-selftest release-selftest/SHA256.json
 ```
+
+Run the self-test in a fresh disposable directory. It compiles the bundled exact
+runtime, covers SAT and all three portable UNSAT proof kinds, independently replays
+the answer banks, rejects a mutation, and binds the retained files in a portable
+manifest. It is a semantic release smoke test, not a performance result or an
+independent scientific replication.
 
 A release containing `spectra.exact` must also pass the dedicated Linux x86,
 Linux ARM64, Windows, and sanitizer matrix, plus the installed exact and exam-repair
@@ -37,9 +45,9 @@ release or a hash-bound workflow artifact. Historical bytes remain reachable fro
 ## Publication
 
 Require successful checks for the exact final merge source. Retain the commit, tree,
-wheel, sdist, environment, and SHA-256 receipts. Creating a tag or draft release is
-not proof that publication completed; download and verify every final asset before
-announcing it.
+wheel, sdist, environment, exact self-test, and SHA-256 receipts. Creating a tag or
+draft release is not proof that publication completed; download and verify every
+final asset before announcing it.
 
 The latest published package remains
 [v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1) until a

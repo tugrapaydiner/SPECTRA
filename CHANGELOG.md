@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Release and replication readiness (Part 3, in progress)
+
+- Add `spectra exact selftest`, a deterministic release-facing command that
+  explicitly builds the bundled exact runtime, exercises SAT plus all three `SBP1`
+  contradiction kinds, independently replays every `SBC1 -> SCQ2` answer, rejects
+  a mutated output and writes a portable hash/size manifest.
+- Require the same command to run from an isolated installed wheel without
+  repository imports or optional ML/scientific dependencies.
+- Document the frozen engineering gates and keep performance, scientific
+  replication, operator adoption and broad solver-superiority claims explicitly
+  outside the self-test.
+- Keep the published package at v0.7.1 until a separate reviewed release commit
+  updates both version fields and final assets are downloaded and verified.
+
 ### Versioned proof-carrying exact-query API
 
 - Add dependency-light `spectra.exact` API version 1 with native ABI 3.

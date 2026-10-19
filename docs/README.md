@@ -24,6 +24,7 @@ historical neural, MCTS, low-bit, general-SAT, or universal CPU-performance clai
 | Install and run the public tools | [Quick start](../README.md#base-toolkit-quick-start) |
 | Understand API, input formats and return values | [API and CLI](API.md) |
 | Build and use checked SAT/UNSAT exact queries | [Proof-carrying exact API](EXACT_API.md) |
+| Run the deterministic release/replication smoke test | [Part 3 readiness](PART3_RELEASE_REPLICATION_READINESS.md) |
 | Apply the exact core to bounded exam rescheduling | [Proof-carrying exam repair](EXAM_REPAIR.md) |
 | Check released, merged, experimental and failed work | [Current status](STATUS.md) |
 | Run tests, build a wheel or reproduce experiments | [Development](DEVELOPMENT.md) |
