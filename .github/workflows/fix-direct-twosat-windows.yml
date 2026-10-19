@@ -39,17 +39,16 @@ jobs:
 
           workflow = Path('.github/workflows/direct-twosat-challenge.yml')
           value = workflow.read_text(encoding='utf-8')
-          old_paths = '''    paths:
-      - .github/workflows/direct-twosat-challenge.yml
-'''
-          new_paths = '''    paths:
-      - .github/workflows/direct-twosat-challenge.yml
-      - experiments/compiled_query/twosat_baseline.cpp
-      - experiments/compiled_query/twosat_baseline.py
-      - experiments/compiled_query/test_twosat_baseline.py
-      - experiments/compiled_query/twosat_challenge.py
-      - experiments/compiled_query/DIRECT_TWOSAT_CHALLENGE_PROTOCOL.md
-'''
+          old_paths = "    paths:\n      - .github/workflows/direct-twosat-challenge.yml\n"
+          new_paths = (
+              "    paths:\n"
+              "      - .github/workflows/direct-twosat-challenge.yml\n"
+              "      - experiments/compiled_query/twosat_baseline.cpp\n"
+              "      - experiments/compiled_query/twosat_baseline.py\n"
+              "      - experiments/compiled_query/test_twosat_baseline.py\n"
+              "      - experiments/compiled_query/twosat_challenge.py\n"
+              "      - experiments/compiled_query/DIRECT_TWOSAT_CHALLENGE_PROTOCOL.md\n"
+          )
           if value.count(old_paths) != 1:
               raise AssertionError('direct challenge path trigger differs')
           workflow.write_text(value.replace(old_paths, new_paths), encoding='utf-8')
