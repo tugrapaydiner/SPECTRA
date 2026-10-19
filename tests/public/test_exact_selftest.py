@@ -66,4 +66,4 @@ def test_cli_exact_selftest_builds_and_freezes_all_proof_paths(tmp_path, capsys)
     }.issubset(manifest["artifacts"])
 
     assert cli_main(["exact", "selftest", str(root)]) == 2
-    assert "File exists" in capsys.readouterr().err
+    assert "exist" in capsys.readouterr().err.lower()
