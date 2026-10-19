@@ -14,12 +14,14 @@
   receipt, recomputes retained source/binary identities, reconstructs the frozen
   request banks, replays every proof/witness, and repeats tamper rejection without
   native execution.
-- Require the two-process generation/audit sequence to pass from an isolated
-  installed wheel without repository imports or optional ML/scientific
-  dependencies.
-- Document the frozen engineering gates and keep performance, scientific
-  replication, operator adoption and broad solver-superiority claims explicitly
-  outside the self-test.
+- Add `spectra exact compare`, which audits two or more complete bundles and allows
+  platform, Python, compiler and native-library differences only when the source,
+  packets, certified outputs, proofs and selector receipts remain identical.
+- Retain complete installed-wheel bundles from Linux 3.11, Linux 3.13, ARM64 and
+  Windows, then compare them in one fresh no-native CI job and publish the semantic
+  comparison receipt as a separate artifact.
+- Keep performance, scientific replication, operator adoption and broad
+  solver-superiority claims explicitly outside these deterministic release checks.
 - Keep the published package at v0.7.1 until a separate reviewed release commit
   updates both version fields and final assets are downloaded and verified.
 
@@ -87,6 +89,3 @@ output-only CPU inference interface with checked final-output equivalence.
 Measurements retain small-case regressions, increased cold allocation and the
 `UNKNOWN` large-case outcomes. No external SAT superiority or learned-capability
 improvement was established. See [the efficiency guide](docs/EFFICIENCY_GUIDE.md).
-
-Earlier packaging and compact-state work is described in
-[current status](docs/STATUS.md) and the [history index](docs/history/README.md).

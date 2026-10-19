@@ -8,33 +8,37 @@
 
 Part 2 completed the frozen `structural-v10` automatic-selector milestone. Part 3
 does not retune that selector. Its controllable goal is to turn the validated
-source tree into a release-facing, independently reproducible exact service with
-one obvious smoke-test path, portable receipts, clean installed-wheel checks, and
-an explicit boundary between engineering verification and scientific replication.
+source tree into a release-facing, independently auditable exact service with one
+obvious smoke-test path, portable receipts, clean installed-wheel checks, and an
+explicit boundary between engineering verification and scientific replication.
 
-The generation and audit commands are:
+The three public commands are:
 
 ```bash
 spectra exact selftest exact-selftest
 spectra exact audit exact-selftest
+spectra exact compare linux311 linux313 arm64 windows
 ```
 
-`selftest` creates a new directory, explicitly compiles the bundled native
-runtime, runs deterministic SAT and UNSAT cases, covers all three portable `SBP1`
+`selftest` creates a new directory, explicitly compiles the bundled native runtime,
+runs deterministic SAT and UNSAT cases, covers all three portable `SBP1`
 contradiction kinds, independently replays the serialized `SBC1 -> SCQ2` results,
-rejects a mutated output, retains the exact C++ source used for compilation, and
-writes a hash/size manifest.
+rejects a mutated output, and writes a hash/size manifest.
 
-`audit` must run in a fresh process. It refuses to proceed when the native
-extension is already loaded, does not compile or execute native code, verifies the
-exact manifest inventory, recomputes retained source and binary hashes, checks the
-build receipt and frozen selector metadata, reconstructs the deterministic request
-banks, independently replays every answer, and repeats the mutation-rejection
-checks.
+`audit` must run in a fresh process. It refuses an already-loaded native module,
+executes no native code, verifies the exact frozen inventory and build receipt,
+reconstructs the request packets, replays every witness and proof, and repeats the
+tamper checks.
+
+`compare` audits two or more complete bundles and permits only environment-level
+differences: platform, Python build, compiler and native-library bytes. The exact
+source, deterministic packets, certified outputs, proof coverage, API/ABI and
+selector receipts must be identical. It emits one semantic fingerprint for the
+shared result.
 
 ## Evidence layout
 
-A passing run contains:
+A passing self-test contains:
 
 ```text
 exact-selftest/
@@ -51,17 +55,40 @@ exact-selftest/
     └── base-static-contradiction.scq2
 ```
 
-`selftest.json` is the generation receipt. `SHA256.json` uses
-`spectra.evidence_freeze.v1` and binds every other retained file. A passing audit
-emits `spectra.exact_selftest_audit.v1` and confirms that exactly eight artifacts
-are bound: the report, source, build receipt, native library, two request banks and
-two certified answer banks. The manifest establishes byte identity only; it does
-not establish data independence, scientific novelty, performance, operator value,
-or production safety.
+`selftest.json` is the semantic receipt. `SHA256.json` uses
+`spectra.evidence_freeze.v1` and binds every other retained file. The manifest
+establishes byte identity only; it does not establish data independence,
+scientific novelty, performance, operator value, or production safety.
 
 The destination must not already exist. A failed run leaves its partial directory
 for diagnosis. Do not rerun into that directory or fill in missing artifacts by
 hand; use a fresh destination and retain the failed evidence when it matters.
+
+## First cross-platform result
+
+Commit `de78f62095c0d4be3c0c2f7f8284f1f161d3f8ea` passed the complete installed
+exact matrix and the new four-bundle comparison in
+[workflow run 39319875020](https://github.com/tugrapaydiner/SPECTRA/actions/runs/39319875020).
+The compared bundles were:
+
+- Linux x86-64, Python 3.11;
+- Linux x86-64, Python 3.13;
+- Linux ARM64, Python 3.13; and
+- Windows x86-64, Python 3.13 with MSVC.
+
+The four native libraries had four different hashes, as expected. All four bundles
+still agreed on:
+
+- source SHA-256 `39016dd2256a08e5d2f1c9bbd48bcd2ab61c38aaa5e9773a882154bd273f88e7`;
+- proof kinds `1`, `2`, and `3`;
+- five decisions: two SAT and three UNSAT;
+- both deterministic packet hashes;
+- both certified-output hashes; and
+- semantic fingerprint `fe347b8512219f220a1ab6c49996f278f29a58f1e128eaff0624382f73174fb0`.
+
+The comparison ran without compiling, loading or executing the retained native
+libraries. Each full bundle and the compact cross-platform receipt are retained as
+separate workflow artifacts.
 
 ## Frozen acceptance gates for this track
 
@@ -69,29 +96,28 @@ A release candidate containing the exact service is acceptable only when all of
 the following pass on one reviewed source identity:
 
 1. public source contracts and active-tree/release/workspace audits;
-2. the release-facing exact self-test plus fresh-process no-native audit from a
-   source checkout;
-3. the same two-process generate/audit sequence from an isolated installed wheel
-   with no repository imports;
-4. Linux x86-64, native Linux ARM64, Windows/MSVC, UBSan, and ASan+UBSan contracts;
-5. exact API version, native ABI, retained-source hash, binary hash, exact
-   artifact inventory, packet/output replay, proof-kind coverage, fresh-process
-   no-native enforcement, and evidence-manifest verification;
-6. package build and clean-install checks for every supported Python version; and
-7. no hidden benchmark threshold, post-hoc case deletion, or conversion of a
+2. the release-facing exact self-test from a source checkout;
+3. the same self-test from an isolated installed wheel with no repository imports;
+4. a fresh-process no-native audit of every retained bundle;
+5. a cross-platform comparison covering Linux 3.11, Linux 3.13, ARM64 and Windows;
+6. Linux x86-64, native Linux ARM64, Windows/MSVC, UBSan, and ASan+UBSan contracts;
+7. exact API version, native ABI, source hash, binary hash, packet/output replay,
+   proof-kind coverage, evidence-manifest verification and semantic fingerprint;
+8. package build and clean-install checks for every supported Python version; and
+9. no hidden benchmark threshold, post-hoc case deletion, or conversion of a
    resource/build failure into a mathematical result.
 
 The public package version remains `0.7.1` until an intentional release commit
-updates both version fields and the final release artifacts are downloaded and
-verified. Creating this branch, command, tag, or draft release does not publish a
-package.
+updates both version fields and the final release assets are downloaded and
+verified. Creating this branch, command, tag, comparison receipt or draft release
+does not publish a package.
 
 ## Non-goals and remaining 100/100 gates
 
-This track can improve release quality and make outside reproduction much easier,
-but project-owned code and CI cannot manufacture the remaining external evidence.
-The following stay open until performed by attributable outside parties or real
-application owners:
+This track improves release quality and makes outside reproduction substantially
+easier, but project-owned code and CI cannot manufacture the remaining external
+evidence. The following stay open until performed by attributable outside parties
+or real application owners:
 
 - independent reproduction with raw receipts and complete evidence;
 - an operator-defined workload and acceptance metric;

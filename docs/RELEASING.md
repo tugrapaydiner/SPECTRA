@@ -36,7 +36,11 @@ independent scientific replication.
 
 A release containing `spectra.exact` must also pass the dedicated Linux x86,
 Linux ARM64, Windows, and sanitizer matrix, plus the installed exact and exam-repair
-checks. Report excluded slow tests and disabled leak detection explicitly.
+checks. Each installed environment must retain its complete self-test bundle. The
+matrix must then run `spectra exact compare` over those bundles and retain the
+cross-platform receipt. Platform-specific native binaries may differ; the exact
+source, packets, certified outputs, proof kinds and selector receipts may not.
+Report excluded slow tests and disabled leak detection explicitly.
 
 ## Repository boundary
 
@@ -49,9 +53,10 @@ release or a hash-bound workflow artifact. Historical bytes remain reachable fro
 ## Publication
 
 Require successful checks for the exact final merge source. Retain the commit, tree,
-wheel, sdist, environment, exact self-test, and SHA-256 receipts. Creating a tag or
-draft release is not proof that publication completed; download and verify every
-final asset before announcing it.
+wheel, sdist, environment, complete per-platform self-test bundles, cross-platform
+comparison receipt, and SHA-256 receipts. Creating a tag or draft release is not
+proof that publication completed; download and verify every final asset before
+announcing it.
 
 The latest published package remains
 [v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1) until a
