@@ -32,13 +32,11 @@ jobs:
             refs/heads/main:refs/remotes/origin/main \
             refs/heads/performance/automatic-engine-selection-final:refs/remotes/origin/performance/automatic-engine-selection-final \
             --tags
-
           test "$(git rev-parse origin/main)" = "527590406c2c624a6aa050e17c6f45b0f000ac5b"
           test "$(git rev-parse origin/performance/automatic-engine-selection-final)" = "90b652106c85e734e62f4a5d7eee97c94b964304"
           git merge-base --is-ancestor \
             90b652106c85e734e62f4a5d7eee97c94b964304 \
             527590406c2c624a6aa050e17c6f45b0f000ac5b
-
           parents="$(git show -s --format='%P' 527590406c2c624a6aa050e17c6f45b0f000ac5b)"
           test "$parents" = "ac71b3a777f4869424247df6481ef32f9996a6b 90b652106c85e734e62f4a5d7eee97c94b964304"
 
@@ -48,15 +46,12 @@ jobs:
           set -euo pipefail
           git config user.name "Tugrap Aydiner"
           git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
-
           if git show-ref --verify --quiet refs/tags/part2-v10-validated; then
             test "$(git rev-list -n 1 part2-v10-validated)" = "527590406c2c624a6aa050e17c6f45b0f000ac5b"
           else
             git tag -a part2-v10-validated \
               527590406c2c624a6aa050e17c6f45b0f000ac5b \
-              -m "Part 2 v10 validated and merged
-
-Automatic exact-engine selection completed its frozen x86-64 and ARM64 validation matrix, merged through PR #72, and retained exact source identity 90b652106c85e734e62f4a5d7eee97c94b964304."
+              -m "Part 2 v10 validated and merged through PR 72; exact validated source 90b652106c85e734e62f4a5d7eee97c94b964304."
             git push origin refs/tags/part2-v10-validated
           fi
 
