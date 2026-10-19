@@ -47,3 +47,8 @@ Separate frozen guards must also pass on x86-64 and ARM64:
 - full public, native, Windows, sanitizer, package and regression matrices pass.
 
 No threshold or case may be changed after the v10 timing run begins.
+
+The original run and its failures remain archived. Revalidation changes
+only measurement power and position balance as specified in
+`AUTO_SELECTOR_V10_REVALIDATION_20261019.md`; cases, selector rules, and
+acceptance thresholds remain unchanged.

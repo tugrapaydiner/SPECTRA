@@ -86,6 +86,7 @@ def test_freeze_run_and_independent_audit(tmp_path, monkeypatch):
     assert manifest["dataset_solution_path"] == "fixtures/custom.sol"
     assert manifest["evaluation_role"] == "holdout"
     assert manifest["warmups"] == 0 and manifest["repeats"] == 2
+    assert manifest["timing_schedule"] == transfer.timing_schedule(0, 2)
     record = transfer.run(root)
     assert tuple(record["modes"]) == transfer.MODES
     assert record["warmups"] == 0

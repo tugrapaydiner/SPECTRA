@@ -247,7 +247,9 @@ def audit(root: Path) -> dict:
 
     threshold = manifest["holdout_max_auto_raw_ratio"]
     summaries = []
+    selector_failures = []
     holdout_failures = []
+    development_failures = []
     for item, run_item in zip(manifest["cases"], run_cases):
         if type(run_item) is not dict or run_item.get("name") != item["name"]:
             raise ValueError("suite run case order differs")
@@ -285,7 +287,11 @@ def audit(root: Path) -> dict:
         elif item["role"] == "holdout" and threshold is not None:
             gate_pass = paired_median <= threshold
         if not gate_pass:
-            holdout_failures.append(item["name"])
+            selector_failures.append(item["name"])
+            if item["role"] == "holdout":
+                holdout_failures.append(item["name"])
+            else:
+                development_failures.append(item["name"])
         summaries.append({
             "name": item["name"],
             "role": item["role"],
@@ -307,7 +313,10 @@ def audit(root: Path) -> dict:
             "auto_vs_raw_paired_median_ratio": paired_median,
             "auto_vs_scc_paired_median_ratio": auto_scc_paired,
             "scc_vs_raw_paired_median_ratio": scc_raw_paired,
-            "holdout_gate_pass": gate_pass,
+            "selector_guard_pass": gate_pass,
+            "holdout_gate_pass": (
+                gate_pass if item["role"] == "holdout" else None
+            ),
             "audit_sha256": (case_root / "audit.sha256").read_text().strip(),
         })
     functional = all(
@@ -323,11 +332,14 @@ def audit(root: Path) -> dict:
         "query_count_per_case": manifest["query_count_per_case"],
         "holdout_max_auto_raw_ratio": threshold,
         "holdout_gate_pass": not holdout_failures,
-        "selector_guard_pass": not holdout_failures,
+        "selector_guard_pass": not selector_failures,
+        "selector_failures": selector_failures,
         "holdout_failures": holdout_failures,
+        "development_failures": development_failures,
         "cases": summaries,
         "interpretation": [
             "set9 is development evidence; set10 and set12 are prospective execution holdouts",
+            "the selector guard covers every case; holdout failures are reported separately",
             "the gate limits auto-policy overhead relative to the explicit raw control",
             "all outputs remain complete proof-carrying conflict-core repair answers",
             "this is not full ITC-2007 timetable feasibility or optimization",

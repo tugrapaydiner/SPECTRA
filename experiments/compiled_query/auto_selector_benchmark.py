@@ -1,4 +1,4 @@
-"""Frozen development and confirmation benchmark for structural auto policy v10."""
+"""Position-balanced, calibrated benchmark for structural auto policy v10."""
 from __future__ import annotations
 
 import argparse
@@ -31,7 +31,9 @@ MODES = ("raw", "scc", "route", "auto")
 DEVELOPMENT_COUNTS = (1, 8, 32, 63, 64, 65, 128, 1024)
 CONFIRMATION_COUNTS = (1, 8, 32, 64, 128, 1024)
 WARMUPS = 2
-SCHEMA = "spectra.auto_selector_benchmark.v7"
+MIN_SAMPLE_NS = 1_000_000
+MAX_BATCH_SIZE = 256
+SCHEMA = "spectra.auto_selector_benchmark.v8"
 POLICY = "structural-v10"
 
 
@@ -325,11 +327,56 @@ def expected_policy(*, base: bool, pins: int, count: int, vertices: int,
         return "scc", "scc_strong_compression"
     return "raw", "short_weak_compression"
 
+def _time_batch(
+    runtime: ExactRuntime,
+    problem: ExactProblem,
+    rows,
+    mode: str,
+    batch_size: int,
+):
+    if batch_size < 1:
+        raise ValueError("batch size must be positive")
+    current = b""
+    answer = None
+    started = time.perf_counter_ns()
+    for _ in range(batch_size):
+        current = pack_session_packet(problem, rows)
+        answer = runtime.solve_session_packet(current, mode=mode)
+    elapsed = time.perf_counter_ns() - started
+    if answer is None:
+        raise AssertionError("timed batch produced no answer")
+    return elapsed, current, answer
+
+
+def _calibrate_batch(
+    runtime: ExactRuntime,
+    problem: ExactProblem,
+    rows,
+    mode: str,
+) -> int:
+    batch_size = 1
+    for _ in range(8):
+        elapsed, current, answer = _time_batch(
+            runtime, problem, rows, mode, batch_size
+        )
+        if not verify_session_output(current, answer.output):
+            raise AssertionError("calibration output replay failed")
+        if elapsed >= MIN_SAMPLE_NS or batch_size >= MAX_BATCH_SIZE:
+            return batch_size
+        target = math.ceil(
+            batch_size * MIN_SAMPLE_NS / max(elapsed, 1)
+        )
+        batch_size = min(
+            MAX_BATCH_SIZE, max(batch_size + 1, target)
+        )
+    return batch_size
+
+
 def run(library: Path, panel: str, destination: Path, repeats: int) -> dict:
     if destination.exists():
         raise FileExistsError(destination)
-    if repeats < 9 or repeats % 2 == 0:
-        raise ValueError("odd repeats >= 9 required")
+    if repeats < 16 or repeats % len(MODES) != 0:
+        raise ValueError("repeats must be a multiple of four and at least 16")
     destination.mkdir(parents=True)
     runtime = ExactRuntime(library)
     records = []
@@ -384,28 +431,61 @@ def run(library: Path, panel: str, destination: Path, repeats: int) -> dict:
                         current = pack_session_packet(problem, rows)
                         runtime.solve_session_packet(current, mode=mode)
 
+                batch_sizes = {
+                    mode: _calibrate_batch(runtime, problem, rows, mode)
+                    for mode in MODES
+                }
                 samples = {mode: [] for mode in MODES}
                 hashes = {mode: set() for mode in MODES}
+                execution_order = []
                 schedule = random.Random(seed_for(
                     "SPECTRA-auto-selector-v10-schedule",
                     f"{panel}/{case.name}/{count}",
                 ))
-                for _ in range(repeats):
-                    order = list(MODES)
-                    schedule.shuffle(order)
+                base_order = list(MODES)
+                for repetition in range(repeats):
+                    offset = repetition % len(MODES)
+                    if offset == 0:
+                        schedule.shuffle(base_order)
+                    order = (*base_order[offset:], *base_order[:offset])
+                    execution_order.append(list(order))
                     for mode in order:
-                        started = time.perf_counter_ns()
-                        current = pack_session_packet(problem, rows)
-                        answer = runtime.solve_session_packet(current, mode=mode)
-                        elapsed = time.perf_counter_ns() - started
-                        samples[mode].append(elapsed)
+                        elapsed, current, answer = _time_batch(
+                            runtime, problem, rows, mode, batch_sizes[mode]
+                        )
+                        samples[mode].append(elapsed / batch_sizes[mode])
                         hashes[mode].add(hashlib.sha256(answer.output).hexdigest())
+                        if answer.output != first[mode].output:
+                            raise AssertionError(
+                                "timed output differs from the verified warm result"
+                            )
                         if not verify_session_output(current, answer.output):
                             raise AssertionError("timed output replay failed")
                 if any(len(values) != 1 for values in hashes.values()):
                     raise AssertionError("output bytes changed across repetitions")
-                medians = {mode: statistics.median(values) for mode, values in samples.items()}
+                medians = {
+                    mode: statistics.median(values)
+                    for mode, values in samples.items()
+                }
                 oracle = min(("raw", "scc", "route"), key=medians.get)
+                selection_ratios = [
+                    selected_ns / oracle_ns
+                    for selected_ns, oracle_ns in zip(
+                        samples[selected], samples[oracle]
+                    )
+                ]
+                realized_ratios = [
+                    auto_ns / oracle_ns
+                    for auto_ns, oracle_ns in zip(
+                        samples["auto"], samples[oracle]
+                    )
+                ]
+                auto_raw_ratios = [
+                    auto_ns / raw_ns
+                    for auto_ns, raw_ns in zip(
+                        samples["auto"], samples["raw"]
+                    )
+                ]
                 record = {
                     "panel": panel,
                     "case": case.name,
@@ -425,10 +505,15 @@ def run(library: Path, panel: str, destination: Path, repeats: int) -> dict:
                     "expected_reason": expected_reason,
                     "oracle_mode": oracle,
                     "medians_ns": medians,
-                    "selection_regret": medians[selected] / medians[oracle],
-                    "realized_regret": medians["auto"] / medians[oracle],
-                    "auto_raw_ratio": medians["auto"] / medians["raw"],
-                    "samples_ns": samples,
+                    "batch_sizes": batch_sizes,
+                    "execution_order": execution_order,
+                    "selection_regret": statistics.median(selection_ratios),
+                    "realized_regret": statistics.median(realized_ratios),
+                    "auto_raw_ratio": statistics.median(auto_raw_ratios),
+                    "independent_median_realized_regret": (
+                        medians["auto"] / medians[oracle]
+                    ),
+                    "samples_ns_per_call": samples,
                     "output_sha256": {
                         mode: next(iter(values)) for mode, values in hashes.items()
                     },
@@ -487,6 +572,14 @@ def run(library: Path, panel: str, destination: Path, repeats: int) -> dict:
         "cases": len({row["case"] for row in records}),
         "cells": len(records),
         "repeats": repeats,
+        "sampling": {
+            "method": (
+                "position-balanced median of paired calibrated-batch "
+                "per-call samples"
+            ),
+            "minimum_sample_ns": MIN_SAMPLE_NS,
+            "maximum_batch_size": MAX_BATCH_SIZE,
+        },
         "global_realized_regret_geomean": gmean(realized),
         "global_selection_regret_geomean": gmean(selection),
         "worst_realized_regret": max(realized),
@@ -534,7 +627,7 @@ def main(argv=None) -> int:
     parser.add_argument("--library", type=Path, required=True)
     parser.add_argument("--panel", choices=("development", "confirmation"), required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--repeats", type=int, default=17)
+    parser.add_argument("--repeats", type=int, default=32)
     args = parser.parse_args(argv)
     run(args.library.resolve(), args.panel, args.out.resolve(), repeats=args.repeats)
     return 0

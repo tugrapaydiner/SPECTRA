@@ -83,8 +83,9 @@ permission to alter the policy after observing results.
 ## Engines and measured boundary
 
 The same immutable packet is run through `auto`, `raw`, `scc`, and `route`.  Each
-mode receives one untimed warmup; five measured repetitions rotate the mode order
-so no mode always executes first or last.  The measured boundary starts with ready
+mode receives eight untimed warmups; 32 measured repetitions rotate through
+complete four-position blocks, so every mode occupies every timing position
+equally.  The measured boundary starts with ready
 `SBC1` bytes and includes:
 
 - input validation and native construction;
