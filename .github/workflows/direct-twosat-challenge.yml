@@ -1,0 +1,181 @@
+name: direct-twosat-challenge
+
+on:
+  push:
+    branches:
+      - part3/release-replication-readiness
+    paths:
+      - .github/workflows/direct-twosat-challenge.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-twosat-challenge-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contracts:
+    name: Contracts (${{ matrix.runner }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, python: '3.11'}
+          - {runner: ubuntu-24.04, python: '3.13'}
+          - {runner: ubuntu-24.04-arm, python: '3.13'}
+          - {runner: windows-2022, python: '3.13'}
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - if: runner.os == 'Windows'
+        name: Load MSVC x64
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'MSVC x64 build tools not found' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $lines = & cmd /c "`"$vcvars`" >nul && set"
+          if ($LASTEXITCODE -ne 0) { throw 'MSVC environment setup failed' }
+          foreach ($line in $lines) {
+            $pair = $line -split '=', 2
+            if ($pair.Count -eq 2 -and $pair[0] -in @('PATH','INCLUDE','LIB','LIBPATH','VCToolsInstallDir','VCINSTALLDIR','WindowsSdkDir','WindowsSDKVersion')) {
+              $line | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            }
+          }
+      - run: python -m pip install 'pytest==9.0.2'
+      - name: Run the independent solver contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest experiments/compiled_query/test_twosat_baseline.py -q
+
+  sanitizers:
+    name: Sanitizer (${{ matrix.sanitizer }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: ['undefined', 'address,undefined']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==9.0.2'
+      - name: Run the direct baseline under sanitizer
+        env:
+          SPECTRA_TWOSAT_SANITIZER: ${{ matrix.sanitizer }}
+          SANITIZER: ${{ matrix.sanitizer }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SPECTRA_EXACT_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; import os; print(build_exact_runtime('exact-sanitized', sanitizer=os.environ['SANITIZER']))")"
+          export UBSAN_OPTIONS=halt_on_error=1
+          if [ "$SANITIZER" = 'address,undefined' ]; then
+            export LD_PRELOAD="$(g++ -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so)"
+            export ASAN_OPTIONS=detect_leaks=0:abort_on_error=1
+          fi
+          python -m pytest experiments/compiled_query/test_twosat_baseline.py -q
+
+  benchmark:
+    name: Matched timing (${{ matrix.runner }})
+    needs: [contracts, sanitizers]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'python-sat==1.9.dev15'
+      - name: Acquire the two exposed WAP development graphs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/marijnheule/clicolcom.git upstream
+          git -C upstream checkout 4932048642da2144f387961b595112277afff82f
+          mkdir graphs
+          find upstream -type f -name wap05a.col -exec cp '{}' graphs/wap05a.col \;
+          find upstream -type f -name wap06a.col -exec cp '{}' graphs/wap06a.col \;
+          test "$(git hash-object graphs/wap05a.col)" = 327cc0c6b1abbc4a9ee31c14f3357136e5b186ec
+          test "$(git hash-object graphs/wap06a.col)" = 60ca46d3198c02176be8812d8f53357e3b9f4114
+      - name: Rebuild the disclosed development cases
+        run: python -m experiments.compiled_query.study export-wap --graphs graphs --output challenge-cases
+      - name: Build both native services
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from experiments.compiled_query.twosat_baseline import build_twosat_baseline
+          from spectra.exact import build_exact_runtime
+          print(build_exact_runtime('exact-build'))
+          print(build_twosat_baseline('twosat-build'))
+          PY
+      - name: Run the frozen challenge
+        id: challenge
+        shell: bash
+        run: |
+          set +e
+          python -m experiments.compiled_query.twosat_challenge \
+            --exact-library "$(find exact-build -maxdepth 1 -type f \( -name '*.so' -o -name '*.pyd' \) -print -quit)" \
+            --twosat-library "$(find twosat-build -maxdepth 1 -type f \( -name '*.so' -o -name '*.dll' \) -print -quit)" \
+            --cases challenge-cases \
+            --out challenge-results \
+            --repeats 32 \
+            --enforce \
+            > challenge.log 2>&1
+          code=$?
+          cat challenge.log
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Retain source, environment and checksums
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p challenge-evidence
+          cp -r challenge-results challenge-evidence/results
+          cp challenge.log challenge-evidence/
+          cp experiments/compiled_query/DIRECT_TWOSAT_CHALLENGE_PROTOCOL.md challenge-evidence/
+          cp exact-build/build.json challenge-evidence/exact-build.json
+          cp twosat-build/build.json challenge-evidence/twosat-build.json
+          git rev-parse HEAD > challenge-evidence/source-commit.txt
+          git rev-parse HEAD^{tree} > challenge-evidence/source-tree.txt
+          python -VV > challenge-evidence/python.txt 2>&1
+          uname -a > challenge-evidence/platform.txt
+          find challenge-evidence -type f -print0 | sort -z | xargs -0 sha256sum > challenge-evidence/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: direct-twosat-${{ matrix.runner }}-${{ github.run_id }}
+          path: challenge-evidence/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Enforce the predeclared gate
+        if: always()
+        shell: bash
+        run: exit ${{ steps.challenge.outputs.exit_code }}
