@@ -66,6 +66,12 @@ def main(argv: list[str] | None = None) -> int:
     exact_selftest.add_argument("directory", type=Path)
     exact_selftest.add_argument("--compiler")
     exact_selftest.add_argument("--max-bytes", type=int, default=512 << 20)
+    exact_audit = exact_actions.add_parser(
+        "audit",
+        help="Audit retained self-test evidence without compiling or loading native code",
+    )
+    exact_audit.add_argument("directory", type=Path)
+    exact_audit.add_argument("--max-bytes", type=int, default=512 << 20)
     evidence = commands.add_parser("evidence", help="Verify a portable hash/size manifest, not scientific validity")
     evidence.add_argument("root", type=Path)
     evidence.add_argument("manifest", type=Path)
@@ -95,6 +101,15 @@ def main(argv: list[str] | None = None) -> int:
                     run_exact_selftest(
                         args.directory,
                         compiler=args.compiler,
+                        max_bytes=args.max_bytes,
+                    ),
+                    None,
+                )
+            elif args.action == "audit":
+                from .exact_selftest import verify_exact_selftest
+                _emit(
+                    verify_exact_selftest(
+                        args.directory,
                         max_bytes=args.max_bytes,
                     ),
                     None,

@@ -7,9 +7,16 @@
 - Add `spectra exact selftest`, a deterministic release-facing command that
   explicitly builds the bundled exact runtime, exercises SAT plus all three `SBP1`
   contradiction kinds, independently replays every `SBC1 -> SCQ2` answer, rejects
-  a mutated output and writes a portable hash/size manifest.
-- Require the same command to run from an isolated installed wheel without
-  repository imports or optional ML/scientific dependencies.
+  a mutated output, retains the exact C++ source used for compilation, and writes
+  a portable hash/size manifest.
+- Add `spectra exact audit`, which requires a fresh process, refuses an already
+  loaded native module, verifies the exact eight-artifact inventory and build
+  receipt, recomputes retained source/binary identities, reconstructs the frozen
+  request banks, replays every proof/witness, and repeats tamper rejection without
+  native execution.
+- Require the two-process generation/audit sequence to pass from an isolated
+  installed wheel without repository imports or optional ML/scientific
+  dependencies.
 - Document the frozen engineering gates and keep performance, scientific
   replication, operator adoption and broad solver-superiority claims explicitly
   outside the self-test.

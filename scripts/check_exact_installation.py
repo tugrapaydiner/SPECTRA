@@ -1,15 +1,18 @@
-"""Exercise the release-facing exact self-test from an installed wheel.
+"""Exercise release-facing exact self-test and audit from an installed wheel.
 
 Run with the installation venv's Python and ``-I`` so repository packages cannot
-satisfy imports. Native compilation is explicit and uses the host compiler.
+satisfy imports. Native compilation occurs in a disposable child process; a
+separate fresh child audits the retained evidence without loading native code.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 
@@ -25,9 +28,6 @@ def main(argv=None):
     args = parser.parse_args(argv)
     output = args.out.resolve() if args.out is not None else None
     previous = Path.cwd()
-    # A loaded extension module remains locked until process exit on Windows.
-    # The temporary build is disposable, so defer that platform's final removal
-    # to the runner/OS rather than converting a completed API check into failure.
     with tempfile.TemporaryDirectory(
             prefix="spectra-exact-installed-",
             ignore_cleanup_errors=(os.name == "nt")) as temporary:
@@ -53,9 +53,32 @@ def main(argv=None):
                         "unexpected optional dependency: " + dependency)
             require(importlib.util.find_spec("experiments") is None,
                     "installed contract must not import repository experiments")
+            require("_spectra_exact_binary" not in sys.modules,
+                    "parent process unexpectedly loaded the native runtime")
+
+            def installed_command(*values):
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-m",
+                        "spectra",
+                        *(str(value) for value in values),
+                    ],
+                    cwd=root,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                require(
+                    completed.returncode == 0,
+                    "installed command failed:\n"
+                    + completed.stdout + "\n" + completed.stderr,
+                )
+                return json.loads(completed.stdout)
 
             evidence_root = root / "selftest"
-            selftest = exact_selftest.run_exact_selftest(evidence_root)
+            selftest = installed_command("exact", "selftest", evidence_root)
             require(selftest["schema"] == exact_selftest.SCHEMA,
                     "installed self-test schema differs")
             require(selftest["status"] == "PASS",
@@ -67,36 +90,81 @@ def main(argv=None):
                 == [(2, 2), (0, 1)],
                 "installed self-test case outcomes differ",
             )
+
+            audit = installed_command("exact", "audit", evidence_root)
+            require(audit["schema"] == exact_selftest.AUDIT_SCHEMA,
+                    "installed audit schema differs")
+            require(audit["verified"] and audit["native_execution"] is False,
+                    "installed no-native audit failed")
+            require(audit["native_module_loaded"] is False,
+                    "audit process loaded the native module")
+            require(audit["proof_kinds"] == [1, 2, 3],
+                    "installed audit proof coverage differs")
+            require((audit["cases"], audit["queries"], audit["sat"], audit["unsat"])
+                    == (2, 5, 2, 3),
+                    "installed audit counts differ")
+
             manifest = json.loads(
                 (evidence_root / "SHA256.json").read_text(encoding="utf-8"))
             manifest_check = evidence.verify(evidence_root, manifest)
-            require(manifest_check["verified"],
-                    "installed self-test manifest verification failed")
+            require(
+                manifest_check == {
+                    "verified": True,
+                    "artifacts": 8,
+                    "format": "spectra.evidence_freeze.v1",
+                },
+                "installed self-test manifest verification differs",
+            )
 
+            retained_source = evidence_root / selftest["build"]["source"]
+            retained_library = evidence_root / selftest["build"]["library"]
             receipt = json.loads(
                 (evidence_root / selftest["build"]["receipt"]).read_text(
                     encoding="utf-8"))
+            require(retained_source.read_bytes() == source_path.read_bytes(),
+                    "retained source differs from installed source")
+            require(
+                hashlib.sha256(retained_source.read_bytes()).hexdigest()
+                == receipt["source_sha256"] == audit["source_sha256"],
+                "retained source identity differs",
+            )
+            require(
+                hashlib.sha256(retained_library.read_bytes()).hexdigest()
+                == receipt["library_sha256"] == audit["library_sha256"],
+                "retained native library identity differs",
+            )
             require(receipt["exact_api_version"] == exact.EXACT_API_VERSION == 1,
                     "exact API version differs")
             require(receipt["native_abi"] == exact.EXACT_NATIVE_ABI == 3,
                     "native ABI differs")
+            require("_spectra_exact_binary" not in sys.modules,
+                    "parent process loaded native code during child checks")
+
             report = {
                 "status": "PASS",
                 "scope": (
-                    "actual installed wheel; isolated Python; explicit native "
-                    "build and semantic self-test"
+                    "actual installed wheel; fresh isolated self-test process; "
+                    "separate fresh no-native audit process"
                 ),
                 "module": str(module_path),
                 "selftest_module": str(selftest_module_path),
                 "source": str(source_path),
                 "selftest_schema": selftest["schema"],
+                "audit_schema": audit["schema"],
                 "exact_api_version": exact.EXACT_API_VERSION,
                 "native_abi": exact.EXACT_NATIVE_ABI,
-                "cases": len(selftest["cases"]),
-                "proof_kinds": selftest["checks"]["proof_kinds"],
+                "cases": audit["cases"],
+                "queries": audit["queries"],
+                "sat": audit["sat"],
+                "unsat": audit["unsat"],
+                "proof_kinds": audit["proof_kinds"],
                 "optional_dependencies": False,
                 "manifest_verified": True,
                 "manifest_artifacts": manifest_check["artifacts"],
+                "retained_source": True,
+                "audit_process_isolated": True,
+                "audit_native_execution": audit["native_execution"],
+                "audit_native_module_loaded": audit["native_module_loaded"],
                 "receipt_source_sha256": receipt["source_sha256"],
                 "receipt_library_sha256": receipt["library_sha256"],
             }

@@ -12,16 +12,25 @@ source tree into a release-facing, independently reproducible exact service with
 one obvious smoke-test path, portable receipts, clean installed-wheel checks, and
 an explicit boundary between engineering verification and scientific replication.
 
-The first command is:
+The generation and audit commands are:
 
 ```bash
 spectra exact selftest exact-selftest
+spectra exact audit exact-selftest
 ```
 
-It creates a new directory, explicitly compiles the bundled native runtime, runs
-deterministic SAT and UNSAT cases, covers all three portable `SBP1` contradiction
-kinds, independently replays the serialized `SBC1 -> SCQ2` results without native
-code, rejects a mutated output, and writes a hash/size manifest.
+`selftest` creates a new directory, explicitly compiles the bundled native
+runtime, runs deterministic SAT and UNSAT cases, covers all three portable `SBP1`
+contradiction kinds, independently replays the serialized `SBC1 -> SCQ2` results,
+rejects a mutated output, retains the exact C++ source used for compilation, and
+writes a hash/size manifest.
+
+`audit` must run in a fresh process. It refuses to proceed when the native
+extension is already loaded, does not compile or execute native code, verifies the
+exact manifest inventory, recomputes retained source and binary hashes, checks the
+build receipt and frozen selector metadata, reconstructs the deterministic request
+banks, independently replays every answer, and repeats the mutation-rejection
+checks.
 
 ## Evidence layout
 
@@ -32,6 +41,7 @@ exact-selftest/
 ├── selftest.json
 ├── SHA256.json
 ├── native/
+│   ├── exact_binary.cpp
 │   ├── build.json
 │   └── _spectra_exact_binary<platform extension>
 └── cases/
@@ -41,10 +51,13 @@ exact-selftest/
     └── base-static-contradiction.scq2
 ```
 
-`selftest.json` is the semantic receipt. `SHA256.json` uses
-`spectra.evidence_freeze.v1` and binds every other retained file. The manifest
-establishes byte identity only; it does not establish data independence,
-scientific novelty, performance, operator value, or production safety.
+`selftest.json` is the generation receipt. `SHA256.json` uses
+`spectra.evidence_freeze.v1` and binds every other retained file. A passing audit
+emits `spectra.exact_selftest_audit.v1` and confirms that exactly eight artifacts
+are bound: the report, source, build receipt, native library, two request banks and
+two certified answer banks. The manifest establishes byte identity only; it does
+not establish data independence, scientific novelty, performance, operator value,
+or production safety.
 
 The destination must not already exist. A failed run leaves its partial directory
 for diagnosis. Do not rerun into that directory or fill in missing artifacts by
@@ -56,11 +69,14 @@ A release candidate containing the exact service is acceptable only when all of
 the following pass on one reviewed source identity:
 
 1. public source contracts and active-tree/release/workspace audits;
-2. the release-facing exact self-test from a source checkout;
-3. the same self-test from an isolated installed wheel with no repository imports;
+2. the release-facing exact self-test plus fresh-process no-native audit from a
+   source checkout;
+3. the same two-process generate/audit sequence from an isolated installed wheel
+   with no repository imports;
 4. Linux x86-64, native Linux ARM64, Windows/MSVC, UBSan, and ASan+UBSan contracts;
-5. exact API version, native ABI, source hash, binary hash, packet/output replay,
-   proof-kind coverage, and evidence-manifest verification;
+5. exact API version, native ABI, retained-source hash, binary hash, exact
+   artifact inventory, packet/output replay, proof-kind coverage, fresh-process
+   no-native enforcement, and evidence-manifest verification;
 6. package build and clean-install checks for every supported Python version; and
 7. no hidden benchmark threshold, post-hoc case deletion, or conversion of a
    resource/build failure into a mathematical result.

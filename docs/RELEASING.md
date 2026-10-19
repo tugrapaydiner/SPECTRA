@@ -21,13 +21,17 @@ python -m build --outdir dist/current
 python scripts/check_current_installation.py \
   --dist dist/current --out install-check
 spectra exact selftest release-selftest
+spectra exact audit release-selftest
 spectra evidence release-selftest release-selftest/SHA256.json
 ```
 
-Run the self-test in a fresh disposable directory. It compiles the bundled exact
-runtime, covers SAT and all three portable UNSAT proof kinds, independently replays
-the answer banks, rejects a mutation, and binds the retained files in a portable
-manifest. It is a semantic release smoke test, not a performance result or an
+Run the self-test in a fresh disposable directory, then audit it in a separate
+fresh process. Generation compiles the bundled exact runtime, covers SAT and all
+three portable UNSAT proof kinds, independently replays the answer banks, rejects
+a mutation, retains the exact source used for compilation, and binds every artifact
+in a portable manifest. Audit refuses an already-loaded native module, recomputes
+the source/binary identities and replays the frozen packets without native
+execution. These are semantic release checks, not a performance result or an
 independent scientific replication.
 
 A release containing `spectra.exact` must also pass the dedicated Linux x86,
