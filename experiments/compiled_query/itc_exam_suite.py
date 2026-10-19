@@ -1,7 +1,7 @@
 """Prospective multi-instance ITC-2007 exam-repair transfer suite.
 
-The selector-v2 rule is developed from the exposed synthetic panel and the
-published ``set9`` transfer only.  ``set10`` and ``set12`` are fixed holdout
+The structural-v10 selector is developed from the exposed synthetic panel,
+the retained failed-v3 confirmation, and the published ``set9`` transfer.  ``set10`` and ``set12`` are fixed holdout
 instances: their execution results must not be used to retune the policy.  This
 suite remains a bounded conflict-core repair study, not a full timetabling claim.
 """
@@ -18,7 +18,7 @@ from typing import Iterable
 from experiments.compiled_query import itc_exam_transfer as transfer
 
 SCHEMA = "spectra.itc2007.exam_repair_suite.v1"
-DEFAULT_HOLDOUT_MAX_RATIO = 1.15
+DEFAULT_HOLDOUT_MAX_RATIO = 1.05
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,7 @@ class SuiteCase:
     role: str
     instance_path: str
     solution_path: str
+    expected_mode: str | None = None
 
     def validate(self) -> "SuiteCase":
         if (type(self.name) is not str or not self.name
@@ -35,6 +36,8 @@ class SuiteCase:
             raise ValueError("suite case name must be lowercase kebab-case")
         if self.role not in ("development", "holdout", "replication"):
             raise ValueError("suite case role differs")
+        if self.expected_mode not in (None, "raw", "scc"):
+            raise ValueError("suite expected mode differs")
         for label, value in (("instance", self.instance_path), ("solution", self.solution_path)):
             if type(value) is not str or not value:
                 raise ValueError(f"suite case {label} path must be nonempty")
@@ -48,17 +51,17 @@ DEFAULT_CASES = (
     SuiteCase(
         "set9-development", "development",
         "examtt-instances/Instances/set9.exam",
-        "InitMethods/SolStore/set9_OBSIFeas_0.sol",
+        "InitMethods/SolStore/set9_OBSIFeas_0.sol", "scc",
     ),
     SuiteCase(
         "set10-holdout", "holdout",
         "examtt-instances/Instances/set10.exam",
-        "InitMethods/SolStore/set10_OBSIFeas_0.sol",
+        "InitMethods/SolStore/set10_OBSIFeas_0.sol", "scc",
     ),
     SuiteCase(
         "set12-holdout", "holdout",
         "examtt-instances/Instances/set12.exam",
-        "InitMethods/SolStore/set12_OBSIFeas_0.sol",
+        "InitMethods/SolStore/set12_OBSIFeas_0.sol", "raw",
     ),
 )
 
@@ -121,6 +124,7 @@ def freeze(root: Path, upstream_root: Path, *, cases: Iterable[SuiteCase] = DEFA
                 "role": case.role,
                 "instance_path": case.instance_path,
                 "solution_path": case.solution_path,
+                "expected_mode": case.expected_mode,
                 "manifest_sha256": (case_root / "manifest.sha256").read_text().strip(),
                 "instance_sha256": manifest["instance_sha256"],
                 "solution_sha256": manifest["solution_sha256"],
@@ -137,9 +141,10 @@ def freeze(root: Path, upstream_root: Path, *, cases: Iterable[SuiteCase] = DEFA
             "dataset_repository": transfer.DATASET_REPOSITORY,
             "dataset_commit": transfer.DATASET_COMMIT,
             "query_count_per_case": query_count,
-            "selector_policy": "structural-v2",
+            "selector_policy": "structural-v10",
             "selector_development_sources": [
                 "exposed synthetic graph panel",
+                "retained failed-v3 confirmation and v4 density sweep",
                 "set9 development transfer",
             ],
             "holdout_policy": (
@@ -170,7 +175,7 @@ def load_manifest(root: Path) -> dict:
     if (manifest.get("schema") != SCHEMA
             or manifest.get("dataset_repository") != transfer.DATASET_REPOSITORY
             or manifest.get("dataset_commit") != transfer.DATASET_COMMIT
-            or manifest.get("selector_policy") != "structural-v2"
+            or manifest.get("selector_policy") not in ("structural-v2", "structural-v3", "structural-v4", "structural-v5", "structural-v6", "structural-v7", "structural-v8", "structural-v10")
             or type(manifest.get("query_count_per_case")) is not int
             or manifest["query_count_per_case"] < 1):
         raise ValueError("suite manifest identity differs")
@@ -181,6 +186,7 @@ def load_manifest(root: Path) -> dict:
     checked = _cases(SuiteCase(
         item.get("name"), item.get("role"),
         item.get("instance_path"), item.get("solution_path"),
+        item.get("expected_mode"),
     ) for item in records if type(item) is dict)
     if len(checked) != len(records):
         raise ValueError("suite case inventory differs")
@@ -254,16 +260,32 @@ def audit(root: Path) -> dict:
         ))
         auto_elapsed = child_run["modes"]["auto"]["elapsed_ns"]
         raw_elapsed = child_run["modes"]["raw"]["elapsed_ns"]
+        scc_elapsed = child_run["modes"]["scc"]["elapsed_ns"]
         paired_median = statistics.median(
             auto / raw for auto, raw in zip(auto_elapsed, raw_elapsed)
         )
+        auto_scc_paired = statistics.median(
+            auto / scc for auto, scc in zip(auto_elapsed, scc_elapsed)
+        )
+        scc_raw_paired = statistics.median(
+            scc / raw for scc, raw in zip(scc_elapsed, raw_elapsed)
+        )
         selected = result["modes"]["auto"]["selected_mode"]
         reason = result["modes"]["auto"]["auto_policy_reason"]
+        expected_mode = item.get("expected_mode")
         gate_pass = True
-        if item["role"] == "holdout" and threshold is not None:
+        if expected_mode == "scc":
+            gate_pass = (
+                selected == "scc"
+                and auto_scc_paired <= 1.03
+                and scc_raw_paired <= 0.98
+            )
+        elif expected_mode == "raw":
+            gate_pass = selected == "raw" and paired_median <= (threshold or 1.05)
+        elif item["role"] == "holdout" and threshold is not None:
             gate_pass = paired_median <= threshold
-            if not gate_pass:
-                holdout_failures.append(item["name"])
+        if not gate_pass:
+            holdout_failures.append(item["name"])
         summaries.append({
             "name": item["name"],
             "role": item["role"],
@@ -278,10 +300,13 @@ def audit(root: Path) -> dict:
             "sat": result["modes"]["auto"]["sat"],
             "unsat": result["modes"]["auto"]["unsat"],
             "proof_kinds": result["modes"]["auto"]["proof_kinds"],
+            "expected_mode": expected_mode,
             "auto_selected_mode": selected,
             "auto_policy_reason": reason,
             "auto_vs_raw_median_ratio": result["auto_vs_raw_median_ratio"],
             "auto_vs_raw_paired_median_ratio": paired_median,
+            "auto_vs_scc_paired_median_ratio": auto_scc_paired,
+            "scc_vs_raw_paired_median_ratio": scc_raw_paired,
             "holdout_gate_pass": gate_pass,
             "audit_sha256": (case_root / "audit.sha256").read_text().strip(),
         })
@@ -298,6 +323,7 @@ def audit(root: Path) -> dict:
         "query_count_per_case": manifest["query_count_per_case"],
         "holdout_max_auto_raw_ratio": threshold,
         "holdout_gate_pass": not holdout_failures,
+        "selector_guard_pass": not holdout_failures,
         "holdout_failures": holdout_failures,
         "cases": summaries,
         "interpretation": [
