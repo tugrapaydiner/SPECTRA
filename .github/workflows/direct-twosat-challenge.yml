@@ -6,6 +6,11 @@ on:
       - part3/release-replication-readiness
     paths:
       - .github/workflows/direct-twosat-challenge.yml
+      - experiments/compiled_query/twosat_baseline.cpp
+      - experiments/compiled_query/twosat_baseline.py
+      - experiments/compiled_query/test_twosat_baseline.py
+      - experiments/compiled_query/twosat_challenge.py
+      - experiments/compiled_query/DIRECT_TWOSAT_CHALLENGE_PROTOCOL.md
   workflow_dispatch:
 
 permissions:
@@ -158,7 +163,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p challenge-evidence
-          cp -r challenge-results challenge-evidence/results
+          if [ -d challenge-results ]; then cp -r challenge-results challenge-evidence/results; fi
           cp challenge.log challenge-evidence/
           cp experiments/compiled_query/DIRECT_TWOSAT_CHALLENGE_PROTOCOL.md challenge-evidence/
           cp exact-build/build.json challenge-evidence/exact-build.json
