@@ -1,0 +1,111 @@
+name: part2-consolidation-patch-v2
+
+on:
+  push:
+    branches:
+      - performance/automatic-engine-selection-final
+    paths:
+      - .github/workflows/part2-consolidation-patch-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: part2-consolidation-patch-v2
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Install test tools
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Apply audited corrections
+        run: python .github/scripts/part2_consolidation_v2.py
+      - name: Verify corrected sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            spectra/exact.py \
+            experiments/compiled_query/exact.py \
+            experiments/compiled_query/itc_exam_transfer.py \
+            experiments/compiled_query/itc_exam_suite.py \
+            experiments/compiled_query/test_itc_exam_transfer.py \
+            experiments/compiled_query/test_itc_exam_suite.py \
+            experiments/compiled_query/auto_selector_benchmark.py
+          python - <<'PY'
+          from pathlib import Path
+
+          package = Path("spectra/exact.py").read_text()
+          research = Path("experiments/compiled_query/exact.py").read_text()
+          assert "structural policy v9" not in package
+          assert "below 256 vertices" not in research
+          assert "frozen structural policy v10" in package
+          assert "Below 96 vertices" in package and "Below 96 vertices" in research
+
+          transfer = Path("experiments/compiled_query/itc_exam_transfer.py").read_text()
+          assert "exam_repair_transfer.v2" in transfer
+          assert "WARMUPS = 8" in transfer and "REPEATS = 32" in transfer
+          assert "timing_schedule(WARMUPS, REPEATS)" in transfer
+
+          suite = Path("experiments/compiled_query/itc_exam_suite.py").read_text()
+          assert '"selector_guard_pass": not selector_failures' in suite
+          assert '"holdout_gate_pass": not holdout_failures' in suite
+          assert '"development_failures": development_failures' in suite
+
+          benchmark = Path(
+              "experiments/compiled_query/auto_selector_benchmark.py"
+          ).read_text()
+          assert "spectra.auto_selector_benchmark.v8" in benchmark
+          assert "MIN_SAMPLE_NS = 1_000_000" in benchmark
+          assert "statistics.median(realized_ratios)" in benchmark
+          assert "repeats must be a multiple of four" in benchmark
+
+          for workflow in (
+              ".github/workflows/part2-auto-selector-validation.yml",
+              ".github/workflows/part2-itc-balanced.yml",
+          ):
+              value = Path(workflow).read_text()
+              assert "performance/automatic-engine-selection-v10" not in value
+              assert "79520b8340ed9e16f8eda836b03d5ac1ede409e8" not in value
+              assert ".github/part2-validation-trigger" in value
+              assert "${{ github.sha }}" in value
+
+          for removed in (
+              ".github/workflows/part2-consolidation-patch.yml",
+              ".github/workflows/part2-consolidation-patch-v2.yml",
+              ".github/scripts/part2_consolidation_v2.py",
+          ):
+              assert not Path(removed).exists()
+          PY
+          git diff --check
+      - name: Run focused contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SPECTRA_EXACT_LIBRARY="$(
+            python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('part2-patch-build'))"
+          )"
+          python -m pytest tests/public/test_auto_selector_v10.py \
+            --confcutdir=tests/public -q
+          python -m pytest \
+            experiments/compiled_query/test_itc_exam_transfer.py \
+            experiments/compiled_query/test_itc_exam_suite.py -q
+      - name: Commit the audited patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Fix Part 2 evidence identity and timing design"
+          git push origin HEAD:refs/heads/performance/automatic-engine-selection-final
