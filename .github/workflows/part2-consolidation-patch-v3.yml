@@ -110,7 +110,7 @@ jobs:
               assert 'performance/automatic-engine-selection-v10' not in value
               assert '79520b8340ed9e16f8eda836b03d5ac1ede409e8' not in value
               assert '.github/part2-validation-trigger' in value
-              assert '${{ github.sha }}' in value
+              assert 'github.sha' in value
 
           for removed in (
               '.github/workflows/part2-consolidation-patch.yml',
