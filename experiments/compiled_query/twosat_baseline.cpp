@@ -511,7 +511,7 @@ struct DirectTwoSat {
             return false;
         }
 
-        std::fill(forced_sparse.begin(), forced_sparse.end(), 0);
+        std::fill(forced_sparse.begin(), forced_sparse.end(), std::uint8_t{0});
         std::vector<U> stack;
         stack.reserve(component_count);
         for (const U root : roots) {
