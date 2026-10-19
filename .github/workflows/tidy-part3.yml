@@ -132,6 +132,26 @@ jobs:
           text = replace_once(text, output_marker, environment_test, "environment tamper test")
           write(path, text)
 
+          # A valid second environment changes its report and receipt together.
+          path = "tests/public/test_exact_compare.py"
+          text = read(path)
+          refresh_marker = "    _refresh_manifest(second)\n"
+          if text.count(refresh_marker) != 2:
+              raise AssertionError("comparison manifest refresh count differs")
+          receipt_update = "".join([
+              '    second_receipt_path = second / second_report["build"]["receipt"]\n',
+              '    second_receipt = json.loads(\n',
+              '        second_receipt_path.read_text(encoding="utf-8")\n',
+              '    )\n',
+              '    second_receipt["platform"] = "different-test-platform"\n',
+              '    second_receipt_path.write_text(\n',
+              '        json.dumps(second_receipt, indent=2, sort_keys=True) + "\\n",\n',
+              '        encoding="utf-8",\n',
+              '    )\n',
+          ])
+          text = text.replace(refresh_marker, receipt_update + refresh_marker, 1)
+          write(path, text)
+
           # Linux ARM64 is part of the verified matrix.
           path = "docs/EXACT_REPLICATION.md"
           text = read(path)
