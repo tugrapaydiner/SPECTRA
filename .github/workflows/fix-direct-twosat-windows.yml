@@ -1,0 +1,71 @@
+name: fix-direct-twosat-windows
+
+on:
+  push:
+    branches:
+      - part3/release-replication-readiness
+    paths:
+      - .github/workflows/fix-direct-twosat-windows.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-direct-twosat-windows
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Make the byte fill type explicit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('experiments/compiled_query/twosat_baseline.cpp')
+          text = source.read_text(encoding='utf-8')
+          old = 'std::fill(forced_sparse.begin(), forced_sparse.end(), 0);'
+          new = 'std::fill(forced_sparse.begin(), forced_sparse.end(), std::uint8_t{0});'
+          if text.count(old) != 1:
+              raise AssertionError('expected one untyped byte fill')
+          source.write_text(text.replace(old, new), encoding='utf-8')
+
+          workflow = Path('.github/workflows/direct-twosat-challenge.yml')
+          value = workflow.read_text(encoding='utf-8')
+          old_paths = '''    paths:
+      - .github/workflows/direct-twosat-challenge.yml
+'''
+          new_paths = '''    paths:
+      - .github/workflows/direct-twosat-challenge.yml
+      - experiments/compiled_query/twosat_baseline.cpp
+      - experiments/compiled_query/twosat_baseline.py
+      - experiments/compiled_query/test_twosat_baseline.py
+      - experiments/compiled_query/twosat_challenge.py
+      - experiments/compiled_query/DIRECT_TWOSAT_CHALLENGE_PROTOCOL.md
+'''
+          if value.count(old_paths) != 1:
+              raise AssertionError('direct challenge path trigger differs')
+          workflow.write_text(value.replace(old_paths, new_paths), encoding='utf-8')
+          PY
+          g++ -std=c++17 -shared -fPIC -Wall -Wextra -Werror -O3 -DNDEBUG \
+            experiments/compiled_query/twosat_baseline.cpp \
+            -o /tmp/spectra_twosat.so
+          git diff --check
+      - name: Save the fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/fix-direct-twosat-windows.yml
+          git config user.name "Tugrap"
+          git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Fix the Windows build for direct 2-SAT"
+          git push origin HEAD:refs/heads/part3/release-replication-readiness
