@@ -2,7 +2,9 @@
 
 Date: 2026-10-19
 
-This document records the repository state immediately before consolidating Part 2 (automatic exact-engine selection). The commit containing this file is an octopus archive commit: every branch head listed below is a direct parent, so no experimental or research history is lost when redundant branch refs are removed.
+This document records the repository state immediately before consolidating Part 2 (automatic exact-engine selection). The octopus archive commit `f6a572246caffa05047d69403a6cd9ec3de1f38f` has every branch head listed below as a direct parent, so no experimental or research history is lost when redundant branch refs are removed.
+
+The canonical long-lived archive ref is `archive/research-history-20261016`. The temporary `archive/pre-part2-consolidation-2026-10-19` ref exists only for the guarded cleanup and may be removed after the canonical archive ref is verified.
 
 `main` is intentionally unchanged by the cleanup. The only active Part 2 branch after consolidation is intended to be `performance/automatic-engine-selection-final`, which remains the head of draft PR #71 until the full validation matrix passes.
 
@@ -39,4 +41,4 @@ Therefore v10 is the correct continuation baseline, but it must remain a draft a
 
 ## Recovery
 
-To recover any removed branch, create a new ref at the exact archived head shown above. Because every head is also a direct parent of this archive commit, ordinary Git reachability is retained even if a branch-name lookup is no longer available.
+To recover any removed branch, create a new ref at the exact archived head shown above. Every head is a direct parent of `f6a572246caffa05047d69403a6cd9ec3de1f38f`, and the canonical archive ref descends from that commit, so ordinary Git reachability is retained after the redundant branch names are removed.
