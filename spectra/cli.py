@@ -72,6 +72,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     exact_audit.add_argument("directory", type=Path)
     exact_audit.add_argument("--max-bytes", type=int, default=512 << 20)
+    exact_compare = exact_actions.add_parser(
+        "compare",
+        help="Audit and compare two or more self-test bundles without native code",
+    )
+    exact_compare.add_argument("directories", nargs="+", type=Path)
+    exact_compare.add_argument("--max-bytes", type=int, default=512 << 20)
     evidence = commands.add_parser("evidence", help="Verify a portable hash/size manifest, not scientific validity")
     evidence.add_argument("root", type=Path)
     evidence.add_argument("manifest", type=Path)
@@ -110,6 +116,15 @@ def main(argv: list[str] | None = None) -> int:
                 _emit(
                     verify_exact_selftest(
                         args.directory,
+                        max_bytes=args.max_bytes,
+                    ),
+                    None,
+                )
+            elif args.action == "compare":
+                from .exact_compare import compare_exact_selftests
+                _emit(
+                    compare_exact_selftests(
+                        args.directories,
                         max_bytes=args.max_bytes,
                     ),
                     None,
