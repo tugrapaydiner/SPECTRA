@@ -45,28 +45,24 @@ jobs:
                   raise AssertionError(f"{label}: expected one match, found {count}")
               return text.replace(old, new, 1)
 
-          # Bind the human-readable environment receipt to the native build receipt.
+          # Bind the readable environment fields to the native build receipt.
           path = "spectra/exact_selftest.py"
           text = read(path)
-          old = '''    _require(receipt["exact_api_version"] == EXACT_API_VERSION, "receipt API differs")
-          _require(receipt["native_abi"] == EXACT_NATIVE_ABI, "receipt ABI differs")
-          _require(receipt["library_name"] == library_path.name, "receipt library name differs")
-          '''
-          new = '''    _require(receipt["exact_api_version"] == EXACT_API_VERSION, "receipt API differs")
-          _require(receipt["native_abi"] == EXACT_NATIVE_ABI, "receipt ABI differs")
-          _require(receipt["python_implementation"] == "CPython", "receipt Python implementation differs")
-          _require(report["python"] == receipt["python_version"], "reported Python version differs")
-          _require(
-              report["python_executable"] == receipt["python_executable"],
-              "reported Python executable differs",
-          )
-          _require(report["platform"] == receipt["platform"], "reported platform differs")
-          _require(receipt["library_name"] == library_path.name, "receipt library name differs")
-          '''
-          text = replace_once(text, old, new, "environment receipt binding")
+          needle = '    _require(receipt["library_name"] == library_path.name, "receipt library name differs")\n'
+          environment_checks = "".join([
+              '    _require(receipt["python_implementation"] == "CPython", "receipt Python implementation differs")\n',
+              '    _require(report["python"] == receipt["python_version"], "reported Python version differs")\n',
+              '    _require(\n',
+              '        report["python_executable"] == receipt["python_executable"],\n',
+              '        "reported Python executable differs",\n',
+              '    )\n',
+              '    _require(report["platform"] == receipt["platform"], "reported platform differs")\n',
+              needle,
+          ])
+          text = replace_once(text, needle, environment_checks, "environment receipt binding")
           write(path, text)
 
-          # Keep the Part 3 CLI change focused; restore the pre-existing CNF error text.
+          # Keep this PR focused by restoring the existing CNF error text.
           path = "spectra/cli.py"
           text = read(path)
           text = replace_once(
@@ -77,7 +73,7 @@ jobs:
           )
           write(path, text)
 
-          # Challenge both the fresh-process guard and forged environment metadata.
+          # Challenge the fresh-process guard and forged environment metadata.
           path = "tests/public/test_exact_selftest.py"
           text = read(path)
           text = replace_once(
@@ -92,52 +88,51 @@ jobs:
               "from spectra.exact_selftest import AUDIT_SCHEMA, SCHEMA, verify_exact_selftest\n",
               "self-test imports",
           )
-          marker = '''
-          @pytest.mark.skipif(
-          '''
-          addition = '''
-          def _refresh_manifest(root: Path) -> None:
-              path = root / "SHA256.json"
-              old = json.loads(path.read_text(encoding="utf-8"))
-              manifest = capture(root, old["artifacts"])
-              path.write_text(
-                  json.dumps(manifest, indent=2, sort_keys=True) + "\\n",
-                  encoding="utf-8",
-              )
+          marker = "@pytest.mark.skipif(\n"
+          guard_tests = "".join([
+              'def _refresh_manifest(root: Path) -> None:\n',
+              '    path = root / "SHA256.json"\n',
+              '    old = json.loads(path.read_text(encoding="utf-8"))\n',
+              '    manifest = capture(root, old["artifacts"])\n',
+              '    path.write_text(\n',
+              '        json.dumps(manifest, indent=2, sort_keys=True) + "\\n",\n',
+              '        encoding="utf-8",\n',
+              '    )\n',
+              '\n',
+              '\n',
+              'def test_audit_refuses_an_already_loaded_native_module(tmp_path, monkeypatch):\n',
+              '    monkeypatch.setitem(sys.modules, "_spectra_exact_binary", object())\n',
+              '    with pytest.raises(RuntimeError, match="fresh process"):\n',
+              '        verify_exact_selftest(tmp_path)\n',
+              '\n',
+              '\n',
+              marker,
+          ])
+          text = replace_once(text, marker, guard_tests, "audit guard tests")
 
-
-          def test_audit_refuses_an_already_loaded_native_module(tmp_path, monkeypatch):
-              monkeypatch.setitem(sys.modules, "_spectra_exact_binary", object())
-              with pytest.raises(RuntimeError, match="fresh process"):
-                  verify_exact_selftest(tmp_path)
-
-
-          @pytest.mark.skipif(
-          '''
-          text = replace_once(text, marker, addition, "audit guard tests")
-          marker = '''    output = root / cases["mixed-current-query"]["output"]
-          '''
-          addition = '''    report_path = root / "selftest.json"
-              original_report = report_path.read_text(encoding="utf-8")
-              forged = json.loads(original_report)
-              forged["platform"] = "forged-platform"
-              report_path.write_text(
-                  json.dumps(forged, indent=2, sort_keys=True) + "\\n",
-                  encoding="utf-8",
-              )
-              _refresh_manifest(root)
-              environment_mismatch = _run("exact", "audit", root)
-              assert environment_mismatch.returncode == 2
-              assert "reported platform differs" in environment_mismatch.stderr.lower()
-              report_path.write_text(original_report, encoding="utf-8")
-              _refresh_manifest(root)
-
-              output = root / cases["mixed-current-query"]["output"]
-          '''
-          text = replace_once(text, marker, addition, "environment tamper test")
+          output_marker = '    output = root / cases["mixed-current-query"]["output"]\n'
+          environment_test = "".join([
+              '    report_path = root / "selftest.json"\n',
+              '    original_report = report_path.read_text(encoding="utf-8")\n',
+              '    forged = json.loads(original_report)\n',
+              '    forged["platform"] = "forged-platform"\n',
+              '    report_path.write_text(\n',
+              '        json.dumps(forged, indent=2, sort_keys=True) + "\\n",\n',
+              '        encoding="utf-8",\n',
+              '    )\n',
+              '    _refresh_manifest(root)\n',
+              '    environment_mismatch = _run("exact", "audit", root)\n',
+              '    assert environment_mismatch.returncode == 2\n',
+              '    assert "reported platform differs" in environment_mismatch.stderr.lower()\n',
+              '    report_path.write_text(original_report, encoding="utf-8")\n',
+              '    _refresh_manifest(root)\n',
+              '\n',
+              output_marker,
+          ])
+          text = replace_once(text, output_marker, environment_test, "environment tamper test")
           write(path, text)
 
-          # Correct the public support statement: Linux ARM64 is in the verified matrix.
+          # Linux ARM64 is part of the verified matrix.
           path = "docs/EXACT_REPLICATION.md"
           text = read(path)
           text = replace_once(
@@ -148,18 +143,18 @@ jobs:
           )
           write(path, text)
 
-          # Restore the historical navigation paragraph dropped by an earlier full-file edit.
+          # Restore the historical navigation paragraph dropped by an earlier edit.
           path = "CHANGELOG.md"
           text = read(path)
-          tail = '''Measurements retain small-case regressions, increased cold allocation and the
-          `UNKNOWN` large-case outcomes. No external SAT superiority or learned-capability
-          improvement was established. See [the efficiency guide](docs/EFFICIENCY_GUIDE.md).
-          '''
-          restored = tail + '''
-          Earlier packaging and compact-state work is described in
-          [current status](docs/STATUS.md) and the [history index](docs/history/README.md).
-          '''
-          text = replace_once(text, tail, restored, "changelog history links")
+          historical = "".join([
+              "Earlier packaging and compact-state work is described in\n",
+              "[current status](docs/STATUS.md) and the [history index](docs/history/README.md).\n",
+          ])
+          if historical not in text:
+              tail = "improvement was established. See [the efficiency guide](docs/EFFICIENCY_GUIDE.md).\n"
+              if not text.endswith(tail):
+                  raise AssertionError("changelog ending differs")
+              text += "\n" + historical
           write(path, text)
 
           Path(".github/workflows/tidy-part3.yml").unlink()
