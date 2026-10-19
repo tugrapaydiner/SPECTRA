@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: part2-consolidation-patch-v3
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   patch:
@@ -36,20 +36,24 @@ jobs:
 
           path = Path('.github/scripts/part2_consolidation_v2.py')
           text = path.read_text(encoding='utf-8')
-          old = '''        text = replace_once(
-              text,
-              f"name: {old_name}",
-              f"name: {new_name}",
-              label=f"{workflow} name",
+          old = (
+              '        text = replace_once(\n'
+              '            text,\n'
+              '            f"name: {old_name}",\n'
+              '            f"name: {new_name}",\n'
+              '            label=f"{workflow} name",\n'
+              '        )\n'
           )
-          '''
-          new = '''        workflow_name = f"name: {old_name}\\n"
-          if not text.startswith(workflow_name):
-              raise AssertionError(f"{workflow}: top-level workflow name differs")
-          text = text.replace(
-              workflow_name, f"name: {new_name}\\n", 1
+          new = (
+              '        workflow_name = f"name: {old_name}\\n"\n'
+              '        if not text.startswith(workflow_name):\n'
+              '            raise AssertionError(\n'
+              '                f"{workflow}: top-level workflow name differs"\n'
+              '            )\n'
+              '        text = text.replace(\n'
+              '            workflow_name, f"name: {new_name}\\n", 1\n'
+              '        )\n'
           )
-          '''
           if text.count(old) != 1:
               raise AssertionError('expected one workflow-name matcher block')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
