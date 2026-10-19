@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Release and replication readiness (Part 3, in progress)
+
+- Add `spectra exact selftest`, a deterministic release-facing command that
+  explicitly builds the bundled exact runtime, exercises both automatic selector
+  paths, SAT, and all three `SBP1`
+  contradiction kinds, independently replays every `SBC1 -> SCQ2` answer, rejects
+  a mutated output, retains the exact C++ source used for compilation, and writes
+  a portable hash/size manifest.
+- Add `spectra exact audit`, which requires a fresh process, refuses an already
+  loaded native module, verifies the exact ten-artifact inventory and build
+  receipt, recomputes retained source/binary identities, reconstructs the frozen
+  request banks, replays every proof/witness, and repeats tamper rejection without
+  native execution.
+- Add `spectra exact compare`, which audits two or more complete bundles and allows
+  platform, Python, compiler and native-library differences only when the source,
+  packets, certified outputs, proofs and selector receipts remain identical.
+- Retain complete installed-wheel bundles from Linux 3.11, Linux 3.13, ARM64 and
+  Windows, then compare them in one fresh no-native CI job and publish the semantic
+  comparison receipt as a separate artifact.
+- Keep performance, scientific replication, operator adoption and broad
+  solver-superiority claims explicitly outside these deterministic release checks.
+- Keep the published package at v0.7.1 until a separate reviewed release commit
+  updates both version fields and final assets are downloaded and verified.
+
 ### Versioned proof-carrying exact-query API
 
 - Add dependency-light `spectra.exact` API version 1 with native ABI 3.

@@ -20,11 +20,27 @@ python scripts/audit_workspace.py --out workspace-audit.json
 python -m build --outdir dist/current
 python scripts/check_current_installation.py \
   --dist dist/current --out install-check
+spectra exact selftest release-selftest
+spectra exact audit release-selftest
+spectra evidence release-selftest release-selftest/SHA256.json
 ```
+
+Run the self-test in a fresh disposable directory, then audit it in a separate
+fresh process. Generation compiles the bundled exact runtime, covers SAT and all
+three portable UNSAT proof kinds, independently replays the answer banks, rejects
+a mutation, retains the exact source used for compilation, and binds every artifact
+in a portable manifest. Audit refuses an already-loaded native module, recomputes
+the source/binary identities and replays the frozen packets without native
+execution. These are semantic release checks, not a performance result or an
+independent scientific replication.
 
 A release containing `spectra.exact` must also pass the dedicated Linux x86,
 Linux ARM64, Windows, and sanitizer matrix, plus the installed exact and exam-repair
-checks. Report excluded slow tests and disabled leak detection explicitly.
+checks. Each installed environment must retain its complete self-test bundle. The
+matrix must then run `spectra exact compare` over those bundles and retain the
+cross-platform receipt. Platform-specific native binaries may differ; the exact
+source, packets, certified outputs, proof kinds and selector receipts may not.
+Report excluded slow tests and disabled leak detection explicitly.
 
 ## Repository boundary
 
@@ -37,8 +53,9 @@ release or a hash-bound workflow artifact. Historical bytes remain reachable fro
 ## Publication
 
 Require successful checks for the exact final merge source. Retain the commit, tree,
-wheel, sdist, environment, and SHA-256 receipts. Creating a tag or draft release is
-not proof that publication completed; download and verify every final asset before
+wheel, sdist, environment, complete per-platform self-test bundles, cross-platform
+comparison receipt, and SHA-256 receipts. Creating a tag or draft release is not
+proof that publication completed; download and verify every final asset before
 announcing it.
 
 The latest published package remains

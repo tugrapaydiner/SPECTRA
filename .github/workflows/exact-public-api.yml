@@ -8,6 +8,8 @@ on:
       - 'spectra/_native/exact_binary.cpp'
       - 'spectra/cli.py'
       - 'tests/public/test_exact_api.py'
+      - 'tests/public/test_exact_selftest.py'
+      - 'tests/public/test_exact_compare.py'
       - 'tests/public/test_exam_repair.py'
       - 'tests/public/test_itc2007_exam.py'
       - 'scripts/check_exact_installation.py'
@@ -51,7 +53,7 @@ jobs:
           python -VV > exact-public-evidence/python.txt
           uname -a > exact-public-evidence/platform.txt
           export SPECTRA_EXACT_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('exact-public-evidence/source-build'))")"
-          python -m pytest tests/public/test_exact_api.py tests/public/test_exam_repair.py tests/public/test_itc2007_exam.py --confcutdir=tests/public -q --junitxml=exact-public-evidence/public-tests.xml 2>&1 | tee exact-public-evidence/public-tests.log
+          python -m pytest tests/public/test_exact_api.py tests/public/test_exact_selftest.py tests/public/test_exact_compare.py tests/public/test_exam_repair.py tests/public/test_itc2007_exam.py --confcutdir=tests/public -q --junitxml=exact-public-evidence/public-tests.xml 2>&1 | tee exact-public-evidence/public-tests.log
           python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-public-evidence/research-tests.xml 2>&1 | tee exact-public-evidence/research-tests.log
       - name: Build the compiler-free wheel and test its installed native API
         run: |
@@ -59,9 +61,16 @@ jobs:
           python -m build --wheel --outdir exact-public-evidence/dist 2>&1 | tee exact-public-evidence/build.log
           python -m venv exact-public-evidence/install
           exact-public-evidence/install/bin/python -m pip install --no-deps exact-public-evidence/dist/*.whl
-          exact-public-evidence/install/bin/python -I scripts/check_exact_installation.py --out exact-public-evidence/installed.json 2>&1 | tee exact-public-evidence/installed.log
+          exact-public-evidence/install/bin/python -I scripts/check_exact_installation.py --out exact-public-evidence/installed.json --evidence-dir exact-public-evidence/installed-selftest 2>&1 | tee exact-public-evidence/installed.log
           exact-public-evidence/install/bin/python -I scripts/check_exam_repair_installation.py --out exact-public-evidence/installed-exam.json 2>&1 | tee exact-public-evidence/installed-exam.log
           python scripts/check_release_readiness.py --out exact-public-evidence/release-readiness.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-selftest-${{ matrix.runner }}-py${{ matrix.python }}-${{ github.run_id }}
+          path: exact-public-evidence/installed-selftest/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -109,7 +118,7 @@ jobs:
           $library = python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('exact-public-evidence/source-build'))"
           "SPECTRA_EXACT_LIBRARY=$library" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $env:SPECTRA_EXACT_LIBRARY = $library
-          python -m pytest tests/public/test_exact_api.py tests/public/test_exam_repair.py tests/public/test_itc2007_exam.py --confcutdir=tests/public -q --junitxml=exact-public-evidence/public-tests.xml 2>&1 | Tee-Object exact-public-evidence/public-tests.log
+          python -m pytest tests/public/test_exact_api.py tests/public/test_exact_selftest.py tests/public/test_exact_compare.py tests/public/test_exam_repair.py tests/public/test_itc2007_exam.py --confcutdir=tests/public -q --junitxml=exact-public-evidence/public-tests.xml 2>&1 | Tee-Object exact-public-evidence/public-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-public-evidence/research-tests.xml 2>&1 | Tee-Object exact-public-evidence/research-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -119,16 +128,89 @@ jobs:
           $python = 'exact-public-evidence/install/Scripts/python.exe'
           & $python -m pip install --no-deps (Get-ChildItem exact-public-evidence/dist/*.whl).FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $python -I scripts/check_exact_installation.py --out exact-public-evidence/installed.json 2>&1 | Tee-Object exact-public-evidence/installed.log
+          & $python -I scripts/check_exact_installation.py --out exact-public-evidence/installed.json --evidence-dir exact-public-evidence/installed-selftest 2>&1 | Tee-Object exact-public-evidence/installed.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $python -I scripts/check_exam_repair_installation.py --out exact-public-evidence/installed-exam.json 2>&1 | Tee-Object exact-public-evidence/installed-exam.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-selftest-windows-py3.13-${{ github.run_id }}
+          path: exact-public-evidence/installed-selftest/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: exact-public-windows-py3.13-${{ github.run_id }}
           path: exact-public-evidence/
           include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+  compare-bundles:
+    name: Compare installed self-test bundles
+    needs: [linux-installed, windows-installed]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: exact-selftest-ubuntu-24.04-py3.11-${{ github.run_id }}
+          path: exact-bundles/linux-py311
+      - uses: actions/download-artifact@v4
+        with:
+          name: exact-selftest-ubuntu-24.04-py3.13-${{ github.run_id }}
+          path: exact-bundles/linux-py313
+      - uses: actions/download-artifact@v4
+        with:
+          name: exact-selftest-ubuntu-24.04-arm-py3.13-${{ github.run_id }}
+          path: exact-bundles/arm-py313
+      - uses: actions/download-artifact@v4
+        with:
+          name: exact-selftest-windows-py3.13-${{ github.run_id }}
+          path: exact-bundles/windows-py313
+      - name: Compare the retained results
+        run: |
+          set -euo pipefail
+          python -m spectra exact compare \
+            exact-bundles/linux-py311 \
+            exact-bundles/linux-py313 \
+            exact-bundles/arm-py313 \
+            exact-bundles/windows-py313 \
+            > cross-platform.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('cross-platform.json').read_text())
+          assert result['verified'] is True
+          assert result['bundles'] == 4
+          assert (result['cases'], result['queries'], result['sat'], result['unsat']) == (3, 13, 10, 3)
+          assert result['proof_kinds'] == [1, 2, 3]
+          assert result['selected_modes'] == {
+              'base-static-contradiction': 'raw',
+              'mixed-current-query': 'raw',
+              'strong-compression': 'scc',
+          }
+          assert result['selector_reasons'] == {
+              'base-static-contradiction': 'base_infeasible',
+              'mixed-current-query': 'short_weak_compression',
+              'strong-compression': 'scc_strong_compression',
+          }
+          assert len(result['environments']) == 4
+          assert result['native_execution'] is False
+          assert result['native_module_loaded'] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-selftest-comparison-${{ github.run_id }}
+          path: cross-platform.json
           retention-days: 90
           if-no-files-found: error
   sanitizers:
