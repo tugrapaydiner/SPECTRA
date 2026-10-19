@@ -1,0 +1,59 @@
+name: load-the-direct-comparison
+
+on:
+  push:
+    branches:
+      - research/native-2sat-challenge
+    paths:
+      - .github/workflows/load-the-direct-comparison.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: load-the-direct-comparison
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Add the development panel
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/.twosat-development/part* | tr -d '\n ' | base64 -d > /tmp/twosat-development.tar.gz
+          test "$(sha256sum /tmp/twosat-development.tar.gz | awk '{print $1}')" = "807c3b58595b4be07313f08a2a7ee01abb018dacd76e08144b0643f086e67207"
+          tar -xzf /tmp/twosat-development.tar.gz
+      - name: Check the panel structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'pytest==9.0.2'
+          python -m py_compile \
+            experiments/compiled_query/twosat_development_benchmark.py \
+            experiments/compiled_query/test_twosat_development_benchmark.py
+          python -m pytest \
+            experiments/compiled_query/test_twosat_development_benchmark.py \
+            --confcutdir=experiments/compiled_query -q
+          git diff --check
+      - name: Save the development panel
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf \
+            .github/.twosat-development \
+            .github/workflows/load-the-direct-comparison.yml
+          git config user.name "Tugrap"
+          git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Add the direct 2-SAT development panel"
+          git push origin HEAD:refs/heads/research/native-2sat-challenge
