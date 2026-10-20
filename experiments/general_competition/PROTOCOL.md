@@ -277,3 +277,23 @@ algorithmic leadership.
 
 The program stops and records a negative result at the first failed correctness or
 admission gate. Performance tuning never outranks semantic correctness.
+
+## 11. Current development checkpoint
+
+The repair at `1310c9f192a4a1e2f25303934f4f3e0fd4fd3a86` makes the native
+arbitrary-CNF matrix a permanent repository contract and keeps the workflow
+inventory guards synchronized with it. It also closes two validation gaps found
+while exercising the first exposed panel:
+
+- an UNSAT result whose PySAT/Lingeling proof stream omits the terminal empty
+  clause is completed with the standard `0` line only after the solver reports
+  UNSAT, and the resulting proof is still required to pass the pinned external
+  `drat-trim` checker; and
+- the exposed 2026 SAT-only diagnostic now uses the receipt-bound native binary
+  frontend instead of the Python reference reducer, while both arms still use the
+  same CaDiCaL backend and every accepted SAT model must satisfy the exact original
+  admitted CNF.
+
+This checkpoint is an engineering repair, not a performance result. The exposed
+panel remains development-only, and none of the general-leadership labels above
+may be used until their complete gates pass.
