@@ -17,7 +17,7 @@ ADAPTER_SOURCE = Path(__file__).with_name("cadical_exact_native.cpp")
 PROOF_SUPPORT_SOURCE = Path(__file__).with_name("direct_twosat_native.cpp")
 CADICAL_COMMIT = "c60730422e758ef1cebe7aeddf2dda31c996bf04"
 CADICAL_TAG = "rel-3.0.1"
-SCHEMA = "spectra.cadical_exact_build.v2"
+SCHEMA = "spectra.cadical_exact_build.v3"
 DEFAULT_BYTES = 512 << 20
 
 
@@ -97,6 +97,7 @@ def build_cadical_exact_runtime(
     cadical_source: str | Path,
     *,
     compiler: str | None = None,
+    c_compiler: str | None = None,
     sanitizer: str = "none",
 ) -> Path:
     """Build the exact pinned official sources as PIC and link the adapter."""
@@ -114,20 +115,28 @@ def build_cadical_exact_runtime(
     if not header.is_file():
         raise ValueError("CaDiCaL source tree is incomplete")
 
-    official_sources = sorted(
+    official_cpp_sources = sorted(
         path
         for path in source_dir.glob("*.cpp")
         if not path.name.endswith("ical.cpp")
     )
-    if len(official_sources) < 40:
+    official_c_sources = sorted(source_dir.glob("*.c"))
+    official_sources = [*official_cpp_sources, *official_c_sources]
+    if len(official_cpp_sources) < 40 or not official_c_sources:
         raise ValueError("CaDiCaL source inventory is unexpectedly small")
+    if not any(path.name == "kitten.c" for path in official_c_sources):
+        raise ValueError("CaDiCaL Kitten source is missing")
     source_records, source_manifest = _source_records(official_sources)
 
     compiler = compiler or "g++"
+    c_compiler = c_compiler or "gcc"
     resolved = shutil.which(compiler)
+    resolved_c = shutil.which(c_compiler)
     archiver = shutil.which("ar")
     if resolved is None:
         raise FileNotFoundError(compiler)
+    if resolved_c is None:
+        raise FileNotFoundError(c_compiler)
     if archiver is None:
         raise FileNotFoundError("ar")
 
@@ -140,22 +149,22 @@ def build_cadical_exact_runtime(
 
     started = time.perf_counter_ns()
     common = [
-        "-std=c++11",
         "-fPIC",
         "-DNBUILD",
         "-I" + str(source_dir),
     ]
     if sanitizer == "none":
-        official_flags = [*common, "-O3", "-DNDEBUG"]
+        optimization = ["-O3", "-DNDEBUG"]
     else:
-        official_flags = [
-            *common,
+        optimization = [
             "-O1",
             "-g",
             "-fno-omit-frame-pointer",
             "-fsanitize=" + sanitizer,
             "-fno-sanitize-recover=all",
         ]
+    cpp_flags = ["-std=c++11", *common, *optimization]
+    c_flags = ["-std=c11", *common, *optimization]
 
     adapter_flags = [
         "-std=c++17",
@@ -167,17 +176,8 @@ def build_cadical_exact_runtime(
         "-Werror",
         "-fno-fast-math",
         "-ffp-contract=off",
+        *optimization,
     ]
-    if sanitizer == "none":
-        adapter_flags += ["-O3", "-DNDEBUG"]
-    else:
-        adapter_flags += [
-            "-O1",
-            "-g",
-            "-fno-omit-frame-pointer",
-            "-fsanitize=" + sanitizer,
-            "-fno-sanitize-recover=all",
-        ]
 
     with tempfile.TemporaryDirectory(dir=destination) as temporary_name:
         temporary = Path(temporary_name)
@@ -186,11 +186,25 @@ def build_cadical_exact_runtime(
         objects = []
         compile_stdout = []
         compile_stderr = []
-        for index, source_file in enumerate(official_sources):
-            target_object = object_dir / f"{index:03d}-{source_file.stem}.o"
+        for index, source_file in enumerate(official_cpp_sources):
+            target_object = object_dir / f"cpp-{index:03d}-{source_file.stem}.o"
             command = [
                 resolved,
-                *official_flags,
+                *cpp_flags,
+                "-c",
+                str(source_file),
+                "-o",
+                str(target_object),
+            ]
+            completed = _run(command, cwd=temporary)
+            compile_stdout.append(completed.stdout)
+            compile_stderr.append(completed.stderr)
+            objects.append(target_object)
+        for index, source_file in enumerate(official_c_sources):
+            target_object = object_dir / f"c-{index:03d}-{source_file.stem}.o"
+            command = [
+                resolved_c,
+                *c_flags,
                 "-c",
                 str(source_file),
                 "-o",
@@ -220,7 +234,8 @@ def build_cadical_exact_runtime(
             str(target),
         ]
         adapter_result = _run(adapter_command, cwd=temporary)
-        version = _run([resolved, "--version"], cwd=temporary, timeout=30)
+        cxx_version = _run([resolved, "--version"], cwd=temporary, timeout=30)
+        c_version = _run([resolved_c, "--version"], cwd=temporary, timeout=30)
         record = {
             "schema": SCHEMA,
             "cadical_repository": "arminbiere/cadical",
@@ -229,7 +244,8 @@ def build_cadical_exact_runtime(
             "cadical_header_sha256": _sha256(header),
             "cadical_source_files": source_records,
             "cadical_source_manifest_sha256": source_manifest,
-            "cadical_compile_flags": official_flags,
+            "cadical_cpp_compile_flags": cpp_flags,
+            "cadical_c_compile_flags": c_flags,
             "cadical_archive_sha256": _sha256(archive),
             "archiver": archiver,
             "archive_command": archive_command,
@@ -243,7 +259,8 @@ def build_cadical_exact_runtime(
             "proof_support_source_sha256": _sha256(PROOF_SUPPORT_SOURCE),
             "library": library.name,
             "library_sha256": _sha256(target),
-            "compiler": version.stdout + version.stderr,
+            "cxx_compiler": cxx_version.stdout + cxx_version.stderr,
+            "c_compiler": c_version.stdout + c_version.stderr,
             "adapter_command": adapter_command,
             "adapter_stdout": adapter_result.stdout,
             "adapter_stderr": adapter_result.stderr,
@@ -275,7 +292,8 @@ def _check_receipt(library: Path) -> dict:
         "cadical_header_sha256",
         "cadical_source_files",
         "cadical_source_manifest_sha256",
-        "cadical_compile_flags",
+        "cadical_cpp_compile_flags",
+        "cadical_c_compile_flags",
         "cadical_archive_sha256",
         "archiver",
         "archive_command",
@@ -289,7 +307,8 @@ def _check_receipt(library: Path) -> dict:
         "proof_support_source_sha256",
         "library",
         "library_sha256",
-        "compiler",
+        "cxx_compiler",
+        "c_compiler",
         "adapter_command",
         "adapter_stdout",
         "adapter_stderr",
@@ -313,7 +332,8 @@ def _check_receipt(library: Path) -> dict:
     files = value["cadical_source_files"]
     if (
         type(files) is not list
-        or len(files) < 40
+        or len(files) < 41
+        or not any(row.get("name") == "kitten.c" for row in files if type(row) is dict)
         or any(
             type(row) is not dict
             or set(row) != {"name", "sha256"}
