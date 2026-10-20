@@ -1,7 +1,8 @@
-"""Frozen three-way benchmark for the fresh transfer suite.
+"""Three-way development benchmark for the exposed transfer suite.
 
-The source identities, graph inventory, answer-free query generator, measured arms,
-schedule and numerical gates are committed before any candidate graph is opened.
+The first prospective opening failed during workload admission. This module now
+measures the corrected generator on exposed graphs; its thresholds are development
+targets and cannot be promoted into a prospective or state-of-the-art claim.
 """
 from __future__ import annotations
 
@@ -29,7 +30,7 @@ from .cases import Case, load_case
 from .direct_twosat import Direct2SATRuntime
 from .fresh_transfer import EXPECTED, GRAPH_INVENTORY
 
-SCHEMA = "spectra.fresh_transfer_benchmark.v1"
+SCHEMA = "spectra.fresh_transfer_benchmark.v2"
 COUNTS = (1, 8, 64, 1024)
 ARMS = (
     "spectra",
@@ -305,8 +306,8 @@ def run(
     payload = {
         "schema": SCHEMA,
         "classification": (
-            "prospectively frozen fresh transfer across six unopened graph "
-            "families under matched proof-carrying first-use accounting"
+            "exposed six-family transfer development under matched "
+            "proof-carrying first-use accounting"
         ),
         "platform": platform.platform(),
         "machine": platform.machine(),
@@ -343,7 +344,7 @@ def run(
         encoding="utf-8",
     )
     if enforce and not gate_pass:
-        raise AssertionError("fresh transfer gate failed")
+        raise AssertionError("transfer development target failed")
     return payload
 
 
