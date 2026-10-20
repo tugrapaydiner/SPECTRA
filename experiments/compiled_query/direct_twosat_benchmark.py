@@ -1,7 +1,8 @@
 """Matched exploratory benchmark against an independent native 2-SAT service.
 
-All inputs are already exposed synthetic development cases. The result is a
-challenge diagnostic, not a holdout or a superiority claim.
+The default inputs are exposed synthetic development cases. Callers may supply
+other already exposed cases, but this harness does not turn them into a holdout or
+superiority claim.
 """
 from __future__ import annotations
 
@@ -56,13 +57,31 @@ def run(
     destination: Path,
     *,
     repeats: int = 24,
+    cases=None,
+    counts=COUNTS,
+    classification: str = (
+        "exposed synthetic development diagnostic; no holdout or SOTA claim"
+    ),
 ) -> dict:
+    counts = tuple(counts)
+    if (
+        not counts
+        or any(type(count) is not int or count < 1 for count in counts)
+        or tuple(sorted(set(counts))) != counts
+    ):
+        raise ValueError("counts must be strictly increasing positive integers")
     if type(repeats) is not int or repeats < len(ARMS) or repeats % len(ARMS):
         raise ValueError("repeats must be a positive multiple of six")
+    if type(classification) is not str or not classification:
+        raise ValueError("classification must be a non-empty string")
     destination.mkdir(parents=True, exist_ok=False)
     spectra = ExactRuntime(spectra_library)
     direct = Direct2SATRuntime(direct_library)
-    cases = synthetic_cases(count=max(COUNTS), n=96)
+    if cases is None:
+        cases = synthetic_cases(count=max(counts), n=96)
+    cases = tuple(cases)
+    if not cases or any(len(case.queries) < max(counts) for case in cases):
+        raise ValueError("every challenge case must contain the largest query prefix")
 
     def execute(arm: str, packet: bytes):
         if arm == "direct_auto":
@@ -106,7 +125,7 @@ def run(
                 case.problem.edges,
                 case.problem.masks,
             )
-            for count in COUNTS:
+            for count in counts:
                 rows = case.queries[:count]
                 packet = pack_session_packet(problem, rows)
                 first = {arm: execute(arm, packet) for arm in ARMS}
@@ -211,7 +230,7 @@ def run(
         gc.enable()
 
     by_count = {}
-    for count in COUNTS:
+    for count in counts:
         rows = [record for record in records if record["count"] == count]
         ratios = [row["best_direct_over_best_spectra"] for row in rows]
         by_count[str(count)] = {
@@ -232,15 +251,14 @@ def run(
         }
     payload = {
         "schema": SCHEMA,
-        "classification": (
-            "exposed synthetic development diagnostic; no holdout or SOTA claim"
-        ),
+        "classification": classification,
         "platform": platform.platform(),
         "machine": platform.machine(),
         "repeats": repeats,
         "schedule": "position-balanced six-arm blocks",
         "target_sample_ns": TARGET_SAMPLE_NS,
         "max_batch": MAX_BATCH,
+        "counts": list(counts),
         "summary": by_count,
         "records": records,
     }
