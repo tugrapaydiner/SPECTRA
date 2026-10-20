@@ -32,6 +32,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          from textwrap import dedent, indent
 
           files = (
               Path('spectra/_native/exact_binary.cpp'),
@@ -41,37 +42,8 @@ jobs:
           if original[0] != original[1]:
               raise AssertionError('packaged and research native sources differ before patch')
 
-          old_observer = '''        size_t at=16;
-          std::vector<W> selected(n,0);
-          ProofScratch proof_scratch; // call-local, also for concurrent observer use
-          for(U first_row=0;first_row<rows;first_row+=64) {
-              U lanes=std::min<U>(64,rows-first_row);W sat_mask=0;
-              std::fill(selected.begin(),selected.end(),0);
-              for(U lane=0;lane<lanes;++lane) {
-                  if(at+W(n)+5>size) return false;
-                  U status=output[at];const uint8_t* labels=output+at+1;
-                  U length=load32(output,at+1+W(n));at+=W(n)+5;
-                  if(W(length)>size-at) return false;
-                  auto pins=bank.row(first_row+lane);
-                  if(status==1) {
-                      if(length) return false;
-                      W bit=W(1)<<lane;sat_mask|=bit;
-                      for(U v=0;v<n;++v) {
-                          U label=labels[v];
-                          if(label==colors[2*v]) continue;
-                          if(label<k && label==colors[2*v+1]) selected[v]|=bit;
-                          else return false;
-                      }
-                      for(auto pin:pins)
-                          if(!((pin.allowed>>labels[pin.vertex])&1)) return false;
-                  } else if(status==0) {
-                      for(U v=0;v<n;++v) if(labels[v]) return false;
-                      if(!verify(pins,0,nullptr,0,output+at,length,&proof_scratch)) return false;
-                  } else return false;
-                  at+=length;
-              }
-          '''
-          new_observer = '''        size_t at=16;
+          observer = indent(dedent('''\
+          size_t at=16;
           std::vector<W> selected(n,0);
           ProofScratch proof_scratch; // call-local, also for concurrent observer use
           const uint8_t* static_proof=nullptr;
@@ -123,23 +95,10 @@ jobs:
                   } else return false;
                   at+=length;
               }
-          '''
+          '''), '        ')
 
-          old_rows = '''    } else {
-              // Keep this immutable-problem proof local to this call. Do not cache
-              // request-dependent contradictions or share mutable state across calls.
-              // The observer independently checks every emitted copy below.
-              std::vector<uint8_t> base_proof;
-              for(U row=0;row<count;++row) {
-                  Answer answer=solver.solve(solver_rows.row(row),&base_proof);
-                  if(row+1<count && solver.bad!=NIL && base_proof.empty() && answer.certificate.size()>=16
-                          && load32(answer.certificate.data(),4)==3)
-                      base_proof=answer.certificate;
-                  append(answer);
-              }
-          }
-          '''
-          new_rows = '''    } else if(solver.bad!=NIL) {
+          rows = indent(dedent('''\
+          } else if(solver.bad!=NIL) {
               // Preserve the historical proof priority: an empty current domain
               // still earns a kind-1 proof before the immutable contradiction.
               // Reuse request scratch, route the kind-3 proof once, and append one
@@ -187,17 +146,25 @@ jobs:
           } else {
               for(U row=0;row<count;++row) append(solver.solve(solver_rows.row(row)));
           }
-          '''
+          '''), '    ')
 
-          patched = []
-          for text in original:
-              if text.count(old_observer) != 1:
-                  raise AssertionError('observer block differs')
-              if text.count(old_rows) != 1:
-                  raise AssertionError('base row block differs')
-              text = text.replace(old_observer, new_observer, 1)
-              text = text.replace(old_rows, new_rows, 1)
-              patched.append(text)
+          def patch(text: str) -> str:
+              verify_at = text.index('    bool verify_bank(')
+              observer_start = text.index('        size_t at=16;\n', verify_at)
+              observer_end = text.index(
+                  '            // Check all SAT lanes against independently reconstructed original\n',
+                  observer_start,
+              )
+              text = text[:observer_start] + observer + text[observer_end:]
+
+              rows_start = text.index(
+                  '    } else {\n'
+                  '        // Keep this immutable-problem proof local to this call. Do not cache\n'
+              )
+              rows_end = text.index('    if(!observer.verify_bank', rows_start)
+              return text[:rows_start] + rows + text[rows_end:]
+
+          patched = [patch(text) for text in original]
           if patched[0] != patched[1]:
               raise AssertionError('packaged and research native sources differ after patch')
           for path, text in zip(files, patched):
