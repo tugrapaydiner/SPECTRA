@@ -1,0 +1,41 @@
+name: retire-native-2sat-branch
+
+on:
+  push:
+    branches:
+      - archive/research-history-20261016
+    paths:
+      - .github/workflows/retire-native-2sat-branch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  retire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: archive/research-history-20261016
+          fetch-depth: 0
+      - name: Verify the archived parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e f36183dd3c859abfa6b2eccf859a3b2599875b3b^{commit}
+          git merge-base --is-ancestor f36183dd3c859abfa6b2eccf859a3b2599875b3b HEAD
+          remote_head="$(git ls-remote --heads origin refs/heads/research/native-2sat-challenge | awk '{print $1}')"
+          test "$remote_head" = "f36183dd3c859abfa6b2eccf859a3b2599875b3b"
+      - name: Remove the redundant branch name
+        run: git push origin --delete research/native-2sat-challenge
+      - name: Remove this one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/retire-native-2sat-branch.yml
+          git config user.name "Tugrap"
+          git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
+          git add -A
+          git commit -m "Remove the completed branch cleanup workflow"
+          git push origin HEAD:refs/heads/archive/research-history-20261016
