@@ -18,8 +18,10 @@ import subprocess
 import tempfile
 import time
 
-SOURCE = Path(__file__).with_name("direct_twosat_native.cpp")
-SCHEMA = "spectra.direct_twosat_build.v1"
+NATIVE_SOURCE = Path(__file__).with_name("direct_twosat_native.cpp")
+MODE_SOURCE = Path(__file__).with_name("direct_twosat_modes.cpp")
+SOURCE_FILES = (NATIVE_SOURCE, MODE_SOURCE)
+SCHEMA = "spectra.direct_twosat_build.v2"
 DEFAULT_BYTES = 512 << 20
 
 
@@ -51,6 +53,16 @@ def _sha256(path: Path) -> str:
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1 << 20), b""):
             digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _source_digest() -> str:
+    digest = hashlib.sha256()
+    for path in SOURCE_FILES:
+        digest.update(path.name.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
     return digest.hexdigest()
 
 
@@ -99,7 +111,7 @@ def build_direct_twosat_runtime(
     started = time.perf_counter_ns()
     with tempfile.TemporaryDirectory(dir=destination) as temporary:
         target = Path(temporary) / library.name
-        command = [resolved, *flags, str(SOURCE.resolve()), "-o", str(target)]
+        command = [resolved, *flags, str(MODE_SOURCE.resolve()), "-o", str(target)]
         completed = subprocess.run(
             command,
             cwd=temporary,
@@ -122,9 +134,9 @@ def build_direct_twosat_runtime(
         )
         record = {
             "schema": SCHEMA,
-            "source": SOURCE.name,
+            "sources": [path.name for path in SOURCE_FILES],
+            "source_sha256": _source_digest(),
             "library": library.name,
-            "source_sha256": _sha256(SOURCE),
             "library_sha256": _sha256(target),
             "compiler": version.stdout + version.stderr,
             "command": command,
@@ -152,9 +164,9 @@ def _check_receipt(library: Path) -> dict:
     value = json.loads(receipt.read_text(encoding="utf-8"))
     expected = {
         "schema",
-        "source",
-        "library",
+        "sources",
         "source_sha256",
+        "library",
         "library_sha256",
         "compiler",
         "command",
@@ -167,13 +179,29 @@ def _check_receipt(library: Path) -> dict:
     }
     if type(value) is not dict or set(value) != expected or value["schema"] != SCHEMA:
         raise ValueError("direct 2-SAT build receipt differs")
-    if value["source"] != SOURCE.name or value["library"] != library.name:
-        raise ValueError("direct 2-SAT build identity differs")
-    if value["source_sha256"] != _sha256(SOURCE):
+    if value["sources"] != [path.name for path in SOURCE_FILES]:
+        raise ValueError("direct 2-SAT source inventory differs")
+    if value["library"] != library.name:
+        raise ValueError("direct 2-SAT library identity differs")
+    if value["source_sha256"] != _source_digest():
         raise ValueError("direct 2-SAT source hash differs")
     if value["library_sha256"] != _sha256(library):
         raise ValueError("direct 2-SAT library hash differs")
     return value
+
+
+def _configure_solver(library, name: str):
+    function = getattr(library, name)
+    function.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.c_uint64,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(_Stats),
+    ]
+    function.restype = ctypes.c_int
+    return function
 
 
 class Direct2SATRuntime:
@@ -183,32 +211,33 @@ class Direct2SATRuntime:
         self.path = Path(library).resolve()
         self.receipt = _check_receipt(self.path)
         self._library = ctypes.CDLL(str(self.path))
-        self._library.direct_twosat_solve.argtypes = [
-            ctypes.POINTER(ctypes.c_uint8),
-            ctypes.c_size_t,
-            ctypes.c_uint64,
-            ctypes.POINTER(ctypes.c_void_p),
-            ctypes.POINTER(ctypes.c_size_t),
-            ctypes.POINTER(_Stats),
-        ]
-        self._library.direct_twosat_solve.restype = ctypes.c_int
+        self._solvers = {
+            "auto": _configure_solver(self._library, "direct_twosat_solve"),
+            "dag": _configure_solver(self._library, "direct_twosat_solve_dag"),
+        }
         self._library.direct_twosat_error.argtypes = []
         self._library.direct_twosat_error.restype = ctypes.c_char_p
         self._library.direct_twosat_free.argtypes = [ctypes.c_void_p]
         self._library.direct_twosat_free.restype = None
 
     def solve_session_packet(
-        self, packet: bytes, *, max_bytes: int = DEFAULT_BYTES
+        self,
+        packet: bytes,
+        *,
+        engine: str = "auto",
+        max_bytes: int = DEFAULT_BYTES,
     ) -> Direct2SATResult:
         if type(packet) is not bytes:
             raise TypeError("direct 2-SAT packet must be bytes")
+        if engine not in self._solvers:
+            raise ValueError("direct 2-SAT engine must be auto or dag")
         if type(max_bytes) is not int or not 1 <= max_bytes < 1 << 64:
             raise ValueError("max_bytes must be a positive uint64")
         buffer = (ctypes.c_uint8 * len(packet)).from_buffer_copy(packet)
         pointer = ctypes.c_void_p()
         size = ctypes.c_size_t()
         stats = _Stats()
-        code = self._library.direct_twosat_solve(
+        code = self._solvers[engine](
             buffer,
             len(packet),
             max_bytes,
@@ -228,13 +257,14 @@ class Direct2SATRuntime:
             output = ctypes.string_at(pointer, size.value)
         finally:
             self._library.direct_twosat_free(pointer)
-        engine = {1: "closure", 2: "dag"}.get(stats.engine)
-        if engine is None:
+        selected_engine = {1: "closure", 2: "dag"}.get(stats.engine)
+        if selected_engine is None:
             raise RuntimeError("direct 2-SAT returned an unknown engine")
         return Direct2SATResult(
             output=output,
             info={
-                "engine": engine,
+                "requested_engine": engine,
+                "engine": selected_engine,
                 "vertices": stats.n,
                 "edges": stats.edges,
                 "queries": stats.queries,
