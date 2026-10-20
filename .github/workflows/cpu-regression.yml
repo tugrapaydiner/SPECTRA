@@ -32,16 +32,19 @@ jobs:
           cache: pip
       - name: Install the dependency-light contract runner
         run: python -m pip install 'pytest==9.0.2'
-      - name: Compile and run arbitrary-CNF admission and binary-core contracts
+      - name: Compile and run arbitrary-CNF, binary-core and scoring contracts
         run: |
           python -m py_compile \
             experiments/general_competition/cnf_admission.py \
             experiments/general_competition/binary_core.py \
+            experiments/general_competition/official_score.py \
             experiments/general_competition/test_cnf_admission.py \
-            experiments/general_competition/test_binary_core.py
+            experiments/general_competition/test_binary_core.py \
+            experiments/general_competition/test_official_score.py
           python -m pytest \
             experiments/general_competition/test_cnf_admission.py \
             experiments/general_competition/test_binary_core.py \
+            experiments/general_competition/test_official_score.py \
             -q
 
   cpu-contracts:
