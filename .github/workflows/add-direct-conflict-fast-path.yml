@@ -154,7 +154,8 @@ jobs:
           python -m pytest \
             tests/public/test_exact_api.py \
             tests/public/test_exact_selftest.py \
-            tests/public/test_auto_selector_v10.py -q
+            tests/public/test_auto_selector_v10.py \
+            --confcutdir=tests/public -q
           git diff --check
       - name: Commit the checked implementation
         shell: bash
