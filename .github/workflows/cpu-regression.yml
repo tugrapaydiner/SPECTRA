@@ -11,6 +11,39 @@ concurrency:
   group: cpu-contracts-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  general-cnf-contracts:
+    name: General CNF contracts (Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install the dependency-light contract runner
+        run: python -m pip install 'pytest==9.0.2'
+      - name: Compile and run arbitrary-CNF admission and binary-core contracts
+        run: |
+          python -m py_compile \
+            experiments/general_competition/cnf_admission.py \
+            experiments/general_competition/binary_core.py \
+            experiments/general_competition/test_cnf_admission.py \
+            experiments/general_competition/test_binary_core.py
+          python -m pytest \
+            experiments/general_competition/test_cnf_admission.py \
+            experiments/general_competition/test_binary_core.py \
+            -q
+
   cpu-contracts:
     name: CPU contracts (Python ${{ matrix.python }})
     strategy:
