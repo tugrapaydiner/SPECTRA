@@ -26,9 +26,9 @@ from spectra.exact import (
 from .cases import synthetic_cases
 from .direct_twosat import Direct2SATRuntime
 
-SCHEMA = "spectra.direct_twosat_challenge.v2"
+SCHEMA = "spectra.direct_twosat_challenge.v3"
 SPECTRA_ARMS = ("raw", "scc", "auto")
-DIRECT_ARMS = ("direct_auto", "direct_dag")
+DIRECT_ARMS = ("direct_auto", "direct_dag", "direct_tile")
 ARMS = SPECTRA_ARMS + DIRECT_ARMS
 COUNTS = (1, 8, 64, 1024)
 TARGET_SAMPLE_NS = 2_000_000
@@ -55,10 +55,10 @@ def run(
     direct_library: Path,
     destination: Path,
     *,
-    repeats: int = 25,
+    repeats: int = 24,
 ) -> dict:
     if type(repeats) is not int or repeats < len(ARMS) or repeats % len(ARMS):
-        raise ValueError("repeats must be a positive multiple of five")
+        raise ValueError("repeats must be a positive multiple of six")
     destination.mkdir(parents=True, exist_ok=False)
     spectra = ExactRuntime(spectra_library)
     direct = Direct2SATRuntime(direct_library)
@@ -69,6 +69,8 @@ def run(
             return direct.solve_session_packet(packet, engine="auto")
         if arm == "direct_dag":
             return direct.solve_session_packet(packet, engine="dag")
+        if arm == "direct_tile":
+            return direct.solve_session_packet(packet, engine="tile")
         return spectra.solve_session_packet(packet, mode=arm)
 
     def timed(arm: str, packet: bytes, batch: int):
@@ -134,7 +136,7 @@ def run(
                 samples = {arm: [] for arm in ARMS}
                 orders = []
                 rng = random.Random(int.from_bytes(hashlib.sha256(
-                    f"direct-2sat-v2/{case.name}/{count}".encode()
+                    f"direct-2sat-v3/{case.name}/{count}".encode()
                 ).digest()[:8], "big"))
                 blocks = repeats // len(ARMS)
                 for _block in range(blocks):
@@ -186,8 +188,14 @@ def run(
                     "scc_over_best_direct": (
                         medians["scc"] / medians[best_direct_arm]
                     ),
-                    "direct_auto_over_direct_dag": (
-                        medians["direct_auto"] / medians["direct_dag"]
+                    "direct_auto_over_best_direct": (
+                        medians["direct_auto"] / medians[best_direct_arm]
+                    ),
+                    "direct_dag_over_best_direct": (
+                        medians["direct_dag"] / medians[best_direct_arm]
+                    ),
+                    "direct_tile_over_best_direct": (
+                        medians["direct_tile"] / medians[best_direct_arm]
                     ),
                 }
                 records.append(record)
@@ -215,17 +223,12 @@ def run(
             "scc_over_best_direct_geomean": _gmean(
                 [row["scc_over_best_direct"] for row in rows]
             ),
-            "direct_auto_over_direct_dag_geomean": _gmean(
-                [row["direct_auto_over_direct_dag"] for row in rows]
-            ),
             "direct_wins": sum(ratio < 1 for ratio in ratios),
             "spectra_wins_or_ties": sum(ratio >= 1 for ratio in ratios),
-            "direct_dag_selected": sum(
-                row["best_direct_arm"] == "direct_dag" for row in rows
-            ),
-            "direct_auto_selected": sum(
-                row["best_direct_arm"] == "direct_auto" for row in rows
-            ),
+            "best_direct_counts": {
+                arm: sum(row["best_direct_arm"] == arm for row in rows)
+                for arm in DIRECT_ARMS
+            },
         }
     payload = {
         "schema": SCHEMA,
@@ -235,7 +238,7 @@ def run(
         "platform": platform.platform(),
         "machine": platform.machine(),
         "repeats": repeats,
-        "schedule": "position-balanced five-arm blocks",
+        "schedule": "position-balanced six-arm blocks",
         "target_sample_ns": TARGET_SAMPLE_NS,
         "max_batch": MAX_BATCH,
         "summary": by_count,
@@ -253,7 +256,7 @@ def main(argv=None) -> int:
     parser.add_argument("--spectra-library", type=Path, required=True)
     parser.add_argument("--direct-library", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--repeats", type=int, default=25)
+    parser.add_argument("--repeats", type=int, default=24)
     args = parser.parse_args(argv)
     result = run(
         args.spectra_library.resolve(),
