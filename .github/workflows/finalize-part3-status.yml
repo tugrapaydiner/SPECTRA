@@ -49,7 +49,7 @@ jobs:
           text = text[:start] + replacement + text[end:]
           path.write_text(text, encoding='utf-8')
           PY
-      - name: Apply the Part 3 identity and status corrections
+      - name: Apply the source and status corrections
         run: python .github/scripts/sync_part3_status.py
       - name: Normalize the rewritten status document
         run: |
@@ -60,12 +60,9 @@ jobs:
           lines = path.read_text(encoding='utf-8').splitlines()
           path.write_text('\n'.join(line.rstrip(' \t') for line in lines) + '\n', encoding='utf-8')
           PY
-      - name: Remove every temporary sync workflow
-        run: |
-          rm .github/workflows/finish-part3-sync.yml
-          rm .github/workflows/complete-part3-sync.yml
-          rm .github/workflows/finalize-part3-status.yml
-      - name: Verify the final source and documentation
+      - name: Leave workflow cleanup to the repository connection
+        run: git checkout HEAD -- .github/workflows
+      - name: Verify the source-only commit
         shell: bash
         run: |
           set -euo pipefail
@@ -92,20 +89,7 @@ jobs:
           assert 'finish-part3' in status
           assert 'FAIL_ADMISSION' in status
           assert 'Part 3 is **in progress**' in status
-
-          workflow = Path('.github/workflows/exact-public-api.yml').read_text()
-          assert 'tests/public/test_auto_selector_v11.py' in workflow
-          assert 'tests/public/test_exact_edgeless.py' in workflow
-          assert 'cancel-in-progress: true' in workflow
-
-          for removed in (
-              '.github/scripts/sync_part3_status.py',
-              '.github/workflows/sync-part3-status.yml',
-              '.github/workflows/finish-part3-sync.yml',
-              '.github/workflows/complete-part3-sync.yml',
-              '.github/workflows/finalize-part3-status.yml',
-          ):
-              assert not Path(removed).exists()
+          assert not Path('.github/scripts/sync_part3_status.py').exists()
           PY
           python -m pytest \
             tests/public/test_auto_selector_v11.py \
@@ -114,9 +98,17 @@ jobs:
           python -m pytest \
             experiments/compiled_query/test_exact.py \
             -k selector_policy_identity_matches_the_public_api -q
-          python scripts/check_active_tree.py > active-tree.json
+          python - <<'PY'
+          import subprocess
+
+          changed = subprocess.check_output(
+              ['git', 'diff', '--name-only'], text=True
+          ).splitlines()
+          assert changed
+          assert not any(path.startswith('.github/workflows/') for path in changed)
+          PY
           git diff --check
-      - name: Commit the synchronized Part 3 source
+      - name: Commit the synchronized source
         shell: bash
         run: |
           set -euo pipefail
@@ -124,5 +116,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --check
-          git commit -m "Keep Part 3's selector identity and status in sync"
+          git commit -m "Align Part 3's selector identity and status"
           git push origin HEAD:refs/heads/finish-part3
