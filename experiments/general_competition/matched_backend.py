@@ -27,6 +27,10 @@ class PreparedFormula:
 
     nvars: int
     clauses: tuple[Clause, ...]
+    empty_clauses: int
+    unit_clauses: int
+    binary_clauses: int
+    long_clauses: int
 
 
 @dataclass(frozen=True)
@@ -51,6 +55,10 @@ class MatchedComparison:
     frontend: str
     original_variables: int
     original_clauses: int
+    empty_input_clauses: int
+    unit_input_clauses: int
+    binary_input_clauses: int
+    long_input_clauses: int
     residual_variables: int
     residual_clauses: int
     core_elapsed_ns: int
@@ -73,8 +81,22 @@ def prepare_matched_formula(
     nvars: int,
     clauses: Iterable[Iterable[int]],
 ) -> PreparedFormula:
-    """Canonicalize once outside a repeated matched-backend timing loop."""
-    return PreparedFormula(nvars=nvars, clauses=canonical_cnf(nvars, clauses))
+    """Canonicalize and classify once outside a repeated matched timing loop."""
+    canonical = canonical_cnf(nvars, clauses)
+    empties = sum(len(row) == 0 for row in canonical)
+    units = sum(len(row) == 1 for row in canonical)
+    binaries = sum(len(row) == 2 for row in canonical)
+    longs = sum(len(row) >= 3 for row in canonical)
+    if empties + units + binaries + longs != len(canonical):
+        raise AssertionError("canonical clause classification differs")
+    return PreparedFormula(
+        nvars=nvars,
+        clauses=canonical,
+        empty_clauses=empties,
+        unit_clauses=units,
+        binary_clauses=binaries,
+        long_clauses=longs,
+    )
 
 
 def _complete_model(raw: list[int] | None, nvars: int) -> tuple[bool, ...]:
@@ -156,12 +178,15 @@ def compare_prepared_backend(
     solver_name: str = "cadical195",
     order: str = "plain-first",
     native_core=None,
+    native_prepared=None,
 ) -> MatchedComparison:
     """Compare one already-canonical formula without repeating untimed setup."""
     if type(prepared) is not PreparedFormula:
         raise ValueError("prepared must come from prepare_matched_formula")
     if order not in ("plain-first", "hybrid-first"):
         raise ValueError("order must be plain-first or hybrid-first")
+    if native_prepared is not None and native_core is None:
+        raise ValueError("native_prepared requires native_core")
     nvars = prepared.nvars
     canonical = prepared.clauses
 
@@ -172,11 +197,37 @@ def compare_prepared_backend(
             raise AssertionError("binary core failed independent replay")
         frontend = "python-replayable-binary-core"
     else:
-        core = native_core.reduce(nvars, canonical)
+        if native_prepared is None:
+            core = native_core.reduce(nvars, canonical)
+        else:
+            if (
+                native_prepared.nvars != nvars
+                or native_prepared.clause_count != len(canonical)
+                or native_prepared.unit_clauses != prepared.unit_clauses
+                or native_prepared.binary_clauses != prepared.binary_clauses
+                or native_prepared.long_clauses != prepared.long_clauses
+            ):
+                raise ValueError("native prepared formula differs from prepared CNF")
+            core = native_core.reduce_prepared(native_prepared)
         if core.original_nvars != nvars:
             raise AssertionError("native binary core belongs to another formula")
-        frontend = "native-binary-core-v1"
+        frontend = "native-binary-core-prepared-v1"
     core_elapsed = perf_counter_ns() - core_started
+
+    inferred_empty = (
+        core.normalized_clause_count
+        - core.unit_input_clauses
+        - core.binary_input_clauses
+        - core.long_input_clauses
+    )
+    if (
+        core.normalized_clause_count != len(canonical)
+        or inferred_empty != prepared.empty_clauses
+        or core.unit_input_clauses != prepared.unit_clauses
+        or core.binary_input_clauses != prepared.binary_clauses
+        or core.long_input_clauses != prepared.long_clauses
+    ):
+        raise AssertionError("binary-core input classification differs")
 
     def hybrid_run() -> BackendRun:
         if core.contradiction:
@@ -228,11 +279,15 @@ def compare_prepared_backend(
     ratio = hybrid_total / max(plain.elapsed_ns, 1)
     accepted = plain_sat and hybrid_sat and plain.model_verified and hybrid.model_verified
     return MatchedComparison(
-        schema="spectra.general_matched_backend.v1",
+        schema="spectra.general_matched_backend.v2",
         solver=solver_name,
         frontend=frontend,
         original_variables=nvars,
         original_clauses=len(canonical),
+        empty_input_clauses=prepared.empty_clauses,
+        unit_input_clauses=prepared.unit_clauses,
+        binary_input_clauses=prepared.binary_clauses,
+        long_input_clauses=prepared.long_clauses,
         residual_variables=core.reduced_nvars,
         residual_clauses=len(core.residual_clauses),
         core_elapsed_ns=core_elapsed,
@@ -263,9 +318,15 @@ def compare_same_backend(
 ) -> MatchedComparison:
     """Canonicalize once, then compare both arms under the same backend."""
     prepared = prepare_matched_formula(nvars, clauses)
+    native_prepared = (
+        native_core.prepare_canonical(prepared.nvars, prepared.clauses)
+        if native_core is not None
+        else None
+    )
     return compare_prepared_backend(
         prepared,
         solver_name=solver_name,
         order=order,
         native_core=native_core,
+        native_prepared=native_prepared,
     )

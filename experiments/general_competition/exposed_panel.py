@@ -28,7 +28,7 @@ from experiments.general_competition.native_binary_core import (
     build_native_binary_core,
 )
 
-SCHEMA = "spectra.general_exposed_panel.v1"
+SCHEMA = "spectra.general_exposed_panel.v2"
 BASE_URL = "https://benchmark-database.de/file/"
 MAX_DOWNLOAD_BYTES = 512 << 20
 
@@ -114,6 +114,12 @@ def run_panel(
         prepared_started = perf_counter_ns()
         prepared = prepare_matched_formula(admitted.nvars, admitted.clauses)
         canonicalization_ns = perf_counter_ns() - prepared_started
+        packing_started = perf_counter_ns()
+        native_prepared = native_core.prepare_canonical(
+            prepared.nvars,
+            prepared.clauses,
+        )
+        native_packing_ns = perf_counter_ns() - packing_started
 
         samples = []
         for repeat in range(repeats):
@@ -123,6 +129,7 @@ def run_panel(
                 solver_name=solver_name,
                 order=order,
                 native_core=native_core,
+                native_prepared=native_prepared,
             )
             if not comparison.accepted_for_timing:
                 raise RuntimeError("SAT-only exposed panel produced an unaccepted answer")
@@ -139,7 +146,12 @@ def run_panel(
             "variables": admitted.receipt.declared_variables,
             "declared_clauses": admitted.receipt.declared_clauses,
             "canonical_clauses": len(prepared.clauses),
+            "empty_clauses": prepared.empty_clauses,
+            "unit_clauses": prepared.unit_clauses,
+            "binary_clauses": prepared.binary_clauses,
+            "long_clauses": prepared.long_clauses,
             "untimed_canonicalization_ns": canonicalization_ns,
+            "untimed_native_packing_ns": native_packing_ns,
             "problem_class": admitted.receipt.problem_class,
             "expected": case.expected,
             "reference_solver": case.reference_solver,
@@ -159,7 +171,7 @@ def run_panel(
         "schema": SCHEMA,
         "status": "MEASURED",
         "solver": solver_name,
-        "frontend": "native-binary-core-v1",
+        "frontend": "native-binary-core-prepared-v1",
         "repeats": repeats,
         "selection": (
             "four exposed 2026 Main SAT instances with winning-solver public runtimes "
@@ -167,9 +179,9 @@ def run_panel(
         ),
         "metric": "post-admission fresh-construction solver stage",
         "preparation_scope": (
-            "admission and one canonicalization per formula are retained diagnostics "
-            "outside the metric; every sample rebuilds the native reduction and both "
-            "CaDiCaL arms from scratch"
+            "admission, one canonicalization, and one immutable canonical ABI packing "
+            "per formula are retained diagnostics outside the metric; every sample "
+            "rebuilds the native reduction and both CaDiCaL arms from scratch"
         ),
         "median_hybrid_over_plain": median(all_ratios),
         "hybrid_wins": sum(ratio < 1.0 for ratio in all_ratios),

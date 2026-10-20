@@ -1,12 +1,14 @@
 """Explicit native acceleration for the replayable general-CNF binary core.
 
-The C++ library returns only the reduction needed by a residual solver. The
-Python binary core remains the proof-producing authority: callers can demand an
-exact field-for-field comparison before accepting a native result.
+The generic entry point validates and canonicalizes arbitrary clauses. Repeated
+matched comparisons can instead prepare an already-canonical formula once and
+use the receipt-bound canonical entry point without re-packing or re-canonicalizing it.
+The Python binary core remains the proof-producing authority for retained claims.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from array import array
+from dataclasses import dataclass, field
 import ctypes
 import hashlib
 import json
@@ -128,6 +130,24 @@ def build_native_binary_core(
 
 
 @dataclass(frozen=True)
+class PreparedNativeFormula:
+    """Canonical CNF packed once for the receipt-bound canonical entry point."""
+
+    nvars: int
+    clause_count: int
+    literal_count: int
+    unit_clauses: int
+    binary_clauses: int
+    long_clauses: int
+    empty_clauses: int
+    clauses: tuple[tuple[int, ...], ...] = field(repr=False, compare=False)
+    _offset_storage: array = field(repr=False, compare=False)
+    _literal_storage: array = field(repr=False, compare=False)
+    _offset_view: object = field(repr=False, compare=False)
+    _literal_view: object = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True)
 class NativeReduction:
     schema: str
     contradiction: bool
@@ -187,7 +207,7 @@ class NativeBinaryCore:
         module.spectra_general_abi.restype = ctypes.c_uint32
         if module.spectra_general_abi() != NATIVE_ABI:
             raise ValueError("loaded native general-CNF ABI differs")
-        module.spectra_general_reduce.argtypes = [
+        signature = [
             ctypes.c_uint32,
             ctypes.c_uint64,
             ctypes.POINTER(ctypes.c_uint64),
@@ -198,7 +218,10 @@ class NativeBinaryCore:
             ctypes.POINTER(ctypes.c_char),
             ctypes.c_uint64,
         ]
-        module.spectra_general_reduce.restype = ctypes.c_int
+        for name in ("spectra_general_reduce", "spectra_general_reduce_canonical"):
+            function = getattr(module, name)
+            function.argtypes = signature
+            function.restype = ctypes.c_int
         module.spectra_general_free.argtypes = [ctypes.c_void_p]
         module.spectra_general_free.restype = None
         self.path = path
@@ -206,11 +229,15 @@ class NativeBinaryCore:
         self._module = module
 
     @staticmethod
-    def _flatten(
-        nvars: int, clauses: Iterable[Iterable[int]]
-    ) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    def _validate_nvars(nvars: int) -> None:
         if type(nvars) is not int or not 0 <= nvars <= 10_000_000:
             raise ValueError("nvars must be an exact integer in [0, 10000000]")
+
+    @classmethod
+    def _flatten(
+        cls, nvars: int, clauses: Iterable[Iterable[int]]
+    ) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        cls._validate_nvars(nvars)
         try:
             iterator = iter(clauses)
         except TypeError as error:
@@ -234,6 +261,89 @@ class NativeBinaryCore:
                 literals.append(literal)
             offsets.append(len(literals))
         return tuple(offsets), tuple(literals)
+
+    @classmethod
+    def prepare_canonical(
+        cls,
+        nvars: int,
+        clauses: Iterable[Iterable[int]],
+    ) -> PreparedNativeFormula:
+        """Validate canonical order and pack one immutable repeated-use input."""
+        cls._validate_nvars(nvars)
+        try:
+            iterator = iter(clauses)
+        except TypeError as error:
+            raise ValueError("clauses must be iterable") from error
+
+        offsets = array("Q", [0])
+        literals = array("i")
+        previous: tuple[int, ...] | None = None
+        frozen_rows: list[tuple[int, ...]] = []
+        units = binaries = longs = empties = 0
+        for clause in iterator:
+            if type(clause) is not tuple:
+                try:
+                    row = tuple(clause)
+                except TypeError as error:
+                    raise ValueError("each clause must be iterable") from error
+            else:
+                row = clause
+            previous_key: tuple[int, int] | None = None
+            previous_abs = 0
+            for literal in row:
+                if (
+                    type(literal) is not int
+                    or literal == 0
+                    or abs(literal) > nvars
+                ):
+                    raise ValueError(
+                        "CNF literal must be a nonzero in-range exact integer"
+                    )
+                key = (abs(literal), literal)
+                if previous_key is not None and not previous_key < key:
+                    raise ValueError("canonical CNF clause is not strictly normalized")
+                if previous_key is not None and previous_abs == abs(literal):
+                    raise ValueError("canonical CNF clause is tautological")
+                previous_key = key
+                previous_abs = abs(literal)
+                literals.append(literal)
+            if previous is not None and not (len(previous), previous) < (len(row), row):
+                raise ValueError("canonical CNF clauses are not strictly ordered")
+            previous = row
+            frozen_rows.append(row)
+            offsets.append(len(literals))
+            if len(row) == 0:
+                empties += 1
+            elif len(row) == 1:
+                units += 1
+            elif len(row) == 2:
+                binaries += 1
+            elif len(row) >= 3:
+                longs += 1
+
+        if offsets.itemsize != ctypes.sizeof(ctypes.c_uint64):
+            raise RuntimeError("platform unsigned-long-long width differs")
+        if literals.itemsize != ctypes.sizeof(ctypes.c_int32):
+            raise RuntimeError("platform integer width differs")
+        literal_count = len(literals)
+        if literal_count == 0:
+            literals.append(0)  # stable non-null buffer; count remains zero
+        offset_view = (ctypes.c_uint64 * len(offsets)).from_buffer(offsets)
+        literal_view = (ctypes.c_int32 * len(literals)).from_buffer(literals)
+        return PreparedNativeFormula(
+            nvars=nvars,
+            clause_count=len(offsets) - 1,
+            literal_count=literal_count,
+            unit_clauses=units,
+            binary_clauses=binaries,
+            long_clauses=longs,
+            empty_clauses=empties,
+            clauses=tuple(frozen_rows),
+            _offset_storage=offsets,
+            _literal_storage=literals,
+            _offset_view=offset_view,
+            _literal_view=literal_view,
+        )
 
     @staticmethod
     def _parse(payload: bytes) -> NativeReduction:
@@ -332,21 +442,25 @@ class NativeBinaryCore:
             propagated_classes=propagated,
         )
 
-    def reduce(
-        self, nvars: int, clauses: Iterable[Iterable[int]]
+    def _invoke(
+        self,
+        function,
+        *,
+        nvars: int,
+        clause_count: int,
+        offsets,
+        literals,
+        literal_count: int,
     ) -> NativeReduction:
-        offsets, literals = self._flatten(nvars, clauses)
-        offset_array = (ctypes.c_uint64 * len(offsets))(*offsets)
-        literal_array = (ctypes.c_int32 * len(literals))(*literals)
         output = ctypes.POINTER(ctypes.c_uint8)()
         output_size = ctypes.c_uint64()
         error = ctypes.create_string_buffer(1024)
-        status = self._module.spectra_general_reduce(
+        status = function(
             nvars,
-            len(offsets) - 1,
-            offset_array,
-            literal_array,
-            len(literals),
+            clause_count,
+            offsets,
+            literals,
+            literal_count,
             ctypes.byref(output),
             ctypes.byref(output_size),
             error,
@@ -369,6 +483,58 @@ class NativeBinaryCore:
         if reduction.original_nvars != nvars:
             raise RuntimeError("native general-CNF result belongs to another formula")
         return reduction
+
+    def reduce(
+        self, nvars: int, clauses: Iterable[Iterable[int]]
+    ) -> NativeReduction:
+        offsets, literals = self._flatten(nvars, clauses)
+        offset_array = (ctypes.c_uint64 * len(offsets))(*offsets)
+        literal_array = (ctypes.c_int32 * max(1, len(literals)))(*(literals or (0,)))
+        return self._invoke(
+            self._module.spectra_general_reduce,
+            nvars=nvars,
+            clause_count=len(offsets) - 1,
+            offsets=offset_array,
+            literals=literal_array,
+            literal_count=len(literals),
+        )
+
+    def reduce_prepared(self, prepared: PreparedNativeFormula) -> NativeReduction:
+        if type(prepared) is not PreparedNativeFormula:
+            raise ValueError("prepared formula must come from prepare_canonical")
+        if (
+            prepared.empty_clauses == 0
+            and prepared.unit_clauses == 0
+            and prepared.binary_clauses == 0
+        ):
+            identity = tuple(range(1, prepared.nvars + 1))
+            return NativeReduction(
+                schema="spectra.general_native_binary_core.v1",
+                contradiction=False,
+                conflict_kind="",
+                conflict_variable=0,
+                original_nvars=prepared.nvars,
+                normalized_clause_count=prepared.clause_count,
+                unit_input_clauses=0,
+                binary_input_clauses=0,
+                long_input_clauses=prepared.long_clauses,
+                class_count=prepared.nvars,
+                class_literals=identity,
+                reduced_nvars=prepared.nvars,
+                residual_clauses=prepared.clauses,
+                mapping=identity,
+                fixed=(False,) * prepared.nvars,
+                equivalent_variables_removed=0,
+                propagated_classes=0,
+            )
+        return self._invoke(
+            self._module.spectra_general_reduce_canonical,
+            nvars=prepared.nvars,
+            clause_count=prepared.clause_count,
+            offsets=prepared._offset_view,
+            literals=prepared._literal_view,
+            literal_count=prepared.literal_count,
+        )
 
 
 def assert_matches_python(

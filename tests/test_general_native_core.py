@@ -10,6 +10,7 @@ import pytest
 
 from experiments.general_competition.binary_core import (
     build_binary_core,
+    canonical_cnf,
     model_satisfies,
     verify_binary_core,
 )
@@ -42,14 +43,49 @@ def native_runtime(tmp_path_factory):
 
 def check_equal(runtime, nvars, clauses):
     frozen = tuple(tuple(row) for row in clauses)
+    canonical = canonical_cnf(nvars, frozen)
     reference = build_binary_core(nvars, frozen)
     assert verify_binary_core(nvars, frozen, reference)
+
     native = runtime.reduce(nvars, frozen)
     assert_matches_python(nvars, frozen, native, reference)
+
+    prepared = runtime.prepare_canonical(nvars, canonical)
+    prepared_native = runtime.reduce_prepared(prepared)
+    assert_matches_python(nvars, frozen, prepared_native, reference)
+    assert prepared.clauses == canonical
+    assert prepared.clause_count == len(canonical)
+    assert (
+        prepared.empty_clauses
+        + prepared.unit_clauses
+        + prepared.binary_clauses
+        + prepared.long_clauses
+        == len(canonical)
+    )
+    for field in (
+        "contradiction",
+        "conflict_kind",
+        "conflict_variable",
+        "original_nvars",
+        "normalized_clause_count",
+        "unit_input_clauses",
+        "binary_input_clauses",
+        "long_input_clauses",
+        "class_count",
+        "class_literals",
+        "reduced_nvars",
+        "residual_clauses",
+        "mapping",
+        "fixed",
+        "equivalent_variables_removed",
+        "propagated_classes",
+    ):
+        assert getattr(prepared_native, field) == getattr(native, field)
 
     if not reference.contradiction and reference.reduced_nvars <= 6:
         for model in product((False, True), repeat=reference.reduced_nvars):
             assert native.lift(model) == reference.lift(model)
+            assert prepared_native.lift(model) == reference.lift(model)
             if model_satisfies(
                 reference.reduced_nvars,
                 reference.residual_clauses,
@@ -91,6 +127,31 @@ def test_zero_variable_and_direct_conflict_cases_match(native_runtime):
         check_equal(native_runtime, 0, clauses)
     check_equal(native_runtime, 1, ((1,), (-1,)))
     check_equal(native_runtime, 4, ((1, -2), (-1, 2), (2,), (-4, 3), (-3, 4)))
+
+
+def test_prepared_identity_path_never_calls_native_code(native_runtime, monkeypatch):
+    prepared = native_runtime.prepare_canonical(3, ((1, 2, 3),))
+
+    def fail(*_args, **_kwargs):
+        raise AssertionError("identity prepared formula should not enter native code")
+
+    monkeypatch.setattr(native_runtime, "_invoke", fail)
+    reduction = native_runtime.reduce_prepared(prepared)
+    assert not reduction.contradiction
+    assert reduction.residual_clauses == ((1, 2, 3),)
+    assert reduction.mapping == (1, 2, 3)
+    assert reduction.class_literals == (1, 2, 3)
+
+
+def test_prepared_canonical_validation_is_fail_closed(native_runtime):
+    with pytest.raises(ValueError, match="strictly normalized"):
+        native_runtime.prepare_canonical(2, ((2, 1),))
+    with pytest.raises(ValueError, match="strictly ordered"):
+        native_runtime.prepare_canonical(2, ((1,), (1,)))
+    with pytest.raises(ValueError, match="tautological"):
+        native_runtime.prepare_canonical(2, ((-1, 1),))
+    with pytest.raises(ValueError, match="literal"):
+        native_runtime.prepare_canonical(1, ((True,),))
 
 
 def test_wrapper_rejects_non_exact_and_out_of_range_inputs(native_runtime):

@@ -30,6 +30,13 @@ def test_same_backend_sat_models_are_checked_before_timing_acceptance():
     assert result.plain.model_verified and result.hybrid.model_verified
     assert result.residual_variables <= result.original_variables
     assert result.residual_clauses <= result.original_clauses
+    assert (
+        result.empty_input_clauses
+        + result.unit_input_clauses
+        + result.binary_input_clauses
+        + result.long_input_clauses
+        == result.original_clauses
+    )
 
 
 def test_prepared_formula_matches_the_direct_path():
@@ -37,7 +44,14 @@ def test_prepared_formula_matches_the_direct_path():
     prepared = prepare_matched_formula(4, clauses)
     direct = compare_same_backend(4, clauses)
     repeated = compare_prepared_backend(prepared)
-    assert prepared == PreparedFormula(4, prepared.clauses)
+    assert prepared == PreparedFormula(
+        4,
+        prepared.clauses,
+        prepared.empty_clauses,
+        prepared.unit_clauses,
+        prepared.binary_clauses,
+        prepared.long_clauses,
+    )
     assert direct.answers_agree == repeated.answers_agree
     assert direct.accepted_for_timing == repeated.accepted_for_timing
     assert direct.plain.status == repeated.plain.status == "SAT_CHECKED"
@@ -71,13 +85,26 @@ def test_invalid_execution_order_is_rejected():
     sys.platform != "linux" or shutil.which("g++") is None,
     reason="native binary-core builder requires Linux and g++",
 )
-def test_native_frontend_keeps_original_model_checking(tmp_path):
+def test_native_frontend_reuses_one_packed_formula_and_checks_models(tmp_path):
     runtime = NativeBinaryCore(build_native_binary_core(tmp_path / "native-core"))
     prepared = prepare_matched_formula(
         4,
         ((1, -2), (-1, 2), (2, 3, 4), (-3, 4)),
     )
-    result = compare_prepared_backend(prepared, native_core=runtime)
-    assert result.frontend == "native-binary-core-v1"
+    native_prepared = runtime.prepare_canonical(prepared.nvars, prepared.clauses)
+    result = compare_prepared_backend(
+        prepared,
+        native_core=runtime,
+        native_prepared=native_prepared,
+    )
+    assert result.frontend == "native-binary-core-prepared-v1"
     assert result.accepted_for_timing
     assert result.plain.model_verified and result.hybrid.model_verified
+
+    other = runtime.prepare_canonical(1, ((1,),))
+    with pytest.raises(ValueError, match="differs"):
+        compare_prepared_backend(
+            prepared,
+            native_core=runtime,
+            native_prepared=other,
+        )
