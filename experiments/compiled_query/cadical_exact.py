@@ -17,7 +17,7 @@ ADAPTER_SOURCE = Path(__file__).with_name("cadical_exact_native.cpp")
 PROOF_SUPPORT_SOURCE = Path(__file__).with_name("direct_twosat_native.cpp")
 CADICAL_COMMIT = "c60730422e758ef1cebe7aeddf2dda31c996bf04"
 CADICAL_TAG = "rel-3.0.1"
-SCHEMA = "spectra.cadical_exact_build.v1"
+SCHEMA = "spectra.cadical_exact_build.v2"
 DEFAULT_BYTES = 512 << 20
 
 
@@ -52,7 +52,22 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _run(command: list[str], *, cwd: Path, timeout: int = 600) -> subprocess.CompletedProcess:
+def _source_records(paths: list[Path]) -> tuple[list[dict], str]:
+    records = []
+    manifest = hashlib.sha256()
+    for path in paths:
+        observed = _sha256(path)
+        records.append({"name": path.name, "sha256": observed})
+        manifest.update(path.name.encode("utf-8"))
+        manifest.update(b"\0")
+        manifest.update(observed.encode("ascii"))
+        manifest.update(b"\n")
+    return records, manifest.hexdigest()
+
+
+def _run(
+    command: list[str], *, cwd: Path, timeout: int = 900
+) -> subprocess.CompletedProcess:
     completed = subprocess.run(
         command,
         cwd=cwd,
@@ -72,10 +87,9 @@ def _run(command: list[str], *, cwd: Path, timeout: int = 600) -> subprocess.Com
 
 
 def _head(source: Path) -> str:
-    completed = _run(
+    return _run(
         ["git", "rev-parse", "HEAD"], cwd=source, timeout=30
-    )
-    return completed.stdout.strip()
+    ).stdout.strip()
 
 
 def build_cadical_exact_runtime(
@@ -85,26 +99,37 @@ def build_cadical_exact_runtime(
     compiler: str | None = None,
     sanitizer: str = "none",
 ) -> Path:
-    """Build the pinned official CaDiCaL core and the project-owned adapter."""
+    """Build the exact pinned official sources as PIC and link the adapter."""
     if os.name != "posix" or platform.system() != "Linux":
-        raise NotImplementedError("the official CaDiCaL challenge currently builds on Linux")
+        raise NotImplementedError(
+            "the official CaDiCaL challenge currently builds on Linux"
+        )
     if sanitizer not in ("none", "undefined", "address,undefined"):
         raise ValueError("unsupported sanitizer")
     source = Path(cadical_source).resolve(strict=True)
     if _head(source) != CADICAL_COMMIT:
         raise ValueError("CaDiCaL source commit differs from the frozen challenge")
-    header = source / "src" / "cadical.hpp"
-    configure = source / "configure"
-    if not header.is_file() or not configure.is_file():
+    source_dir = source / "src"
+    header = source_dir / "cadical.hpp"
+    if not header.is_file():
         raise ValueError("CaDiCaL source tree is incomplete")
+
+    official_sources = sorted(
+        path
+        for path in source_dir.glob("*.cpp")
+        if not path.name.endswith("ical.cpp")
+    )
+    if len(official_sources) < 40:
+        raise ValueError("CaDiCaL source inventory is unexpectedly small")
+    source_records, source_manifest = _source_records(official_sources)
 
     compiler = compiler or "g++"
     resolved = shutil.which(compiler)
-    make = shutil.which("make")
+    archiver = shutil.which("ar")
     if resolved is None:
         raise FileNotFoundError(compiler)
-    if make is None:
-        raise FileNotFoundError("make")
+    if archiver is None:
+        raise FileNotFoundError("ar")
 
     destination = Path(directory).resolve()
     destination.mkdir(parents=True, exist_ok=True)
@@ -114,15 +139,25 @@ def build_cadical_exact_runtime(
         raise FileExistsError("CaDiCaL adapter build outputs already exist")
 
     started = time.perf_counter_ns()
-    configure_result = _run([str(configure)], cwd=source)
-    build_result = _run(
-        [make, "-C", "build", "-j2", "libcadical.a"], cwd=source
-    )
-    static_library = source / "build" / "libcadical.a"
-    if not static_library.is_file():
-        raise RuntimeError("official CaDiCaL build did not produce libcadical.a")
+    common = [
+        "-std=c++11",
+        "-fPIC",
+        "-DNBUILD",
+        "-I" + str(source_dir),
+    ]
+    if sanitizer == "none":
+        official_flags = [*common, "-O3", "-DNDEBUG"]
+    else:
+        official_flags = [
+            *common,
+            "-O1",
+            "-g",
+            "-fno-omit-frame-pointer",
+            "-fsanitize=" + sanitizer,
+            "-fno-sanitize-recover=all",
+        ]
 
-    flags = [
+    adapter_flags = [
         "-std=c++17",
         "-shared",
         "-fPIC",
@@ -134,9 +169,9 @@ def build_cadical_exact_runtime(
         "-ffp-contract=off",
     ]
     if sanitizer == "none":
-        flags += ["-O3", "-DNDEBUG"]
+        adapter_flags += ["-O3", "-DNDEBUG"]
     else:
-        flags += [
+        adapter_flags += [
             "-O1",
             "-g",
             "-fno-omit-frame-pointer",
@@ -144,28 +179,64 @@ def build_cadical_exact_runtime(
             "-fno-sanitize-recover=all",
         ]
 
-    with tempfile.TemporaryDirectory(dir=destination) as temporary:
-        target = Path(temporary) / library.name
-        command = [
+    with tempfile.TemporaryDirectory(dir=destination) as temporary_name:
+        temporary = Path(temporary_name)
+        object_dir = temporary / "cadical-objects"
+        object_dir.mkdir()
+        objects = []
+        compile_stdout = []
+        compile_stderr = []
+        for index, source_file in enumerate(official_sources):
+            target_object = object_dir / f"{index:03d}-{source_file.stem}.o"
+            command = [
+                resolved,
+                *official_flags,
+                "-c",
+                str(source_file),
+                "-o",
+                str(target_object),
+            ]
+            completed = _run(command, cwd=temporary)
+            compile_stdout.append(completed.stdout)
+            compile_stderr.append(completed.stderr)
+            objects.append(target_object)
+
+        archive = temporary / "libcadical-pic.a"
+        archive_command = [archiver, "rcs", str(archive), *(str(x) for x in objects)]
+        archive_result = _run(archive_command, cwd=temporary)
+        if not archive.is_file():
+            raise RuntimeError("PIC CaDiCaL archive was not produced")
+
+        target = temporary / library.name
+        adapter_command = [
             resolved,
-            *flags,
-            "-I" + str(source / "src"),
+            *adapter_flags,
+            "-I" + str(source_dir),
             str(ADAPTER_SOURCE.resolve()),
-            str(static_library),
+            str(archive),
             "-pthread",
             "-ldl",
             "-o",
             str(target),
         ]
-        compiled = _run(command, cwd=Path(temporary))
-        version = _run([resolved, "--version"], cwd=Path(temporary), timeout=30)
+        adapter_result = _run(adapter_command, cwd=temporary)
+        version = _run([resolved, "--version"], cwd=temporary, timeout=30)
         record = {
             "schema": SCHEMA,
             "cadical_repository": "arminbiere/cadical",
             "cadical_tag": CADICAL_TAG,
             "cadical_commit": CADICAL_COMMIT,
             "cadical_header_sha256": _sha256(header),
-            "cadical_static_library_sha256": _sha256(static_library),
+            "cadical_source_files": source_records,
+            "cadical_source_manifest_sha256": source_manifest,
+            "cadical_compile_flags": official_flags,
+            "cadical_archive_sha256": _sha256(archive),
+            "archiver": archiver,
+            "archive_command": archive_command,
+            "archive_stdout": archive_result.stdout,
+            "archive_stderr": archive_result.stderr,
+            "official_compile_stdout": "".join(compile_stdout),
+            "official_compile_stderr": "".join(compile_stderr),
             "adapter_source": ADAPTER_SOURCE.name,
             "adapter_source_sha256": _sha256(ADAPTER_SOURCE),
             "proof_support_source": PROOF_SUPPORT_SOURCE.name,
@@ -173,15 +244,9 @@ def build_cadical_exact_runtime(
             "library": library.name,
             "library_sha256": _sha256(target),
             "compiler": version.stdout + version.stderr,
-            "configure_command": [str(configure)],
-            "configure_stdout": configure_result.stdout,
-            "configure_stderr": configure_result.stderr,
-            "make_command": [make, "-C", "build", "-j2", "libcadical.a"],
-            "make_stdout": build_result.stdout,
-            "make_stderr": build_result.stderr,
-            "adapter_command": command,
-            "adapter_stdout": compiled.stdout,
-            "adapter_stderr": compiled.stderr,
+            "adapter_command": adapter_command,
+            "adapter_stdout": adapter_result.stdout,
+            "adapter_stderr": adapter_result.stderr,
             "platform": platform.platform(),
             "machine": platform.machine(),
             "sanitizer": sanitizer,
@@ -208,7 +273,16 @@ def _check_receipt(library: Path) -> dict:
         "cadical_tag",
         "cadical_commit",
         "cadical_header_sha256",
-        "cadical_static_library_sha256",
+        "cadical_source_files",
+        "cadical_source_manifest_sha256",
+        "cadical_compile_flags",
+        "cadical_archive_sha256",
+        "archiver",
+        "archive_command",
+        "archive_stdout",
+        "archive_stderr",
+        "official_compile_stdout",
+        "official_compile_stderr",
         "adapter_source",
         "adapter_source_sha256",
         "proof_support_source",
@@ -216,12 +290,6 @@ def _check_receipt(library: Path) -> dict:
         "library",
         "library_sha256",
         "compiler",
-        "configure_command",
-        "configure_stdout",
-        "configure_stderr",
-        "make_command",
-        "make_stdout",
-        "make_stderr",
         "adapter_command",
         "adapter_stdout",
         "adapter_stderr",
@@ -230,7 +298,11 @@ def _check_receipt(library: Path) -> dict:
         "sanitizer",
         "elapsed_ns",
     }
-    if type(value) is not dict or set(value) != required or value["schema"] != SCHEMA:
+    if (
+        type(value) is not dict
+        or set(value) != required
+        or value["schema"] != SCHEMA
+    ):
         raise ValueError("CaDiCaL adapter build receipt differs")
     if (
         value["cadical_repository"] != "arminbiere/cadical"
@@ -238,6 +310,28 @@ def _check_receipt(library: Path) -> dict:
         or value["cadical_commit"] != CADICAL_COMMIT
     ):
         raise ValueError("CaDiCaL external source identity differs")
+    files = value["cadical_source_files"]
+    if (
+        type(files) is not list
+        or len(files) < 40
+        or any(
+            type(row) is not dict
+            or set(row) != {"name", "sha256"}
+            or type(row["name"]) is not str
+            or type(row["sha256"]) is not str
+            or len(row["sha256"]) != 64
+            for row in files
+        )
+    ):
+        raise ValueError("CaDiCaL source manifest differs")
+    manifest = hashlib.sha256()
+    for row in files:
+        manifest.update(row["name"].encode("utf-8"))
+        manifest.update(b"\0")
+        manifest.update(row["sha256"].encode("ascii"))
+        manifest.update(b"\n")
+    if manifest.hexdigest() != value["cadical_source_manifest_sha256"]:
+        raise ValueError("CaDiCaL source manifest hash differs")
     if value["adapter_source"] != ADAPTER_SOURCE.name:
         raise ValueError("CaDiCaL adapter source name differs")
     if value["proof_support_source"] != PROOF_SUPPORT_SOURCE.name:
@@ -246,7 +340,10 @@ def _check_receipt(library: Path) -> dict:
         raise ValueError("CaDiCaL adapter source hash differs")
     if value["proof_support_source_sha256"] != _sha256(PROOF_SUPPORT_SOURCE):
         raise ValueError("CaDiCaL proof support source hash differs")
-    if value["library"] != library.name or value["library_sha256"] != _sha256(library):
+    if (
+        value["library"] != library.name
+        or value["library_sha256"] != _sha256(library)
+    ):
         raise ValueError("CaDiCaL adapter library hash differs")
     return value
 
@@ -278,7 +375,9 @@ class CadicalExactRuntime:
             raw_signature.decode("utf-8", "replace") if raw_signature else ""
         )
         if "cadical" not in self.signature.lower():
-            raise RuntimeError("combined library does not report a CaDiCaL signature")
+            raise RuntimeError(
+                "combined library does not report a CaDiCaL signature"
+            )
 
     def solve_session_packet(
         self, packet: bytes, *, max_bytes: int = DEFAULT_BYTES
@@ -301,7 +400,11 @@ class CadicalExactRuntime:
         )
         if code:
             raw = self._library.cadical_exact_error()
-            message = raw.decode("utf-8", "replace") if raw else "CaDiCaL adapter failed"
+            message = (
+                raw.decode("utf-8", "replace")
+                if raw
+                else "CaDiCaL adapter failed"
+            )
             if code == 1:
                 raise ValueError(message)
             if code == 2:
@@ -319,6 +422,9 @@ class CadicalExactRuntime:
                 "cadical_tag": self.receipt["cadical_tag"],
                 "cadical_commit": self.receipt["cadical_commit"],
                 "cadical_signature": self.signature,
+                "cadical_source_manifest_sha256": self.receipt[
+                    "cadical_source_manifest_sha256"
+                ],
                 "vertices": stats.n,
                 "edges": stats.edges,
                 "queries": stats.queries,
@@ -331,7 +437,9 @@ class CadicalExactRuntime:
                 "failed_assumptions": stats.failed_assumptions,
                 "output_bytes": stats.output_bytes,
                 "proof_bytes": stats.proof_bytes,
-                "adapter_source_sha256": self.receipt["adapter_source_sha256"],
+                "adapter_source_sha256": self.receipt[
+                    "adapter_source_sha256"
+                ],
                 "proof_support_source_sha256": self.receipt[
                     "proof_support_source_sha256"
                 ],
