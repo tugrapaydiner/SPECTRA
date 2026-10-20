@@ -53,6 +53,45 @@ jobs:
           code_end = shell.index("\nPY\n\ncat > tests/public/test_exact_edgeless.py", code_start)
           code = shell[code_start:code_end]
 
+          old_admission = '''              W per_row=W(n)+25;
+              if(count && per_row>(UINT64_MAX-16)/W(count))
+                  throw Resource("edgeless SCQ2 output bound overflows");
+              W output_bound=16+per_row*W(count);
+              if(output_bound>std::numeric_limits<size_t>::max())
+                  throw Resource("edgeless SCQ2 output exceeds platform size");
+              W scratch=64*W(n+1)+16*W(pins)+8192;
+              if(W(packet_size)>total_cap || output_bound>(total_cap-W(packet_size))/2
+                      || scratch>total_cap-W(packet_size)-2*output_bound)
+                  throw Resource("edgeless bank solve/verify/output admission exceeds cap");
+
+              BankResult result;
+              result.output.reserve(static_cast<size_t>(output_bound));
+'''
+          new_admission = '''              W per_row=25+17*W(n);
+              if(count && per_row>(UINT64_MAX-16)/W(count))
+                  throw Resource("edgeless SCQ2 output bound overflows");
+              W output_bound=16+per_row*W(count);
+              W initial=16+(W(n)+25)*W(count);
+              if(output_bound>std::numeric_limits<size_t>::max()
+                      || initial>std::numeric_limits<size_t>::max())
+                  throw Resource("edgeless SCQ2 output exceeds platform size");
+              // Keep the same conservative admission envelope as the general
+              // exact service. The fast path may allocate less, but callers must
+              // not gain a larger accepted problem merely by selecting auto.
+              W retained=64*W(n+1)+32*W(pins+count+1);
+              W scratch=2048*W(n+1)+64*W(pins)+64*W(count)+8192;
+              if(retained>total_cap || W(packet_size)>total_cap-retained
+                      || output_bound>(total_cap-retained-W(packet_size))/2
+                      || scratch>total_cap-retained-W(packet_size)-2*output_bound)
+                  throw Resource("edgeless bank solve/verify/output admission exceeds cap");
+
+              BankResult result;
+              result.output.reserve(static_cast<size_t>(initial));
+'''
+          if code.count(old_admission) != 1:
+              raise AssertionError('edgeless admission block differs')
+          code = code.replace(old_admission, new_admission, 1)
+
           loop_start = code.index('patched=[]\n')
           loop_end = code.index('if patched[0]!=patched[1]:\n', loop_start)
           replacement = '''def restore_cpp_indent(block):
