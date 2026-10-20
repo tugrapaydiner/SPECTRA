@@ -358,13 +358,15 @@ Reduction reduce_formula(std::uint32_t nvars, std::vector<Clause> canonical) {
         throw std::invalid_argument("normalized clause count exceeds uint32");
     }
     result.normalized_clause_count = static_cast<std::uint32_t>(canonical.size());
+    bool has_empty_clause = false;
     for (const Clause& row : canonical) {
-        if (row.size() == 1) ++result.unit_input_clauses;
+        if (row.empty()) has_empty_clause = true;
+        else if (row.size() == 1) ++result.unit_input_clauses;
         else if (row.size() == 2) ++result.binary_input_clauses;
         else if (row.size() >= 3) ++result.long_input_clauses;
     }
 
-    if (result.unit_input_clauses == 0 && result.binary_input_clauses == 0) {
+    if (!has_empty_clause && result.unit_input_clauses == 0 && result.binary_input_clauses == 0) {
         set_identity_result(nvars, std::move(canonical), result);
         return result;
     }
@@ -406,6 +408,14 @@ Reduction reduce_formula(std::uint32_t nvars, std::vector<Clause> canonical) {
 
     result.class_literals = equivalence_classes(nvars, component, result.class_count);
     result.equivalent_variables_removed = nvars - result.class_count;
+    if (has_empty_clause) {
+        result.contradiction = true;
+        result.conflict_code = 2;
+        result.mapping.assign(nvars, 0);
+        result.fixed.assign(nvars, 0);
+        result.residual_clauses = {Clause{}};
+        return result;
+    }
     if (result.class_count == nvars && result.unit_input_clauses == 0) {
         result.mapping = result.class_literals;
         result.fixed.assign(nvars, 0);
