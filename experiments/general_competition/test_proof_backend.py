@@ -87,6 +87,19 @@ def test_retained_original_formula_proof_passes_drat_trim(tmp_path):
     assert "VERIFIED" in (receipt.stdout + receipt.stderr).upper()
 
 
+@pytest.mark.skipif(
+    not os.environ.get("DRAT_TRIM"),
+    reason="pinned external DRAT-trim checker is not configured",
+)
+def test_root_conflict_proof_passes_drat_trim(tmp_path):
+    clauses = ((1,), (-1,))
+    result = solve_safe_hybrid(1, clauses)
+    formula = write_dimacs(tmp_path / "root-conflict.cnf", 1, clauses)
+    proof = write_drat(tmp_path / "root-conflict.drat", result.proof)
+    receipt = check_drat(os.environ["DRAT_TRIM"], formula, proof)
+    assert receipt.verified, receipt.record()
+
+
 def test_writers_refuse_to_replace_retained_evidence(tmp_path):
     formula = write_dimacs(tmp_path / "formula.cnf", 1, ((1,),))
     with pytest.raises(FileExistsError):

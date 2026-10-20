@@ -211,6 +211,8 @@ def solve_original_with_drat(
             if raw_proof is None:
                 raise RuntimeError("UNSAT backend returned no proof")
             proof = _proof_lines(raw_proof)
+            if not _has_empty_clause(proof):
+                proof = (*proof, "0")
     elapsed = perf_counter_ns() - started
 
     if sat:

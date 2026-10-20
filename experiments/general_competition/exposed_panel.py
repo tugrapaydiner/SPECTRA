@@ -20,6 +20,10 @@ from urllib.request import Request, urlopen
 
 from experiments.general_competition.competition_input import admit_and_load_cnf
 from experiments.general_competition.matched_backend import compare_same_backend
+from experiments.general_competition.native_binary_core import (
+    NativeBinaryCore,
+    build_native_binary_core,
+)
 
 SCHEMA = "spectra.general_exposed_panel.v1"
 BASE_URL = "https://benchmark-database.de/file/"
@@ -90,6 +94,11 @@ def run_panel(
         raise ValueError("repeats must be an exact integer in [1, 9]")
     root = Path(directory).resolve()
     root.mkdir(parents=True, exist_ok=True)
+    native_directory = root / "native-binary-core"
+    native_library = native_directory / "libspectra_general_core.so"
+    if not native_library.is_file():
+        native_library = build_native_binary_core(native_directory)
+    native_core = NativeBinaryCore(native_library)
     cases = []
 
     for case in PANEL:
@@ -107,6 +116,7 @@ def run_panel(
                 admitted.clauses,
                 solver_name=solver_name,
                 order=order,
+                native_core=native_core,
             )
             if not comparison.accepted_for_timing:
                 raise RuntimeError("SAT-only exposed panel produced an unaccepted answer")
@@ -141,6 +151,7 @@ def run_panel(
         "schema": SCHEMA,
         "status": "MEASURED",
         "solver": solver_name,
+        "frontend": "native-binary-core-v1",
         "repeats": repeats,
         "selection": (
             "four exposed 2026 Main SAT instances with winning-solver public runtimes "

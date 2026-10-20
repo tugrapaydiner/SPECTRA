@@ -41,6 +41,7 @@ class BackendRun:
 class MatchedComparison:
     schema: str
     solver: str
+    frontend: str
     original_variables: int
     original_clauses: int
     residual_variables: int
@@ -140,6 +141,7 @@ def compare_same_backend(
     *,
     solver_name: str = "cadical195",
     order: str = "plain-first",
+    native_core=None,
 ) -> MatchedComparison:
     """Compare canonical CNF with binary-core residual using one backend."""
     if order not in ("plain-first", "hybrid-first"):
@@ -147,10 +149,17 @@ def compare_same_backend(
     canonical = canonical_cnf(nvars, clauses)
 
     core_started = perf_counter_ns()
-    core = build_binary_core(nvars, canonical)
+    if native_core is None:
+        core = build_binary_core(nvars, canonical)
+        if not verify_binary_core(nvars, canonical, core):
+            raise AssertionError("binary core failed independent replay")
+        frontend = "python-replayable-binary-core"
+    else:
+        core = native_core.reduce(nvars, canonical)
+        if core.original_nvars != nvars:
+            raise AssertionError("native binary core belongs to another formula")
+        frontend = "native-binary-core-v1"
     core_elapsed = perf_counter_ns() - core_started
-    if not verify_binary_core(nvars, canonical, core):
-        raise AssertionError("binary core failed independent replay")
 
     def hybrid_run() -> BackendRun:
         if core.contradiction:
@@ -162,7 +171,7 @@ def compare_same_backend(
                 elapsed_ns=0,
                 conflicts=1,
                 decisions=0,
-                propagations=len(core.unit_trace),
+                propagations=getattr(core, "propagated_classes", 0),
                 restarts=0,
                 model=(),
                 model_verified=True,
@@ -204,6 +213,7 @@ def compare_same_backend(
     return MatchedComparison(
         schema="spectra.general_matched_backend.v1",
         solver=solver_name,
+        frontend=frontend,
         original_variables=nvars,
         original_clauses=len(canonical),
         residual_variables=core.reduced_nvars,
@@ -220,6 +230,7 @@ def compare_same_backend(
         accepted_for_timing=accepted,
         claim_boundary=(
             "exposed post-admission development diagnostic; same backend in both arms; "
-            "SAT models checked on original CNF; residual UNSAT has no standard proof yet"
+            f"frontend={frontend}; SAT models checked on original CNF; "
+            "residual UNSAT has no standard proof yet"
         ),
     )
