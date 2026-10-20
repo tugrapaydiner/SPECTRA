@@ -1,0 +1,332 @@
+name: check-colouring-options
+
+on:
+  push:
+    branches: [archive/research-history-20261016]
+    paths: [.github/workflows/check-colouring-options.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: check-colouring-options
+  cancel-in-progress: false
+
+env:
+  SPECTRA_COMMIT: cf24e71e1300310e5590fbf626b80cef36d025fe
+  UPSTREAM_COMMIT: 4932048642da2144f387961b595112277afff82f
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.SPECTRA_COMMIT }}
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: marijnheule/clicolcom
+          ref: ${{ env.UPSTREAM_COMMIT }}
+          path: upstream-source
+          sparse-checkout: |
+            graphs
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Compare deterministic colouring procedures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p colouring-audit/colourings
+          python - <<'PY' 2>&1 | tee colouring-audit/run.log
+          from __future__ import annotations
+
+          import hashlib
+          import heapq
+          import json
+          from pathlib import Path
+          import random
+          import time
+
+          from experiments.critical_clique_coloring.core import (
+              parse_dimacs_col,
+              verify_coloring,
+          )
+          from experiments.wap_support.workload import deterministic_dsatur
+
+          NAMES = (
+              "DSJC500.5.col",
+              "flat300_20_0.col",
+              "le450_25c.col",
+              "miles1500.col",
+              "queen16_16.col",
+              "school1.col",
+          )
+
+          def count(colouring):
+              return max(colouring, default=-1) + 1
+
+          def greedy(graph, order):
+              colours = [-1] * graph.n
+              for vertex in order:
+                  used = {colours[n] for n in graph.adjacency[vertex]
+                          if colours[n] >= 0}
+                  colour = 0
+                  while colour in used:
+                      colour += 1
+                  colours[vertex] = colour
+              result = tuple(colours)
+              verify_coloring(graph, result, count(result))
+              return result
+
+          def smallest_last(graph):
+              degree = [len(row) for row in graph.adjacency]
+              alive = [True] * graph.n
+              heap = [(degree[v], v) for v in range(graph.n)]
+              heapq.heapify(heap)
+              removed = []
+              while heap:
+                  observed, vertex = heapq.heappop(heap)
+                  if not alive[vertex] or observed != degree[vertex]:
+                      continue
+                  alive[vertex] = False
+                  removed.append(vertex)
+                  for neighbour in graph.adjacency[vertex]:
+                      if alive[neighbour]:
+                          degree[neighbour] -= 1
+                          heapq.heappush(heap, (degree[neighbour], neighbour))
+              return greedy(graph, reversed(removed))
+
+          def seeded_dsatur(graph, seed):
+              rng = random.Random(seed)
+              rank = list(range(graph.n))
+              rng.shuffle(rank)
+              tie = [0] * graph.n
+              for at, vertex in enumerate(rank):
+                  tie[vertex] = at
+              colours = [-1] * graph.n
+              saturation = [set() for _ in range(graph.n)]
+              degree = [len(row) for row in graph.adjacency]
+              version = [0] * graph.n
+              heap = [
+                  (0, -degree[v], tie[v], v, 0)
+                  for v in range(graph.n)
+              ]
+              heapq.heapify(heap)
+              for _ in range(graph.n):
+                  while True:
+                      negative_sat, negative_degree, _tie, vertex, observed = heapq.heappop(heap)
+                      if (colours[vertex] < 0
+                              and observed == version[vertex]
+                              and -negative_sat == len(saturation[vertex])
+                              and -negative_degree == degree[vertex]):
+                          break
+                  colour = 0
+                  while colour in saturation[vertex]:
+                      colour += 1
+                  colours[vertex] = colour
+                  for neighbour in graph.adjacency[vertex]:
+                      if colours[neighbour] < 0 and colour not in saturation[neighbour]:
+                          saturation[neighbour].add(colour)
+                          version[neighbour] += 1
+                          heapq.heappush(
+                              heap,
+                              (-len(saturation[neighbour]), -degree[neighbour],
+                               tie[neighbour], neighbour, version[neighbour]),
+                          )
+              result = tuple(colours)
+              verify_coloring(graph, result, count(result))
+              return result
+
+          def rlf(graph, seed):
+              rng = random.Random(seed)
+              rank_order = list(range(graph.n))
+              rng.shuffle(rank_order)
+              rank = [0] * graph.n
+              for at, vertex in enumerate(rank_order):
+                  rank[vertex] = at
+              uncoloured = set(range(graph.n))
+              colours = [-1] * graph.n
+              colour = 0
+              while uncoloured:
+                  seed_vertex = max(
+                      uncoloured,
+                      key=lambda v: (len(graph.adjacency[v] & uncoloured), -rank[v]),
+                  )
+                  independent = {seed_vertex}
+                  candidates = uncoloured - {seed_vertex} - graph.adjacency[seed_vertex]
+                  excluded = uncoloured - candidates - independent
+                  while candidates:
+                      vertex = max(
+                          candidates,
+                          key=lambda v: (
+                              len(graph.adjacency[v] & excluded),
+                              len(graph.adjacency[v] & candidates),
+                              -rank[v],
+                          ),
+                      )
+                      independent.add(vertex)
+                      newly_excluded = candidates & graph.adjacency[vertex]
+                      candidates.remove(vertex)
+                      candidates.difference_update(newly_excluded)
+                      excluded.update(newly_excluded)
+                  for vertex in independent:
+                      colours[vertex] = colour
+                  uncoloured.difference_update(independent)
+                  colour += 1
+              result = tuple(colours)
+              verify_coloring(graph, result, count(result))
+              return result
+
+          def eliminate_high_colours(graph, initial):
+              colours = list(initial)
+              changed = True
+              while changed:
+                  changed = False
+                  top = max(colours, default=-1)
+                  if top <= 0:
+                      break
+                  targets = [v for v, c in enumerate(colours) if c == top]
+                  snapshot = list(colours)
+                  targets.sort(
+                      key=lambda v: (-len(graph.adjacency[v]), v)
+                  )
+                  possible = True
+                  for vertex in targets:
+                      used = {colours[n] for n in graph.adjacency[vertex]}
+                      replacement = next(
+                          (c for c in range(top) if c not in used),
+                          None,
+                      )
+                      if replacement is None:
+                          possible = False
+                          break
+                      colours[vertex] = replacement
+                  if possible:
+                      changed = True
+                  else:
+                      colours = snapshot
+                      break
+              result = tuple(colours)
+              verify_coloring(graph, result, count(result))
+              return result
+
+          report = {
+              "schema": "spectra.colouring_options.v1",
+              "source_commit": "cf24e71e1300310e5590fbf626b80cef36d025fe",
+              "upstream_commit": "4932048642da2144f387961b595112277afff82f",
+              "graphs": {},
+          }
+
+          for name in NAMES:
+              started = time.perf_counter()
+              graph = parse_dimacs_col(Path("upstream-source/graphs") / name)
+              graph_seed = int(graph.sha256[:16], 16)
+              candidates = {}
+
+              baseline = deterministic_dsatur(graph)
+              candidates["deterministic_dsatur"] = (baseline, None)
+              candidates["largest_first"] = (
+                  greedy(graph, sorted(
+                      range(graph.n),
+                      key=lambda v: (-len(graph.adjacency[v]), v),
+                  )),
+                  None,
+              )
+              candidates["smallest_last"] = (smallest_last(graph), None)
+
+              best_dsatur = baseline
+              best_dsatur_seed = None
+              for trial in range(256):
+                  seed = graph_seed ^ (0x9E3779B97F4A7C15 * (trial + 1))
+                  current = seeded_dsatur(graph, seed)
+                  if (count(current), current) < (count(best_dsatur), best_dsatur):
+                      best_dsatur = current
+                      best_dsatur_seed = seed
+              candidates["multistart_dsatur_256"] = (
+                  best_dsatur,
+                  best_dsatur_seed,
+              )
+
+              best_rlf = None
+              best_rlf_seed = None
+              for trial in range(64):
+                  seed = graph_seed ^ (0xD1B54A32D192ED03 * (trial + 1))
+                  current = rlf(graph, seed)
+                  if best_rlf is None or (count(current), current) < (
+                      count(best_rlf), best_rlf
+                  ):
+                      best_rlf = current
+                      best_rlf_seed = seed
+              candidates["multistart_rlf_64"] = (best_rlf, best_rlf_seed)
+
+              improved = {}
+              for label, (colouring, seed) in candidates.items():
+                  reduced = eliminate_high_colours(graph, colouring)
+                  improved[label + "+eliminate"] = (reduced, seed)
+              candidates.update(improved)
+
+              best_label, (best, best_seed) = min(
+                  candidates.items(),
+                  key=lambda item: (count(item[1][0]), item[1][0], item[0]),
+              )
+              verify_coloring(graph, best, count(best))
+              Path("colouring-audit/colourings", name + ".json").write_text(
+                  json.dumps({
+                      "graph": name,
+                      "graph_sha256": graph.sha256,
+                      "method": best_label,
+                      "seed": best_seed,
+                      "colour_count": count(best),
+                      "colouring": best,
+                  }, indent=2, sort_keys=True) + "\n",
+                  encoding="utf-8",
+              )
+              record = {
+                  "vertices": graph.n,
+                  "edges": graph.m,
+                  "graph_sha256": graph.sha256,
+                  "counts": {
+                      label: count(value[0])
+                      for label, value in sorted(candidates.items())
+                  },
+                  "best_method": best_label,
+                  "best_seed": best_seed,
+                  "best_colours": count(best),
+                  "elapsed_seconds": time.perf_counter() - started,
+              }
+              report["graphs"][name] = record
+              print(name, json.dumps(record, sort_keys=True), flush=True)
+
+          Path("colouring-audit/results.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          git diff --check
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: colouring-options-${{ github.run_id }}
+          path: colouring-audit/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Remove this one-shot workflow
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin archive/research-history-20261016
+          git switch -C archive-clean origin/archive/research-history-20261016
+          git config user.name "Tugrap"
+          git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
+          rm .github/workflows/check-colouring-options.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "Remove the completed colouring audit"
+          git push origin HEAD:refs/heads/archive/research-history-20261016
