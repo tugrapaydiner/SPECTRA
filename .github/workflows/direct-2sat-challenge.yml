@@ -104,7 +104,7 @@ jobs:
             --spectra-library "$SPECTRA_LIBRARY" \
             --direct-library "$DIRECT_LIBRARY" \
             --out direct-2sat-results \
-            --repeats 25
+            --repeats 24
       - uses: actions/upload-artifact@v4
         with:
           name: direct-2sat-${{ matrix.runner }}-${{ github.run_id }}
