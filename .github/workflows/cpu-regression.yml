@@ -59,25 +59,25 @@ jobs:
         if: matrix.python == '3.13'
         run: |
           set -euo pipefail
-          mkdir -p .general-cnf
+          mkdir -p general-cnf-receipts
           test "$(git -C .official/satcompetition-2026 rev-parse HEAD)" = \
             "8ca5451c8993e7b1099ce08a80d3ee81e5d4b07c"
           git -C .official/satcompetition-2026 rev-parse HEAD \
-            > .general-cnf/satcompetition-2026-commit.txt
+            > general-cnf-receipts/satcompetition-2026-commit.txt
           git -C .official/satcompetition-2026 rev-parse HEAD:downloads/scores.csv \
-            > .general-cnf/satcompetition-2026-scores-blob.txt
+            > general-cnf-receipts/satcompetition-2026-scores-blob.txt
           python -m experiments.general_competition.official_score \
             .official/satcompetition-2026/downloads/scores.csv \
-            --out .general-cnf/satcompetition-2026-main.json \
-            > .general-cnf/satcompetition-2026-main.stdout.json
+            --out general-cnf-receipts/satcompetition-2026-main.json \
+            > general-cnf-receipts/satcompetition-2026-main.stdout.json
           cmp \
-            .general-cnf/satcompetition-2026-main.json \
-            .general-cnf/satcompetition-2026-main.stdout.json
+            general-cnf-receipts/satcompetition-2026-main.json \
+            general-cnf-receipts/satcompetition-2026-main.stdout.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: matrix.python == '3.13'
         with:
           name: satcompetition-2026-main-${{ github.run_id }}
-          path: .general-cnf/
+          path: general-cnf-receipts/
           if-no-files-found: error
           retention-days: 90
 
