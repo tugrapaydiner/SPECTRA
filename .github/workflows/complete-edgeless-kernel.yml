@@ -52,6 +52,23 @@ jobs:
                   raise AssertionError(f'expected one malformed delimiter: {old!r}')
               source = source.replace(old, new, 1)
 
+          old_logic = (
+              "          if code.count(old_admission) != 1:\n"
+              "              raise AssertionError('edgeless admission block differs')\n"
+              "          code = code.replace(old_admission, new_admission, 1)\n"
+          )
+          new_logic = (
+              "          admission_at = code.index('W per_row=W(n)+25;')\n"
+              "          admission_start = code.rfind('\\n', 0, admission_at) + 1\n"
+              "          first_write = code.index('result.output.insert', admission_at)\n"
+              "          admission_end = code.rfind('\\n', 0, first_write) + 1\n"
+              "          code = (code[:admission_start] + new_admission\n"
+              "                  + code[admission_end:])\n"
+          )
+          if source.count(old_logic) != 1:
+              raise AssertionError('expected one admission replacement block')
+          source = source.replace(old_logic, new_logic, 1)
+
           marker = (
               "      - name: Apply the edgeless kernel with structural markers\n"
               "        shell: bash\n"
