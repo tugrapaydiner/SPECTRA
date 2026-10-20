@@ -9,7 +9,6 @@ from __future__ import annotations
 import itertools
 import json
 import os
-from pathlib import Path
 import random
 
 import pytest
@@ -57,15 +56,21 @@ def _models(problem: ExactProblem, query):
 
 
 def _statuses(output: bytes, n: int, count: int) -> tuple[int, ...]:
-    return tuple(code for code, _labels, _proof in decode_certified_output(output, n, count))
+    return tuple(
+        code for code, _labels, _proof
+        in decode_certified_output(output, n, count)
+    )
 
 
-def test_mixed_bank_covers_sat_and_all_three_proof_kinds(direct_runtime):
+@pytest.mark.parametrize("engine", ("auto", "dag"))
+def test_mixed_bank_covers_sat_and_all_three_proof_kinds(
+    direct_runtime, engine
+):
     mixed = ExactProblem.create(2, 2, ((0, 1),), (0b11, 0b11))
     rows = ((), ((0, 0b01),), ((0, 0b01), (1, 0b01)), ((0, 0),))
     packet = pack_session_packet(mixed, rows)
-    result = direct_runtime.solve_session_packet(packet)
-    assert result.info["engine"] == "closure"
+    result = direct_runtime.solve_session_packet(packet, engine=engine)
+    assert result.info["engine"] == ("dag" if engine == "dag" else "closure")
     assert (result.info["sat"], result.info["unsat"]) == (2, 2)
     assert verify_session_output(packet, result.output)
     decoded = decode_certified_output(result.output, mixed.n, len(rows))
@@ -73,7 +78,7 @@ def test_mixed_bank_covers_sat_and_all_three_proof_kinds(direct_runtime):
 
     static = ExactProblem.create(2, 1, ((0, 1),), (0b1, 0b1))
     static_packet = pack_session_packet(static, ((),))
-    static_result = direct_runtime.solve_session_packet(static_packet)
+    static_result = direct_runtime.solve_session_packet(static_packet, engine=engine)
     assert verify_session_output(static_packet, static_result.output)
     proof_kinds = []
     for output, n, count in (
@@ -86,36 +91,46 @@ def test_mixed_bank_covers_sat_and_all_three_proof_kinds(direct_runtime):
     assert sorted(set(proof_kinds)) == [1, 2, 3]
 
 
-def test_exhaustive_three_vertex_formulas_and_requests(direct_runtime):
+@pytest.mark.parametrize("engine", ("auto", "dag"))
+def test_exhaustive_three_vertex_formulas_and_requests(direct_runtime, engine):
     edge_bank = ((0, 1), (0, 2), (1, 2))
     domains = (1, 2, 3, 4, 5, 6)
     for graph_bits in range(8):
-        edges = tuple(edge_bank[index] for index in range(3) if graph_bits >> index & 1)
+        edges = tuple(
+            edge_bank[index] for index in range(3) if graph_bits >> index & 1
+        )
         for masks in itertools.product(domains, repeat=3):
             problem = ExactProblem.create(3, 3, edges, masks)
-            subsets = [tuple(value for value in range(8) if value & ~mask == 0) for mask in masks]
+            subsets = [
+                tuple(value for value in range(8) if value & ~mask == 0)
+                for mask in masks
+            ]
             rows = tuple(
                 tuple(enumerate(request))
                 for request in itertools.product(*subsets)
             )
             packet = pack_session_packet(problem, rows)
-            result = direct_runtime.solve_session_packet(packet)
+            result = direct_runtime.solve_session_packet(packet, engine=engine)
             assert verify_session_output(packet, result.output)
             expected = tuple(1 if _models(problem, row) else 0 for row in rows)
             assert _statuses(result.output, problem.n, len(rows)) == expected
 
 
+@pytest.mark.parametrize("engine", ("auto", "dag"))
 def test_random_banks_match_bruteforce_and_spectra(
-    direct_runtime, spectra_runtime
+    direct_runtime, spectra_runtime, engine
 ):
     rng = random.Random(20261019)
     for _ in range(160):
         n = rng.randint(0, 8)
         palette = rng.randint(1, 5)
         masks = tuple(
-            sum(1 << colour for colour in rng.sample(
-                range(palette), rng.randint(1, min(2, palette))
-            ))
+            sum(
+                1 << colour
+                for colour in rng.sample(
+                    range(palette), rng.randint(1, min(2, palette))
+                )
+            )
             for _ in range(n)
         )
         edges = tuple(
@@ -135,7 +150,7 @@ def test_random_banks_match_bruteforce_and_spectra(
             rows.append(tuple(pins))
         rows = tuple(rows)
         packet = pack_session_packet(problem, rows)
-        direct = direct_runtime.solve_session_packet(packet)
+        direct = direct_runtime.solve_session_packet(packet, engine=engine)
         spectra = spectra_runtime.solve_session_packet(packet, mode="raw")
         assert verify_session_output(packet, direct.output)
         assert verify_session_output(packet, spectra.output)
@@ -144,13 +159,21 @@ def test_random_banks_match_bruteforce_and_spectra(
         assert _statuses(spectra.output, n, len(rows)) == expected
 
 
-def test_large_uncompressed_problem_uses_dag_fallback(direct_runtime):
+def test_explicit_dag_and_memory_fallback(direct_runtime):
     problem = ExactProblem.create(256, 2, (), (0b11,) * 256)
     packet = pack_session_packet(problem, ((),))
-    result = direct_runtime.solve_session_packet(packet, max_bytes=64 << 10)
-    assert result.info["engine"] == "dag"
-    assert result.info["closure_bytes"] == 0
-    assert verify_session_output(packet, result.output)
+
+    explicit = direct_runtime.solve_session_packet(packet, engine="dag")
+    assert explicit.info["requested_engine"] == "dag"
+    assert explicit.info["engine"] == "dag"
+    assert explicit.info["closure_bytes"] == 0
+    assert verify_session_output(packet, explicit.output)
+
+    fallback = direct_runtime.solve_session_packet(packet, max_bytes=64 << 10)
+    assert fallback.info["requested_engine"] == "auto"
+    assert fallback.info["engine"] == "dag"
+    assert fallback.info["closure_bytes"] == 0
+    assert verify_session_output(packet, fallback.output)
 
 
 def test_receipt_and_packet_tampering_fail_closed(tmp_path, direct_runtime):
