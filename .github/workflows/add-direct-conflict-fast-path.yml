@@ -1,0 +1,170 @@
+name: add-direct-conflict-fast-path
+
+on:
+  push:
+    branches: [faster-exact-service]
+    paths:
+      - '.github/workflows/add-direct-conflict-fast-path.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: add-direct-conflict-fast-path
+  cancel-in-progress: false
+
+jobs:
+  patch-and-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: faster-exact-service
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==9.0.2'
+      - name: Add the proof fast path and focused contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          sources = (
+              Path('spectra/_native/exact_binary.cpp'),
+              Path('experiments/compiled_query/exact_native.cpp'),
+          )
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              if text.count(old) != 1:
+                  raise SystemExit(f'{label}: expected one match, found {text.count(old)}')
+              return text.replace(old, new, 1)
+
+          old_after_closure = '''        if(conflict==NIL) return true;
+                  a.sat=false;a.certificate=proof(2,trace(parent,conflict),trace(parent,conflict^1U));return false;
+              }
+              Answer solve(const std::vector<Pin>& pins,
+          '''
+          new_after_closure = '''        if(conflict==NIL) return true;
+                  a.sat=false;a.certificate=proof(2,trace(parent,conflict),trace(parent,conflict^1U));return false;
+              }
+              bool direct_seed_conflict(const std::vector<U>& seeds,Answer& answer) const {
+                  // A pair of currently forced literals can already contradict on one
+                  // original implication. Emit the shortest portable proof instead of
+                  // rediscovering the same edge through a full closure traversal.
+                  if(seeds.empty() || seeds.size()>64 || original.off.size()!=2*W(n)+1)
+                      return false;
+                  for(U source:seeds) {
+                      U source_color=(source&1U)?hi[source/2]:lo[source/2];
+                      if(source_color==255) continue;
+                      auto begin=original.to.begin()+original.off[source];
+                      auto end=original.to.begin()+original.off[source+1];
+                      for(U forced:seeds) {
+                          U forced_color=(forced&1U)?hi[forced/2]:lo[forced/2];
+                          if(forced_color!=source_color) continue;
+                          U target=forced^1U;++answer.arcs;
+                          if(std::binary_search(begin,end,target)) {
+                              answer.sat=false;
+                              answer.certificate=proof(2,{source,target},{forced});
+                              return true;
+                          }
+                      }
+                  }
+                  return false;
+              }
+              Answer solve(const std::vector<Pin>& pins,
+          '''
+
+          old_solve_roots = '''    Answer solve_roots(const std::vector<U>& seeds) const {
+                  Answer answer;
+                  std::vector<U> parent;
+          '''
+          new_solve_roots = '''    Answer solve_roots(const std::vector<U>& seeds) const {
+                  Answer answer;
+                  if(direct_seed_conflict(seeds,answer)) return answer;
+                  std::vector<U> parent;
+          '''
+
+          old_tile_replay = '''                    if(solver.routed) answer=solver.solve_roots(replay_roots);
+                              else solver.raw_closure(replay_roots,parent,answer);
+                              if(answer.sat)
+          '''
+          new_tile_replay = '''                    if(!solver.direct_seed_conflict(replay_roots,answer)) {
+                                  if(solver.routed) answer=solver.solve_roots(replay_roots);
+                                  else solver.raw_closure(replay_roots,parent,answer);
+                              }
+                              if(answer.sat)
+          '''
+
+          for source in sources:
+              text = source.read_text(encoding='utf-8')
+              text = replace_once(text, old_after_closure, new_after_closure,
+                                  f'{source}: helper insertion')
+              text = replace_once(text, old_solve_roots, new_solve_roots,
+                                  f'{source}: scalar fast path')
+              text = replace_once(text, old_tile_replay, new_tile_replay,
+                                  f'{source}: tiled fast path')
+              source.write_text(text, encoding='utf-8')
+
+          if sources[0].read_bytes() != sources[1].read_bytes():
+              raise SystemExit('packaged and research native sources differ')
+
+          test = Path('tests/public/test_exact_api.py')
+          text = test.read_text(encoding='utf-8')
+          old = '''    damaged[-1] ^= 1
+              assert not verify_session_output(packet, bytes(damaged))
+          
+          
+          def test_runtime_close_is_idempotent_and_fail_closed(exact_runtime):
+          '''
+          new = '''    damaged[-1] ^= 1
+              assert not verify_session_output(packet, bytes(damaged))
+          
+          
+          @pytest.mark.parametrize('mode', ('raw', 'scc', 'auto'))
+          def test_direct_forced_conflict_uses_short_original_edge_proof(
+                  exact_runtime, mode):
+              problem = tiny_problem()
+              query = ((0, 1), (1, 1))
+              packet = pack_session_packet(problem, (query,))
+              result = exact_runtime.solve_session_packet(packet, mode=mode)
+              assert (result.sat_count, result.unsat_count) == (0, 1)
+              code, labels, proof = decode_certified_output(
+                  result.output, problem.n, 1)[0]
+              assert code == 0 and not any(labels)
+              assert struct.unpack_from('<4sIII', proof) == (b'SBP1', 2, 2, 1)
+              assert result.visited == 0
+              assert result.arcs_scanned <= 4
+              assert verify_session_output(packet, result.output)
+          
+          
+          def test_runtime_close_is_idempotent_and_fail_closed(exact_runtime):
+          '''
+          text = replace_once(text, old, new, f'{test}: focused contract')
+          test.write_text(text, encoding='utf-8')
+          PY
+      - name: Run the public exact contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest \
+            tests/public/test_exact_api.py \
+            tests/public/test_exact_selftest.py \
+            tests/public/test_auto_selector_v10.py -q
+          git diff --check
+      - name: Commit the checked implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name Tugrap
+          git config user.email 106766396+tugrapaydiner@users.noreply.github.com
+          git add \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/exact_native.cpp \
+            tests/public/test_exact_api.py
+          git commit -m 'Use short proofs for direct conflicts'
+          git push origin HEAD:faster-exact-service
