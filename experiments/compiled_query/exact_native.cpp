@@ -405,9 +405,9 @@ if(mode==4) {
         condensed=false;routed=false;auto_reason="dense_pin_short";
     } else if(high_pin && n<96 && W(nc)<2*W(n)) {
         condensed=false;routed=false;auto_reason="dense_small_compressed";
-    } else if(bank_size==64 && W(nc)==2*W(n)
+    } else if(bank_size>=64 && W(nc)==2*W(n)
             && W(p.edges.size())>=4*W(n)) {
-        condensed=false;routed=false;auto_reason="dense_uncompressed_tile64";
+        condensed=false;routed=false;auto_reason="dense_uncompressed_bank";
     } else if(bank_size>=64) {
         condensed=true;routed=false;auto_reason="scc_long_bank";
     } else if(bank_size>=8 && W(2)*W(nc)<=W(n)) {
@@ -1091,7 +1091,7 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
         PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);
         PyObject* queries=PyLong_FromUnsignedLong(bank_queries);
         PyObject* pins=PyLong_FromUnsignedLong(bank_pins);
-        PyObject* policy=PyUnicode_FromString(which==4?"structural-v10":"explicit");
+        PyObject* policy=PyUnicode_FromString(which==4?"structural-v11":"explicit");
         PyObject* reason=PyUnicode_FromString(solver->auto_reason);
         if(!kernel || !tiles || !queries || !pins || !policy || !reason
                 || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0

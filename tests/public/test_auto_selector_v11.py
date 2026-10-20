@@ -31,7 +31,7 @@ def solve(runtime, problem, rows):
     packet = pack_session_packet(problem, rows)
     answer = runtime.solve_session_packet(packet, mode="auto")
     assert verify_session_output(packet, answer.output)
-    assert answer.info["auto_policy"] == "structural-v10"
+    assert answer.info["auto_policy"] == "structural-v11"
     assert answer.info["mode"] == "auto"
     return answer
 
@@ -70,7 +70,7 @@ def test_large_tiny_bank_uses_the_native_raw_path(exact_runtime):
     explicit = exact_runtime.solve_session_packet(packet, mode="raw")
     assert automatic.output == explicit.output
     assert automatic.info["mode"] == "auto"
-    assert automatic.info["auto_policy"] == "structural-v10"
+    assert automatic.info["auto_policy"] == "structural-v11"
     assert automatic.info["selected_mode"] == "raw"
     assert automatic.info["auto_policy_reason"] == "large_tiny_bank"
     assert verify_session_output(packet, automatic.output)
@@ -176,14 +176,15 @@ def test_dense_uncompressed_graph_uses_raw_at_tile64(exact_runtime):
     answer = solve(exact_runtime, problem, ((),) * 64)
     assert answer.info["components"] == 2 * problem.n
     assert answer.info["selected_mode"] == "raw"
-    assert answer.info["auto_policy_reason"] == "dense_uncompressed_tile64"
+    assert answer.info["auto_policy_reason"] == "dense_uncompressed_bank"
 
 
-def test_dense_uncompressed_graph_uses_scc_after_tile64(exact_runtime):
+def test_dense_uncompressed_graph_stays_raw_after_tile64(exact_runtime):
     problem = dense_uncompressed_problem()
     answer = solve(exact_runtime, problem, ((),) * 128)
-    assert answer.info["selected_mode"] == "scc"
-    assert answer.info["auto_policy_reason"] == "scc_long_bank"
+    assert answer.info["components"] == 2 * problem.n
+    assert answer.info["selected_mode"] == "raw"
+    assert answer.info["auto_policy_reason"] == "dense_uncompressed_bank"
 
 
 def test_auto_keeps_a_base_contradiction_on_raw(exact_runtime):
