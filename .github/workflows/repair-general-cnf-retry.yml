@@ -1,0 +1,94 @@
+name: retry-general-cnf-repair
+
+on:
+  push:
+    branches:
+      - finish-part3
+    paths:
+      - .github/workflows/repair-general-cnf-retry.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-general-cnf
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: finish-part3
+          fetch-depth: 0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: marijnheule/drat-trim
+          ref: 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          path: .official/drat-trim
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Apply the reviewed repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/repair-general-cnf.yml').read_text(
+              encoding='utf-8'
+          )
+          opening = "          python - <<'PY'\n"
+          start = workflow.index(opening) + len(opening)
+          end = workflow.index("\n          PY\n", start)
+          block = workflow[start:end]
+          script = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in block.splitlines()
+          )
+          exec(compile(script, '<general-cnf-repair>', 'exec'), {})
+          PY
+          git rm \
+            .github/workflows/repair-general-cnf.yml \
+            .github/workflows/repair-general-cnf-retry.yml
+
+      - name: Check the repaired contracts
+        shell: bash
+        env:
+          DRAT_TRIM: ${{ github.workspace }}/.official/drat-trim/drat-trim
+        run: |
+          set -euo pipefail
+          make -C .official/drat-trim
+          python -m pip install \
+            'pytest==9.0.2' \
+            'python-sat==1.9.dev15' \
+            'pyyaml==6.0.3' \
+            'numpy==2.3.5'
+          python -m py_compile \
+            experiments/general_competition/proof_backend.py \
+            experiments/general_competition/matched_backend.py \
+            experiments/general_competition/exposed_panel.py
+          python -m pytest \
+            experiments/general_competition/test_proof_backend.py \
+            experiments/general_competition/test_matched_backend.py \
+            tests/test_release_version_intent.py \
+            -q
+          python scripts/check_active_tree.py > /tmp/active-tree.json
+          git diff --check
+
+      - name: Commit the repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Tugrap"
+          git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Repair the general CNF validation path"
+          git push origin HEAD:refs/heads/finish-part3
