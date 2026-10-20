@@ -21,7 +21,7 @@ jobs:
   contracts:
     name: Contracts (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -104,7 +104,7 @@ jobs:
             --spectra-library "$SPECTRA_LIBRARY" \
             --direct-library "$DIRECT_LIBRARY" \
             --out direct-2sat-results \
-            --repeats 24
+            --repeats 25
       - uses: actions/upload-artifact@v4
         with:
           name: direct-2sat-${{ matrix.runner }}-${{ github.run_id }}
