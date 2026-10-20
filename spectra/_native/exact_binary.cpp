@@ -723,6 +723,9 @@ struct Observer {
         size_t at=16;
         std::vector<W> selected(n,0);
         ProofScratch proof_scratch; // call-local, also for concurrent observer use
+        const uint8_t* static_proof=nullptr;
+        U static_proof_size=0;
+        const std::vector<Pin> no_pins;
         for(U first_row=0;first_row<rows;first_row+=64) {
             U lanes=std::min<U>(64,rows-first_row);W sat_mask=0;
             std::fill(selected.begin(),selected.end(),0);
@@ -731,9 +734,9 @@ struct Observer {
                 U status=output[at];const uint8_t* labels=output+at+1;
                 U length=load32(output,at+1+W(n));at+=W(n)+5;
                 if(W(length)>size-at) return false;
-                auto pins=bank.row(first_row+lane);
                 if(status==1) {
                     if(length) return false;
+                    auto pins=bank.row(first_row+lane);
                     W bit=W(1)<<lane;sat_mask|=bit;
                     for(U v=0;v<n;++v) {
                         U label=labels[v];
@@ -745,7 +748,27 @@ struct Observer {
                         if(!((pin.allowed>>labels[pin.vertex])&1)) return false;
                 } else if(status==0) {
                     for(U v=0;v<n;++v) if(labels[v]) return false;
-                    if(!verify(pins,0,nullptr,0,output+at,length,&proof_scratch)) return false;
+                    bool kind3=length>=16 && !std::memcmp(output+at,"SBP1",4)
+                        && load32(output+at,4)==3;
+                    bool same_static=kind3 && static_proof
+                        && length==static_proof_size
+                        && !std::memcmp(output+at,static_proof,length);
+                    if(!same_static) {
+                        if(kind3) {
+                            // A kind-3 proof is immutable-problem evidence. Walk
+                            // its original-literal paths once, then require exact
+                            // byte equality for repeated copies in this bank.
+                            if(!verify(no_pins,0,nullptr,0,output+at,length,&proof_scratch))
+                                return false;
+                            if(!static_proof) {
+                                static_proof=output+at;static_proof_size=length;
+                            }
+                        } else {
+                            auto pins=bank.row(first_row+lane);
+                            if(!verify(pins,0,nullptr,0,output+at,length,&proof_scratch))
+                                return false;
+                        }
+                    }
                 } else return false;
                 at+=length;
             }
@@ -934,18 +957,53 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
                 append(answer);
             }
         }
-    } else {
-        // Keep this immutable-problem proof local to this call. Do not cache
-        // request-dependent contradictions or share mutable state across calls.
-        // The observer independently checks every emitted copy below.
-        std::vector<uint8_t> base_proof;
+    } else if(solver.bad!=NIL) {
+        // Preserve the historical proof priority: an empty current domain
+        // still earns a kind-1 proof before the immutable contradiction.
+        // Reuse request scratch, route the kind-3 proof once, and append one
+        // serialized row template for every remaining request.
+        std::vector<U> seen(solver.n,0),touched;
+        std::vector<W> effective(solver.n);
+        touched.reserve(static_cast<size_t>(std::min<W>(pins,solver.n)));
+        std::vector<uint8_t> base_proof,base_row;
+        const std::vector<Pin> no_pins;
+        U epoch=0;
         for(U row=0;row<count;++row) {
-            Answer answer=solver.solve(solver_rows.row(row),&base_proof);
-            if(row+1<count && solver.bad!=NIL && base_proof.empty() && answer.certificate.size()>=16
-                    && load32(answer.certificate.data(),4)==3)
-                base_proof=answer.certificate;
-            append(answer);
+            if(++epoch==0) {std::fill(seen.begin(),seen.end(),0);epoch=1;}
+            touched.clear();
+            for(U pin=solver_rows.row_begin(row);pin<solver_rows.row_end(row);++pin) {
+                U v=solver_rows.pin_vertex(pin);
+                if(seen[v]!=epoch) {
+                    seen[v]=epoch;effective[v]=solver.masks[v];touched.push_back(v);
+                }
+                effective[v]&=solver_rows.pin_allowed(pin);
+            }
+            std::sort(touched.begin(),touched.end());
+            U empty=NIL;
+            for(U v:touched) if(!effective[v]) {empty=v;break;}
+            if(empty!=NIL) {
+                Answer answer;answer.sat=false;answer.certificate=proof(1,{empty},{});
+                append(answer);continue;
+            }
+            if(base_row.empty()) {
+                Answer answer=solver.solve(no_pins);
+                if(answer.sat || !answer.labels.empty() || answer.certificate.size()<16
+                        || answer.certificate.size()>UINT32_MAX
+                        || load32(answer.certificate.data(),4)!=3)
+                    throw std::logic_error("base contradiction proof differs");
+                result.visits+=answer.visits;result.arcs+=answer.arcs;
+                base_proof=std::move(answer.certificate);
+                base_row.reserve(5+W(solver.n)+base_proof.size());
+                base_row.push_back(0);base_row.resize(1+solver.n,0);
+                word(base_row,static_cast<U>(base_proof.size()));
+                base_row.insert(base_row.end(),base_proof.begin(),base_proof.end());
+            }
+            reserve_row(base_proof.size());
+            result.output.insert(result.output.end(),base_row.begin(),base_row.end());
+            ++result.unsat;result.proof_bytes+=base_proof.size();
         }
+    } else {
+        for(U row=0;row<count;++row) append(solver.solve(solver_rows.row(row)));
     }
     if(!observer.verify_bank(observer_rows,result.output.data(),result.output.size()))
         throw std::logic_error(std::string("serialized ")+schema+" bank failed independent observer");
