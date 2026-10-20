@@ -37,7 +37,6 @@ jobs:
             | gzip --decompress \
             > .github/scripts/install_native_general_solver.py
           python .github/scripts/install_native_general_solver.py
-          rm -rf .github/native-general-installer
       - name: Challenge the integrated source
         shell: bash
         run: |
@@ -54,9 +53,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git restore --source=HEAD -- \
+            .github/workflows/cpu-regression.yml \
+            .github/workflows/install-native-general-solver.yml
           git config user.name "Tugrap"
           git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
-          git add -A
+          git add \
+            experiments/general_competition/native_cdcl.cpp \
+            experiments/general_competition/native_cdcl.py \
+            experiments/general_competition/test_native_cdcl.py
           git diff --cached --check
           git commit -m "Add the first native general-CNF engine"
           git push origin HEAD:refs/heads/finish-part3
