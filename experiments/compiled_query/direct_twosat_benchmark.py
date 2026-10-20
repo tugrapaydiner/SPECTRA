@@ -26,8 +26,10 @@ from spectra.exact import (
 from .cases import synthetic_cases
 from .direct_twosat import Direct2SATRuntime
 
-SCHEMA = "spectra.direct_twosat_challenge.v1"
-ARMS = ("raw", "scc", "auto", "direct")
+SCHEMA = "spectra.direct_twosat_challenge.v2"
+SPECTRA_ARMS = ("raw", "scc", "auto")
+DIRECT_ARMS = ("direct_auto", "direct_dag")
+ARMS = SPECTRA_ARMS + DIRECT_ARMS
 COUNTS = (1, 8, 64, 1024)
 TARGET_SAMPLE_NS = 2_000_000
 MAX_BATCH = 64
@@ -53,18 +55,20 @@ def run(
     direct_library: Path,
     destination: Path,
     *,
-    repeats: int = 24,
+    repeats: int = 25,
 ) -> dict:
     if type(repeats) is not int or repeats < len(ARMS) or repeats % len(ARMS):
-        raise ValueError("repeats must be a positive multiple of four")
+        raise ValueError("repeats must be a positive multiple of five")
     destination.mkdir(parents=True, exist_ok=False)
     spectra = ExactRuntime(spectra_library)
     direct = Direct2SATRuntime(direct_library)
     cases = synthetic_cases(count=max(COUNTS), n=96)
 
     def execute(arm: str, packet: bytes):
-        if arm == "direct":
-            return direct.solve_session_packet(packet)
+        if arm == "direct_auto":
+            return direct.solve_session_packet(packet, engine="auto")
+        if arm == "direct_dag":
+            return direct.solve_session_packet(packet, engine="dag")
         return spectra.solve_session_packet(packet, mode=arm)
 
     def timed(arm: str, packet: bytes, batch: int):
@@ -126,13 +130,11 @@ def run(
                         if _statuses(answer.output, problem.n, count) != expected:
                             raise AssertionError("warm result differs")
 
-                batch_sizes = {
-                    arm: calibrate(arm, packet) for arm in ARMS
-                }
+                batch_sizes = {arm: calibrate(arm, packet) for arm in ARMS}
                 samples = {arm: [] for arm in ARMS}
                 orders = []
                 rng = random.Random(int.from_bytes(hashlib.sha256(
-                    f"direct-2sat/{case.name}/{count}".encode()
+                    f"direct-2sat-v2/{case.name}/{count}".encode()
                 ).digest()[:8], "big"))
                 blocks = repeats // len(ARMS)
                 for _block in range(blocks):
@@ -151,7 +153,11 @@ def run(
                     arm: statistics.median(values)
                     for arm, values in samples.items()
                 }
-                best_spectra_arm = min(("raw", "scc", "auto"), key=medians.get)
+                best_spectra_arm = min(SPECTRA_ARMS, key=medians.get)
+                best_direct_arm = min(DIRECT_ARMS, key=medians.get)
+                direct_over_spectra = (
+                    medians[best_direct_arm] / medians[best_spectra_arm]
+                )
                 record = {
                     "case": case.name,
                     "cluster": case.cluster,
@@ -164,24 +170,33 @@ def run(
                     "packet_bytes": len(packet),
                     "packet_sha256": _digest(packet),
                     "output_sha256": outputs,
-                    "direct_info": infos["direct"],
+                    "direct_info": {
+                        arm: infos[arm] for arm in DIRECT_ARMS
+                    },
                     "batch_sizes": batch_sizes,
                     "execution_orders": orders,
                     "samples_ns_per_call": samples,
                     "medians_ns": medians,
                     "best_spectra_arm": best_spectra_arm,
-                    "direct_over_best_spectra": (
-                        medians["direct"] / medians[best_spectra_arm]
+                    "best_direct_arm": best_direct_arm,
+                    "best_direct_over_best_spectra": direct_over_spectra,
+                    "auto_over_best_direct": (
+                        medians["auto"] / medians[best_direct_arm]
                     ),
-                    "auto_over_direct": medians["auto"] / medians["direct"],
-                    "scc_over_direct": medians["scc"] / medians["direct"],
+                    "scc_over_best_direct": (
+                        medians["scc"] / medians[best_direct_arm]
+                    ),
+                    "direct_auto_over_direct_dag": (
+                        medians["direct_auto"] / medians["direct_dag"]
+                    ),
                 }
                 records.append(record)
                 print(
                     case.name,
                     count,
-                    "direct/best=%.4f" % record["direct_over_best_spectra"],
-                    "best=" + best_spectra_arm,
+                    "direct/best=%.4f" % direct_over_spectra,
+                    "spectra=" + best_spectra_arm,
+                    "direct=" + best_direct_arm,
                     flush=True,
                 )
     finally:
@@ -190,22 +205,26 @@ def run(
     by_count = {}
     for count in COUNTS:
         rows = [record for record in records if record["count"] == count]
+        ratios = [row["best_direct_over_best_spectra"] for row in rows]
         by_count[str(count)] = {
             "cells": len(rows),
-            "direct_over_best_spectra_geomean": _gmean(
-                [row["direct_over_best_spectra"] for row in rows]
+            "best_direct_over_best_spectra_geomean": _gmean(ratios),
+            "auto_over_best_direct_geomean": _gmean(
+                [row["auto_over_best_direct"] for row in rows]
             ),
-            "auto_over_direct_geomean": _gmean(
-                [row["auto_over_direct"] for row in rows]
+            "scc_over_best_direct_geomean": _gmean(
+                [row["scc_over_best_direct"] for row in rows]
             ),
-            "scc_over_direct_geomean": _gmean(
-                [row["scc_over_direct"] for row in rows]
+            "direct_auto_over_direct_dag_geomean": _gmean(
+                [row["direct_auto_over_direct_dag"] for row in rows]
             ),
-            "direct_wins": sum(
-                row["direct_over_best_spectra"] < 1 for row in rows
+            "direct_wins": sum(ratio < 1 for ratio in ratios),
+            "spectra_wins_or_ties": sum(ratio >= 1 for ratio in ratios),
+            "direct_dag_selected": sum(
+                row["best_direct_arm"] == "direct_dag" for row in rows
             ),
-            "spectra_wins_or_ties": sum(
-                row["direct_over_best_spectra"] >= 1 for row in rows
+            "direct_auto_selected": sum(
+                row["best_direct_arm"] == "direct_auto" for row in rows
             ),
         }
     payload = {
@@ -216,7 +235,7 @@ def run(
         "platform": platform.platform(),
         "machine": platform.machine(),
         "repeats": repeats,
-        "schedule": "position-balanced four-arm blocks",
+        "schedule": "position-balanced five-arm blocks",
         "target_sample_ns": TARGET_SAMPLE_NS,
         "max_batch": MAX_BATCH,
         "summary": by_count,
@@ -234,7 +253,7 @@ def main(argv=None) -> int:
     parser.add_argument("--spectra-library", type=Path, required=True)
     parser.add_argument("--direct-library", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--repeats", type=int, default=24)
+    parser.add_argument("--repeats", type=int, default=25)
     args = parser.parse_args(argv)
     result = run(
         args.spectra_library.resolve(),
