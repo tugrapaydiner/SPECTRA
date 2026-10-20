@@ -1,7 +1,8 @@
 # Direct 2-SAT challenge
 
 **Branch:** `direct-2sat-challenge`  
-**Base:** Part 3 commit `65dc9ff1f7c32e3528e1635af58a4f761ef514af`
+**Base:** Part 3 commit `65dc9ff1f7c32e3528e1635af58a4f761ef514af`  
+**Current stage:** independent engine and challenge matrix implemented; results pending.
 
 ## Why this challenge exists
 
