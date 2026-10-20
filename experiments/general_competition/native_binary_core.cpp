@@ -5,7 +5,6 @@
 #include <deque>
 #include <limits>
 #include <map>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -52,27 +51,72 @@ std::uint32_t node_for_literal(std::int32_t literal) noexcept {
     return 2U * (variable - 1U) + (literal < 0 ? 1U : 0U);
 }
 
-std::vector<Clause> canonicalize(std::uint32_t nvars, const std::vector<Clause>& input) {
-    std::set<Clause, ClauseLess> unique;
-    LiteralLess literal_less;
-    for (const Clause& row : input) {
-        std::set<std::int32_t> values;
-        bool tautology = false;
+void sort_unique_clauses(std::vector<Clause>& rows) {
+    ClauseLess less;
+    std::sort(rows.begin(), rows.end(), less);
+    rows.erase(std::unique(rows.begin(), rows.end()), rows.end());
+}
+
+bool normalize_clause(std::uint32_t nvars, Clause& row, bool validate_range) {
+    LiteralLess less;
+    if (validate_range) {
         for (std::int32_t literal : row) {
             const std::int64_t wide = literal;
             const std::int64_t absolute = wide < 0 ? -wide : wide;
             if (literal == 0 || absolute > static_cast<std::int64_t>(nvars)) {
                 throw std::invalid_argument("CNF literal must be nonzero and in range");
             }
-            if (values.find(-literal) != values.end()) tautology = true;
-            values.insert(literal);
         }
-        if (tautology) continue;
-        Clause canonical(values.begin(), values.end());
-        std::sort(canonical.begin(), canonical.end(), literal_less);
-        unique.insert(std::move(canonical));
     }
-    return std::vector<Clause>(unique.begin(), unique.end());
+    std::sort(row.begin(), row.end(), less);
+    Clause compact;
+    compact.reserve(row.size());
+    for (std::int32_t literal : row) {
+        if (!compact.empty()) {
+            if (compact.back() == literal) continue;
+            const std::int64_t left = compact.back();
+            const std::int64_t right = literal;
+            const std::int64_t left_abs = left < 0 ? -left : left;
+            const std::int64_t right_abs = right < 0 ? -right : right;
+            if (left_abs == right_abs) return false;
+        }
+        compact.push_back(literal);
+    }
+    row.swap(compact);
+    return true;
+}
+
+std::vector<Clause> canonicalize(std::uint32_t nvars, std::vector<Clause> rows) {
+    std::vector<Clause> canonical;
+    canonical.reserve(rows.size());
+    for (Clause& row : rows) {
+        if (normalize_clause(nvars, row, true)) canonical.push_back(std::move(row));
+    }
+    sort_unique_clauses(canonical);
+    return canonical;
+}
+
+void validate_canonical_row(std::uint32_t nvars, const Clause& row) {
+    LiteralLess less;
+    for (std::size_t index = 0; index < row.size(); ++index) {
+        const std::int32_t literal = row[index];
+        const std::int64_t wide = literal;
+        const std::int64_t absolute = wide < 0 ? -wide : wide;
+        if (literal == 0 || absolute > static_cast<std::int64_t>(nvars)) {
+            throw std::invalid_argument("canonical CNF literal must be nonzero and in range");
+        }
+        if (index) {
+            const std::int32_t previous = row[index - 1];
+            if (!less(previous, literal)) {
+                throw std::invalid_argument("canonical CNF clause is not strictly normalized");
+            }
+            const std::int64_t previous_wide = previous;
+            const std::int64_t previous_abs = previous_wide < 0 ? -previous_wide : previous_wide;
+            if (previous_abs == absolute) {
+                throw std::invalid_argument("canonical CNF clause is tautological");
+            }
+        }
+    }
 }
 
 std::vector<Clause> read_input(
@@ -80,7 +124,8 @@ std::vector<Clause> read_input(
     std::uint64_t clause_count,
     const std::uint64_t* offsets,
     const std::int32_t* literals,
-    std::uint64_t literal_count) {
+    std::uint64_t literal_count,
+    bool canonical_input) {
     if (!offsets) throw std::invalid_argument("offsets pointer is null");
     if (literal_count && !literals) throw std::invalid_argument("literals pointer is null");
     if (offsets[0] != 0 || offsets[clause_count] != literal_count) {
@@ -91,6 +136,7 @@ std::vector<Clause> read_input(
     }
     std::vector<Clause> rows;
     rows.reserve(static_cast<std::size_t>(clause_count));
+    ClauseLess clause_less;
     for (std::uint64_t index = 0; index < clause_count; ++index) {
         const std::uint64_t start = offsets[index];
         const std::uint64_t stop = offsets[index + 1];
@@ -103,9 +149,15 @@ std::vector<Clause> read_input(
         Clause row;
         row.reserve(static_cast<std::size_t>(stop - start));
         for (std::uint64_t offset = start; offset < stop; ++offset) row.push_back(literals[offset]);
+        if (canonical_input) {
+            validate_canonical_row(nvars, row);
+            if (!rows.empty() && !clause_less(rows.back(), row)) {
+                throw std::invalid_argument("canonical CNF clauses are not strictly ordered");
+            }
+        }
         rows.push_back(std::move(row));
     }
-    return canonicalize(nvars, rows);
+    return canonical_input ? rows : canonicalize(nvars, std::move(rows));
 }
 
 void sort_unique(std::vector<std::uint32_t>& row) {
@@ -201,21 +253,20 @@ std::vector<std::int32_t> equivalence_classes(
 
 std::vector<Clause> substitute(
     std::uint32_t class_count,
-    const std::vector<Clause>& clauses,
+    std::vector<Clause> clauses,
     const std::vector<std::int32_t>& class_literals) {
     std::vector<Clause> rows;
     rows.reserve(clauses.size());
-    for (const Clause& row : clauses) {
-        Clause mapped;
-        mapped.reserve(row.size());
-        for (std::int32_t literal : row) {
+    for (Clause& row : clauses) {
+        for (std::int32_t& literal : row) {
             const std::uint32_t variable = static_cast<std::uint32_t>(literal < 0 ? -literal : literal);
             const std::int32_t target = class_literals[variable - 1];
-            mapped.push_back(literal > 0 ? target : -target);
+            literal = literal > 0 ? target : -target;
         }
-        rows.push_back(std::move(mapped));
+        if (normalize_clause(class_count, row, false)) rows.push_back(std::move(row));
     }
-    return canonicalize(class_count, rows);
+    sort_unique_clauses(rows);
+    return rows;
 }
 
 struct UnitResult {
@@ -226,12 +277,15 @@ struct UnitResult {
 UnitResult unit_propagate(std::uint32_t nvars, const std::vector<Clause>& clauses) {
     UnitResult result;
     result.values.assign(static_cast<std::size_t>(nvars) + 1, 0);
+    bool has_unit = false;
     for (const Clause& row : clauses) {
         if (row.empty()) {
             result.conflict = true;
             return result;
         }
+        has_unit = has_unit || row.size() == 1;
     }
+    if (!has_unit) return result;
 
     std::vector<std::vector<std::uint32_t>> occurrences(2ULL * nvars);
     std::vector<std::uint32_t> remaining;
@@ -282,7 +336,23 @@ UnitResult unit_propagate(std::uint32_t nvars, const std::vector<Clause>& clause
     return result;
 }
 
-Reduction reduce_formula(std::uint32_t nvars, const std::vector<Clause>& canonical) {
+void set_identity_result(
+    std::uint32_t nvars,
+    std::vector<Clause> canonical,
+    Reduction& result) {
+    result.class_count = nvars;
+    result.class_literals.resize(nvars);
+    result.mapping.resize(nvars);
+    result.fixed.assign(nvars, 0);
+    for (std::uint32_t variable = 1; variable <= nvars; ++variable) {
+        result.class_literals[variable - 1] = static_cast<std::int32_t>(variable);
+        result.mapping[variable - 1] = static_cast<std::int32_t>(variable);
+    }
+    result.reduced_nvars = nvars;
+    result.residual_clauses = std::move(canonical);
+}
+
+Reduction reduce_formula(std::uint32_t nvars, std::vector<Clause> canonical) {
     Reduction result;
     if (canonical.size() > std::numeric_limits<std::uint32_t>::max()) {
         throw std::invalid_argument("normalized clause count exceeds uint32");
@@ -292,6 +362,11 @@ Reduction reduce_formula(std::uint32_t nvars, const std::vector<Clause>& canonic
         if (row.size() == 1) ++result.unit_input_clauses;
         else if (row.size() == 2) ++result.binary_input_clauses;
         else if (row.size() >= 3) ++result.long_input_clauses;
+    }
+
+    if (result.unit_input_clauses == 0 && result.binary_input_clauses == 0) {
+        set_identity_result(nvars, std::move(canonical), result);
+        return result;
     }
 
     std::vector<std::vector<std::uint32_t>> graph(2ULL * nvars);
@@ -308,6 +383,8 @@ Reduction reduce_formula(std::uint32_t nvars, const std::vector<Clause>& canonic
         } else if (row.size() == 2) {
             add_arc(-row[0], row[1]);
             add_arc(-row[1], row[0]);
+        } else if (row.size() > 2) {
+            break;
         }
     }
     for (auto& row : graph) sort_unique(row);
@@ -328,10 +405,18 @@ Reduction reduce_formula(std::uint32_t nvars, const std::vector<Clause>& canonic
     }
 
     result.class_literals = equivalence_classes(nvars, component, result.class_count);
-    const std::vector<Clause> substituted = substitute(
-        result.class_count, canonical, result.class_literals);
-    const UnitResult units = unit_propagate(result.class_count, substituted);
     result.equivalent_variables_removed = nvars - result.class_count;
+    if (result.class_count == nvars && result.unit_input_clauses == 0) {
+        result.mapping = result.class_literals;
+        result.fixed.assign(nvars, 0);
+        result.reduced_nvars = nvars;
+        result.residual_clauses = std::move(canonical);
+        return result;
+    }
+
+    std::vector<Clause> substituted = substitute(
+        result.class_count, std::move(canonical), result.class_literals);
+    const UnitResult units = unit_propagate(result.class_count, substituted);
     for (std::size_t index = 1; index < units.values.size(); ++index) {
         if (units.values[index] != 0) ++result.propagated_classes;
     }
@@ -349,29 +434,37 @@ Reduction reduce_formula(std::uint32_t nvars, const std::vector<Clause>& canonic
         if (units.values[variable] == 0) free[variable] = ++result.reduced_nvars;
     }
 
-    std::vector<Clause> residual_rows;
-    residual_rows.reserve(substituted.size());
-    for (const Clause& row : substituted) {
-        bool satisfied = false;
-        for (std::int32_t literal : row) {
-            const std::uint32_t variable = static_cast<std::uint32_t>(literal < 0 ? -literal : literal);
-            if (units.values[variable] == (literal > 0 ? 1 : -1)) {
-                satisfied = true;
-                break;
+    if (result.propagated_classes == 0) {
+        result.residual_clauses = std::move(substituted);
+    } else if (result.reduced_nvars == 0) {
+        result.residual_clauses.clear();
+    } else {
+        std::vector<Clause> residual_rows;
+        residual_rows.reserve(substituted.size());
+        for (const Clause& row : substituted) {
+            bool satisfied = false;
+            for (std::int32_t literal : row) {
+                const std::uint32_t variable = static_cast<std::uint32_t>(literal < 0 ? -literal : literal);
+                if (units.values[variable] == (literal > 0 ? 1 : -1)) {
+                    satisfied = true;
+                    break;
+                }
             }
-        }
-        if (satisfied) continue;
-        Clause remaining;
-        for (std::int32_t literal : row) {
-            const std::uint32_t variable = static_cast<std::uint32_t>(literal < 0 ? -literal : literal);
-            if (units.values[variable] == 0) {
-                const std::int32_t target = static_cast<std::int32_t>(free[variable]);
-                remaining.push_back(literal > 0 ? target : -target);
+            if (satisfied) continue;
+            Clause remaining;
+            remaining.reserve(row.size());
+            for (std::int32_t literal : row) {
+                const std::uint32_t variable = static_cast<std::uint32_t>(literal < 0 ? -literal : literal);
+                if (units.values[variable] == 0) {
+                    const std::int32_t target = static_cast<std::int32_t>(free[variable]);
+                    remaining.push_back(literal > 0 ? target : -target);
+                }
             }
+            residual_rows.push_back(std::move(remaining));
         }
-        residual_rows.push_back(std::move(remaining));
+        sort_unique_clauses(residual_rows);
+        result.residual_clauses = std::move(residual_rows);
     }
-    result.residual_clauses = canonicalize(result.reduced_nvars, residual_rows);
 
     result.mapping.reserve(nvars);
     result.fixed.reserve(nvars);
@@ -445,16 +538,14 @@ void write_error(char* buffer, std::uint64_t capacity, const char* message) noex
     std::memcpy(buffer, message, length);
     buffer[length] = '\0';
 }
-}  // namespace
 
-extern "C" std::uint32_t spectra_general_abi() noexcept { return 1; }
-
-extern "C" int spectra_general_reduce(
+int reduce_entry(
     std::uint32_t nvars,
     std::uint64_t clause_count,
     const std::uint64_t* offsets,
     const std::int32_t* literals,
     std::uint64_t literal_count,
+    bool canonical_input,
     std::uint8_t** output_data,
     std::uint64_t* output_size,
     char* error,
@@ -466,9 +557,9 @@ extern "C" int spectra_general_reduce(
     *output_data = nullptr;
     *output_size = 0;
     try {
-        const std::vector<Clause> canonical = read_input(
-            nvars, clause_count, offsets, literals, literal_count);
-        const Reduction reduction = reduce_formula(nvars, canonical);
+        std::vector<Clause> canonical = read_input(
+            nvars, clause_count, offsets, literals, literal_count, canonical_input);
+        const Reduction reduction = reduce_formula(nvars, std::move(canonical));
         const std::vector<std::uint8_t> bytes = serialize(nvars, reduction);
         void* memory = std::malloc(bytes.size());
         if (!memory) throw std::bad_alloc();
@@ -486,6 +577,39 @@ extern "C" int spectra_general_reduce(
         write_error(error, error_capacity, "unknown native binary core failure");
         return 2;
     }
+}
+}  // namespace
+
+extern "C" std::uint32_t spectra_general_abi() noexcept { return 1; }
+
+extern "C" int spectra_general_reduce(
+    std::uint32_t nvars,
+    std::uint64_t clause_count,
+    const std::uint64_t* offsets,
+    const std::int32_t* literals,
+    std::uint64_t literal_count,
+    std::uint8_t** output_data,
+    std::uint64_t* output_size,
+    char* error,
+    std::uint64_t error_capacity) noexcept {
+    return reduce_entry(
+        nvars, clause_count, offsets, literals, literal_count, false,
+        output_data, output_size, error, error_capacity);
+}
+
+extern "C" int spectra_general_reduce_canonical(
+    std::uint32_t nvars,
+    std::uint64_t clause_count,
+    const std::uint64_t* offsets,
+    const std::int32_t* literals,
+    std::uint64_t literal_count,
+    std::uint8_t** output_data,
+    std::uint64_t* output_size,
+    char* error,
+    std::uint64_t error_capacity) noexcept {
+    return reduce_entry(
+        nvars, clause_count, offsets, literals, literal_count, true,
+        output_data, output_size, error, error_capacity);
 }
 
 extern "C" void spectra_general_free(void* pointer) noexcept { std::free(pointer); }
