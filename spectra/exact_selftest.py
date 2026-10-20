@@ -183,7 +183,7 @@ def _run_case(
     _require(result.sat_count == expected_codes.count(1), f"{name}: SAT count differs")
     _require(result.unsat_count == expected_codes.count(0), f"{name}: UNSAT count differs")
     _require(result.info["selected_mode"] == expected_mode, f"{name}: selected mode differs")
-    _require(result.info["auto_policy"] == "structural-v10", f"{name}: policy differs")
+    _require(result.info["auto_policy"] == "structural-v11", f"{name}: policy differs")
     _require(
         result.info["auto_policy_reason"] == expected_reason,
         f"{name}: policy reason differs",
@@ -546,7 +546,7 @@ def verify_exact_selftest(
         _require(row["sat"] == codes.count(1), f"{name}: SAT count differs")
         _require(row["unsat"] == codes.count(0), f"{name}: UNSAT count differs")
         _require(row["selected_mode"] == expected_mode, f"{name}: mode differs")
-        _require(row["auto_policy"] == "structural-v10", f"{name}: policy differs")
+        _require(row["auto_policy"] == "structural-v11", f"{name}: policy differs")
         _require(
             row["auto_policy_reason"] == expected_reason,
             f"{name}: policy reason differs",
