@@ -129,15 +129,6 @@ jobs:
               text.replace('structural-v10', 'structural-v11'),
               encoding='utf-8',
           )
-
-          workflow = Path('.github/workflows/check-faster-exact-service.yml')
-          text = workflow.read_text(encoding='utf-8')
-          workflow.write_text(
-              text.replace(
-                  'test_auto_selector_v10.py', 'test_auto_selector_v11.py'
-              ),
-              encoding='utf-8',
-          )
           PY
       - name: Run selector and exact-service contracts
         shell: bash
@@ -166,7 +157,6 @@ jobs:
             experiments/compiled_query/test_exact.py \
             tests/public/test_auto_selector_v10.py \
             tests/public/test_auto_selector_v11.py \
-            tests/public/test_exact_api.py \
-            .github/workflows/check-faster-exact-service.yml
+            tests/public/test_exact_api.py
           git commit -m 'Keep dense uncompressed banks on raw'
           git push origin HEAD:faster-exact-service
