@@ -1,0 +1,73 @@
+name: clean-part3-branches
+
+on:
+  push:
+    branches: [archive/research-history-20261016]
+    paths: [.github/workflows/clean-part3-branches.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clean-part3-branches
+  cancel-in-progress: false
+
+jobs:
+  clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: archive/research-history-20261016
+          fetch-depth: 0
+
+      - name: Verify the archive and canonical branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+          test "$(git rev-parse refs/remotes/origin/finish-part3)" = \
+            "c0d56123bcc97f60d777de0d52d5b85a70808a25"
+          test "$(git rev-parse c0d56123bcc97f60d777de0d52d5b85a70808a25^{tree})" = \
+            "102bf99ce3ad5447a12c98c29049be61e8914969"
+          test "$(git show -s --format='%P' c0d56123bcc97f60d777de0d52d5b85a70808a25)" = \
+            "b3899b286904a2b28ba26f44bf4503ec21c1ed7f 3f8df9e505068ec57cbe2734e6a461507bca7238"
+
+          archive_commit="726c40c6881ea978f5320b0973226f6683956dcd"
+          git merge-base --is-ancestor "$archive_commit" HEAD
+
+          while read -r branch expected; do
+            observed="$(git rev-parse "refs/remotes/origin/$branch")"
+            test "$observed" = "$expected"
+            git merge-base --is-ancestor "$expected" "$archive_commit"
+          done <<'EOF'
+          direct-2sat-challenge 3f20f64512b141864daa81567638fae709e156bc
+          faster-exact-service 63b724b8cb897faadeba57d2ae5e48c4362dca5d
+          external-solver-challenge 9df7111f418fcd5e34b747cab976dc625ccfe5b7
+          fresh-transfer-study b3899b286904a2b28ba26f44bf4503ec21c1ed7f
+          part3/release-replication-readiness 3f8df9e505068ec57cbe2734e6a461507bca7238
+          EOF
+
+      - name: Remove the redundant branch names
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin --delete \
+            direct-2sat-challenge \
+            faster-exact-service \
+            external-solver-challenge \
+            fresh-transfer-study \
+            part3/release-replication-readiness
+
+      - name: Remove this one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Tugrap"
+          git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
+          rm .github/workflows/clean-part3-branches.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "Remove the completed branch cleanup"
+          git push origin HEAD:refs/heads/archive/research-history-20261016
