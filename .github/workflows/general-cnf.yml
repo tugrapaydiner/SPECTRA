@@ -62,7 +62,6 @@ jobs:
       - name: Retain one checked SAT and UNSAT receipt
         shell: python
         run: |
-          from dataclasses import asdict
           from hashlib import sha256
           from itertools import product
           import json
@@ -71,6 +70,8 @@ jobs:
           import platform
           import subprocess
           import sys
+
+          sys.path.insert(0, str(Path.cwd()))
 
           from experiments.general_competition.native_cdcl import (
               SOURCE,
