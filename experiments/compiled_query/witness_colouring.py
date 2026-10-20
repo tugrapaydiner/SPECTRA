@@ -33,6 +33,18 @@ def colour_count(colouring) -> int:
     return max(colouring, default=-1) + 1
 
 
+def colouring_sha256(colouring) -> str:
+    """Hash arbitrary nonnegative colour indices without a one-byte limit."""
+    values = tuple(colouring)
+    digest = hashlib.sha256(b"SPECTRA colouring v1\0")
+    digest.update(struct.pack("<Q", len(values)))
+    for colour in values:
+        if type(colour) is not int or not 0 <= colour < 1 << 32:
+            raise ValueError("colour indices must be unsigned 32-bit integers")
+        digest.update(struct.pack("<I", colour))
+    return digest.hexdigest()
+
+
 def _verify(graph: Graph, colouring) -> tuple[int, ...]:
     result = tuple(colouring)
     verify_coloring(graph, result, colour_count(result))
@@ -158,7 +170,7 @@ def best_witness_colouring(
         "trial": trial,
         "restarts": restarts,
         "colour_count": colour_count(colouring),
-        "colouring_sha256": hashlib.sha256(bytes(colouring)).hexdigest(),
+        "colouring_sha256": colouring_sha256(colouring),
     }
     return colouring, receipt
 
@@ -262,7 +274,7 @@ def prepare_witness_topology(
         "selected_trial": selected["trial"],
         "restarts": restarts,
         "witness_colours": colour_count(colouring),
-        "witness_sha256": hashlib.sha256(bytes(colouring)).hexdigest(),
+        "witness_sha256": colouring_sha256(colouring),
     }
     _verify(prepared, colouring)
     if maximum_degree > max_witness_colours - 1 and mode == "degree-capped":

@@ -11,6 +11,7 @@ from experiments.critical_clique_coloring.core import (
 from .witness_colouring import (
     best_witness_colouring,
     colour_count,
+    colouring_sha256,
     degree_capped_subgraph,
     prepare_witness_topology,
 )
@@ -40,6 +41,12 @@ def test_portfolio_is_deterministic_and_proper(tmp_path):
     assert first_receipt == second_receipt
     assert colour_count(first) == 3
     verify_coloring(graph, first, 3)
+
+
+def test_colour_digest_supports_indices_above_one_byte():
+    values = tuple(range(300))
+    assert colouring_sha256(values) == colouring_sha256(values)
+    assert colouring_sha256(values) != colouring_sha256(tuple(reversed(values)))
 
 
 def test_degree_capped_subgraph_is_stable_and_bounded(tmp_path):
