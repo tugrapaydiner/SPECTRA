@@ -9,7 +9,7 @@ permissions:
   contents: read
 concurrency:
   group: cpu-contracts-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   general-cnf-contracts:
     name: General CNF contracts (Python ${{ matrix.python }})
