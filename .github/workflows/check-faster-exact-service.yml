@@ -4,6 +4,14 @@ on:
   push:
     branches: [faster-exact-service]
     paths:
+      - 'spectra/_native/exact_binary.cpp'
+      - 'spectra/exact_selftest.py'
+      - 'experiments/compiled_query/exact_native.cpp'
+      - 'experiments/compiled_query/auto_selector_benchmark.py'
+      - 'experiments/compiled_query/test_exact.py'
+      - 'tests/public/test_exact_api.py'
+      - 'tests/public/test_exact_selftest.py'
+      - 'tests/public/test_auto_selector_v11.py'
       - '.github/workflows/check-faster-exact-service.yml'
   workflow_dispatch:
 
