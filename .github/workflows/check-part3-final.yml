@@ -1,0 +1,103 @@
+name: check-part3-final
+
+on:
+  push:
+    branches: [finish-part3]
+    paths: ['.github/workflows/check-part3-final.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: check-part3-final
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: finish-part3
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Install the declared test environment
+        run: python -m pip install 'build==1.3.0' 'pytest==9.0.2' 'numpy==2.3.5' 'python-sat==1.9.dev15'
+      - name: Apply the reviewed repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/apply_part3_review.py
+          python .github/scripts/repair_itc_policy.py
+          python .github/scripts/repair_optional_study.py
+          rm .github/workflows/part3-source-review.yml
+          rm .github/workflows/part3-source-review-v2.yml
+          rm .github/workflows/check-part3.yml
+          rm .github/workflows/check-part3-again.yml
+          rm .github/workflows/check-part3-final.yml
+          git diff --check
+      - name: Run every Part 3 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            spectra/exact.py \
+            spectra/exact_selftest.py \
+            spectra/exact_compare.py \
+            scripts/check_exact_installation.py \
+            experiments/compiled_query/exact.py \
+            experiments/compiled_query/auto_selector_benchmark.py \
+            experiments/compiled_query/itc_exam_transfer.py \
+            experiments/compiled_query/test_study.py
+          python scripts/check_active_tree.py --out /tmp/active-tree.json
+          python scripts/check_release_readiness.py --out /tmp/release-readiness.json
+          export SPECTRA_EXACT_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('/tmp/part3-final-review-exact'))")"
+          python -m pytest tests/public --confcutdir=tests/public -q
+          python -m pytest experiments/compiled_query -q --maxfail=1
+          python - <<'PY'
+          from pathlib import Path
+
+          current_policy_files = (
+              'spectra/exact.py',
+              'experiments/compiled_query/exact.py',
+              'experiments/compiled_query/auto_selector_benchmark.py',
+              'experiments/compiled_query/itc_exam_transfer.py',
+          )
+          for name in current_policy_files:
+              text = Path(name).read_text(encoding='utf-8')
+              assert 'current["auto_policy"] != "structural-v10"' not in text, name
+          for name in ('spectra/exact.py', 'experiments/compiled_query/exact.py'):
+              text = Path(name).read_text(encoding='utf-8')
+              assert 'frozen structural policy v10' not in text
+              assert 'frozen structural policy v11' in text
+          for root in (Path('spectra'), Path('experiments/compiled_query')):
+              for path in root.rglob('*.py'):
+                  assert 'path.name != "SHA256.json"' not in path.read_text(
+                      encoding='utf-8', errors='ignore'
+                  ), path
+          document = Path('docs/PART3_RELEASE_REPLICATION_READINESS.md').read_text(
+              encoding='utf-8'
+          )
+          assert 'part3/release-replication-readiness' not in document
+          assert '39016dd2256a08e5d2f1c9bbd48bcd2ab61c38aaa5e9773a882154bd273f88e7' not in document
+          assert '99df9e1a42bc396fe451583c42f90dadaf9a47ff838b4508d53b2a59cd304700' not in document
+          PY
+      - name: Save the reviewed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore \
+            .github/workflows/part3-source-review.yml \
+            .github/workflows/part3-source-review-v2.yml \
+            .github/workflows/check-part3.yml \
+            .github/workflows/check-part3-again.yml \
+            .github/workflows/check-part3-final.yml
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Finish the Part 3 source review'
+          git push origin HEAD:refs/heads/finish-part3
