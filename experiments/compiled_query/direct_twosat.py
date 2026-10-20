@@ -21,7 +21,7 @@ import time
 NATIVE_SOURCE = Path(__file__).with_name("direct_twosat_native.cpp")
 MODE_SOURCE = Path(__file__).with_name("direct_twosat_modes.cpp")
 SOURCE_FILES = (NATIVE_SOURCE, MODE_SOURCE)
-SCHEMA = "spectra.direct_twosat_build.v2"
+SCHEMA = "spectra.direct_twosat_build.v3"
 DEFAULT_BYTES = 512 << 20
 
 
@@ -214,6 +214,7 @@ class Direct2SATRuntime:
         self._solvers = {
             "auto": _configure_solver(self._library, "direct_twosat_solve"),
             "dag": _configure_solver(self._library, "direct_twosat_solve_dag"),
+            "tile": _configure_solver(self._library, "direct_twosat_solve_tile"),
         }
         self._library.direct_twosat_error.argtypes = []
         self._library.direct_twosat_error.restype = ctypes.c_char_p
@@ -230,7 +231,7 @@ class Direct2SATRuntime:
         if type(packet) is not bytes:
             raise TypeError("direct 2-SAT packet must be bytes")
         if engine not in self._solvers:
-            raise ValueError("direct 2-SAT engine must be auto or dag")
+            raise ValueError("direct 2-SAT engine must be auto, dag or tile")
         if type(max_bytes) is not int or not 1 <= max_bytes < 1 << 64:
             raise ValueError("max_bytes must be a positive uint64")
         buffer = (ctypes.c_uint8 * len(packet)).from_buffer_copy(packet)
@@ -257,7 +258,7 @@ class Direct2SATRuntime:
             output = ctypes.string_at(pointer, size.value)
         finally:
             self._library.direct_twosat_free(pointer)
-        selected_engine = {1: "closure", 2: "dag"}.get(stats.engine)
+        selected_engine = {1: "closure", 2: "dag", 3: "tile"}.get(stats.engine)
         if selected_engine is None:
             raise RuntimeError("direct 2-SAT returned an unknown engine")
         return Direct2SATResult(
