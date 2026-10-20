@@ -85,7 +85,7 @@ jobs:
       - name: Run the native-core equivalence contract
         run: |
           python -m pip install 'pytest==9.0.2'
-          python -m pytest tests/test_general_native_core.py -q
+          python -m pytest --noconftest tests/test_general_native_core.py -q
           git diff --check
       - name: Commit the correction
         shell: bash
