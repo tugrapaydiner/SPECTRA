@@ -259,55 +259,9 @@ PASS, but they determine how broadly the result may be advertised.
 
 ## Other project tracks
 
-The public package retains backward-compatible bounded CNF, CPU SVM, neural,
-low-bit, compiler, and deployment modules. Their full historical branch and bulky
-evidence trees are preserved on `archive/research-history-20261016`, not copied
-into the active checkout. Each track keeps its own limitations and **none inherits
-the WAP result**. In particular:
-
-| Track | Retained value | Not established |
-|---|---|---|
-| Bounded CNF search | reproducible paths, reusable indexes, original-clause checks | general SAT superiority or UNSAT proofs |
-| Native SVM execution | faithful same-model CPU execution and pipeline receipts | best task accuracy or universal speedups |
-| Neural/low-bit history | retained hypotheses, models, failures, and controls | a flagship learned-reasoning result |
-| Cover/domain experiments | exact structured execution and negative competitor results | universal graph-colouring advantage |
-| Two-plan migration support | complete minimum-change answers, fresh contradiction paths, independent native checking | operational network control, fresh confirmation, or universal speedups |
-
-The latest published package release remains
-[v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1). The WAP
-flagship source is unreleased research until a separately audited release is made.
-
-## Base toolkit quick start
-
-```bash
-git clone https://github.com/tugrapaydiner/SPECTRA.git
-cd SPECTRA
-python -m venv .venv
-# Linux/macOS: source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install .
-python -m spectra doctor
-python -m spectra cnf solve examples/tiny.cnf --seed 7 --max-flips 1024 --out answer.json
-python -m spectra cnf check examples/tiny.cnf answer.json
-```
-
-The base installation does not require PyTorch or a compiler. Native runtimes are
-explicit builds. Bounded search returns `SAT_VERIFIED` or `UNKNOWN`; process success
-alone never means the problem was solved.
-
-## Verify and develop
-
-```bash
-python -m pip install ".[test]"
-python -m pytest tests/public --confcutdir=tests/public
-python scripts/check_release_readiness.py
-```
-
-Historical slow retraining and large evidence replays live in the dedicated archive
-branch and are not routine pull-request gates. Test passes are implementation
-evidence, not proof of generalization or support for every platform/input. Read [SECURITY.md](SECURITY.md) before accepting external inputs,
-native libraries, or checkpoints, and [CONTRIBUTING.md](CONTRIBUTING.md) before
-changing numerical code or retained experiments.
-
-Code is distributed under [MIT](LICENSE). Upstream datasets and third-party
-components retain their own licenses and attribution requirements.
+The native 2-SAT development challenge is recorded in
+[`TWOSAT_CHALLENGE_RESULTS_20261019.md`](experiments/compiled_query/TWOSAT_CHALLENGE_RESULTS_20261019.md).
+It is a deliberately hard negative result: a purpose-built challenger is faster
+overall on the exposed pure-service panel, even though SPECTRA retains substantial
+wins on dense-compression cells. That result is an optimization target, not a new
+flagship claim.
