@@ -13,7 +13,6 @@ import json
 from pathlib import Path
 import re
 import subprocess
-from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_TRACKED_BYTES = 14 * 1024 * 1024
@@ -25,6 +24,7 @@ MAX_SINGLE_FILE_BYTES = 2 * 1024 * 1024
 ACTIVE_WORKFLOWS = {
     "cpu-regression.yml",
     "exact-public-api.yml",
+    "general-cnf.yml",
     "itc-exam-suite.yml",
     "public-package.yml",
     "repository-audit.yml",
