@@ -121,12 +121,45 @@ def _complete_model(raw: list[int] | None, nvars: int) -> tuple[bool, ...]:
     return tuple(values.get(variable, False) for variable in range(1, nvars + 1))
 
 
-def _new_solver(name: str, *, with_proof: bool):
+def _new_solver(
+    name: str,
+    *,
+    with_proof: bool,
+    bootstrap_with: Iterable[Iterable[int]] = (),
+):
     try:
         from pysat.solvers import Solver
     except ImportError as error:
         raise RuntimeError("python-sat is required for the native proof backend") from error
-    return Solver(name=name, with_proof=with_proof, use_timer=False)
+    return Solver(
+        name=name,
+        bootstrap_with=[list(row) for row in bootstrap_with],
+        with_proof=with_proof,
+        use_timer=False,
+    )
+
+
+def _proof_lines(raw_proof: Iterable[str | bytes]) -> tuple[str, ...]:
+    """Normalize the proof stream without changing any retained DRAT clause."""
+    retained: list[str] = []
+    for raw_line in raw_proof:
+        if isinstance(raw_line, bytes):
+            try:
+                line = raw_line.decode("ascii")
+            except UnicodeDecodeError as error:
+                raise RuntimeError("UNSAT backend returned a non-ASCII proof line") from error
+        elif isinstance(raw_line, str):
+            line = raw_line
+        else:
+            raise RuntimeError("UNSAT backend returned a non-text proof line")
+        line = line.strip()
+        if line:
+            retained.append(line)
+    return tuple(retained)
+
+
+def _has_empty_clause(proof: Iterable[str]) -> bool:
+    return any(line.strip() == "0" for line in proof)
 
 
 def solve_original_with_drat(
@@ -138,9 +171,14 @@ def solve_original_with_drat(
     """Solve the exact original clause sequence and retain a DRAT proof for UNSAT."""
     rows = _exact_rows(nvars, clauses)
     started = perf_counter_ns()
-    with _new_solver(solver_name, with_proof=True) as solver:
-        for row in rows:
-            solver.add_clause(list(row))
+    # PySAT's proof-producing solver contract initializes the original formula
+    # through ``bootstrap_with``. Adding every clause after construction can leave
+    # some solver/version combinations with a non-finalized proof stream.
+    with _new_solver(
+        solver_name,
+        with_proof=True,
+        bootstrap_with=rows,
+    ) as solver:
         sat = solver.solve()
         if sat:
             model = _complete_model(solver.get_model(), nvars)
@@ -150,7 +188,7 @@ def solve_original_with_drat(
             raw_proof = solver.get_proof()
             if raw_proof is None:
                 raise RuntimeError("UNSAT backend returned no proof")
-            proof = tuple(line.strip() for line in raw_proof if line.strip())
+            proof = _proof_lines(raw_proof)
     elapsed = perf_counter_ns() - started
 
     if sat:
@@ -160,7 +198,7 @@ def solve_original_with_drat(
         status = "SAT_CHECKED"
     else:
         verified = False
-        if not proof or "0" not in proof:
+        if not proof or not _has_empty_clause(proof):
             raise RuntimeError("UNSAT proof is empty or lacks the empty clause")
         status = "UNSAT_WITH_DRAT"
     return OriginalProofRun(
@@ -182,9 +220,11 @@ def _solve_residual(
     solver_name: str,
 ) -> tuple[str, tuple[bool, ...], int]:
     started = perf_counter_ns()
-    with _new_solver(solver_name, with_proof=False) as solver:
-        for row in core.residual_clauses:
-            solver.add_clause(list(row))
+    with _new_solver(
+        solver_name,
+        with_proof=False,
+        bootstrap_with=core.residual_clauses,
+    ) as solver:
         sat = solver.solve()
         model = _complete_model(solver.get_model(), core.reduced_nvars) if sat else ()
     elapsed = perf_counter_ns() - started
@@ -290,9 +330,9 @@ def write_dimacs(
     return destination
 
 
-def write_drat(path: str | Path, proof: Iterable[str]) -> Path:
-    lines = tuple(str(line).strip() for line in proof if str(line).strip())
-    if not lines or "0" not in lines:
+def write_drat(path: str | Path, proof: Iterable[str | bytes]) -> Path:
+    lines = _proof_lines(proof)
+    if not lines or not _has_empty_clause(lines):
         raise ValueError("DRAT proof must contain a derived empty clause")
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
