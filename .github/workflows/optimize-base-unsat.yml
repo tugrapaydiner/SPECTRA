@@ -1,0 +1,237 @@
+name: optimize-base-unsat
+
+on:
+  push:
+    branches:
+      - part3/release-replication-readiness
+    paths:
+      - .github/workflows/optimize-base-unsat.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: optimize-base-unsat
+  cancel-in-progress: false
+
+jobs:
+  optimize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Remove repeated base-UNSAT work
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          files = (
+              Path('spectra/_native/exact_binary.cpp'),
+              Path('experiments/compiled_query/exact_native.cpp'),
+          )
+          original = [path.read_text(encoding='utf-8') for path in files]
+          if original[0] != original[1]:
+              raise AssertionError('packaged and research native sources differ before patch')
+
+          old_observer = '''        size_t at=16;
+          std::vector<W> selected(n,0);
+          ProofScratch proof_scratch; // call-local, also for concurrent observer use
+          for(U first_row=0;first_row<rows;first_row+=64) {
+              U lanes=std::min<U>(64,rows-first_row);W sat_mask=0;
+              std::fill(selected.begin(),selected.end(),0);
+              for(U lane=0;lane<lanes;++lane) {
+                  if(at+W(n)+5>size) return false;
+                  U status=output[at];const uint8_t* labels=output+at+1;
+                  U length=load32(output,at+1+W(n));at+=W(n)+5;
+                  if(W(length)>size-at) return false;
+                  auto pins=bank.row(first_row+lane);
+                  if(status==1) {
+                      if(length) return false;
+                      W bit=W(1)<<lane;sat_mask|=bit;
+                      for(U v=0;v<n;++v) {
+                          U label=labels[v];
+                          if(label==colors[2*v]) continue;
+                          if(label<k && label==colors[2*v+1]) selected[v]|=bit;
+                          else return false;
+                      }
+                      for(auto pin:pins)
+                          if(!((pin.allowed>>labels[pin.vertex])&1)) return false;
+                  } else if(status==0) {
+                      for(U v=0;v<n;++v) if(labels[v]) return false;
+                      if(!verify(pins,0,nullptr,0,output+at,length,&proof_scratch)) return false;
+                  } else return false;
+                  at+=length;
+              }
+          '''
+          new_observer = '''        size_t at=16;
+          std::vector<W> selected(n,0);
+          ProofScratch proof_scratch; // call-local, also for concurrent observer use
+          const uint8_t* static_proof=nullptr;
+          U static_proof_size=0;
+          const std::vector<Pin> no_pins;
+          for(U first_row=0;first_row<rows;first_row+=64) {
+              U lanes=std::min<U>(64,rows-first_row);W sat_mask=0;
+              std::fill(selected.begin(),selected.end(),0);
+              for(U lane=0;lane<lanes;++lane) {
+                  if(at+W(n)+5>size) return false;
+                  U status=output[at];const uint8_t* labels=output+at+1;
+                  U length=load32(output,at+1+W(n));at+=W(n)+5;
+                  if(W(length)>size-at) return false;
+                  if(status==1) {
+                      if(length) return false;
+                      auto pins=bank.row(first_row+lane);
+                      W bit=W(1)<<lane;sat_mask|=bit;
+                      for(U v=0;v<n;++v) {
+                          U label=labels[v];
+                          if(label==colors[2*v]) continue;
+                          if(label<k && label==colors[2*v+1]) selected[v]|=bit;
+                          else return false;
+                      }
+                      for(auto pin:pins)
+                          if(!((pin.allowed>>labels[pin.vertex])&1)) return false;
+                  } else if(status==0) {
+                      for(U v=0;v<n;++v) if(labels[v]) return false;
+                      bool kind3=length>=16 && !std::memcmp(output+at,"SBP1",4)
+                          && load32(output+at,4)==3;
+                      bool same_static=kind3 && static_proof
+                          && length==static_proof_size
+                          && !std::memcmp(output+at,static_proof,length);
+                      if(!same_static) {
+                          if(kind3) {
+                              // A kind-3 proof is immutable-problem evidence. Walk
+                              // its original-literal paths once, then require exact
+                              // byte equality for repeated copies in this bank.
+                              if(!verify(no_pins,0,nullptr,0,output+at,length,&proof_scratch))
+                                  return false;
+                              if(!static_proof) {
+                                  static_proof=output+at;static_proof_size=length;
+                              }
+                          } else {
+                              auto pins=bank.row(first_row+lane);
+                              if(!verify(pins,0,nullptr,0,output+at,length,&proof_scratch))
+                                  return false;
+                          }
+                      }
+                  } else return false;
+                  at+=length;
+              }
+          '''
+
+          old_rows = '''    } else {
+              // Keep this immutable-problem proof local to this call. Do not cache
+              // request-dependent contradictions or share mutable state across calls.
+              // The observer independently checks every emitted copy below.
+              std::vector<uint8_t> base_proof;
+              for(U row=0;row<count;++row) {
+                  Answer answer=solver.solve(solver_rows.row(row),&base_proof);
+                  if(row+1<count && solver.bad!=NIL && base_proof.empty() && answer.certificate.size()>=16
+                          && load32(answer.certificate.data(),4)==3)
+                      base_proof=answer.certificate;
+                  append(answer);
+              }
+          }
+          '''
+          new_rows = '''    } else if(solver.bad!=NIL) {
+              // Preserve the historical proof priority: an empty current domain
+              // still earns a kind-1 proof before the immutable contradiction.
+              // Reuse request scratch, route the kind-3 proof once, and append one
+              // serialized row template for every remaining request.
+              std::vector<U> seen(solver.n,0),touched;
+              std::vector<W> effective(solver.n);
+              touched.reserve(static_cast<size_t>(std::min<W>(pins,solver.n)));
+              std::vector<uint8_t> base_proof,base_row;
+              const std::vector<Pin> no_pins;
+              U epoch=0;
+              for(U row=0;row<count;++row) {
+                  if(++epoch==0) {std::fill(seen.begin(),seen.end(),0);epoch=1;}
+                  touched.clear();
+                  for(U pin=solver_rows.row_begin(row);pin<solver_rows.row_end(row);++pin) {
+                      U v=solver_rows.pin_vertex(pin);
+                      if(seen[v]!=epoch) {
+                          seen[v]=epoch;effective[v]=solver.masks[v];touched.push_back(v);
+                      }
+                      effective[v]&=solver_rows.pin_allowed(pin);
+                  }
+                  std::sort(touched.begin(),touched.end());
+                  U empty=NIL;
+                  for(U v:touched) if(!effective[v]) {empty=v;break;}
+                  if(empty!=NIL) {
+                      Answer answer;answer.sat=false;answer.certificate=proof(1,{empty},{});
+                      append(answer);continue;
+                  }
+                  if(base_row.empty()) {
+                      Answer answer=solver.solve(no_pins);
+                      if(answer.sat || !answer.labels.empty() || answer.certificate.size()<16
+                              || answer.certificate.size()>UINT32_MAX
+                              || load32(answer.certificate.data(),4)!=3)
+                          throw std::logic_error("base contradiction proof differs");
+                      result.visits+=answer.visits;result.arcs+=answer.arcs;
+                      base_proof=std::move(answer.certificate);
+                      base_row.reserve(5+W(solver.n)+base_proof.size());
+                      base_row.push_back(0);base_row.resize(1+solver.n,0);
+                      word(base_row,static_cast<U>(base_proof.size()));
+                      base_row.insert(base_row.end(),base_proof.begin(),base_proof.end());
+                  }
+                  reserve_row(base_proof.size());
+                  result.output.insert(result.output.end(),base_row.begin(),base_row.end());
+                  ++result.unsat;result.proof_bytes+=base_proof.size();
+              }
+          } else {
+              for(U row=0;row<count;++row) append(solver.solve(solver_rows.row(row)));
+          }
+          '''
+
+          patched = []
+          for text in original:
+              if text.count(old_observer) != 1:
+                  raise AssertionError('observer block differs')
+              if text.count(old_rows) != 1:
+                  raise AssertionError('base row block differs')
+              text = text.replace(old_observer, new_observer, 1)
+              text = text.replace(old_rows, new_rows, 1)
+              patched.append(text)
+          if patched[0] != patched[1]:
+              raise AssertionError('packaged and research native sources differ after patch')
+          for path, text in zip(files, patched):
+              path.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+      - name: Run the focused proof and competitor contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SPECTRA_EXACT_LIBRARY="$(
+            python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('optimized-exact'))"
+          )"
+          python -m pytest \
+            experiments/compiled_query/test_exact.py \
+            -q -k 'impossible_graph_bank_keeps_current_request_proofs or every_proof_kind_and_single_byte_mutations or auto_does_not_hide_malformed_packets_or_resource_limits'
+          python -m pytest \
+            experiments/compiled_query/test_native_twosat_challenge.py \
+            experiments/compiled_query/test_twosat_development_benchmark.py \
+            -q
+          python -m pytest tests/public/test_exact_api.py --confcutdir=tests/public -q
+          python - <<'PY'
+          from pathlib import Path
+          assert Path('spectra/_native/exact_binary.cpp').read_bytes() == Path(
+              'experiments/compiled_query/exact_native.cpp'
+          ).read_bytes()
+          PY
+      - name: Save the optimization
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Tugrap"
+          git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
+          git add spectra/_native/exact_binary.cpp experiments/compiled_query/exact_native.cpp
+          git diff --cached --check
+          git commit -m "Speed up repeated base contradictions"
+          git push origin HEAD:refs/heads/part3/release-replication-readiness
