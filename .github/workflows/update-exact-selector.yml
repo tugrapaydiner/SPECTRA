@@ -1,0 +1,178 @@
+name: update-exact-selector
+
+on:
+  push:
+    branches: [faster-exact-service]
+    paths:
+      - '.github/workflows/update-exact-selector.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-exact-selector
+  cancel-in-progress: false
+
+jobs:
+  patch-and-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: faster-exact-service
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Update the structural selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          old_native = '''    } else if(bank_size==64 && W(nc)==2*W(n)
+                      && W(p.edges.size())>=4*W(n)) {
+                  condensed=false;routed=false;auto_reason="dense_uncompressed_tile64";
+              } else if(bank_size>=64) {
+          '''
+          new_native = '''    } else if(bank_size>=64 && W(nc)==2*W(n)
+                      && W(p.edges.size())>=4*W(n)) {
+                  condensed=false;routed=false;auto_reason="dense_uncompressed_bank";
+              } else if(bank_size>=64) {
+          '''
+          for source in (
+              Path('spectra/_native/exact_binary.cpp'),
+              Path('experiments/compiled_query/exact_native.cpp'),
+          ):
+              replace_once(source, old_native, new_native)
+              text = source.read_text(encoding='utf-8')
+              if text.count('structural-v10') != 1:
+                  raise SystemExit(f'{source}: selector identity differs')
+              source.write_text(
+                  text.replace('structural-v10', 'structural-v11', 1),
+                  encoding='utf-8',
+              )
+
+          if Path('spectra/_native/exact_binary.cpp').read_bytes() != Path(
+                  'experiments/compiled_query/exact_native.cpp').read_bytes():
+              raise SystemExit('packaged and research native sources differ')
+
+          benchmark = Path('experiments/compiled_query/auto_selector_benchmark.py')
+          replace_once(
+              benchmark,
+              '''    if count == 64 and components == 2 * vertices and edges >= 4 * vertices:
+                      return "raw", "dense_uncompressed_tile64"
+                  if count >= 64:
+              ''',
+              '''    if count >= 64 and components == 2 * vertices and edges >= 4 * vertices:
+                      return "raw", "dense_uncompressed_bank"
+                  if count >= 64:
+              ''',
+          )
+          text = benchmark.read_text(encoding='utf-8')
+          benchmark.write_text(
+              text.replace('POLICY = "structural-v10"',
+                           'POLICY = "structural-v11"', 1),
+              encoding='utf-8',
+          )
+
+          research_test = Path('experiments/compiled_query/test_exact.py')
+          replace_once(
+              research_test,
+              '''        elif count == 64 and components == 2 * n and len(edges) >= 4 * n:
+                              selected, reason = 'raw', 'dense_uncompressed_tile64'
+                          elif count >= 64:
+              ''',
+              '''        elif count >= 64 and components == 2 * n and len(edges) >= 4 * n:
+                              selected, reason = 'raw', 'dense_uncompressed_bank'
+                          elif count >= 64:
+              ''',
+          )
+          text = research_test.read_text(encoding='utf-8')
+          research_test.write_text(
+              text.replace('structural-v10', 'structural-v11'),
+              encoding='utf-8',
+          )
+
+          old_test = Path('tests/public/test_auto_selector_v10.py')
+          new_test = Path('tests/public/test_auto_selector_v11.py')
+          text = old_test.read_text(encoding='utf-8')
+          text = text.replace('structural-v10', 'structural-v11')
+          text = text.replace('dense_uncompressed_tile64',
+                              'dense_uncompressed_bank')
+          text = text.replace(
+              'def test_dense_uncompressed_graph_uses_scc_after_tile64(exact_runtime):',
+              'def test_dense_uncompressed_graph_stays_raw_after_tile64(exact_runtime):',
+          )
+          old_block = '''    answer = solve(exact_runtime, problem, ((),) * 128)
+              assert answer.info["selected_mode"] == "scc"
+              assert answer.info["auto_policy_reason"] == "scc_long_bank"
+          '''
+          new_block = '''    answer = solve(exact_runtime, problem, ((),) * 128)
+              assert answer.info["components"] == 2 * problem.n
+              assert answer.info["selected_mode"] == "raw"
+              assert answer.info["auto_policy_reason"] == "dense_uncompressed_bank"
+          '''
+          if text.count(old_block) != 1:
+              raise SystemExit('selector test block differs')
+          text = text.replace(old_block, new_block, 1)
+          new_test.write_text(text, encoding='utf-8')
+          old_test.unlink()
+
+          api_test = Path('tests/public/test_exact_api.py')
+          text = api_test.read_text(encoding='utf-8')
+          api_test.write_text(
+              text.replace('structural-v10', 'structural-v11'),
+              encoding='utf-8',
+          )
+
+          workflow = Path('.github/workflows/check-faster-exact-service.yml')
+          text = workflow.read_text(encoding='utf-8')
+          workflow.write_text(
+              text.replace('test_auto_selector_v10.py',
+                           'test_auto_selector_v11.py'),
+              encoding='utf-8',
+          )
+          PY
+      - name: Run selector and exact-service contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SPECTRA_EXACT_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('selector-build'))")"
+          python -m pytest \
+            tests/public/test_exact_api.py \
+            tests/public/test_auto_selector_v11.py \
+            --confcutdir=tests/public -q
+          python -m pytest \
+            experiments/compiled_query/test_exact.py \
+            experiments/compiled_query/test_linear_construction.py \
+            -q
+          git diff --check
+      - name: Commit the checked selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name Tugrap
+          git config user.email 106766396+tugrapaydiner@users.noreply.github.com
+          git add \
+            spectra/_native/exact_binary.cpp \
+            experiments/compiled_query/exact_native.cpp \
+            experiments/compiled_query/auto_selector_benchmark.py \
+            experiments/compiled_query/test_exact.py \
+            tests/public/test_auto_selector_v10.py \
+            tests/public/test_auto_selector_v11.py \
+            tests/public/test_exact_api.py \
+            .github/workflows/check-faster-exact-service.yml
+          git commit -m 'Keep dense uncompressed banks on raw'
+          git push origin HEAD:faster-exact-service
