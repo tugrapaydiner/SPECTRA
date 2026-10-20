@@ -146,6 +146,8 @@ jobs:
             -q
       - name: Run the fixed exposed SAT-only panel
         run: |
+          set -euo pipefail
+          mkdir -p exposed-panel
           python -m experiments.general_competition.exposed_panel \
             exposed-panel \
             --repeats 3 \
