@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("pysat")
+
 from experiments.general_competition.binary_core import model_satisfies
 from experiments.general_competition.proof_backend import (
     check_drat,
