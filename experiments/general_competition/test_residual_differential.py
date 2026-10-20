@@ -28,8 +28,21 @@ def random_formula(seed: int):
 
 
 def oracle_status(name: str, clauses) -> bool:
-    with Solver(name=name, bootstrap_with=[list(row) for row in clauses]) as solver:
+    # PySAT's constructor indexes clause[0] and crashes on a valid empty
+    # clause. Adding rows through the public solver API preserves DIMACS
+    # semantics and exercises the empty-clause UNSAT path correctly.
+    with Solver(name=name) as solver:
+        for row in clauses:
+            solver.add_clause(list(row))
         return bool(solver.solve())
+
+
+def test_oracles_accept_the_valid_empty_clause_case():
+    expected = tuple(oracle_status(name, ((),)) for name in ORACLES)
+    assert expected == (False, False)
+    result = solve_general(1, ((),))
+    assert result.status == "UNSAT_VERIFIED"
+    assert verify_general_result(1, ((),), result)
 
 
 def test_random_general_cnf_matches_two_independent_solver_families():
