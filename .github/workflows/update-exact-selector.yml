@@ -34,70 +34,61 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path: Path, old: str, new: str) -> None:
+          def require_replace(path: Path, old: str, new: str) -> None:
               text = path.read_text(encoding='utf-8')
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{path}: expected one match, found {count}')
+              if text.count(old) != 1:
+                  raise SystemExit(
+                      f'{path}: expected one {old!r}, found {text.count(old)}'
+                  )
               path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          old_native = '''    } else if(bank_size==64 && W(nc)==2*W(n)
+          native_old = '''    } else if(bank_size==64 && W(nc)==2*W(n)
                       && W(p.edges.size())>=4*W(n)) {
                   condensed=false;routed=false;auto_reason="dense_uncompressed_tile64";
               } else if(bank_size>=64) {
           '''
-          new_native = '''    } else if(bank_size>=64 && W(nc)==2*W(n)
+          native_new = '''    } else if(bank_size>=64 && W(nc)==2*W(n)
                       && W(p.edges.size())>=4*W(n)) {
                   condensed=false;routed=false;auto_reason="dense_uncompressed_bank";
               } else if(bank_size>=64) {
           '''
-          for source in (
+          native_sources = (
               Path('spectra/_native/exact_binary.cpp'),
               Path('experiments/compiled_query/exact_native.cpp'),
-          ):
-              replace_once(source, old_native, new_native)
-              text = source.read_text(encoding='utf-8')
-              if text.count('structural-v10') != 1:
-                  raise SystemExit(f'{source}: selector identity differs')
-              source.write_text(
-                  text.replace('structural-v10', 'structural-v11', 1),
-                  encoding='utf-8',
-              )
-
-          if Path('spectra/_native/exact_binary.cpp').read_bytes() != Path(
-                  'experiments/compiled_query/exact_native.cpp').read_bytes():
+          )
+          for source in native_sources:
+              require_replace(source, native_old, native_new)
+              require_replace(source, 'structural-v10', 'structural-v11')
+          if native_sources[0].read_bytes() != native_sources[1].read_bytes():
               raise SystemExit('packaged and research native sources differ')
 
           benchmark = Path('experiments/compiled_query/auto_selector_benchmark.py')
-          replace_once(
+          require_replace(
               benchmark,
-              '''    if count == 64 and components == 2 * vertices and edges >= 4 * vertices:
-                      return "raw", "dense_uncompressed_tile64"
-                  if count >= 64:
-              ''',
-              '''    if count >= 64 and components == 2 * vertices and edges >= 4 * vertices:
-                      return "raw", "dense_uncompressed_bank"
-                  if count >= 64:
-              ''',
+              'if count == 64 and components == 2 * vertices and edges >= 4 * vertices:',
+              'if count >= 64 and components == 2 * vertices and edges >= 4 * vertices:',
           )
-          text = benchmark.read_text(encoding='utf-8')
-          benchmark.write_text(
-              text.replace('POLICY = "structural-v10"',
-                           'POLICY = "structural-v11"', 1),
-              encoding='utf-8',
+          require_replace(
+              benchmark,
+              'return "raw", "dense_uncompressed_tile64"',
+              'return "raw", "dense_uncompressed_bank"',
+          )
+          require_replace(
+              benchmark,
+              'POLICY = "structural-v10"',
+              'POLICY = "structural-v11"',
           )
 
           research_test = Path('experiments/compiled_query/test_exact.py')
-          replace_once(
+          require_replace(
               research_test,
-              '''        elif count == 64 and components == 2 * n and len(edges) >= 4 * n:
-                              selected, reason = 'raw', 'dense_uncompressed_tile64'
-                          elif count >= 64:
-              ''',
-              '''        elif count >= 64 and components == 2 * n and len(edges) >= 4 * n:
-                              selected, reason = 'raw', 'dense_uncompressed_bank'
-                          elif count >= 64:
-              ''',
+              'elif count == 64 and components == 2 * n and len(edges) >= 4 * n:',
+              'elif count >= 64 and components == 2 * n and len(edges) >= 4 * n:',
+          )
+          require_replace(
+              research_test,
+              "selected, reason = 'raw', 'dense_uncompressed_tile64'",
+              "selected, reason = 'raw', 'dense_uncompressed_bank'",
           )
           text = research_test.read_text(encoding='utf-8')
           research_test.write_text(
@@ -109,8 +100,9 @@ jobs:
           new_test = Path('tests/public/test_auto_selector_v11.py')
           text = old_test.read_text(encoding='utf-8')
           text = text.replace('structural-v10', 'structural-v11')
-          text = text.replace('dense_uncompressed_tile64',
-                              'dense_uncompressed_bank')
+          text = text.replace(
+              'dense_uncompressed_tile64', 'dense_uncompressed_bank'
+          )
           text = text.replace(
               'def test_dense_uncompressed_graph_uses_scc_after_tile64(exact_runtime):',
               'def test_dense_uncompressed_graph_stays_raw_after_tile64(exact_runtime):',
@@ -126,8 +118,9 @@ jobs:
           '''
           if text.count(old_block) != 1:
               raise SystemExit('selector test block differs')
-          text = text.replace(old_block, new_block, 1)
-          new_test.write_text(text, encoding='utf-8')
+          new_test.write_text(
+              text.replace(old_block, new_block, 1), encoding='utf-8'
+          )
           old_test.unlink()
 
           api_test = Path('tests/public/test_exact_api.py')
@@ -140,8 +133,9 @@ jobs:
           workflow = Path('.github/workflows/check-faster-exact-service.yml')
           text = workflow.read_text(encoding='utf-8')
           workflow.write_text(
-              text.replace('test_auto_selector_v10.py',
-                           'test_auto_selector_v11.py'),
+              text.replace(
+                  'test_auto_selector_v10.py', 'test_auto_selector_v11.py'
+              ),
               encoding='utf-8',
           )
           PY
