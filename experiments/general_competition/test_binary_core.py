@@ -7,7 +7,6 @@ import pytest
 
 from experiments.general_competition.binary_core import (
     BinaryCore,
-    ComponentProof,
     UnitStep,
     build_binary_core,
     canonical_cnf,
@@ -76,12 +75,12 @@ def test_binary_contradiction_has_mutual_reachability_evidence():
 
 
 def test_long_clause_conflict_is_replayed_as_unit_propagation():
-    clauses = ((1,), (-1, 2), (-2, 3, 4), (-3,), (-4,))
+    clauses = ((1,), (-1, 2), (-2, -3, -4), (3,), (4,))
     core = build_binary_core(4, clauses)
     assert core.contradiction
     assert core.conflict_kind == "unit"
-    assert core.conflict_clause == (-2, 3, 4)
-    assert tuple(step.literal for step in core.unit_trace) == (-4, -3, 1, 2)
+    assert core.conflict_clause == (-2, -3, -4)
+    assert tuple(step.literal for step in core.unit_trace) == (1, 3, 4, 2)
     assert verify_binary_core(4, clauses, core)
     assert not models(4, canonical_cnf(4, clauses))
 
