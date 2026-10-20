@@ -103,8 +103,20 @@ assert result.query_count == len(queries)
 assert verify_session_output(packet, result.output)
 ```
 
-The default `auto` mode uses only graph structure and request-bank length. It does
-not inspect measured timings or cached answers. The result metadata names the selected engine. For edgeless graphs, `auto` uses a separately replayed direct-domain kernel and reports `bank_kernel="edgeless"`; explicit modes retain their original implementations for controlled comparisons. Callers can still force `raw`, `scc`, `sparse`, or `route`.
+The default `auto` mode is the frozen `structural-v11` dispatcher. It uses only
+immutable graph/SCC geometry, bank length, and pin counts; it never inspects
+answers, measured timings, or cached results. Long banks normally use SCC/tile-64,
+but remain on raw when SCC construction leaves every literal separate and the
+original graph is dense enough that the quotient adds work. Short, contradictory,
+and dense proof-heavy shapes retain their frozen raw rules. The result metadata
+reports `auto_policy`, `selected_mode`, and `auto_policy_reason`.
+
+For edgeless graphs, `auto` can execute a separately replayed direct-domain kernel
+and reports `bank_kernel="edgeless"`. Current restrictions that directly force an
+original implication conflict can emit a minimal portable kind-2 proof without a
+full closure replay. These are implementation paths under the same checked answer
+contract; callers can still force `raw`, `scc`, `sparse`, or `route` for controlled
+comparisons.
 
 `pack_session_packet` accepts ordinary Python inputs. `pack_validated_session_packet`
 is for already admitted immutable inputs and still rechecks exact types, bounds,
@@ -150,9 +162,13 @@ native checking, `SCQ2` construction, disposal, and output hashing. They exclude
 JSON decoding, packet creation, compilation, process startup and offline Python
 replay. Do not present them as first-use application latency.
 
-The current performance evidence uses exposed synthetic development graphs and is
-not an independent application benchmark. The installed API does not inherit the
-frozen WAP result, create a general SAT claim, or establish algorithmic novelty.
+The current exact-service evidence includes a prospectively frozen mixed direct
+2-SAT holdout and disclosed development comparisons against the strongest of three
+project-authored direct engines and the official CaDiCaL 3.0.1 core. Those results
+are narrow repeated binary-list service comparisons, not ordinary SAT Competition
+or graph-colouring benchmarks. The installed API does not inherit the frozen WAP
+claim, create general SAT leadership, establish algorithmic novelty, or substitute
+for outside-team replication and operator-authored workloads.
 
 ## Tested boundary
 

@@ -1,145 +1,145 @@
-# Part 3 — release and replication readiness
+# Part 3 — exact-service competition, release and replication readiness
 
-**Started:** 2026-10-19  
-**Branch:** `part3/release-replication-readiness`  
+**Started:** 2026-10-19
+**Working branch:** `finish-part3`
 **Base:** merged and tagged Part 2 commit `527590406c2c624a6aa050e17c6f45b0f000ac5b`
+**Review:** draft pull request #76
 
-## Goal
+## Status
 
-Part 2 completed the frozen `structural-v10` automatic-selector milestone. Part 3
-does not retune that selector. Its controllable goal is to turn the validated
-source tree into a release-facing, independently auditable exact service with one
-obvious smoke-test path, portable receipts, clean installed-wheel checks, and an
-explicit boundary between engineering verification and scientific replication.
+Part 3 is **in progress**. It has not been merged, tagged as complete, or
+published as a package release. The branch combines release-facing evidence
+tooling with the current structural-v11 exact runtime and the retained
+competition studies. Passing project-owned CI is necessary engineering
+evidence, not outside replication or a broad state-of-the-art claim.
 
-The three public commands are:
+Earlier Part 3 branches were archived and consolidated into this one working
+branch. A later cleanup accidentally removed the newest competition files;
+that source was restored before the permanent matrix was pointed at it. The
+draft PR records the recovery commits and exact current head.
+
+## Release-facing commands
 
 ```bash
 spectra exact selftest exact-selftest
 spectra exact audit exact-selftest
-spectra exact compare linux311 linux313 arm64 windows
+spectra exact compare first-bundle second-bundle
 ```
 
-`selftest` creates a new directory, explicitly compiles the bundled native runtime,
-runs deterministic SAT and UNSAT cases through both the raw and SCC automatic
-selector paths, covers all three portable `SBP1` contradiction kinds,
-independently replays the serialized `SBC1 -> SCQ2` results, rejects a mutated
-output, and writes a hash/size manifest.
+`selftest` explicitly builds the bundled native runtime, exercises raw and SCC
+automatic paths, SAT, and all three portable `SBP1` contradiction kinds,
+independently replays every `SBC1 -> SCQ2` bank, rejects tampering, retains the
+exact C++ source, and writes a portable manifest.
 
-`audit` must run in a fresh process. It refuses an already-loaded native module,
-executes no native code, verifies the exact frozen inventory and build receipt,
-requires the reported Python version, executable and platform to agree with that
-receipt, reconstructs the request packets, replays every witness and proof, and
-repeats the tamper checks.
+`audit` runs in a fresh process without executing retained native code. It
+verifies the frozen inventory, build receipt, source and binary hashes,
+packets, complete labels, contradiction proofs, selector receipts, and
+mutation checks. `compare` audits multiple bundles and permits only declared
+environment differences while requiring one shared semantic result.
 
-`compare` audits two or more complete bundles and permits only environment-level
-differences: platform, Python build, compiler and native-library bytes. The exact
-source, deterministic packets, certified outputs, proof coverage, API/ABI and
-selector receipts must be identical. It emits one semantic fingerprint for the
-shared result.
+A successful self-test directory contains ten manifest-bound files plus
+`SHA256.json`: the semantic receipt, retained native source, build receipt,
+platform library, three request packets, and three certified output banks.
+Failed runs leave partial evidence and must be rerun into a new directory.
 
-## Evidence layout
+## Current runtime identity
 
-A passing self-test contains:
+The one-call public dispatcher is `structural-v11`. Its decision uses only
+immutable graph/SCC geometry, bank length, and pin counts. It keeps long dense
+uncompressed banks on raw when a quotient would remove no literals, otherwise
+uses the frozen raw/SCC rules inherited from Part 2. Edgeless problems may use
+a separately replayed direct-domain kernel. Direct forced conflicts can emit a
+minimal original-literal proof without replaying a complete closure.
 
-```text
-exact-selftest/
-├── selftest.json
-├── SHA256.json
-├── native/
-│   ├── exact_binary.cpp
-│   ├── build.json
-│   └── _spectra_exact_binary<platform extension>
-└── cases/
-    ├── mixed-current-query.sbc1
-    ├── mixed-current-query.scq2
-    ├── strong-compression.sbc1
-    ├── strong-compression.scq2
-    ├── base-static-contradiction.sbc1
-    └── base-static-contradiction.scq2
-```
+Explicit `raw`, `scc`, `sparse`, and `route` modes remain available as
+controls. Public and research native C++ sources must remain byte-identical.
 
-`selftest.json` is the semantic receipt. `SHA256.json` uses
-`spectra.evidence_freeze.v1` and binds every other retained file. The manifest
-establishes byte identity only; it does not establish data independence,
-scientific novelty, performance, operator value, or production safety.
+## Retained competition evidence
 
-The destination must not already exist. A failed run leaves its partial directory
-for diagnosis. Do not rerun into that directory or fill in missing artifacts by
-hand; use a fresh destination and retain the failed evidence when it matters.
+### Prospective direct 2-SAT holdout
 
-## Reference cross-platform result
+Four graph identities, a deterministic answer-free bank with exactly 512 SAT
+and 512 UNSAT rows, six measured arms, schedules, and numerical gates were
+frozen before the graph bytes were acquired. SPECTRA `auto` passed on x86-64
+and native ARM64 and won all 32 measured architecture/graph/bank cells. At
+1,024 requests it was about 2.19× faster on x86-64 and 2.50× faster on ARM64
+than the fastest median of the independently implemented closure, scalar-DAG,
+and tile-64 challenger engines.
 
-The `v2` bundle has been checked on:
+The original structural-v10 holdout also exposed a negative result: explicit
+raw was faster than public auto on every 1,024-row graph. That opened evidence
+motivated structural-v11, so the later replay is development evidence rather
+than a second prospective confirmation.
 
-- Linux x86-64, Python 3.11;
-- Linux x86-64, Python 3.13;
-- Linux ARM64, Python 3.13; and
-- Windows x86-64, Python 3.13 with MSVC.
+### Structural-v11 replay
 
-The exact final source commit and workflow run are recorded in pull request #73,
-outside this source file. Embedding a commit identifier inside the commit itself
-would make the identity circular and immediately stale when the document changed.
+On the already opened mixed banks, structural-v11 retained complete
+proof-carrying output and won all 32 cells. Public auto was about 4.45× faster
+on x86-64 and 4.33× faster on ARM64 than the fastest project-authored direct
+engine at 1,024 requests. The replay validates the implementation opportunity;
+it does not reset the holdout boundary.
 
-The four native libraries had four different SHA-256 hashes, as expected for their
-different platforms and Python ABIs. All four bundles nevertheless agreed on:
+### Official CaDiCaL 3.0.1 comparison
 
-- exact source SHA-256
-  `39016dd2256a08e5d2f1c9bbd48bcd2ab61c38aaa5e9773a882154bd273f88e7`;
-- three deterministic cases and thirteen decisions;
-- ten SAT and three UNSAT results;
-- proof kinds `1`, `2`, and `3`;
-- `raw` selection for the base-infeasible and short weak-compression cases;
-- `scc` selection for the strong-compression case;
-- all three packet hashes and all three certified-output hashes; and
-- semantic fingerprint
-  `99df9e1a42bc396fe451583c42f90dadaf9a47ff838b4508d53b2a59cd304700`.
+The official unmodified CaDiCaL 3.0.1 core was pinned by commit and source
+manifest. Under the disclosed matched first-use proof-carrying contract,
+SPECTRA won all 32 measured cells. Geometric-mean speedups ranged from about
+9.26× at one request to 25.82× at 1,024 requests depending on architecture.
 
-The comparison process compiled, loaded and executed no retained native library.
-It audited the four complete bundles from their manifests, receipts, request
-packets and certified outputs. The full bundles and compact comparison receipt are
-retained as separate 90-day workflow artifacts.
+CaDiCaL is a general SAT solver and SPECTRA is specialized for fixed
+one/two-colour graph domains. The adapter, proof translation, and benchmark
+harness are project-authored, and the workload was already open. This result
+therefore does not establish general SAT leadership or outside implementation
+superiority.
 
-The earlier two-case `v1` result and its different fingerprint remain in workflow
-history. They are not presented as the current result because `v2` adds the SCC
-selector path and changes the frozen semantic inventory.
+## Fresh-transfer result: retained failure
 
-## Frozen acceptance gates for this track
+The six-family transfer protocol was frozen before opening a new graph set.
+Graph-free validation passed, but the first candidate, `DSJC500.5.col`,
+exceeded the predeclared 63-colour deterministic-DSATUR admission limit. The
+correct verdict is `FAIL_ADMISSION` on both architectures:
 
-A release candidate containing the exact service is acceptable only when all of
-the following pass on one reviewed source identity:
+- no solver arm was timed;
+- no performance cell was produced;
+- no graph was replaced;
+- no threshold was relaxed; and
+- all six acquired candidates are now exposed development inputs.
 
-1. public source contracts and active-tree/release/workspace audits;
-2. the release-facing exact self-test from a source checkout;
-3. the same self-test from an isolated installed wheel with no repository imports;
-4. a fresh-process no-native audit of every retained bundle;
-5. a cross-platform comparison covering Linux 3.11, Linux 3.13, ARM64 and Windows;
-6. Linux x86-64, native Linux ARM64, Windows/MSVC, UBSan, and ASan+UBSan contracts;
-7. exact API version, native ABI, source hash, binary hash, packet/output replay,
-   proof-kind coverage, evidence-manifest verification and semantic fingerprint;
-8. package build and clean-install checks for every supported Python version; and
-9. no hidden benchmark threshold, post-hoc case deletion, or conversion of a
-   resource/build failure into a mathematical result.
+A stronger deterministic witness-colouring procedure may be developed on that
+exposed suite, but a future prospective transfer must use a genuinely new
+inventory frozen only after the replacement generator passes its complete
+graph-free tests.
 
-The public package version remains `0.7.1` until an intentional release commit
-updates both version fields and the final release assets are downloaded and
-verified. Creating this branch, command, tag, comparison receipt or draft release
-does not publish a package.
+## Merge and release gates
 
-## Non-goals and remaining 100/100 gates
+Part 3 may be considered merge-ready only when one exact final source identity
+passes all of the following:
 
-This track improves release quality and makes outside reproduction substantially
-easier, but project-owned code and CI cannot manufacture the remaining external
-evidence. The following stay open until performed by attributable outside parties
-or real application owners:
+1. active-tree, release, packaging, and workspace audits;
+2. public structural-v11, edgeless, packet, proof, self-test, audit, compare,
+   exam-repair, and ITC contracts;
+3. isolated installed-wheel execution on Linux Python 3.11/3.13, native ARM64,
+   and Windows/MSVC;
+4. fresh-process no-native auditing and cross-platform bundle comparison;
+5. UBSan and ASan+UBSan for the exact runtime and retained challenger adapters;
+6. direct 2-SAT and official CaDiCaL contracts on x86-64 and ARM64;
+7. byte equality between public and research native sources; and
+8. preservation of every failed admission, negative cell, and claim boundary.
 
-- independent reproduction with raw receipts and complete evidence;
-- an operator-defined workload and acceptance metric;
-- maintained use or integration outside this repository;
-- closest-work review by relevant experts;
-- authentic availability/restriction traces or another genuinely prospective
-  transfer family; and
-- production deployment, security, reliability, or broad SAT/colouring superiority.
+A package release is a separate decision. The published version remains
+`0.7.1` until an intentional release commit updates both version fields and
+final wheel/sdist assets are downloaded and verified.
 
-Those are scientific and impact gates, not excuses to weaken the exact engineering
-contract. Part 3 must report them honestly rather than award itself completion.
+## Gates that project-owned CI cannot award
+
+Part 3 remains scientifically incomplete without attributable external work:
+
+- outside-team reproduction with the complete raw bundle;
+- an independently written adapter or challenger;
+- operator-authored restrictions and acceptance metrics;
+- maintained use outside this repository;
+- expert closest-work review; and
+- production security, reliability, and deployment evidence.
+
+These open gates are not reasons to weaken the engineering contract, and they
+cannot be converted into completion by adding more project-owned test runs.

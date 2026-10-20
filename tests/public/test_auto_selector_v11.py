@@ -24,7 +24,16 @@ def exact_runtime(tmp_path_factory):
     compiler = "cl" if sys.platform == "win32" else "g++"
     if sys.platform not in ("linux", "win32") or shutil.which(compiler) is None:
         pytest.skip("supported native compiler is unavailable")
-    return ExactRuntime(build_exact_runtime(tmp_path_factory.mktemp("selector-v10-runtime")))
+    return ExactRuntime(build_exact_runtime(tmp_path_factory.mktemp("selector-v11-runtime")))
+
+
+def test_public_docstring_names_the_frozen_v11_policy():
+    doc = ExactRuntime.solve_session_packet.__doc__ or ""
+    assert "structural policy v11" in doc
+    assert "structural policy v10" not in doc
+    assert "Long banks of at least" in doc
+    assert "64 requests" in doc
+    assert "bank_kernel" in doc
 
 
 def solve(runtime, problem, rows):

@@ -479,19 +479,21 @@ class ExactRuntime:
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
         """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
 
-        The default ``auto`` mode uses frozen structural policy v10. Banks of
+        The default ``auto`` mode uses frozen structural policy v11. Banks of
         at most eight requests on graphs above 512 vertices take the exact raw
         path directly, and fixed contradictions stay raw. Dense high-pin banks
         shorter than 64 requests stay raw. Below 96 vertices, dense high-pin
-        banks stay raw only when SCC compression is present; uncompressed long
-        banks may use SCC. At exactly 64 requests, dense uncompressed graphs
-        whose edge count is at least four times the vertex count stay raw.
-        Other feasible banks of at least 64 requests use SCC; banks from eight
-        requests use SCC earlier when SCCs compress the literal graph by at least
-        fourfold. Selection uses immutable graph/request geometry only, never
-        answers or measured timings. ``info['selected_mode']`` and
-        ``info['auto_policy_reason']`` expose the decision. Explicit modes keep
-        their meaning; the automatic policy is a frozen structural dispatcher.
+        banks stay raw when SCC compression is present. Long banks of at least
+        64 requests also stay raw when SCC construction leaves all ``2*n``
+        literals separate and the original graph has at least four edges per
+        vertex. Other feasible long banks use SCC; banks from eight requests use
+        SCC earlier when SCCs compress the literal graph by at least fourfold.
+        Selection uses immutable graph/request geometry, bank length, and pin
+        counts only—never answers or measured timings. For edgeless problems,
+        ``auto`` may then use the separately replayed direct-domain bank kernel.
+        ``info['selected_mode']``, ``info['auto_policy_reason']``, and
+        ``info['bank_kernel']`` expose the decision. Explicit modes keep their
+        meaning; the automatic policy is a frozen structural dispatcher.
         """
         if type(packet) is not bytes:
             raise ValueError('session packet must be immutable exact bytes')

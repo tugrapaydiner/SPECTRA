@@ -627,3 +627,15 @@ def test_old_abi_capsules_are_rejected_before_native_dereference(exact_runtime):
     with pytest.raises(ValueError, match='handle'):
         exact_runtime._module.verify(old_observer, (), 1, b'', b'')
     assert exact_runtime._module.abi() == 3
+
+
+def test_selector_policy_identity_matches_the_public_api():
+    from spectra.exact import ExactRuntime as PublicExactRuntime
+
+    for runtime in (PublicExactRuntime, ExactRuntime):
+        doc = runtime.solve_session_packet.__doc__ or ""
+        assert "structural policy v11" in doc
+        assert "structural policy v10" not in doc
+        assert "Long banks of at least" in doc
+        assert "64 requests" in doc
+        assert "bank_kernel" in doc
