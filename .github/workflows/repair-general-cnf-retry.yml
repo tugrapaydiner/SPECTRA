@@ -68,8 +68,7 @@ jobs:
           python -m pip install \
             'pytest==9.0.2' \
             'python-sat==1.9.dev15' \
-            'pyyaml==6.0.3' \
-            'numpy==2.3.5'
+            'pyyaml==6.0.3'
           python -m py_compile \
             experiments/general_competition/proof_backend.py \
             experiments/general_competition/matched_backend.py \
@@ -77,8 +76,22 @@ jobs:
           python -m pytest \
             experiments/general_competition/test_proof_backend.py \
             experiments/general_competition/test_matched_backend.py \
-            tests/test_release_version_intent.py \
+            --confcutdir=experiments/general_competition \
             -q
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          path = Path('tests/test_release_version_intent.py')
+          spec = importlib.util.spec_from_file_location('release_version_intent', path)
+          module = importlib.util.module_from_spec(spec)
+          assert spec.loader is not None
+          spec.loader.exec_module(module)
+          module.test_permanent_workflow_inventory_is_explicit_and_small()
+          for workflow in module.workflow_paths():
+              module.test_permanent_workflows_have_no_write_permissions(workflow)
+              module.test_permanent_workflows_contain_no_publication_side_effect(workflow)
+          PY
           python scripts/check_active_tree.py > /tmp/active-tree.json
           git diff --check
 
