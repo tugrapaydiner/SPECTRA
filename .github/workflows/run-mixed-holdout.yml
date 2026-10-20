@@ -1,0 +1,89 @@
+name: run-mixed-holdout
+
+on:
+  push:
+    branches: [direct-2sat-challenge]
+    paths:
+      - '.github/workflows/run-mixed-holdout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mixed-direct-2sat-holdout
+  cancel-in-progress: false
+
+jobs:
+  holdout:
+    name: Holdout (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - name: Check out the frozen SPECTRA source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 7962ffe4033a8409659c917816b719259b16fab9
+          persist-credentials: false
+
+      - name: Acquire the four frozen graph identities
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: marijnheule/clicolcom
+          ref: 4932048642da2144f387961b595112277afff82f
+          path: holdout-upstream
+          sparse-checkout: graphs
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Build both frozen native services
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "7962ffe4033a8409659c917816b719259b16fab9"
+          SPECTRA_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('holdout-build/spectra'))")"
+          DIRECT_LIBRARY="$(python -c "from experiments.compiled_query.direct_twosat import build_direct_twosat_runtime; print(build_direct_twosat_runtime('holdout-build/direct'))")"
+          echo "SPECTRA_LIBRARY=$SPECTRA_LIBRARY" >> "$GITHUB_ENV"
+          echo "DIRECT_LIBRARY=$DIRECT_LIBRARY" >> "$GITHUB_ENV"
+
+      - name: Run the frozen mixed challenge
+        id: challenge
+        shell: bash
+        run: |
+          set +e
+          python -m experiments.compiled_query.direct_twosat_holdout_run \
+            --graph-dir holdout-upstream/graphs \
+            --spectra-library "$SPECTRA_LIBRARY" \
+            --direct-library "$DIRECT_LIBRARY" \
+            --out mixed-holdout-results \
+            2>&1 | tee mixed-holdout.log
+          code=${PIPESTATUS[0]}
+          echo "$code" > mixed-holdout-exit-code.txt
+          exit 0
+
+      - name: Retain every result, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mixed-direct-2sat-${{ matrix.runner }}-${{ github.run_id }}
+          path: |
+            mixed-holdout-results/
+            mixed-holdout.log
+            mixed-holdout-exit-code.txt
+            holdout-build/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Enforce the frozen verdict
+        if: always()
+        shell: bash
+        run: |
+          test -f mixed-holdout-exit-code.txt
+          exit "$(cat mixed-holdout-exit-code.txt)"
