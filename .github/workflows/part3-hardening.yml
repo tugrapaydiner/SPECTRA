@@ -45,7 +45,6 @@ jobs:
                   raise AssertionError(f'{label}: expected one match, found {count}')
               return text.replace(old, new, 1)
 
-          # Keep the frozen benchmark model aligned with the executable policy.
           name = 'experiments/compiled_query/auto_selector_benchmark.py'
           text = read(name)
           text = replace_once(
@@ -63,15 +62,31 @@ jobs:
           )
           write(name, text)
 
-          # Only the root manifest is special. A nested file with the same name
-          # must still be rejected as an unbound artifact.
           name = 'spectra/exact_selftest.py'
+          text = read(name)
+          marker = '        if path.is_file() and path.name != "SHA256.json"\n'
+          if text.count(marker) != 2:
+              raise AssertionError('expected generation and audit manifest checks')
+          text = text.replace(
+              marker,
+              '        if path.is_file() and path != root / "SHA256.json"\n',
+              1,
+          )
+          text = replace_once(
+              text,
+              marker,
+              '        if path.is_file() and path != manifest_path\n',
+              'audit manifest inventory boundary',
+          )
+          write(name, text)
+
+          name = 'experiments/compiled_query/twosat_development_benchmark.py'
           text = read(name)
           text = replace_once(
               text,
-              '        if path.is_file() and path.name != "SHA256.json"\n',
-              '        if path.is_file() and path != manifest_path\n',
-              'root manifest inventory boundary',
+              '        if path.is_file() and path.name != "SHA256.json":\n',
+              '        if path.is_file() and path != root / "SHA256.json":\n',
+              'development manifest inventory boundary',
           )
           write(name, text)
 
@@ -115,8 +130,10 @@ jobs:
 
 
           '''
-          text = replace_once(text, marker, new_test + marker,
-                              'installed evidence contamination test')
+          text = replace_once(
+              text, marker, new_test + marker,
+              'installed evidence contamination test',
+          )
           write(name, text)
 
           name = 'scripts/check_exact_installation.py'
@@ -140,11 +157,11 @@ jobs:
                       )
               if retained_evidence is not None:
           '''
-          text = replace_once(text, anchor, replacement,
-                              'installed evidence path boundary')
+          text = replace_once(
+              text, anchor, replacement, 'installed evidence path boundary'
+          )
           write(name, text)
 
-          # The edgeless kernel retains no implication or condensation adjacency.
           for name in (
               'spectra/_native/exact_binary.cpp',
               'experiments/compiled_query/exact_native.cpp',
@@ -177,7 +194,6 @@ jobs:
           )
           write(name, text)
 
-          # Prevent the policy model from drifting away again.
           name = 'experiments/compiled_query/test_exact.py'
           text = read(name)
           addition = '''
@@ -196,7 +212,33 @@ jobs:
               raise AssertionError('benchmark policy regression test already exists')
           write(name, text.rstrip() + '\n' + addition)
 
-          # Pin every action in the modified release workflow to an immutable SHA.
+          policy_doc = '''        The default ``auto`` mode uses frozen structural policy v11. Edgeless
+                  graphs use a direct-domain kernel while retaining the same structural mode
+                  and reason receipts. Banks of at most eight requests on graphs above 512
+                  vertices take the exact raw path directly, and fixed contradictions stay
+                  raw. Dense high-pin banks shorter than 64 requests stay raw. Below 96
+                  vertices, dense high-pin banks stay raw only when SCC compression is
+                  present. Nonempty dense uncompressed graphs with at least 64 requests and
+                  at least four edges per vertex stay raw. Other feasible banks of at least
+                  64 requests use SCC; nonempty banks from eight requests use SCC earlier
+                  when SCCs compress the literal graph by at least fourfold. Selection uses
+                  immutable graph/request geometry only, never answers or measured timings.
+                  ``info['selected_mode']`` and ``info['auto_policy_reason']`` expose the
+                  decision. Explicit modes keep their meaning; the automatic policy is a
+                  frozen structural dispatcher.
+          '''
+          old_end = (
+              '        their meaning; the automatic policy is a frozen structural dispatcher.\n'
+          )
+          for name in ('spectra/exact.py', 'experiments/compiled_query/exact.py'):
+              text = read(name)
+              start = text.index(
+                  '        The default ``auto`` mode uses frozen structural policy v10.'
+              )
+              end = text.index(old_end, start) + len(old_end)
+              text = text[:start] + policy_doc + text[end:]
+              write(name, text)
+
           name = '.github/workflows/exact-public-api.yml'
           text = read(name)
           pins = {
@@ -215,8 +257,6 @@ jobs:
               text = text.replace(old, new)
           write(name, text)
 
-          # Remove stale identities from the pre-v11 result and state the real
-          # candidate status instead of presenting historical hashes as current.
           name = 'docs/PART3_RELEASE_REPLICATION_READINESS.md'
           text = read(name)
           text = replace_once(
@@ -280,6 +320,20 @@ jobs:
           )
           write(name, text)
 
+          name = 'CHANGELOG.md'
+          text = read(name)
+          text = replace_once(
+              text,
+              '- Retain complete installed-wheel bundles from Linux 3.11, Linux 3.13, ARM64 and\n'
+              '  Windows, then compare them in one fresh no-native CI job and publish the semantic\n'
+              '  comparison receipt as a separate artifact.\n',
+              '- Prepare CI to retain complete installed-wheel bundles from Linux 3.11, Linux\n'
+              '  3.13, ARM64 and Windows, compare them in a fresh no-native job, and publish a\n'
+              '  semantic receipt only after the final candidate matrix passes.\n',
+              'unreleased cross-platform wording',
+          )
+          write(name, text)
+
           Path('.github/workflows/part3-hardening.yml').unlink()
           PY
       - name: Run the complete Part 3 test surface
@@ -288,9 +342,11 @@ jobs:
           set -euo pipefail
           git diff --check
           python -m py_compile \
+            spectra/exact.py \
             spectra/exact_selftest.py \
             spectra/exact_compare.py \
             scripts/check_exact_installation.py \
+            experiments/compiled_query/exact.py \
             experiments/compiled_query/auto_selector_benchmark.py
           python scripts/check_active_tree.py --out /tmp/active-tree.json
           python scripts/check_release_readiness.py --out /tmp/release-readiness.json
@@ -307,6 +363,15 @@ jobs:
               'actions/download-artifact@v4',
           ):
               assert token not in workflow
+          for name in ('spectra/exact.py', 'experiments/compiled_query/exact.py'):
+              text = Path(name).read_text()
+              assert 'frozen structural policy v10' not in text
+              assert 'frozen structural policy v11' in text
+          for root in (Path('spectra'), Path('experiments/compiled_query')):
+              for path in root.rglob('*.py'):
+                  assert 'path.name != "SHA256.json"' not in path.read_text(
+                      encoding='utf-8', errors='ignore'
+                  ), path
           doc = Path('docs/PART3_RELEASE_REPLICATION_READINESS.md').read_text()
           assert 'part3/release-replication-readiness' not in doc
           assert '39016dd2256a08e5d2f1c9bbd48bcd2ab61c38aaa5e9773a882154bd273f88e7' not in doc
