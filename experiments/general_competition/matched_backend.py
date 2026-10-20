@@ -13,13 +13,20 @@ from time import perf_counter_ns
 from typing import Iterable
 
 from experiments.general_competition.binary_core import (
-    BinaryCore,
     Clause,
     build_binary_core,
     canonical_cnf,
     model_satisfies,
     verify_binary_core,
 )
+
+
+@dataclass(frozen=True)
+class PreparedFormula:
+    """One canonical formula prepared outside the measured solver endpoint."""
+
+    nvars: int
+    clauses: tuple[Clause, ...]
 
 
 @dataclass(frozen=True)
@@ -60,6 +67,14 @@ class MatchedComparison:
 
     def record(self) -> dict:
         return asdict(self)
+
+
+def prepare_matched_formula(
+    nvars: int,
+    clauses: Iterable[Iterable[int]],
+) -> PreparedFormula:
+    """Canonicalize once outside a repeated matched-backend timing loop."""
+    return PreparedFormula(nvars=nvars, clauses=canonical_cnf(nvars, clauses))
 
 
 def _complete_model(raw: list[int] | None, nvars: int) -> tuple[bool, ...]:
@@ -135,18 +150,20 @@ def run_backend(
     )
 
 
-def compare_same_backend(
-    nvars: int,
-    clauses: Iterable[Iterable[int]],
+def compare_prepared_backend(
+    prepared: PreparedFormula,
     *,
     solver_name: str = "cadical195",
     order: str = "plain-first",
     native_core=None,
 ) -> MatchedComparison:
-    """Compare canonical CNF with binary-core residual using one backend."""
+    """Compare one already-canonical formula without repeating untimed setup."""
+    if type(prepared) is not PreparedFormula:
+        raise ValueError("prepared must come from prepare_matched_formula")
     if order not in ("plain-first", "hybrid-first"):
         raise ValueError("order must be plain-first or hybrid-first")
-    canonical = canonical_cnf(nvars, clauses)
+    nvars = prepared.nvars
+    canonical = prepared.clauses
 
     core_started = perf_counter_ns()
     if native_core is None:
@@ -233,4 +250,22 @@ def compare_same_backend(
             f"frontend={frontend}; SAT models checked on original CNF; "
             "residual UNSAT has no standard proof yet"
         ),
+    )
+
+
+def compare_same_backend(
+    nvars: int,
+    clauses: Iterable[Iterable[int]],
+    *,
+    solver_name: str = "cadical195",
+    order: str = "plain-first",
+    native_core=None,
+) -> MatchedComparison:
+    """Canonicalize once, then compare both arms under the same backend."""
+    prepared = prepare_matched_formula(nvars, clauses)
+    return compare_prepared_backend(
+        prepared,
+        solver_name=solver_name,
+        order=order,
+        native_core=native_core,
     )

@@ -9,17 +9,20 @@ the exact admitted original clauses.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
-from decimal import Decimal
+from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
 from statistics import median
+from time import perf_counter_ns
 from typing import Iterable
 from urllib.request import Request, urlopen
 
 from experiments.general_competition.competition_input import admit_and_load_cnf
-from experiments.general_competition.matched_backend import compare_same_backend
+from experiments.general_competition.matched_backend import (
+    compare_prepared_backend,
+    prepare_matched_formula,
+)
 from experiments.general_competition.native_binary_core import (
     NativeBinaryCore,
     build_native_binary_core,
@@ -108,12 +111,15 @@ def run_panel(
             max_source_bytes=MAX_DOWNLOAD_BYTES,
             max_dimacs_bytes=2 << 30,
         )
+        prepared_started = perf_counter_ns()
+        prepared = prepare_matched_formula(admitted.nvars, admitted.clauses)
+        canonicalization_ns = perf_counter_ns() - prepared_started
+
         samples = []
         for repeat in range(repeats):
             order = "plain-first" if repeat % 2 == 0 else "hybrid-first"
-            comparison = compare_same_backend(
-                admitted.nvars,
-                admitted.clauses,
+            comparison = compare_prepared_backend(
+                prepared,
                 solver_name=solver_name,
                 order=order,
                 native_core=native_core,
@@ -132,6 +138,8 @@ def run_panel(
             "semantic_sha256": admitted.receipt.semantic_sha256,
             "variables": admitted.receipt.declared_variables,
             "declared_clauses": admitted.receipt.declared_clauses,
+            "canonical_clauses": len(prepared.clauses),
+            "untimed_canonicalization_ns": canonicalization_ns,
             "problem_class": admitted.receipt.problem_class,
             "expected": case.expected,
             "reference_solver": case.reference_solver,
@@ -158,6 +166,11 @@ def run_panel(
             "between 2.12 and 4.22 seconds; no formula replaced after acquisition"
         ),
         "metric": "post-admission fresh-construction solver stage",
+        "preparation_scope": (
+            "admission and one canonicalization per formula are retained diagnostics "
+            "outside the metric; every sample rebuilds the native reduction and both "
+            "CaDiCaL arms from scratch"
+        ),
         "median_hybrid_over_plain": median(all_ratios),
         "hybrid_wins": sum(ratio < 1.0 for ratio in all_ratios),
         "cells": len(all_ratios),
