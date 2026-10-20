@@ -32,18 +32,21 @@ jobs:
           cache: pip
       - name: Install the dependency-light contract runner
         run: python -m pip install 'pytest==9.0.2'
-      - name: Compile and run arbitrary-CNF, binary-core and scoring contracts
+      - name: Compile and run arbitrary-CNF contracts
         run: |
           python -m py_compile \
             experiments/general_competition/cnf_admission.py \
             experiments/general_competition/binary_core.py \
+            experiments/general_competition/residual_solver.py \
             experiments/general_competition/official_score.py \
             experiments/general_competition/test_cnf_admission.py \
             experiments/general_competition/test_binary_core.py \
+            experiments/general_competition/test_residual_solver.py \
             experiments/general_competition/test_official_score.py
           python -m pytest \
             experiments/general_competition/test_cnf_admission.py \
             experiments/general_competition/test_binary_core.py \
+            experiments/general_competition/test_residual_solver.py \
             experiments/general_competition/test_official_score.py \
             -q
       - name: Check out the pinned SAT Competition 2026 results
