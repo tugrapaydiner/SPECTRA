@@ -2,13 +2,15 @@
 
 SAT answers from a reduced residual are lifted and checked against the exact
 original clause sequence. An UNSAT answer from the residual is never promoted on
-its own: the exact original formula is solved again with CaDiCaL proof logging,
-and the retained DRAT proof is intended for an external checker such as the pinned
-DRAT-trim contract in CI.
+its own: the exact original formula is solved again with a dedicated proof-logging
+backend, and the retained DRAT proof is checked by the pinned DRAT-trim contract.
 
-This is deliberately conservative. Until a proof-producing preprocessing
-composition is implemented, UNSAT pays for the original-formula confirmation
-rather than turning an internal reduction receipt into a Main-track certificate.
+The performance backend and proof backend are deliberately separate. CaDiCaL is
+used for residual solving, while Lingeling is the default proof producer because
+PySAT 1.9.dev15's CaDiCaL wrapper does not reliably finalize the DRAT stream in
+this environment. Until proof-producing preprocessing composition is implemented,
+UNSAT pays for original-formula confirmation rather than turning an internal
+reduction receipt into a Main-track certificate.
 """
 from __future__ import annotations
 
@@ -25,6 +27,9 @@ from experiments.general_competition.binary_core import (
     model_satisfies,
     verify_binary_core,
 )
+
+DEFAULT_RESIDUAL_SOLVER = "cadical195"
+DEFAULT_PROOF_SOLVER = "lingeling"
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,7 @@ class OriginalProofRun:
 class SafeHybridRun:
     schema: str
     solver: str
+    proof_solver: str
     status: str
     original_variables: int
     original_clauses: int
@@ -127,6 +133,8 @@ def _new_solver(
     with_proof: bool,
     bootstrap_with: Iterable[Iterable[int]] = (),
 ):
+    if type(name) is not str or not name:
+        raise ValueError("solver name must be a non-empty string")
     try:
         from pysat.solvers import Solver
     except ImportError as error:
@@ -166,14 +174,28 @@ def solve_original_with_drat(
     nvars: int,
     clauses: Iterable[Iterable[int]],
     *,
-    solver_name: str = "cadical195",
+    solver_name: str = DEFAULT_PROOF_SOLVER,
 ) -> OriginalProofRun:
     """Solve the exact original clause sequence and retain a DRAT proof for UNSAT."""
     rows = _exact_rows(nvars, clauses)
     started = perf_counter_ns()
-    # PySAT's proof-producing solver contract initializes the original formula
-    # through ``bootstrap_with``. Adding every clause after construction can leave
-    # some solver/version combinations with a non-finalized proof stream.
+
+    # The original formula already proves UNSAT when it contains an empty clause.
+    # PySAT 1.9.dev15 indexes clause[0] while bootstrapping and cannot accept this
+    # valid DIMACS edge case, so retain the canonical one-line proof directly.
+    if () in rows:
+        return OriginalProofRun(
+            schema="spectra.general_original_proof.v2",
+            solver="input-empty-clause",
+            status="UNSAT_WITH_DRAT",
+            variables=nvars,
+            clauses=len(rows),
+            elapsed_ns=perf_counter_ns() - started,
+            model=(),
+            model_verified=False,
+            proof=("0",),
+        )
+
     with _new_solver(
         solver_name,
         with_proof=True,
@@ -202,7 +224,7 @@ def solve_original_with_drat(
             raise RuntimeError("UNSAT proof is empty or lacks the empty clause")
         status = "UNSAT_WITH_DRAT"
     return OriginalProofRun(
-        schema="spectra.general_original_proof.v1",
+        schema="spectra.general_original_proof.v2",
         solver=solver_name,
         status=status,
         variables=nvars,
@@ -239,7 +261,8 @@ def solve_safe_hybrid(
     nvars: int,
     clauses: Iterable[Iterable[int]],
     *,
-    solver_name: str = "cadical195",
+    solver_name: str = DEFAULT_RESIDUAL_SOLVER,
+    proof_solver_name: str = DEFAULT_PROOF_SOLVER,
 ) -> SafeHybridRun:
     """Use the binary frontend for SAT but require an original-formula DRAT for UNSAT."""
     rows = _exact_rows(nvars, clauses)
@@ -255,7 +278,7 @@ def solve_safe_hybrid(
     if core.contradiction:
         residual_status = "SKIPPED_CORE_CONTRADICTION"
         original = solve_original_with_drat(
-            nvars, rows, solver_name=solver_name
+            nvars, rows, solver_name=proof_solver_name
         )
         confirmation_elapsed = original.elapsed_ns
         if original.status != "UNSAT_WITH_DRAT":
@@ -279,7 +302,7 @@ def solve_safe_hybrid(
             proof_scope = "not-required-for-sat"
         else:
             original = solve_original_with_drat(
-                nvars, rows, solver_name=solver_name
+                nvars, rows, solver_name=proof_solver_name
             )
             confirmation_elapsed = original.elapsed_ns
             if original.status != "UNSAT_WITH_DRAT":
@@ -292,8 +315,9 @@ def solve_safe_hybrid(
 
     total = perf_counter_ns() - total_started
     return SafeHybridRun(
-        schema="spectra.general_safe_hybrid.v1",
+        schema="spectra.general_safe_hybrid.v2",
         solver=solver_name,
+        proof_solver=proof_solver_name,
         status=status,
         original_variables=nvars,
         original_clauses=len(rows),
