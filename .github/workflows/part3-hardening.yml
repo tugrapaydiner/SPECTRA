@@ -1,0 +1,325 @@
+name: part3-hardening
+
+on:
+  push:
+    branches: [finish-part3]
+    paths: ['.github/workflows/part3-hardening.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: part3-hardening
+  cancel-in-progress: false
+
+jobs:
+  harden:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: finish-part3
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Install the complete test environment
+        run: python -m pip install 'build==1.3.0' 'pytest==9.0.2' 'numpy==2.3.5' 'python-sat==1.9.dev15'
+      - name: Harden the remaining boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def read(name: str) -> str:
+              return Path(name).read_text(encoding='utf-8')
+
+          def write(name: str, value: str) -> None:
+              Path(name).write_text(value, encoding='utf-8')
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise AssertionError(f'{label}: expected one match, found {count}')
+              return text.replace(old, new, 1)
+
+          # Keep the frozen benchmark model aligned with the executable policy.
+          name = 'experiments/compiled_query/auto_selector_benchmark.py'
+          text = read(name)
+          text = replace_once(
+              text,
+              '    if count >= 64 and components == 2 * vertices and edges >= 4 * vertices:\n',
+              '    if (vertices > 0 and count >= 64 and components == 2 * vertices\n'
+              '            and edges >= 4 * vertices):\n',
+              'nonempty dense benchmark policy',
+          )
+          text = replace_once(
+              text,
+              '    if count >= 8 and 2 * components <= vertices:\n',
+              '    if vertices > 0 and count >= 8 and 2 * components <= vertices:\n',
+              'nonempty compressed benchmark policy',
+          )
+          write(name, text)
+
+          # Only the root manifest is special. A nested file with the same name
+          # must still be rejected as an unbound artifact.
+          name = 'spectra/exact_selftest.py'
+          text = read(name)
+          text = replace_once(
+              text,
+              '        if path.is_file() and path.name != "SHA256.json"\n',
+              '        if path.is_file() and path != manifest_path\n',
+              'root manifest inventory boundary',
+          )
+          write(name, text)
+
+          name = 'tests/public/test_exact_selftest.py'
+          text = read(name)
+          text = replace_once(
+              text,
+              '    unbound.unlink()\n\n    report_path = root / "selftest.json"\n',
+              '    unbound.unlink()\n\n'
+              '    nested_manifest = root / "cases" / "SHA256.json"\n'
+              '    nested_manifest.write_text("not the root manifest\\n", encoding="utf-8")\n'
+              '    nested = _run("exact", "audit", root)\n'
+              '    assert nested.returncode == 2\n'
+              '    assert "unbound or missing" in nested.stderr.lower()\n'
+              '    nested_manifest.unlink()\n\n'
+              '    report_path = root / "selftest.json"\n',
+              'nested manifest rejection test',
+          )
+          marker = '@pytest.mark.skipif(\n'
+          new_test = '''def test_installation_checker_keeps_reports_outside_the_frozen_bundle(tmp_path):
+              evidence = tmp_path / "retained-bundle"
+              result = subprocess.run(
+                  [
+                      sys.executable,
+                      "scripts/check_exact_installation.py",
+                      "--out",
+                      str(evidence / "report.json"),
+                      "--evidence-dir",
+                      str(evidence),
+                  ],
+                  cwd=REPOSITORY,
+                  text=True,
+                  capture_output=True,
+                  check=False,
+              )
+              assert result.returncode != 0
+              assert "outside the retained evidence directory" in (
+                  result.stdout + result.stderr
+              ).lower()
+              assert not evidence.exists()
+
+
+          '''
+          text = replace_once(text, marker, new_test + marker,
+                              'installed evidence contamination test')
+          write(name, text)
+
+          name = 'scripts/check_exact_installation.py'
+          text = read(name)
+          anchor = '''    retained_evidence = (
+                  args.evidence_dir.resolve() if args.evidence_dir is not None else None
+              )
+              if retained_evidence is not None:
+          '''
+          replacement = '''    retained_evidence = (
+                  args.evidence_dir.resolve() if args.evidence_dir is not None else None
+              )
+              if output is not None and retained_evidence is not None:
+                  try:
+                      output.relative_to(retained_evidence)
+                  except ValueError:
+                      pass
+                  else:
+                      raise RuntimeError(
+                          "output report must be outside the retained evidence directory"
+                      )
+              if retained_evidence is not None:
+          '''
+          text = replace_once(text, anchor, replacement,
+                              'installed evidence path boundary')
+          write(name, text)
+
+          # The edgeless kernel retains no implication or condensation adjacency.
+          for name in (
+              'spectra/_native/exact_binary.cpp',
+              'experiments/compiled_query/exact_native.cpp',
+          ):
+              text = read(name)
+              text = replace_once(
+                  text,
+                  '            "retained_proof_arcs",static_cast<unsigned long long>(fast_arcs),\n'
+                  '            "condensation_arcs",static_cast<unsigned long long>(fast_arcs),\n',
+                  '            "retained_proof_arcs",static_cast<unsigned long long>(0),\n'
+                  '            "condensation_arcs",static_cast<unsigned long long>(0),\n',
+                  f'edgeless metadata in {name}',
+              )
+              write(name, text)
+
+          name = 'tests/public/test_exact_edgeless.py'
+          text = read(name)
+          text = replace_once(
+              text,
+              "        assert result.info['bank_kernel']=='edgeless'\n"
+              "        assert result.info['selected_mode']=='scc'\n",
+              "        assert result.info['bank_kernel']=='edgeless'\n"
+              "        assert result.info['retained_proof_arcs']==0\n"
+              "        assert result.info['condensation_arcs']==0\n"
+              "        assert result.info['retained_array_bytes']==0\n"
+              "        assert result.info['native_observer_array_bytes']==0\n"
+              "        assert result.info['original_adjacency_retained'] is False\n"
+              "        assert result.info['selected_mode']=='scc'\n",
+              'edgeless retained-state contract',
+          )
+          write(name, text)
+
+          # Prevent the policy model from drifting away again.
+          name = 'experiments/compiled_query/test_exact.py'
+          text = read(name)
+          addition = '''
+
+          def test_benchmark_policy_model_does_not_infer_compression_from_an_empty_graph():
+              from .auto_selector_benchmark import expected_policy
+
+              assert expected_policy(
+                  base=True, pins=0, count=8, vertices=0, edges=0, components=0
+              ) == ("raw", "short_weak_compression")
+              assert expected_policy(
+                  base=True, pins=0, count=64, vertices=0, edges=0, components=0
+              ) == ("scc", "scc_long_bank")
+          '''
+          if 'def test_benchmark_policy_model_does_not_infer_compression_from_an_empty_graph' in text:
+              raise AssertionError('benchmark policy regression test already exists')
+          write(name, text.rstrip() + '\n' + addition)
+
+          # Pin every action in the modified release workflow to an immutable SHA.
+          name = '.github/workflows/exact-public-api.yml'
+          text = read(name)
+          pins = {
+              'actions/checkout@v4':
+                  'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+              'actions/setup-python@v5':
+                  'actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065',
+              'actions/upload-artifact@v4':
+                  'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+              'actions/download-artifact@v4':
+                  'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093',
+          }
+          for old, new in pins.items():
+              if old not in text:
+                  raise AssertionError(f'missing action tag: {old}')
+              text = text.replace(old, new)
+          write(name, text)
+
+          # Remove stale identities from the pre-v11 result and state the real
+          # candidate status instead of presenting historical hashes as current.
+          name = 'docs/PART3_RELEASE_REPLICATION_READINESS.md'
+          text = read(name)
+          text = replace_once(
+              text,
+              '**Branch:** `part3/release-replication-readiness`  \n',
+              '**Branch:** `finish-part3`  \n',
+              'Part 3 branch name',
+          )
+          old_goal = '''Part 2 completed the frozen `structural-v10` automatic-selector milestone. Part 3
+          does not retune that selector. Its controllable goal is to turn the validated
+          source tree into a release-facing, independently auditable exact service with one
+          obvious smoke-test path, portable receipts, clean installed-wheel checks, and an
+          explicit boundary between engineering verification and scientific replication.
+          '''
+          new_goal = '''Part 2 completed the frozen `structural-v10` automatic-selector milestone. Part 3
+          preserves that evidence while developing the `structural-v11` candidate, including
+          the edgeless and direct-conflict paths. Because the native source and selector
+          receipts changed, every release and cross-platform gate must be rerun on one final
+          Part 3 identity. The broader goal is a release-facing, independently auditable exact
+          service with portable receipts, clean installed-wheel checks, and an explicit
+          boundary between engineering verification and scientific replication.
+          '''
+          text = replace_once(text, old_goal, new_goal, 'Part 3 goal')
+          start = text.index('## Reference cross-platform result\n')
+          end = text.index('## Frozen acceptance gates for this track\n', start)
+          current = '''## Current candidate status
+
+          The four-platform `v2` bundle recorded under pull request #73 belongs to the
+          earlier pre-`structural-v11` source. Its source hash and semantic fingerprint are
+          preserved in workflow history, but they are historical evidence only and must not
+          be presented as identities for the current candidate.
+
+          The `finish-part3` branch remains a draft. A current reference result exists only
+          after one exact final source identity passes the complete Linux 3.11, Linux 3.13,
+          native ARM64, Windows/MSVC, UBSan, ASan+UBSan, installed-wheel, no-native audit,
+          cross-bundle comparison, repository-audit and package checks. The new source hash,
+          bundle fingerprints and workflow identities will be recorded after that matrix
+          passes; old hashes are never copied forward.
+
+          '''
+          text = text[:start] + current + text[end:]
+          write(name, text)
+
+          name = 'docs/EXACT_REPLICATION.md'
+          text = read(name)
+          text = replace_once(
+              text,
+              'A successful run creates exactly ten frozen files beneath that directory:\n',
+              'A successful run creates ten manifest-bound artifacts plus `SHA256.json`:\n',
+              'replication artifact count',
+          )
+          write(name, text)
+
+          name = 'experiments/compiled_query/TWOSAT_CHALLENGE_PROTOCOL.md'
+          text = read(name)
+          text = replace_once(
+              text,
+              '**Branch:** `part3/release-replication-readiness`\n',
+              '**Branch:** `finish-part3`\n',
+              '2-SAT protocol branch name',
+          )
+          write(name, text)
+
+          Path('.github/workflows/part3-hardening.yml').unlink()
+          PY
+      - name: Run the complete Part 3 test surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python -m py_compile \
+            spectra/exact_selftest.py \
+            spectra/exact_compare.py \
+            scripts/check_exact_installation.py \
+            experiments/compiled_query/auto_selector_benchmark.py
+          python scripts/check_active_tree.py --out /tmp/active-tree.json
+          python scripts/check_release_readiness.py --out /tmp/release-readiness.json
+          export SPECTRA_EXACT_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('/tmp/part3-hardening-exact'))")"
+          python -m pytest tests/public --confcutdir=tests/public -q
+          python -m pytest experiments/compiled_query -q --maxfail=1
+          python - <<'PY'
+          from pathlib import Path
+          workflow = Path('.github/workflows/exact-public-api.yml').read_text()
+          for token in (
+              'actions/checkout@v4',
+              'actions/setup-python@v5',
+              'actions/upload-artifact@v4',
+              'actions/download-artifact@v4',
+          ):
+              assert token not in workflow
+          doc = Path('docs/PART3_RELEASE_REPLICATION_READINESS.md').read_text()
+          assert 'part3/release-replication-readiness' not in doc
+          assert '39016dd2256a08e5d2f1c9bbd48bcd2ab61c38aaa5e9773a882154bd273f88e7' not in doc
+          assert '99df9e1a42bc396fe451583c42f90dadaf9a47ff838b4508d53b2a59cd304700' not in doc
+          assert not Path('.github/workflows/part3-hardening.yml').exists()
+          PY
+      - name: Save the hardening review
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Tugrap'
+          git config user.email '106766396+tugrapaydiner@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Harden the Part 3 evidence boundary'
+          git push origin HEAD:refs/heads/finish-part3
