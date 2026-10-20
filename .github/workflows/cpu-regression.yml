@@ -18,15 +18,15 @@ jobs:
       matrix:
         python: ['3.11', '3.13']
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 1
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -46,6 +46,40 @@ jobs:
             experiments/general_competition/test_binary_core.py \
             experiments/general_competition/test_official_score.py \
             -q
+      - name: Check out the pinned SAT Competition 2026 results
+        if: matrix.python == '3.13'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: satcompetition/2026
+          ref: 8ca5451c8993e7b1099ce08a80d3ee81e5d4b07c
+          path: .official/satcompetition-2026
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Reproduce the official 2026 Main PAR-2 field
+        if: matrix.python == '3.13'
+        run: |
+          set -euo pipefail
+          mkdir -p .general-cnf
+          test "$(git -C .official/satcompetition-2026 rev-parse HEAD)" = \
+            "8ca5451c8993e7b1099ce08a80d3ee81e5d4b07c"
+          git -C .official/satcompetition-2026 rev-parse HEAD \
+            > .general-cnf/satcompetition-2026-commit.txt
+          git -C .official/satcompetition-2026 rev-parse HEAD:downloads/scores.csv \
+            > .general-cnf/satcompetition-2026-scores-blob.txt
+          python -m experiments.general_competition.official_score \
+            .official/satcompetition-2026/downloads/scores.csv \
+            --out .general-cnf/satcompetition-2026-main.json \
+            > .general-cnf/satcompetition-2026-main.stdout.json
+          cmp \
+            .general-cnf/satcompetition-2026-main.json \
+            .general-cnf/satcompetition-2026-main.stdout.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: matrix.python == '3.13'
+        with:
+          name: satcompetition-2026-main-${{ github.run_id }}
+          path: .general-cnf/
+          if-no-files-found: error
+          retention-days: 90
 
   cpu-contracts:
     name: CPU contracts (Python ${{ matrix.python }})
