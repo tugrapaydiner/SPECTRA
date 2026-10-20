@@ -164,6 +164,23 @@ def test_one_call_packet_output_is_independently_replayable(exact_runtime):
     assert not verify_session_output(packet, bytes(damaged))
 
 
+@pytest.mark.parametrize('mode', ('raw', 'scc', 'auto'))
+def test_direct_forced_conflict_uses_short_original_edge_proof(
+        exact_runtime, mode):
+    problem = tiny_problem()
+    query = ((0, 1), (1, 1))
+    packet = pack_session_packet(problem, (query,))
+    result = exact_runtime.solve_session_packet(packet, mode=mode)
+    assert (result.sat_count, result.unsat_count) == (0, 1)
+    code, labels, proof = decode_certified_output(
+        result.output, problem.n, 1)[0]
+    assert code == 0 and not any(labels)
+    assert struct.unpack_from('<4sIII', proof) == (b'SBP1', 2, 2, 1)
+    assert result.visited == 0
+    assert result.arcs_scanned <= 4
+    assert verify_session_output(packet, result.output)
+
+
 def test_runtime_close_is_idempotent_and_fail_closed(exact_runtime):
     session = exact_runtime.prepare(tiny_problem())
     session.close()

@@ -565,6 +565,30 @@ if(mode==4) {
         if(conflict==NIL) return true;
         a.sat=false;a.certificate=proof(2,trace(parent,conflict),trace(parent,conflict^1U));return false;
     }
+    bool direct_seed_conflict(const std::vector<U>& seeds,Answer& answer) const {
+        // A pair of currently forced literals can already contradict on one
+        // original implication. Emit the shortest portable proof instead of
+        // rediscovering the same edge through a full closure traversal.
+        if(seeds.empty() || seeds.size()>64 || original.off.size()!=2*W(n)+1)
+            return false;
+        for(U source:seeds) {
+            U source_color=(source&1U)?hi[source/2]:lo[source/2];
+            if(source_color==255) continue;
+            auto begin=original.to.begin()+original.off[source];
+            auto end=original.to.begin()+original.off[source+1];
+            for(U forced:seeds) {
+                U forced_color=(forced&1U)?hi[forced/2]:lo[forced/2];
+                if(forced_color!=source_color) continue;
+                U target=forced^1U;++answer.arcs;
+                if(std::binary_search(begin,end,target)) {
+                    answer.sat=false;
+                    answer.certificate=proof(2,{source,target},{forced});
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     Answer solve(const std::vector<Pin>& pins,
                  const std::vector<uint8_t>* known_base_proof=nullptr) const {
         Answer answer;
@@ -594,6 +618,7 @@ if(mode==4) {
     // every restriction and ruled out empty domains and a fixed contradiction.
     Answer solve_roots(const std::vector<U>& seeds) const {
         Answer answer;
+        if(direct_seed_conflict(seeds,answer)) return answer;
         std::vector<U> parent;
         std::vector<uint8_t> reached;
         if(condensed) {
@@ -915,8 +940,10 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
                     // prepared roots, without reparsing or sorting the request.
                     replay_roots.assign(roots.begin()+root_offsets[lane],
                                         roots.begin()+root_offsets[lane+1]);
-                    if(solver.routed) answer=solver.solve_roots(replay_roots);
-                    else solver.raw_closure(replay_roots,parent,answer);
+                    if(!solver.direct_seed_conflict(replay_roots,answer)) {
+                        if(solver.routed) answer=solver.solve_roots(replay_roots);
+                        else solver.raw_closure(replay_roots,parent,answer);
+                    }
                     if(answer.sat)
                         throw std::logic_error("bit-lane contradiction did not replay");
                 } else {
