@@ -1,8 +1,8 @@
-"""Prospectively frozen mixed-result transfer cases.
+"""Development mixed-result transfer cases after the first admission failure.
 
-The graph identities are fixed from upstream tree metadata. Case construction is
-answer-free: a deterministic witness proves every SAT row and a trapped original
-edge proves every UNSAT row. No solver or timing result is consulted.
+Graph identities remain explicit. Case construction is answer-free: a deterministic
+witness proves every SAT row and a trapped retained edge proves every UNSAT row.
+No solver answer or benchmark timing is consulted.
 """
 from __future__ import annotations
 
@@ -10,16 +10,13 @@ import hashlib
 from pathlib import Path
 import random
 
-from experiments.critical_clique_coloring.core import (
-    parse_dimacs_col,
-    verify_coloring,
-)
-from experiments.wap_support.workload import deterministic_dsatur
+from experiments.critical_clique_coloring.core import parse_dimacs_col
 
 from .binary_list import BinaryListProblem
 from .cases import Case, canonical, digest, load_case, write_case
+from .witness_colouring import prepare_witness_topology
 
-SCHEMA = "spectra.fresh_transfer.v1"
+SCHEMA = "spectra.fresh_transfer.v2"
 UPSTREAM_REPOSITORY = "marijnheule/clicolcom"
 UPSTREAM_COMMIT = "4932048642da2144f387961b595112277afff82f"
 MASTER_SEED = 0x6D4B1F29A7C3E850
@@ -72,10 +69,6 @@ def _seed_for(name: str) -> int:
     return MASTER_SEED ^ suffix
 
 
-def _witness_hash(colouring) -> str:
-    return hashlib.sha256(bytes(colouring)).hexdigest()
-
-
 def _expected_payload(name: str) -> bytes:
     return canonical({
         "schema": SCHEMA,
@@ -88,11 +81,11 @@ def _expected_payload(name: str) -> bytes:
 
 
 def build_fresh_case(source: Path, destination: Path) -> dict:
-    """Build one frozen case and return its answer-free generation receipt."""
+    """Build one answer-free development case and return its generation receipt."""
     source = Path(source).resolve(strict=True)
     name = source.name
     if name not in GRAPH_INVENTORY:
-        raise ValueError("graph is outside the frozen transfer inventory")
+        raise ValueError("graph is outside the transfer inventory")
     expected_graph = GRAPH_INVENTORY[name]
     raw = source.read_bytes()
     if len(raw) != expected_graph["bytes"]:
@@ -101,16 +94,21 @@ def build_fresh_case(source: Path, destination: Path) -> dict:
     if blob_sha1 != expected_graph["git_blob_sha1"]:
         raise ValueError(f"{name}: Git-blob identity differs from frozen metadata")
 
-    graph = parse_dimacs_col(source, name=name)
-    if graph.n < 9:
+    original = parse_dimacs_col(source, name=name)
+    if original.n < 9:
         raise ValueError(f"{name}: fewer than nine vertices")
-    if len(graph.edges) < QUERY_COUNT // 2:
+    if len(original.edges) < QUERY_COUNT // 2:
         raise ValueError(f"{name}: fewer than 512 edges")
-    colouring = deterministic_dsatur(graph)
-    verify_coloring(graph, colouring, max(colouring, default=-1) + 1)
+
+    prepared = prepare_witness_topology(original)
+    graph = prepared.graph
+    colouring = prepared.colouring
+    if len(graph.edges) < QUERY_COUNT // 2:
+        raise ValueError(f"{name}: prepared topology has fewer than 512 edges")
+
     colour_count = max(colouring, default=-1) + 1
-    if colour_count < 1 or colour_count > 63:
-        raise ValueError(f"{name}: DSATUR colour count is outside [1, 63]")
+    if not 1 <= colour_count <= 63:
+        raise AssertionError(f"{name}: witness colour count is outside [1, 63]")
 
     trap_colour = colour_count
     palette = colour_count + 1
@@ -133,7 +131,7 @@ def build_fresh_case(source: Path, destination: Path) -> dict:
             query = ()
         elif row % 2 == 0:
             # The 511 nonzero even rows encode their index as a unique nonempty
-            # subset of nine witness pins. The known DSATUR colouring proves SAT.
+            # subset of nine witness pins. The retained colouring proves SAT.
             code = row // 2
             query = tuple(sorted(
                 (tag_vertices[bit], 1 << colouring[tag_vertices[bit]])
@@ -141,7 +139,7 @@ def build_fresh_case(source: Path, destination: Path) -> dict:
                 if (code >> bit) & 1
             ))
         else:
-            # Each odd row chooses a distinct shuffled original edge and pins both
+            # Each odd row chooses a distinct retained edge and pins both
             # endpoints to the shared trap colour. This proves UNSAT without a
             # solver. Index-coded witness pins vary width without changing proof.
             code = row // 2
@@ -158,7 +156,7 @@ def build_fresh_case(source: Path, destination: Path) -> dict:
         seen.add(query)
         queries.append(query)
 
-    # Verify the construction by the disclosed witnesses, without any solver.
+    # Verify the construction directly from disclosed witnesses, without a solver.
     edge_set = set(graph.edges)
     for row, query in enumerate(queries):
         if EXPECTED[row]:
@@ -179,16 +177,21 @@ def build_fresh_case(source: Path, destination: Path) -> dict:
 
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=False)
+    topology = prepared.receipt
     provenance = (
-        "prospectively frozen SPECTRA transfer suite; upstream="
+        "exposed transfer development; upstream="
         + UPSTREAM_REPOSITORY + "@" + UPSTREAM_COMMIT
         + "; graph_git_blob_sha1=" + blob_sha1
-        + "; graph_sha256=" + graph.sha256
-        + "; deterministic DSATUR witness plus one trap colour; no solver filtering"
+        + "; original_graph_sha256=" + original.sha256
+        + "; prepared_topology_sha256=" + graph.sha256
+        + "; topology_mode=" + topology["topology_mode"]
+        + "; deterministic structural witness portfolio plus one trap colour"
+        + "; no solver filtering"
     )
     case = Case(
         name,
-        "fresh-transfer:" + expected_graph["family"] + ":" + graph.sha256,
+        "fresh-transfer-development:"
+        + expected_graph["family"] + ":" + graph.sha256,
         provenance,
         problem,
         tuple(queries),
@@ -199,21 +202,34 @@ def build_fresh_case(source: Path, destination: Path) -> dict:
     expected_path.write_bytes(_expected_payload(name))
     loaded, case_sha256 = load_case(case_path)
     if loaded != case:
-        raise AssertionError("frozen case did not round-trip")
+        raise AssertionError("transfer case did not round-trip")
 
     receipt = {
         "schema": SCHEMA,
+        "classification": "exposed development after failed prospective opening",
         "upstream_repository": UPSTREAM_REPOSITORY,
         "upstream_commit": UPSTREAM_COMMIT,
         "graph": name,
         "family": expected_graph["family"],
         "graph_bytes": len(raw),
         "graph_git_blob_sha1": blob_sha1,
-        "graph_sha256": graph.sha256,
+        "original_graph_sha256": original.sha256,
+        "prepared_topology_sha256": graph.sha256,
         "vertices": graph.n,
-        "edges": len(graph.edges),
-        "dsatur_colours": colour_count,
-        "dsatur_witness_sha256": _witness_hash(colouring),
+        "original_edges": len(original.edges),
+        "retained_edges": len(graph.edges),
+        "dropped_edges": len(original.edges) - len(graph.edges),
+        "topology_mode": topology["topology_mode"],
+        "degree_cap": topology["degree_cap"],
+        "maximum_retained_degree": topology["maximum_retained_degree"],
+        "full_graph_best_colours": topology["full_graph_best_colours"],
+        "full_graph_best_method": topology["full_graph_best_method"],
+        "full_graph_best_trial": topology["full_graph_best_trial"],
+        "witness_colours": topology["witness_colours"],
+        "witness_method": topology["selected_method"],
+        "witness_trial": topology["selected_trial"],
+        "witness_restarts": topology["restarts"],
+        "witness_sha256": topology["witness_sha256"],
         "palette": palette,
         "trap_colour": trap_colour,
         "generator_seed": seed,
@@ -231,7 +247,7 @@ def build_fresh_case(source: Path, destination: Path) -> dict:
 
 
 def open_fresh_transfer(graph_directory: Path, destination: Path) -> dict:
-    """Open all six frozen graph blobs into immutable cases, with no replacement."""
+    """Build all six exposed development cases with no replacement."""
     graph_directory = Path(graph_directory).resolve(strict=True)
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=False)
@@ -243,6 +259,7 @@ def open_fresh_transfer(graph_directory: Path, destination: Path) -> dict:
         )
     manifest = {
         "schema": SCHEMA + ".inventory",
+        "classification": "exposed development after failed prospective opening",
         "upstream_repository": UPSTREAM_REPOSITORY,
         "upstream_commit": UPSTREAM_COMMIT,
         "master_seed": MASTER_SEED,

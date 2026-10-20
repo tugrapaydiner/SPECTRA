@@ -1,4 +1,4 @@
-"""Graph-free contracts for the prospective fresh transfer suite."""
+"""Contracts for the exposed transfer-development generator."""
 from __future__ import annotations
 
 import hashlib
@@ -31,8 +31,16 @@ def _git_blob_sha1(payload: bytes) -> str:
     ).hexdigest()
 
 
-def test_frozen_inventory_and_status_schedule_are_exact():
-    assert SCHEMA == "spectra.fresh_transfer.v1"
+def _add_graph(monkeypatch, name: str, payload: bytes, family: str) -> None:
+    monkeypatch.setitem(GRAPH_INVENTORY, name, {
+        "family": family,
+        "bytes": len(payload),
+        "git_blob_sha1": _git_blob_sha1(payload),
+    })
+
+
+def test_exposed_inventory_and_status_schedule_are_exact():
+    assert SCHEMA == "spectra.fresh_transfer.v2"
     assert MASTER_SEED == 0x6D4B1F29A7C3E850
     assert QUERY_COUNT == 1024
     assert EXPECTED == tuple(1 if row % 2 == 0 else 0 for row in range(1024))
@@ -81,11 +89,7 @@ def test_generator_is_deterministic_unique_and_answer_free(tmp_path, monkeypatch
     payload = _graph_payload(33, edges)
     graph = tmp_path / name
     graph.write_bytes(payload)
-    monkeypatch.setitem(GRAPH_INVENTORY, name, {
-        "family": "synthetic-complete",
-        "bytes": len(payload),
-        "git_blob_sha1": _git_blob_sha1(payload),
-    })
+    _add_graph(monkeypatch, name, payload, "synthetic-complete")
 
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -101,8 +105,40 @@ def test_generator_is_deterministic_unique_and_answer_free(tmp_path, monkeypatch
     assert len(set(case.queries)) == QUERY_COUNT
     assert first_receipt["sat"] == first_receipt["unsat"] == 512
     assert first_receipt["answer_filtering"] is False
+    assert first_receipt["topology_mode"] == "full"
+    assert first_receipt["retained_edges"] == first_receipt["original_edges"]
+    assert first_receipt["witness_colours"] <= 63
     expected = json.loads((first / "expected.json").read_text(encoding="utf-8"))
     assert tuple(expected["statuses"]) == EXPECTED
+
+
+def test_high_chromatic_graph_uses_deterministic_degree_cap(tmp_path, monkeypatch):
+    name = "capped-transfer.col"
+    edges = tuple(
+        (left, right)
+        for left in range(70)
+        for right in range(left + 1, 70)
+    )
+    payload = _graph_payload(70, edges)
+    graph = tmp_path / name
+    graph.write_bytes(payload)
+    _add_graph(monkeypatch, name, payload, "synthetic-clique")
+
+    destination = tmp_path / "capped"
+    receipt = build_fresh_case(graph, destination)
+    case, _case_sha256 = load_case(destination / "case.json")
+
+    assert receipt["topology_mode"] == "degree-capped"
+    assert receipt["full_graph_best_colours"] == 70
+    assert receipt["witness_colours"] <= 63
+    assert receipt["palette"] <= 64
+    assert receipt["degree_cap"] == 62
+    assert receipt["maximum_retained_degree"] <= 62
+    assert receipt["dropped_edges"] > 0
+    assert receipt["retained_edges"] >= 512
+    assert len(case.problem.edges) == receipt["retained_edges"]
+    assert set(case.problem.edges).issubset(edges)
+    assert len(case.queries) == QUERY_COUNT
 
 
 def test_identity_and_admission_fail_closed(tmp_path, monkeypatch):
@@ -115,11 +151,7 @@ def test_identity_and_admission_fail_closed(tmp_path, monkeypatch):
     payload = _graph_payload(33, edges)
     graph = tmp_path / name
     graph.write_bytes(payload)
-    monkeypatch.setitem(GRAPH_INVENTORY, name, {
-        "family": "identity-test",
-        "bytes": len(payload),
-        "git_blob_sha1": _git_blob_sha1(payload),
-    })
+    _add_graph(monkeypatch, name, payload, "identity-test")
     damaged = bytearray(payload)
     damaged[-2] = ord("1") if damaged[-2] != ord("1") else ord("2")
     graph.write_bytes(bytes(damaged))
@@ -131,20 +163,17 @@ def test_identity_and_admission_fail_closed(tmp_path, monkeypatch):
     small_payload = _graph_payload(9, small_edges)
     small = tmp_path / small_name
     small.write_bytes(small_payload)
-    monkeypatch.setitem(GRAPH_INVENTORY, small_name, {
-        "family": "small-test",
-        "bytes": len(small_payload),
-        "git_blob_sha1": _git_blob_sha1(small_payload),
-    })
+    _add_graph(monkeypatch, small_name, small_payload, "small-test")
     with pytest.raises(ValueError, match="fewer than 512 edges"):
         build_fresh_case(small, tmp_path / "too-small")
 
 
 def test_generator_source_contains_no_solver_feedback():
-    source = Path(__file__).with_name("fresh_transfer.py").read_text(encoding="utf-8")
-    assert "pysat" not in source.lower()
-    assert "Solver(" not in source
-    assert ".solve(" not in source
+    for filename in ("fresh_transfer.py", "witness_colouring.py"):
+        source = Path(__file__).with_name(filename).read_text(encoding="utf-8")
+        assert "pysat" not in source.lower()
+        assert "Solver(" not in source
+        assert ".solve(" not in source
 
 
 def test_large_gap_gates_are_frozen_and_fail_independently():
