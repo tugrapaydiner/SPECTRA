@@ -514,11 +514,11 @@ def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, coun
             selected, reason = 'raw', 'dense_pin_short'
         elif high_pin and n < 96 and components < 2 * n:
             selected, reason = 'raw', 'dense_small_compressed'
-        elif count >= 64 and components == 2 * n and len(edges) >= 4 * n:
+        elif n and count >= 64 and components == 2 * n and len(edges) >= 4 * n:
             selected, reason = 'raw', 'dense_uncompressed_bank'
         elif count >= 64:
             selected, reason = 'scc', 'scc_long_bank'
-        elif count >= 8 and 2 * components <= n:
+        elif n and count >= 8 and 2 * components <= n:
             selected, reason = 'scc', 'scc_strong_compression'
         else:
             selected, reason = 'raw', 'short_weak_compression'

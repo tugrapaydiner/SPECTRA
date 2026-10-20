@@ -391,7 +391,7 @@ struct Index {
             base[v]=static_cast<uint8_t>(comp[2*v]<comp[2*v+1]);
         }
 if(mode==4) {
-    // Structural auto policy v10. Raw handles tiny, contradictory,
+    // Structural auto policy v11. Raw handles tiny, contradictory,
     // proof-heavy small-compressed, and one measured tile64 warmup
     // shape. Other feasible long banks use the SCC tile64 engine.
     const bool high_pin=bank_size
