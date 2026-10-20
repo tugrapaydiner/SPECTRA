@@ -18,7 +18,15 @@ from pathlib import Path
 from typing import Iterable
 
 _HEADER = ("solverid", "instanceid", "runtime", "status", "score", "vresult")
-_VERIFIED = {"sat-verified": "sat", "unsat-verified": "unsat"}
+# Main/AI tracks retain checker-qualified statuses. The public all-track table also
+# contains bare SAT/UNSAT statuses for experimental tracks, which still score as
+# solved cells but must not be mistaken for proof-checked Main evidence.
+_SOLVED = {
+    "sat-verified": "sat",
+    "unsat-verified": "unsat",
+    "sat": "sat",
+    "unsat": "unsat",
+}
 
 
 @dataclass(frozen=True)
@@ -148,9 +156,9 @@ def parse_scores(
 
         runtime = _decimal(runtime_text, "runtime", line_number)
         score = _decimal(score_text, "score", line_number)
-        verified = _VERIFIED.get(status)
-        if verified is not None:
-            if declared and declared != verified:
+        solved_result = _SOLVED.get(status)
+        if solved_result is not None:
+            if declared and declared != solved_result:
                 raise ValueError(f"line {line_number}: checker result contradicts verdict")
             if score != runtime:
                 raise ValueError(f"line {line_number}: verified score must equal runtime")
@@ -231,8 +239,8 @@ def score_field(
         candidates = set()
         if row.declared_result:
             candidates.add(row.declared_result)
-        if row.status in _VERIFIED:
-            candidates.add(_VERIFIED[row.status])
+        if row.status in _SOLVED:
+            candidates.add(_SOLVED[row.status])
         if len(candidates) > 1:
             raise ValueError("one score cell has conflicting verdict evidence")
         if candidates:
@@ -261,7 +269,7 @@ def score_field(
     provisional: list[Standing] = []
     for solver_id, cells in sorted(by_solver.items()):
         ordered = tuple(cells[instance] for instance in sorted(reference))
-        solved_rows = tuple(row for row in ordered if row.status in _VERIFIED)
+        solved_rows = tuple(row for row in ordered if row.status in _SOLVED)
         invalid_cells = sum(_is_invalid_status(row.status) for row in ordered)
         provisional.append(
             Standing(
@@ -272,9 +280,9 @@ def score_field(
                 sat_par2=_mean(cells[instance].score for instance in sat_ids),
                 unsat_par2=_mean(cells[instance].score for instance in unsat_ids),
                 solved=len(solved_rows),
-                sat_solved=sum(row.status == "sat-verified" for row in solved_rows),
+                sat_solved=sum(_SOLVED[row.status] == "sat" for row in solved_rows),
                 unsat_solved=sum(
-                    row.status == "unsat-verified" for row in solved_rows
+                    _SOLVED[row.status] == "unsat" for row in solved_rows
                 ),
                 instances=len(reference),
                 sat_instances=len(sat_ids),
