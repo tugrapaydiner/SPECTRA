@@ -1,0 +1,116 @@
+name: run-transfer-development
+
+on:
+  push:
+    branches: [archive/research-history-20261016]
+    paths: [.github/workflows/run-transfer-development.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: run-transfer-development
+  cancel-in-progress: false
+
+env:
+  SPECTRA_COMMIT: d85e0bb06d1fedc7de22ca06f6d394bc1278a120
+  CADICAL_COMMIT: c60730422e758ef1cebe7aeddf2dda31c996bf04
+  UPSTREAM_COMMIT: 4932048642da2144f387961b595112277afff82f
+
+jobs:
+  benchmark:
+    name: Transfer development (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.SPECTRA_COMMIT }}
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: arminbiere/cadical
+          ref: ${{ env.CADICAL_COMMIT }}
+          path: cadical-source
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: marijnheule/clicolcom
+          ref: ${{ env.UPSTREAM_COMMIT }}
+          path: upstream-source
+          sparse-checkout: |
+            graphs
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Check the generator contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'pytest==9.0.2'
+          python -m py_compile \
+            experiments/compiled_query/witness_colouring.py \
+            experiments/compiled_query/fresh_transfer.py \
+            experiments/compiled_query/fresh_transfer_benchmark.py
+          python -m pytest \
+            experiments/compiled_query/test_witness_colouring.py \
+            experiments/compiled_query/test_fresh_transfer.py -q
+
+      - name: Build the cases and native services
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p transfer-evidence
+          git rev-parse HEAD > transfer-evidence/source_commit.txt
+          git rev-parse HEAD^{tree} > transfer-evidence/source_tree.txt
+          git -C cadical-source rev-parse HEAD > transfer-evidence/cadical_commit.txt
+          git -C upstream-source rev-parse HEAD > transfer-evidence/upstream_commit.txt
+          python -VV > transfer-evidence/python.txt
+          uname -a > transfer-evidence/platform.txt
+          lscpu > transfer-evidence/lscpu.txt || true
+
+          python - <<'PY' 2>&1 | tee transfer-evidence/generation.log
+          from pathlib import Path
+          from experiments.compiled_query.fresh_transfer import open_fresh_transfer
+
+          open_fresh_transfer(
+              Path('upstream-source/graphs'),
+              Path('transfer-evidence/cases'),
+          )
+          PY
+
+          SPECTRA_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('transfer-evidence/spectra-build'))")"
+          CADICAL_LIBRARY="$(python -c "from experiments.compiled_query.cadical_exact import build_cadical_exact_runtime; import os; print(build_cadical_exact_runtime('transfer-evidence/cadical-build', os.path.abspath('cadical-source')))")"
+          DIRECT_LIBRARY="$(python -c "from experiments.compiled_query.direct_twosat import build_direct_twosat_runtime; print(build_direct_twosat_runtime('transfer-evidence/direct-build'))")"
+          echo "SPECTRA_LIBRARY=$SPECTRA_LIBRARY" >> "$GITHUB_ENV"
+          echo "CADICAL_LIBRARY=$CADICAL_LIBRARY" >> "$GITHUB_ENV"
+          echo "DIRECT_LIBRARY=$DIRECT_LIBRARY" >> "$GITHUB_ENV"
+
+      - name: Run the full five-arm matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=30s 80m \
+            python -m experiments.compiled_query.fresh_transfer_benchmark \
+              --spectra-library "$SPECTRA_LIBRARY" \
+              --cadical-library "$CADICAL_LIBRARY" \
+              --direct-library "$DIRECT_LIBRARY" \
+              --cases transfer-evidence/cases \
+              --out transfer-evidence/results \
+              --repeats 30 \
+            2>&1 | tee transfer-evidence/benchmark.log
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: transfer-development-${{ matrix.runner }}-${{ github.run_id }}
+          path: transfer-evidence/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
