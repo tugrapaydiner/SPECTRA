@@ -20,13 +20,35 @@ def main() -> None:
         text,
         '("explicit", "structural-v10")',
         '("explicit", "structural-v11")',
-        "ITC accepted policy identities",
+        "ITC current accepted policy identities",
     )
     text = replace_once(
         text,
         'current["auto_policy"] != "structural-v10"',
         'current["auto_policy"] != "structural-v11"',
-        "ITC automatic policy identity",
+        "ITC current automatic policy identity",
+    )
+    historical = (
+        '"explicit", "structural-v2", "structural-v3", "structural-v4", '
+        '"structural-v5", "structural-v6", "structural-v10"'
+    )
+    historical_with_current = historical + ', "structural-v11"'
+    text = replace_once(
+        text,
+        f"policy not in ({historical})",
+        f"policy not in ({historical_with_current})",
+        "ITC historical and current policy allowlist",
+    )
+    historical_auto = (
+        '"structural-v2", "structural-v3", "structural-v4", '
+        '"structural-v5", "structural-v6", "structural-v10"'
+    )
+    historical_auto_with_current = historical_auto + ', "structural-v11"'
+    text = replace_once(
+        text,
+        f'(mode == "auto" and policy not in ({historical_auto}))',
+        f'(mode == "auto" and policy not in ({historical_auto_with_current}))',
+        "ITC automatic historical and current allowlist",
     )
     path.write_text(text, encoding="utf-8")
 
@@ -44,6 +66,7 @@ def main() -> None:
     assert '("explicit", "structural-v11")' in source
     assert 'current["auto_policy"] != "structural-v11"' in source
     assert 'current["auto_policy"] != "structural-v10"' not in source
+    assert '"structural-v10", "structural-v11"' in source
 
 
 '''
