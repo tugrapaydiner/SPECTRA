@@ -62,7 +62,7 @@ def _statuses(output: bytes, n: int, count: int) -> tuple[int, ...]:
     )
 
 
-@pytest.mark.parametrize("engine", ("auto", "dag"))
+@pytest.mark.parametrize("engine", ("auto", "dag", "tile"))
 def test_mixed_bank_covers_sat_and_all_three_proof_kinds(
     direct_runtime, engine
 ):
@@ -70,7 +70,8 @@ def test_mixed_bank_covers_sat_and_all_three_proof_kinds(
     rows = ((), ((0, 0b01),), ((0, 0b01), (1, 0b01)), ((0, 0),))
     packet = pack_session_packet(mixed, rows)
     result = direct_runtime.solve_session_packet(packet, engine=engine)
-    assert result.info["engine"] == ("dag" if engine == "dag" else "closure")
+    expected_engine = {"auto": "closure", "dag": "dag", "tile": "tile"}[engine]
+    assert result.info["engine"] == expected_engine
     assert (result.info["sat"], result.info["unsat"]) == (2, 2)
     assert verify_session_output(packet, result.output)
     decoded = decode_certified_output(result.output, mixed.n, len(rows))
@@ -91,7 +92,7 @@ def test_mixed_bank_covers_sat_and_all_three_proof_kinds(
     assert sorted(set(proof_kinds)) == [1, 2, 3]
 
 
-@pytest.mark.parametrize("engine", ("auto", "dag"))
+@pytest.mark.parametrize("engine", ("auto", "dag", "tile"))
 def test_exhaustive_three_vertex_formulas_and_requests(direct_runtime, engine):
     edge_bank = ((0, 1), (0, 2), (1, 2))
     domains = (1, 2, 3, 4, 5, 6)
@@ -116,7 +117,7 @@ def test_exhaustive_three_vertex_formulas_and_requests(direct_runtime, engine):
             assert _statuses(result.output, problem.n, len(rows)) == expected
 
 
-@pytest.mark.parametrize("engine", ("auto", "dag"))
+@pytest.mark.parametrize("engine", ("auto", "dag", "tile"))
 def test_random_banks_match_bruteforce_and_spectra(
     direct_runtime, spectra_runtime, engine
 ):
@@ -159,15 +160,16 @@ def test_random_banks_match_bruteforce_and_spectra(
         assert _statuses(spectra.output, n, len(rows)) == expected
 
 
-def test_explicit_dag_and_memory_fallback(direct_runtime):
+def test_explicit_engines_and_memory_fallback(direct_runtime):
     problem = ExactProblem.create(256, 2, (), (0b11,) * 256)
     packet = pack_session_packet(problem, ((),))
 
-    explicit = direct_runtime.solve_session_packet(packet, engine="dag")
-    assert explicit.info["requested_engine"] == "dag"
-    assert explicit.info["engine"] == "dag"
-    assert explicit.info["closure_bytes"] == 0
-    assert verify_session_output(packet, explicit.output)
+    for engine in ("dag", "tile"):
+        explicit = direct_runtime.solve_session_packet(packet, engine=engine)
+        assert explicit.info["requested_engine"] == engine
+        assert explicit.info["engine"] == engine
+        assert explicit.info["closure_bytes"] == 0
+        assert verify_session_output(packet, explicit.output)
 
     fallback = direct_runtime.solve_session_packet(packet, max_bytes=64 << 10)
     assert fallback.info["requested_engine"] == "auto"
