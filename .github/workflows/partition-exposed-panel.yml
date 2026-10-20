@@ -1,0 +1,595 @@
+name: partition-exposed-panel
+
+on:
+  push:
+    branches:
+      - finish-part3
+    paths:
+      - .github/workflows/partition-exposed-panel.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: partition-exposed-panel
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: finish-part3
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+
+      - name: Partition the retained panel without changing its cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          panel_source = '''"""Run the fixed exposed SAT-only panel with a matched CaDiCaL backend.
+
+          The four instances were already public in the SAT Competition 2026 Main results.
+          They are development diagnostics, not prospective confirmation. Selection was
+          frozen from the winning solver's public score table before this harness downloaded
+          or inspected the formulas. Every candidate answer must be SAT and is checked on
+          the exact admitted original clauses.
+          """
+          from __future__ import annotations
+
+          import argparse
+          from dataclasses import dataclass
+          import hashlib
+          import json
+          from pathlib import Path
+          from statistics import median
+          from time import perf_counter_ns
+          from typing import Iterable
+          from urllib.request import Request, urlopen
+
+          from experiments.general_competition.competition_input import admit_and_load_cnf
+          from experiments.general_competition.matched_backend import (
+              compare_prepared_backend,
+              prepare_matched_formula,
+          )
+          from experiments.general_competition.native_binary_core import (
+              NativeBinaryCore,
+              build_native_binary_core,
+          )
+
+          SCHEMA = "spectra.general_exposed_panel.v1"
+          BASE_URL = "https://benchmark-database.de/file/"
+          MAX_DOWNLOAD_BYTES = 512 << 20
+
+
+          @dataclass(frozen=True)
+          class PanelCase:
+              instance_id: str
+              reference_solver: str
+              reference_seconds: str
+              expected: str = "sat"
+
+
+          PANEL = (
+              PanelCase("5de866bc7ff4dfde3cd682b5aca75894", "anders_satsuma-iter-kissat[main]", "2.12"),
+              PanelCase("6cd46641ebd4c840b8f116d14ca17dfd", "anders_satsuma-iter-kissat[main]", "2.14"),
+              PanelCase("af8248aa34c4803bfc0add954cf2e620", "anders_satsuma-iter-kissat[main]", "2.45"),
+              PanelCase("ee44c3f464238366729bf2cb16eb412a", "anders_satsuma-iter-kissat[main]", "4.22"),
+          )
+          _PANEL_BY_ID = {case.instance_id: case for case in PANEL}
+          _SELECTION = (
+              "four exposed 2026 Main SAT instances with winning-solver public runtimes "
+              "between 2.12 and 4.22 seconds; no formula replaced after acquisition"
+          )
+          _METRIC = "post-admission fresh-construction solver stage"
+          _PREPARATION_SCOPE = (
+              "admission and one canonicalization per formula are retained diagnostics "
+              "outside the metric; every sample rebuilds the native reduction and both "
+              "CaDiCaL arms from scratch"
+          )
+          _CLAIM_BOUNDARY = (
+              "exposed SAT-only development result; same CaDiCaL backend; not PAR-2, "
+              "not a hidden holdout, not Main-track proof compliance, and not general leadership"
+          )
+
+
+          def select_panel_cases(instance_ids: Iterable[str] | None) -> tuple[PanelCase, ...]:
+              if instance_ids is None:
+                  return PANEL
+              retained = tuple(instance_ids)
+              if not retained:
+                  raise ValueError("at least one panel instance is required")
+              if len(set(retained)) != len(retained):
+                  raise ValueError("panel instance ids must be unique")
+              unknown = [value for value in retained if value not in _PANEL_BY_ID]
+              if unknown:
+                  raise ValueError(f"unknown panel instance ids: {unknown}")
+              return tuple(_PANEL_BY_ID[value] for value in retained)
+
+
+          def _download(case: PanelCase, directory: Path) -> Path:
+              if len(case.instance_id) != 32 or any(
+                  character not in "0123456789abcdef" for character in case.instance_id
+              ):
+                  raise ValueError("panel instance id must be a lowercase 32-hex GBD id")
+              directory.mkdir(parents=True, exist_ok=True)
+              destination = directory / f"{case.instance_id}.cnf.xz"
+              if destination.exists():
+                  return destination
+              request = Request(
+                  BASE_URL + case.instance_id,
+                  headers={"User-Agent": "SPECTRA exposed SAT Competition development panel"},
+              )
+              total = 0
+              try:
+                  with urlopen(request, timeout=180) as response, destination.open("xb") as output:
+                      while chunk := response.read(1 << 20):
+                          total += len(chunk)
+                          if total > MAX_DOWNLOAD_BYTES:
+                              raise MemoryError("exposed panel source exceeds download limit")
+                          output.write(chunk)
+              except BaseException:
+                  destination.unlink(missing_ok=True)
+                  raise
+              if total == 0:
+                  destination.unlink(missing_ok=True)
+                  raise ValueError("exposed panel download is empty")
+              return destination
+
+
+          def _sha256(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as stream:
+                  while chunk := stream.read(1 << 20):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+
+          def _summary(cases: list[dict], *, solver_name: str, repeats: int, status: str) -> dict:
+              all_ratios = [
+                  sample["hybrid_over_plain"]
+                  for case in cases
+                  for sample in case["samples"]
+              ]
+              return {
+                  "schema": SCHEMA,
+                  "status": status,
+                  "solver": solver_name,
+                  "frontend": "native-binary-core-v1",
+                  "repeats": repeats,
+                  "selection": _SELECTION,
+                  "metric": _METRIC,
+                  "preparation_scope": _PREPARATION_SCOPE,
+                  "median_hybrid_over_plain": median(all_ratios),
+                  "hybrid_wins": sum(ratio < 1.0 for ratio in all_ratios),
+                  "cells": len(all_ratios),
+                  "cases": cases,
+                  "claim_boundary": _CLAIM_BOUNDARY,
+              }
+
+
+          def run_panel(
+              directory: str | Path,
+              *,
+              repeats: int = 3,
+              solver_name: str = "cadical195",
+              instance_ids: Iterable[str] | None = None,
+          ) -> dict:
+              if type(repeats) is not int or repeats < 1 or repeats > 9:
+                  raise ValueError("repeats must be an exact integer in [1, 9]")
+              selected = select_panel_cases(instance_ids)
+              root = Path(directory).resolve()
+              root.mkdir(parents=True, exist_ok=True)
+              native_directory = root / "native-binary-core"
+              native_library = native_directory / "libspectra_general_core.so"
+              if not native_library.is_file():
+                  native_library = build_native_binary_core(native_directory)
+              native_core = NativeBinaryCore(native_library)
+              cases: list[dict] = []
+
+              for case in selected:
+                  source = _download(case, root / "instances")
+                  admitted = admit_and_load_cnf(
+                      source,
+                      max_source_bytes=MAX_DOWNLOAD_BYTES,
+                      max_dimacs_bytes=2 << 30,
+                  )
+                  prepared_started = perf_counter_ns()
+                  prepared = prepare_matched_formula(admitted.nvars, admitted.clauses)
+                  canonicalization_ns = perf_counter_ns() - prepared_started
+
+                  samples = []
+                  for repeat in range(repeats):
+                      order = "plain-first" if repeat % 2 == 0 else "hybrid-first"
+                      comparison = compare_prepared_backend(
+                          prepared,
+                          solver_name=solver_name,
+                          order=order,
+                          native_core=native_core,
+                      )
+                      if not comparison.accepted_for_timing:
+                          raise RuntimeError("SAT-only exposed panel produced an unaccepted answer")
+                      samples.append(comparison.record())
+
+                  ratios = [sample["hybrid_over_plain"] for sample in samples]
+                  cases.append({
+                      "instance_id": case.instance_id,
+                      "source": BASE_URL + case.instance_id,
+                      "source_bytes": admitted.receipt.source_bytes,
+                      "source_sha256": _sha256(source),
+                      "dimacs_sha256": admitted.receipt.dimacs_sha256,
+                      "semantic_sha256": admitted.receipt.semantic_sha256,
+                      "variables": admitted.receipt.declared_variables,
+                      "declared_clauses": admitted.receipt.declared_clauses,
+                      "canonical_clauses": len(prepared.clauses),
+                      "untimed_canonicalization_ns": canonicalization_ns,
+                      "problem_class": admitted.receipt.problem_class,
+                      "expected": case.expected,
+                      "reference_solver": case.reference_solver,
+                      "reference_seconds": case.reference_seconds,
+                      "samples": samples,
+                      "median_hybrid_over_plain": median(ratios),
+                      "hybrid_wins": sum(ratio < 1.0 for ratio in ratios),
+                  })
+
+              complete = tuple(case.instance_id for case in selected) == tuple(
+                  case.instance_id for case in PANEL
+              )
+              report = _summary(
+                  cases,
+                  solver_name=solver_name,
+                  repeats=repeats,
+                  status="MEASURED" if complete else "MEASURED_CASE",
+              )
+              report["selected_instances"] = [case.instance_id for case in selected]
+              report["complete_panel"] = complete
+              return report
+
+
+          def merge_panel_reports(reports: Iterable[dict]) -> dict:
+              retained = tuple(reports)
+              if len(retained) != len(PANEL):
+                  raise ValueError("one complete case report is required for every panel instance")
+              solver_names = {report.get("solver") for report in retained}
+              frontends = {report.get("frontend") for report in retained}
+              repeat_counts = {report.get("repeats") for report in retained}
+              if len(solver_names) != 1 or len(frontends) != 1 or len(repeat_counts) != 1:
+                  raise ValueError("partitioned panel reports disagree on their execution contract")
+              solver_name = next(iter(solver_names))
+              repeats = next(iter(repeat_counts))
+              if frontends != {"native-binary-core-v1"} or type(repeats) is not int:
+                  raise ValueError("partitioned panel report identity differs")
+
+              cases_by_id: dict[str, dict] = {}
+              for report in retained:
+                  if (
+                      report.get("schema") != SCHEMA
+                      or report.get("status") != "MEASURED_CASE"
+                      or report.get("complete_panel") is not False
+                      or report.get("cells") != repeats
+                  ):
+                      raise ValueError("invalid partitioned panel report")
+                  cases = report.get("cases")
+                  if type(cases) is not list or len(cases) != 1:
+                      raise ValueError("each partition must contain exactly one case")
+                  case = cases[0]
+                  instance_id = case.get("instance_id")
+                  if instance_id in cases_by_id:
+                      raise ValueError("duplicate partitioned panel case")
+                  if instance_id not in _PANEL_BY_ID:
+                      raise ValueError("unknown partitioned panel case")
+                  samples = case.get("samples")
+                  if type(samples) is not list or len(samples) != repeats:
+                      raise ValueError("partitioned panel sample count differs")
+                  if any(
+                      sample.get("accepted_for_timing") is not True
+                      or sample.get("answers_agree") is not True
+                      or sample.get("frontend") != "native-binary-core-v1"
+                      for sample in samples
+                  ):
+                      raise ValueError("partitioned panel contains an unaccepted sample")
+                  cases_by_id[instance_id] = case
+
+              expected = {case.instance_id for case in PANEL}
+              if set(cases_by_id) != expected:
+                  raise ValueError("partitioned panel inventory is incomplete")
+              ordered = [cases_by_id[case.instance_id] for case in PANEL]
+              report = _summary(
+                  ordered,
+                  solver_name=solver_name,
+                  repeats=repeats,
+                  status="MEASURED",
+              )
+              report["selected_instances"] = [case.instance_id for case in PANEL]
+              report["complete_panel"] = True
+              report["partitioned_jobs"] = len(retained)
+              return report
+
+
+          def merge_panel_directory(directory: str | Path) -> dict:
+              root = Path(directory).resolve(strict=True)
+              paths = sorted(root.rglob("*.json"))
+              if len(paths) != len(PANEL):
+                  raise ValueError("partition directory must contain exactly four JSON reports")
+              reports = []
+              source_reports = []
+              for path in paths:
+                  data = path.read_bytes()
+                  reports.append(json.loads(data.decode("utf-8")))
+                  source_reports.append({
+                      "path": path.relative_to(root).as_posix(),
+                      "sha256": hashlib.sha256(data).hexdigest(),
+                  })
+              report = merge_panel_reports(reports)
+              report["source_reports"] = source_reports
+              return report
+
+
+          def main(argv: Iterable[str] | None = None) -> None:
+              parser = argparse.ArgumentParser(description=__doc__)
+              parser.add_argument("directory", type=Path)
+              parser.add_argument("--repeats", type=int, default=3)
+              parser.add_argument("--solver", default="cadical195")
+              parser.add_argument("--instance", action="append", dest="instances")
+              parser.add_argument("--merge-cases", action="store_true")
+              parser.add_argument("--out", type=Path, required=True)
+              args = parser.parse_args(list(argv) if argv is not None else None)
+              if args.merge_cases:
+                  if args.instances:
+                      parser.error("--merge-cases cannot be combined with --instance")
+                  report = merge_panel_directory(args.directory)
+              else:
+                  report = run_panel(
+                      args.directory,
+                      repeats=args.repeats,
+                      solver_name=args.solver,
+                      instance_ids=args.instances,
+                  )
+              text = json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n"
+              args.out.parent.mkdir(parents=True, exist_ok=True)
+              with args.out.open("x", encoding="utf-8") as stream:
+                  stream.write(text)
+              print(text, end="")
+
+
+          if __name__ == "__main__":
+              main()
+          '''
+          panel_source = panel_source.replace('\n          ', '\n').lstrip()
+          Path('experiments/general_competition/exposed_panel.py').write_text(
+              panel_source, encoding='utf-8'
+          )
+
+          test_source = '''from __future__ import annotations
+
+          import pytest
+
+          from experiments.general_competition.exposed_panel import (
+              PANEL,
+              SCHEMA,
+              merge_panel_reports,
+              select_panel_cases,
+          )
+
+
+          def _case_report(instance_id: str, ratio: float) -> dict:
+              sample = {
+                  "frontend": "native-binary-core-v1",
+                  "hybrid_over_plain": ratio,
+                  "accepted_for_timing": True,
+                  "answers_agree": True,
+              }
+              return {
+                  "schema": SCHEMA,
+                  "status": "MEASURED_CASE",
+                  "solver": "cadical195",
+                  "frontend": "native-binary-core-v1",
+                  "repeats": 3,
+                  "cells": 3,
+                  "cases": [{
+                      "instance_id": instance_id,
+                      "samples": [sample, sample, sample],
+                      "median_hybrid_over_plain": ratio,
+                      "hybrid_wins": 3 if ratio < 1 else 0,
+                  }],
+                  "complete_panel": False,
+              }
+
+
+          def test_panel_selection_rejects_changed_inventory():
+              assert select_panel_cases(None) == PANEL
+              assert select_panel_cases((PANEL[1].instance_id,)) == (PANEL[1],)
+              with pytest.raises(ValueError, match="unique"):
+                  select_panel_cases((PANEL[0].instance_id, PANEL[0].instance_id))
+              with pytest.raises(ValueError, match="unknown"):
+                  select_panel_cases(("0" * 32,))
+
+
+          def test_partitioned_reports_merge_in_the_frozen_order():
+              reports = tuple(
+                  _case_report(case.instance_id, 0.8 + index * 0.1)
+                  for index, case in enumerate(reversed(PANEL))
+              )
+              merged = merge_panel_reports(reports)
+              assert merged["status"] == "MEASURED"
+              assert merged["complete_panel"] is True
+              assert merged["partitioned_jobs"] == 4
+              assert merged["cells"] == 12
+              assert [case["instance_id"] for case in merged["cases"]] == [
+                  case.instance_id for case in PANEL
+              ]
+
+
+          def test_partition_merge_rejects_missing_and_duplicate_cases():
+              reports = tuple(_case_report(case.instance_id, 1.0) for case in PANEL)
+              with pytest.raises(ValueError, match="every panel instance"):
+                  merge_panel_reports(reports[:-1])
+              duplicate = (*reports[:-1], reports[0])
+              with pytest.raises(ValueError, match="duplicate"):
+                  merge_panel_reports(duplicate)
+          '''
+          test_source = test_source.replace('\n          ', '\n').lstrip()
+          Path('experiments/general_competition/test_exposed_panel.py').write_text(
+              test_source, encoding='utf-8'
+          )
+
+          workflow_path = Path('.github/workflows/cpu-regression.yml')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          start = workflow.index('\n  exposed-general-panel:\n')
+          end = workflow.index('\n  cpu-contracts:\n', start)
+          replacement = '''
+  exposed-general-panel:
+    name: Exposed panel case ${{ matrix.instance }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        instance:
+          - 5de866bc7ff4dfde3cd682b5aca75894
+          - 6cd46641ebd4c840b8f116d14ca17dfd
+          - af8248aa34c4803bfc0add954cf2e620
+          - ee44c3f464238366729bf2cb16eb412a
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install the pinned matched backend
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Check the partition and matched-backend contracts
+        run: |
+          python -m pytest \
+            experiments/general_competition/test_competition_input.py \
+            experiments/general_competition/test_matched_backend.py \
+            experiments/general_competition/test_exposed_panel.py \
+            -q
+      - name: Run one frozen exposed case
+        run: |
+          set -euo pipefail
+          root="exposed-panel/${{ matrix.instance }}"
+          mkdir -p "$root"
+          python -m experiments.general_competition.exposed_panel \
+            "$root" \
+            --instance "${{ matrix.instance }}" \
+            --repeats 3 \
+            --out "$root/${{ matrix.instance }}.json" \
+            > "$root/stdout.json"
+          cmp "$root/${{ matrix.instance }}.json" "$root/stdout.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: spectra-exposed-general-case-${{ matrix.instance }}-${{ github.run_id }}
+          path: exposed-panel/${{ matrix.instance }}/${{ matrix.instance }}.json
+          retention-days: 90
+          if-no-files-found: warn
+
+  aggregate-exposed-panel:
+    name: Aggregate exposed 2026 SAT panel
+    needs: [exposed-general-panel]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: spectra-exposed-general-case-*-${{ github.run_id }}
+          path: exposed-panel-cases
+      - name: Merge the complete frozen inventory
+        run: |
+          set -euo pipefail
+          mkdir -p exposed-panel
+          python -m experiments.general_competition.exposed_panel \
+            exposed-panel-cases \
+            --merge-cases \
+            --out exposed-panel/results.json \
+            > exposed-panel/stdout.json
+          cmp exposed-panel/results.json exposed-panel/stdout.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('exposed-panel/results.json').read_text())
+          assert result['status'] == 'MEASURED'
+          assert result['complete_panel'] is True
+          assert result['partitioned_jobs'] == 4
+          assert result['cells'] == 12
+          assert len(result['cases']) == 4
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: spectra-exposed-general-panel-${{ github.run_id }}
+          path: exposed-panel/results.json
+          retention-days: 90
+          if-no-files-found: error
+'''
+          workflow = workflow[:start] + '\n' + replacement.strip('\n') + workflow[end:]
+          workflow = workflow.replace(
+              '            experiments/general_competition/test_proof_backend.py \\\n            experiments/general_competition/test_official_score.py',
+              '            experiments/general_competition/test_proof_backend.py \\\n            experiments/general_competition/test_exposed_panel.py \\\n            experiments/general_competition/test_official_score.py',
+              1,
+          )
+          workflow = workflow.replace(
+              '            experiments/general_competition/test_proof_backend.py \\\n            experiments/general_competition/test_official_score.py \\\n            -q',
+              '            experiments/general_competition/test_proof_backend.py \\\n            experiments/general_competition/test_exposed_panel.py \\\n            experiments/general_competition/test_official_score.py \\\n            -q',
+              1,
+          )
+          workflow_path.write_text(workflow, encoding='utf-8')
+
+          Path('.github/workflows/partition-exposed-panel.yml').unlink()
+          PY
+
+      - name: Validate the partitioned workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'pytest==9.0.2' 'pyyaml==6.0.3'
+          python -m py_compile \
+            experiments/general_competition/exposed_panel.py \
+            experiments/general_competition/test_exposed_panel.py
+          python -m pytest \
+            experiments/general_competition/test_exposed_panel.py \
+            --confcutdir=experiments/general_competition \
+            -q
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          workflow = yaml.safe_load(Path('.github/workflows/cpu-regression.yml').read_text())
+          jobs = workflow['jobs']
+          assert 'exposed-general-panel' in jobs
+          assert 'aggregate-exposed-panel' in jobs
+          assert len(jobs['exposed-general-panel']['strategy']['matrix']['instance']) == 4
+          assert jobs['aggregate-exposed-panel']['needs'] == ['exposed-general-panel']
+          PY
+          python scripts/check_active_tree.py > /tmp/active-tree.json
+          git diff --check
+
+      - name: Commit the partitioned panel
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Tugrap"
+          git config user.email "106766396+tugrapaydiner@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Run exposed panel cases independently"
+          git push origin HEAD:refs/heads/finish-part3
