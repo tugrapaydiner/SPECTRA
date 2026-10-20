@@ -76,6 +76,35 @@ jobs:
           cmp \
             general-cnf-receipts/satcompetition-2026-main.json \
             general-cnf-receipts/satcompetition-2026-main.stdout.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = json.loads(Path(
+              'general-cnf-receipts/satcompetition-2026-main.json'
+          ).read_text(encoding='utf-8'))
+          assert receipt['source_sha256'] == (
+              'c00d4137bc602b0cc431e52cca02e989ef4abf4c6197cd70b42abedf6c7a4d4e'
+          )
+          assert receipt['source_rows'] == 13200
+          assert (
+              receipt['solver_count'],
+              receipt['instance_count'],
+              receipt['sat_instances'],
+              receipt['unsat_instances'],
+              receipt['unknown_instances'],
+          ) == (19, 400, 191, 166, 43)
+          expected = (
+              ('anders_satsuma-iter-kissat[main]', '3647.019675', 276),
+              ('anders_satsuma-iter-ae-kissat-mab[main]', '3696.843', 269),
+              ('zheng_kissat-mab-hypre[main]', '3996.293425', 255),
+          )
+          observed = tuple(
+              (row['solver_id'], row['overall_par2'], row['solved'])
+              for row in receipt['standings'][:3]
+          )
+          assert observed == expected
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: matrix.python == '3.13'
         with:
@@ -127,6 +156,8 @@ jobs:
           assert sklearn.__version__ == '1.8.0'
           assert pysat.__version__ == '1.9.dev15'
           PY
+      - name: Cross-check general CNF against CaDiCaL and Glucose
+        run: python -m pytest experiments/general_competition/test_residual_differential.py -q
       - name: Full fast regression including native builds
         run: |
           set -o pipefail
