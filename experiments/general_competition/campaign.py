@@ -28,6 +28,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 from .cnf_admission import admit_cnf
@@ -51,6 +52,119 @@ def write_json(path: Path, value: object) -> None:
     with path.open("x", encoding="utf-8") as stream:
         json.dump(value, stream, indent=2, sort_keys=True, allow_nan=False)
         stream.write("\n")
+
+
+STORAGE_SCHEMA = "spectra.general_evidence_storage.v1"
+COMPRESSION_MIN_BYTES = 64 * 1024
+
+
+def _decoded_identity(path: Path) -> tuple[int, str]:
+    value = hashlib.sha256()
+    size = 0
+    with lzma.open(path, "rb") as stream:
+        for chunk in iter(lambda: stream.read(1 << 20), b""):
+            value.update(chunk)
+            size += len(chunk)
+    return size, value.hexdigest()
+
+
+def _fsync_directory(path: Path) -> None:
+    if os.name == "posix":
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+def compress_evidence_file(path: Path, root: Path, journal: Path) -> dict:
+    """Publish verified XZ bytes and durable metadata before removing raw bytes.
+
+    An interrupted operation leaves either the original, or a verified archive
+    with its original identity in the append-only journal (sometimes both).
+    No operation overwrites an existing archive or follows an evidence symlink.
+    """
+    root = root.resolve(strict=True)
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("compression source must be a regular non-symlink file")
+    path = path.resolve(strict=True)
+    logical = str(path.relative_to(root))
+    journal.resolve().relative_to(root)
+    if journal.is_symlink():
+        raise ValueError("compression journal must not be a symlink")
+    stored = path.with_name(path.name + ".xz")
+    if stored.exists() or stored.is_symlink():
+        raise FileExistsError(stored)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".compress-", suffix=".tmp", dir=path.parent)
+    temporary = Path(temporary_name)
+    os.close(descriptor)
+    expected_hash = hashlib.sha256()
+    expected_bytes = 0
+    try:
+        with path.open("rb") as incoming, lzma.open(temporary, "wb", preset=1) as outgoing:
+            for chunk in iter(lambda: incoming.read(1 << 20), b""):
+                expected_hash.update(chunk)
+                expected_bytes += len(chunk)
+                outgoing.write(chunk)
+        with temporary.open("rb") as stream:
+            os.fsync(stream.fileno())
+        if _decoded_identity(temporary) != (expected_bytes, expected_hash.hexdigest()):
+            raise ValueError("compressed evidence failed its round-trip identity check")
+        if path.stat().st_size != expected_bytes or digest(path) != expected_hash.hexdigest():
+            raise ValueError("evidence source changed during compression")
+        entry = {"logical_path": logical, "uncompressed_sha256": expected_hash.hexdigest(),
+                 "uncompressed_bytes": expected_bytes, "stored_path": str(stored.relative_to(root)),
+                 "stored_sha256": digest(temporary), "stored_bytes": temporary.stat().st_size,
+                 "compression": "xz", "preset": 1, "roundtrip_verified": True}
+        # Atomic create-if-absent: unlike replace(), an existing archive cannot
+        # be overwritten by a race between the existence check and publication.
+        os.link(temporary, stored)
+        temporary.unlink()
+        _fsync_directory(stored.parent)
+        with journal.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(entry, sort_keys=True, allow_nan=False) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        _fsync_directory(journal.parent)
+        path.unlink()
+        _fsync_directory(path.parent)
+        return entry
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def compress_evidence_scope(scope: Path, root: Path, *, recursive: bool = True) -> dict:
+    """Compress large payloads only; JSON receipts and small logs stay readable."""
+    journal = scope / "storage.jsonl"
+    receipt_path = scope / "storage.json"
+    if journal.exists() or receipt_path.exists():
+        raise FileExistsError("storage receipts already exist")
+    candidates = sorted(scope.rglob("*") if recursive else scope.iterdir())
+    entries = []
+    for path in candidates:
+        if not path.is_file():
+            continue
+        if path.suffix.lower() in {".json", ".jsonl", ".xz", ".gz", ".zip", ".zst", ".bz2"}:
+            continue
+        if path.stat().st_size < COMPRESSION_MIN_BYTES:
+            continue
+        entries.append(compress_evidence_file(path, root, journal))
+    receipt = {"schema": STORAGE_SCHEMA, "minimum_bytes": COMPRESSION_MIN_BYTES,
+               "compression": "xz", "preset": 1, "timing_scope": "after checking; outside solve and check timers",
+               "entries": entries}
+    write_json(receipt_path, receipt)
+    return receipt
+
+
+def _storage_abort(root: Path, cells: list[dict], scope: Path, error: Exception) -> dict:
+    """Keep completed cells but refuse a ranking after a storage failure."""
+    summary = {"status": "ABORTED_STORAGE_FAILURE", "cells_retained": len(cells),
+               "declared_field_complete": False, "claim": "No ranking accepted",
+               "scope": str(scope.relative_to(root)), "error": f"{type(error).__name__}: {error}"}
+    write_json(root / "summary.json", summary)
+    files = {str(path.relative_to(root)): digest(path) for path in sorted(root.rglob("*")) if path.is_file()}
+    write_json(root / "evidence-sha256.json", files)
+    return summary
 
 
 def _positive(value: float, name: str) -> float:
@@ -468,6 +582,9 @@ def score_campaign(cells: list[dict], inventory: dict, field: dict, timeout: flo
 def run_campaign(args: argparse.Namespace) -> dict:
     _positive(args.timeout, "timeout")
     _positive(args.checker_timeout, "checker_timeout")
+    compression_enabled = getattr(args, "compress_evidence", False)
+    if type(compression_enabled) is not bool:
+        raise ValueError("compress_evidence must be Boolean")
     for name in ("memory_mib", "output_mib", "dimacs_mib"):
         value = getattr(args, name)
         if type(value) is not int or value <= 0:
@@ -489,6 +606,10 @@ def run_campaign(args: argparse.Namespace) -> dict:
                      "execution": "sequential fresh process groups with private solver working/temp directories; shared host/filesystem, not a security sandbox",
                      "timing_boundary": "process spawn through exit, includes parse and proof output; independent checking separately bounded",
                      "input_preparation": "common byte-preserving decompression and admission excluded for every solver",
+                     "evidence_compression": {"enabled": compression_enabled, "schema": STORAGE_SCHEMA,
+                                              "compression": "xz", "preset": 1,
+                                              "minimum_bytes": COMPRESSION_MIN_BYTES,
+                                              "outside_solve_and_check_timers": True},
                      "checker": str(checker), "checker_sha256": digest(checker) if checker.is_file() else None,
                      "runner_sha256": digest(Path(__file__)), "python": sys.version,
                      "platform": platform.platform(), "machine": platform.machine(),
@@ -678,8 +799,19 @@ def run_campaign(args: argparse.Namespace) -> dict:
                 stream.flush()
                 os.fsync(stream.fileno())
             cells.append(cell)
+            if compression_enabled:
+                try:
+                    compress_evidence_scope(cell_dir, destination)
+                except (OSError, ValueError, lzma.LZMAError) as error:
+                    return _storage_abort(destination, cells, cell_dir, error)
             print(json.dumps({"completed": len(cells), "total": len(inventory["instances"]) * len(field["solvers"]),
                               "instance": instance["id"], "solver": solver["id"], "status": cell["status"]}), flush=True)
+        if compression_enabled:
+            try:
+                # No later cell needs this formula after its entire field ran.
+                compress_evidence_scope(instance_dir, destination, recursive=False)
+            except (OSError, ValueError, lzma.LZMAError) as error:
+                return _storage_abort(destination, cells, instance_dir, error)
     write_json(destination / "admissions.json", {"admissions": admissions, "exact_semantic_duplicate_pairs": duplicates})
     csv_bytes = _score_csv(cells, args.timeout)
     (destination / "scores.csv").write_bytes(csv_bytes)
@@ -730,6 +862,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--memory-mib", type=int, default=4096)
     run.add_argument("--output-mib", type=int, default=1024)
     run.add_argument("--dimacs-mib", type=int, default=2048)
+    run.add_argument("--compress-evidence", action="store_true",
+                     help="losslessly XZ-compress large checked artifacts outside all timing endpoints")
     native = sub.add_parser("native", help="standalone native worker; checking is external")
     for flag in ("library", "cnf", "proof", "stats"):
         native.add_argument("--" + flag, type=Path, required=True)
@@ -747,7 +881,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.action == "run":
         result = run_campaign(args)
         print(json.dumps(result, indent=2, sort_keys=True))
-        return 1 if result.get("status") == "INVALID_CAMPAIGN" else 0
+        return 1 if result.get("status") in ("INVALID_CAMPAIGN", "ABORTED_STORAGE_FAILURE") else 0
     if args.action == "native":
         return native_worker(args)
     if args.action == "stage":

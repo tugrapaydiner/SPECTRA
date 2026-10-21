@@ -46,9 +46,19 @@ Report excluded slow tests and disabled leak detection explicitly.
 
 The active tree is capped by `scripts/check_active_tree.py`: no large historical
 archives, retired transport directories, stale branch-trigger workflows, or files
-larger than the declared limit may be added. Durable research evidence belongs in a
-release or a hash-bound workflow artifact. Historical bytes remain reachable from
-`archive/research-history-20261016` and their original commits.
+larger than the declared limit may be added. Historical bytes remain reachable
+from `archive/research-history-20261016` and their original commits.
+
+Workflow artifacts are temporary transport and review copies. The workflows
+currently request 30-day or 90-day retention; neither period provides permanent
+research evidence. A SHA-256 receipt verifies retrieved bytes, not their future
+availability. Before announcing a scientific release, deposit the complete source,
+inputs or immutable acquisition instructions, raw results including failures,
+proofs, checker/build identities, and manifests in a durable archive with a stable
+public locator and an explicit preservation policy. Release assets may provide an
+additional copy, but a release URL alone does not establish permanent retention.
+Record the archive locator in the release and verify a fresh download against the
+published hashes before claiming that the evidence is durably available.
 
 ## Publication
 

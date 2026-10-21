@@ -405,3 +405,117 @@ def test_alternative_solver_exit_codes_require_explicit_declaration():
     declaration = {"SAT": [0, 10], "UNSAT": [0, 20]}
     assert _status(process, "SAT", 1, declaration) == "SAT"
     assert _status(process, "UNSAT", 1, declaration) == "UNSAT"
+
+
+def test_compression_roundtrip_preserves_logical_identity_and_journal(tmp_path):
+    from .campaign import compress_evidence_file
+    data = b"1 -2 3 0\n" * 10000
+    source = tmp_path / "proof.drat"
+    source.write_bytes(data)
+    entry = compress_evidence_file(source, tmp_path, tmp_path / "storage.jsonl")
+    assert not source.exists()
+    stored = tmp_path / entry["stored_path"]
+    assert lzma.decompress(stored.read_bytes()) == data
+    assert entry["logical_path"] == "proof.drat"
+    assert entry["uncompressed_sha256"] == hashlib.sha256(data).hexdigest()
+    assert entry["uncompressed_bytes"] == len(data)
+    assert entry["stored_sha256"] == digest(stored)
+    assert entry["stored_bytes"] == stored.stat().st_size
+    assert entry["roundtrip_verified"] is True
+    assert json.loads((tmp_path / "storage.jsonl").read_text()) == entry
+
+
+def test_compression_corruption_keeps_original_and_publishes_no_archive(tmp_path, monkeypatch):
+    from . import campaign
+    source = tmp_path / "proof.drat"
+    source.write_bytes(b"0\n" * 40000)
+    original = source.read_bytes()
+    monkeypatch.setattr(campaign, "_decoded_identity", lambda _: (len(original), "0" * 64))
+    with pytest.raises(ValueError, match="round-trip"):
+        campaign.compress_evidence_file(source, tmp_path, tmp_path / "storage.jsonl")
+    assert source.read_bytes() == original
+    assert not (tmp_path / "proof.drat.xz").exists()
+    assert not (tmp_path / "storage.jsonl").exists()
+    assert not list(tmp_path.glob(".compress-*"))
+
+
+def test_compression_never_overwrites_existing_archive_or_follows_symlink(tmp_path):
+    from .campaign import compress_evidence_file
+    source = tmp_path / "proof.drat"
+    source.write_text("original")
+    archive = tmp_path / "proof.drat.xz"
+    archive.write_text("existing")
+    with pytest.raises(FileExistsError):
+        compress_evidence_file(source, tmp_path, tmp_path / "storage.jsonl")
+    assert source.read_text() == "original" and archive.read_text() == "existing"
+    if os.name == "posix":
+        link = tmp_path / "alias"
+        link.symlink_to(source)
+        with pytest.raises(ValueError, match="non-symlink"):
+            compress_evidence_file(link, tmp_path, tmp_path / "storage.jsonl")
+        assert source.read_text() == "original"
+
+
+def test_compression_journal_failure_keeps_original_and_verified_archive(tmp_path):
+    from .campaign import compress_evidence_file
+    source = tmp_path / "proof.drat"
+    data = b"0\n" * 40000
+    source.write_bytes(data)
+    journal = tmp_path / "storage.jsonl"
+    journal.mkdir()
+    with pytest.raises(OSError):
+        compress_evidence_file(source, tmp_path, journal)
+    assert source.read_bytes() == data
+    assert lzma.decompress((tmp_path / "proof.drat.xz").read_bytes()) == data
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_campaign_compression_retains_checked_result_and_hashes_all_stored_files(tmp_path):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("c " + "large retained comment " * 5000 + "\np cnf 1 1\n1 0\n")
+    code = "import pathlib,sys; pathlib.Path(sys.argv[2]).write_text('1 -2 0\\n'*10000); pathlib.Path('derived.lsr').write_text('0\\n'*40000); print('c '+ 'large log '*10000); print('s SATISFIABLE'); print('v 1 0'); raise SystemExit(10)"
+    inventory, field = manifests(tmp_path, [instance(cnf)], [solver(code=code)])
+    args = arguments(tmp_path, inventory, field)
+    args.compress_evidence = True
+    result = run_campaign(args)
+    assert result["resource_summary"]["baseline"]["statuses"] == {"SAT_VERIFIED": 1}
+    root = args.out
+    storage = []
+    for path in root.rglob("storage.json"):
+        receipt = json.loads(path.read_text())
+        assert receipt["schema"] == "spectra.general_evidence_storage.v1"
+        storage.extend(receipt["entries"])
+    logical = {entry["logical_path"] for entry in storage}
+    assert "instances/00000/input.cnf" in logical
+    assert "instances/00000/solver-000/proof.drat" in logical
+    assert "instances/00000/solver-000/derived.lsr" in logical
+    assert "instances/00000/solver-000/solve/stdout.txt" in logical
+    for entry in storage:
+        data = lzma.decompress((root / entry["stored_path"]).read_bytes())
+        assert len(data) == entry["uncompressed_bytes"]
+        assert hashlib.sha256(data).hexdigest() == entry["uncompressed_sha256"]
+    hashes = json.loads((root / "evidence-sha256.json").read_text())
+    assert set(hashes) == {str(path.relative_to(root)) for path in root.rglob("*") if path.is_file()} - {"evidence-sha256.json"}
+    assert all(digest(root / path) == expected for path, expected in hashes.items())
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_campaign_storage_failure_retains_cell_and_refuses_partial_ranking(tmp_path, monkeypatch):
+    from . import campaign
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 1\n1 0\n")
+    inventory, field = manifests(tmp_path, [instance(cnf)], [solver()])
+    args = arguments(tmp_path, inventory, field)
+    args.compress_evidence = True
+
+    def fail(*_args, **_kwargs):
+        raise OSError("storage unavailable")
+
+    monkeypatch.setattr(campaign, "compress_evidence_scope", fail)
+    result = run_campaign(args)
+    assert result["status"] == "ABORTED_STORAGE_FAILURE"
+    assert result["cells_retained"] == 1
+    assert result["declared_field_complete"] is False
+    assert "standings" not in result
+    assert (args.out / "cells.jsonl").is_file()
+    assert (args.out / "evidence-sha256.json").is_file()

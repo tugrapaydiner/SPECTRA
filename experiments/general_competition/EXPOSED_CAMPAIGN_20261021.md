@@ -1,6 +1,6 @@
 # Exposed general-CNF development campaign — 2026-10-21
 
-**Status:** protocol frozen before the campaign; results pending.
+**Status:** first attempt retained as incomplete; unchanged inventory and field will be rerun with verified post-check lossless evidence compression.
 **Claim boundary:** exposed development evidence only. This is not an official
 competition run, a complete modern field, a hidden confirmation, or independent
 replication. The supplied [100/100 roadmap](../../docs/SPECTRA_100_100_ROADMAP.md)
@@ -90,7 +90,8 @@ were rebuilt from source before measurement. Build logs and skipped unsafe
 generated archive symlinks are retained. VeriPB is the exact prebuilt 3.0.2
 checker bundled in the official 2026 Lymphosat submission; it was not locally
 rebuilt. Hashes bind observed artifacts, not an independently certified supply
-chain.
+chain. The [component manifest](exposed_components_20261021.json) preserves
+nested component/license notices, build evidence, and unresolved provenance gaps.
 
 ### Retained preflight failure
 
@@ -101,6 +102,28 @@ proof is rejected with “There is no contradicting constraint in the database.�
 The original input, proof and checker logs are retained. The competitor is not
 patched and the negative case is not removed. A table of benchmark outcomes must
 not be described as a proof-clean validation of this submission.
+
+## Storage repair and retained incomplete attempt
+
+The initial run used source `9eee856fbac3e9e1bf334f3dca4c8f40e271f82e`. It was
+stopped on 2026-10-21 at 17:25:56 UTC after 49 of 768 cells because shared disk
+capacity could not hold the projected raw proof output. All 49 completed cells,
+the interrupted cell's raw files and a complete list of the 719 uncompleted cells
+are retained. This attempt has **no accepted ranking**. Nothing is dropped or
+replaced based on a result.
+
+The restart keeps exactly the same 96 formulas, eight entries, binary hashes,
+solver/checker limits and order. The only harness change is optional post-check
+lossless XZ compression, outside the solve/check timers. Every compressed file
+records both original and stored sizes/hashes; decompression must reproduce the
+original bytes before the uncompressed copy is removed. Compression failures
+abort with retained evidence and no ranking. The published restart source and
+full evidence archive identities will be recorded with the results. Evidence
+output for the restart uses a memory-backed filesystem because the shared disk
+cannot hold the retained campaign. This is applied equally to every solver and
+is another reason the result must not be presented as an official-hardware run.
+The incomplete-attempt archive is 231,406,636 bytes with SHA-256
+`6f8235fc6a133d5fa3b770a8bd52c23de52a8eda6a8b3b44e50d05077892c6ff`.
 
 ## Checking and evidence discipline
 
@@ -156,7 +179,7 @@ python -m experiments.general_competition.campaign run \
   --solvers /absolute/path/solvers.json \
   --out /absolute/path/new-evidence-directory \
   --timeout 5 --checker-timeout 30 --memory-mib 4096 \
-  --output-mib 64 --dimacs-mib 64 \
+  --output-mib 64 --dimacs-mib 64 --compress-evidence \
   --checker /absolute/path/drat-trim
 ```
 

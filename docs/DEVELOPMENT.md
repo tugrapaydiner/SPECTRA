@@ -80,6 +80,38 @@ The full ITC suite is intentionally manual because it downloads pinned upstream
 inputs and performs a long cross-platform evaluation. Trigger
 `itc-exam-suite.yml` only when changing the exam adapter, exact engine, or protocol.
 
+## General-CNF reproduction
+
+Follow the frozen inventory, solver field and limits in the
+[2026-10-21 exposed campaign](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md).
+Use its recorded source commit, acquire the original inputs with matching hashes,
+and build source components with the recorded commands. Where the field uses a
+bundled prebuilt checker, retrieve that exact artifact and verify its hash; do not
+describe it as a local source build. Rebase absolute paths in a separate field
+receipt and record the resulting binary hashes; a rebuild is a reproduction with
+its own identity. The
+[campaign runner](../experiments/general_competition/campaign.py) accepts:
+
+```bash
+python -m experiments.general_competition.campaign run \
+  --inventory /absolute/path/acquired/inventory.json \
+  --solvers /absolute/path/reproduction-solvers.json \
+  --out /absolute/path/new-evidence-directory \
+  --timeout 5 --checker-timeout 30 --memory-mib 4096 \
+  --output-mib 64 --dimacs-mib 64 --compress-evidence \
+  --checker /absolute/path/drat-trim
+```
+
+Use a new output directory and retain every declared cell, including admission,
+timeout, resource, model and proof failures. The field selects separate DSR and
+pseudo-Boolean checkers where required; `drat-trim` does not check those formats.
+Keep standalone SPECTRA-G results separate from upstream solvers and frontend or
+portfolio results. This 96-formula, eight-entry, shared-host development campaign
+has short limits and an incomplete roadmap field. It does not establish hidden
+confirmation, independent replication, official competition rank, or the 100/100
+gate. Preserve evidence beyond expiring CI artifacts as described in
+[the release guide](RELEASING.md#repository-boundary).
+
 ## Flagship reproduction
 
 The WAP confirmation result is immutable. Follow
