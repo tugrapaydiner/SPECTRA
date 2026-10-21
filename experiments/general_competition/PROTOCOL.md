@@ -3,6 +3,15 @@
 **Status:** development protocol, not frozen confirmation evidence  
 **Starting source:** `832302a30d8d4d04a48afb418610ad49b94c3ad1`
 
+**Current correctness status (2026-10-21):** the frozen campaign at source
+[1f6a913](https://github.com/tugrapaydiner/SPECTRA/commit/1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5)
+produced two independently confirmed invalid SAT models from standalone
+SPECTRA-G. That entry is disqualified and fails G0. The
+[retained failure record](EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
+identifies the cases and evidence. Performance tuning is paused while correctness
+is investigated. A repair must be validated under a new source identity; it does
+not replace the failed baseline or establish a leadership label.
+
 The objective of this phase is to earn the broadest technically defensible solver
 leadership claim. It is not permission to relabel the existing binary-list exact
 service as a general SAT solver.
@@ -74,8 +83,8 @@ legacy baselines.
 At minimum retain exact source snapshots for:
 
 - SAT Competition 2026 Main overall winner `satsuma-iter+kissat`;
-- 2026 runner-up `Kissat-MAB-HyPre`;
-- 2026 third-place `EDA-Kissat-v2`;
+- 2026 Main author-award runner-up `Kissat-MAB-HyPre`;
+- 2026 Main third-place author-award entry `EDA-Kissat-v2`;
 - the 2026 SAT-subtrack AI winner `Lymphosat`, reported separately because of its
   family-specialized generated portfolio;
 - 2025 Main winner `kissat-sc2024`;
@@ -83,6 +92,11 @@ At minimum retain exact source snapshots for:
 - current upstream CaDiCaL; and
 - the strongest independently maintained proof-producing baseline that remains
   buildable in the official execution environment.
+
+Author-award positions are distinct from raw solver ranks. The retained
+[2026 score accounting](EXPOSED_CAMPAIGN_20261021.md#declared-solver-field) places
+HyPre third and EDA-Kissat-v2 seventh in the raw Main solver ordering. This
+clarification does not change the required competitor entries.
 
 The virtual best solver is retained as a diagnostic upper bound. It is never
 reported as an executable competitor and cannot be “beaten” by changing its
@@ -278,11 +292,11 @@ algorithmic leadership.
 The program stops and records a negative result at the first failed correctness or
 admission gate. Performance tuning never outranks semantic correctness.
 
-## 11. Current development checkpoint
+## 11. Historical engineering checkpoint
 
-The repair at `1310c9f192a4a1e2f25303934f4f3e0fd4fd3a86` makes the native
-arbitrary-CNF matrix a permanent repository contract and keeps the workflow
-inventory guards synchronized with it. It also closes two validation gaps found
+The repair at `1310c9f192a4a1e2f25303934f4f3e0fd4fd3a86` made the native
+arbitrary-CNF matrix a permanent repository contract and kept the workflow
+inventory guards synchronized with it. It also closed two validation gaps found
 while exercising the first exposed panel:
 
 - an UNSAT result whose PySAT/Lingeling proof stream omits the terminal empty
@@ -294,6 +308,7 @@ while exercising the first exposed panel:
   same CaDiCaL backend and every accepted SAT model must satisfy the exact original
   admitted CNF.
 
-This checkpoint is an engineering repair, not a performance result. The exposed
-panel remains development-only, and none of the general-leadership labels above
-may be used until their complete gates pass.
+This checkpoint recorded an engineering repair, not a performance result or a
+passed G0 gate. The exposed panel remains development-only. The later native model
+failures above remain part of the record, and none of the general-leadership
+labels may be used until their complete gates pass.

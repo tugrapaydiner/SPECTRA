@@ -206,6 +206,13 @@ general SAT or colouring-superiority claim.
 
 ## General-CNF research track
 
+**Correctness gate failed for the frozen native baseline.** The campaign at
+source [1f6a913](https://github.com/tugrapaydiner/SPECTRA/commit/1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5)
+recorded [two independently confirmed invalid SAT models](experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
+from standalone SPECTRA-G. That entry is disqualified, and performance tuning is
+paused. Any later repair requires validation under its own source identity; it
+cannot change this baseline result or establish a leadership claim.
+
 Standalone native **SPECTRA-G** and the **SPECTRA-assisted portfolio** are separate
 experimental entries. The native CDCL engine, checked SAT models, UNSAT proof
 replay, and arbitrary-CNF admission contracts are developed under the
