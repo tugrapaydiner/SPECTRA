@@ -9,6 +9,7 @@ the exact admitted original clauses.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from dataclasses import dataclass
 import hashlib
 import json
@@ -18,17 +19,18 @@ from time import perf_counter_ns
 from typing import Iterable
 from urllib.request import Request, urlopen
 
-from experiments.general_competition.competition_input import admit_and_load_cnf
-from experiments.general_competition.matched_backend import (
-    compare_prepared_backend,
-    prepare_matched_formula,
+from experiments.general_competition.adaptive_backend import (
+    POLICY,
+    compare_adaptive_backend,
 )
+from experiments.general_competition.competition_input import admit_and_load_cnf
+from experiments.general_competition.matched_backend import prepare_matched_formula
 from experiments.general_competition.native_binary_core import (
     NativeBinaryCore,
     build_native_binary_core,
 )
 
-SCHEMA = "spectra.general_exposed_panel.v2"
+SCHEMA = "spectra.general_exposed_panel.v3"
 BASE_URL = "https://benchmark-database.de/file/"
 MAX_DOWNLOAD_BYTES = 512 << 20
 
@@ -124,7 +126,7 @@ def run_panel(
         samples = []
         for repeat in range(repeats):
             order = "plain-first" if repeat % 2 == 0 else "hybrid-first"
-            comparison = compare_prepared_backend(
+            comparison = compare_adaptive_backend(
                 prepared,
                 solver_name=solver_name,
                 order=order,
@@ -136,7 +138,7 @@ def run_panel(
             samples.append(comparison.record())
 
         ratios = [sample["hybrid_over_plain"] for sample in samples]
-        case_record = {
+        cases.append({
             "instance_id": case.instance_id,
             "source": BASE_URL + case.instance_id,
             "source_bytes": admitted.receipt.source_bytes,
@@ -159,19 +161,18 @@ def run_panel(
             "samples": samples,
             "median_hybrid_over_plain": median(ratios),
             "hybrid_wins": sum(ratio < 1.0 for ratio in ratios),
-        }
-        cases.append(case_record)
+            "decisions": dict(sorted(Counter(
+                sample["adaptive_decision"] for sample in samples
+            ).items())),
+        })
 
-    all_ratios = [
-        sample["hybrid_over_plain"]
-        for case in cases
-        for sample in case["samples"]
-    ]
+    all_samples = [sample for case in cases for sample in case["samples"]]
+    all_ratios = [sample["hybrid_over_plain"] for sample in all_samples]
     return {
         "schema": SCHEMA,
         "status": "MEASURED",
         "solver": solver_name,
-        "frontend": "native-binary-core-prepared-v1",
+        "frontend": POLICY,
         "repeats": repeats,
         "selection": (
             "four exposed 2026 Main SAT instances with winning-solver public runtimes "
@@ -179,16 +180,19 @@ def run_panel(
         ),
         "metric": "post-admission fresh-construction solver stage",
         "preparation_scope": (
-            "admission, one canonicalization, and one immutable canonical ABI packing "
-            "per formula are retained diagnostics outside the metric; every sample "
-            "rebuilds the native reduction and both CaDiCaL arms from scratch"
+            "admission, one canonicalization, immutable ABI packing, and native builds "
+            "are retained diagnostics outside the metric; every sample rebuilds the "
+            "selected candidate path and the matched CaDiCaL control from scratch"
         ),
         "median_hybrid_over_plain": median(all_ratios),
         "hybrid_wins": sum(ratio < 1.0 for ratio in all_ratios),
+        "decisions": dict(sorted(Counter(
+            sample["adaptive_decision"] for sample in all_samples
+        ).items())),
         "cells": len(all_ratios),
         "cases": cases,
         "claim_boundary": (
-            "exposed SAT-only development result; same CaDiCaL backend; not PAR-2, "
+            "exposed SAT-only development result; same CaDiCaL fallback; not PAR-2, "
             "not a hidden holdout, not Main-track proof compliance, and not general leadership"
         ),
     }
