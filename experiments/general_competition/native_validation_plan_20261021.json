@@ -1,0 +1,40 @@
+{
+  "all_failures_retained": true,
+  "checker_timeout_seconds": 30,
+  "cpu_affinity": [
+    0
+  ],
+  "created_at_utc": "2026-10-21T18:01:30.966260+00:00",
+  "diagnosis_sha256": "be722151b573685a18ff6172ebadff7399cc5ed0fdf5fed7f4235279359a16b6",
+  "dimacs_mib": 64,
+  "entries": [
+    "SPECTRA-G-repaired"
+  ],
+  "evidence_compression": "xz-preset1-after-checking",
+  "formula_replacement_allowed": false,
+  "heap_performance_ablation": "Suspended; zero ablation cells executed.",
+  "instances": 96,
+  "interpretation": [
+    "Zero invalid results among returned answers is bounded development evidence only. Timeouts and unknowns remain unsolved.",
+    "Any original failing formula that times out after the repair is reported as unresolved, not as a newly verified solve.",
+    "The original competitors are not rerun in this single-entry validation; cross-run timing differences are not a fair paired speedup estimate.",
+    "No hidden formulas, outside replication, complete-field leadership, or 100/100 gate is established."
+  ],
+  "inventory_sha256": "b2b7c072b538e6e70645cd0b9974cdc873c061b01ffcdb3315bdfae157737501",
+  "memory_mib_per_process": 4096,
+  "native_cpp_sha256": "93f02179cf879ae486ddb406fd08802aea816a1ee9155a2b1c112eca4a2c08cf",
+  "original_baseline_disqualification_unchanged": true,
+  "original_baseline_source_commit": "1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5",
+  "output_file_mib": 64,
+  "purpose": "Validate the repaired native engine on the complete already exposed 96-formula inventory; no competitive rank or speedup claim.",
+  "runner_sha256": "38788eac7177c2961a4bb25a83caac6cd16cb1c81a3d0b5fb35a4dadbfa82ad8",
+  "same_inventory_and_order": true,
+  "schema": "spectra.native_correctness_validation_plan.v1",
+  "scoring_policy": "declared-inventory-v2",
+  "selection_sha256": "dad14ec29395eab1f67ceddfc8bbc023ee9341e6c33ec01ea3daf44be96b9f5e",
+  "solver_timeout_seconds": 5,
+  "source_commit": "cb14031d4187c4cba5cccb37984ecf59d59bfdae",
+  "start_gate": "The original frozen 96x8 baseline has all768cells, summary.json and evidence-sha256.json.",
+  "status_at_freeze": "NOT_STARTED",
+  "upstream_engines": []
+}

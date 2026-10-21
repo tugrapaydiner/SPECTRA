@@ -166,8 +166,22 @@ A separately written parser and `python-sat` agree with the retained checker.
 The source archive hashes match, and decompression reproduces the original
 admitted CNFs. The forensic receipt SHA-256 is
 `a63e422c00a20a2f124d6deb5525e281d437a344a0d7d6a5e9cec9bc6baf5701`.
-The native decision-heap relevance invariant is under investigation; any fix is
-validated as a different source identity. Performance tuning is paused.
+The [diagnosis receipt](native_correctness_20261021.json) confirms the cause:
+repeated activity rescaling underflowed some relevant variables to zero, and
+heap rebuilding then omitted them. Instrumented original search reproduced both
+wrong models byte for byte and found 19 and 88 relevant variables, respectively,
+left unassigned with zero activity. A four-variable regression reproduces the
+same failure with two clauses.
+
+The repair at source `cb14031d4187c4cba5cccb37984ecf59d59bfdae` records variable
+occurrence independently of floating-point priority. The regression fails on the
+original engine and passes with the repair; all 21 native tests pass locally with
+external DRAT checking. The [separate validation plan](native_validation_plan_20261021.json)
+freezes a native-only rerun of all 96 formulas after the original 768-cell
+baseline finishes. A repaired timeout is still unresolved, and a later successful
+solve cannot erase a baseline failure. No cross-run speedup or new eight-entry
+ranking is claimed. Performance tuning remains paused; the earlier heap
+optimization plan ran zero ablation cells.
 
 ### Scoring and verification repairs
 
