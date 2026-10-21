@@ -118,6 +118,15 @@ gzip may buffer a limited amount ahead. Inputs exactly at the limit remain valid
 with or without a final newline; accepted receipts are unchanged. This is an
 input-read bound, not a total process-RSS guarantee.
 
+The competition loader also binds replay to the admitted decoded byte count and
+SHA-256, not just equivalent clauses. It rejects comment/whitespace changes and
+growth between admission and replay, then rechecks the original source bytes so
+changed gzip/XZ containers with identical decoded content cannot inherit an old
+source receipt. The semantic hash definition is unchanged. These checks detect
+persistent source changes, not every possible race with a hostile writer; use
+immutable inputs for a scientific run. The additional source read is part of the
+current loader's work, not a retrofit of any frozen timing measurement.
+
 ### Scoring policy and offline evidence verification
 
 New campaigns default to `--scoring-policy declared-inventory-v2`. This keeps

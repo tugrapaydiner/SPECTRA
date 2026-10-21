@@ -45,3 +45,66 @@ def test_xz_limits_and_malformed_data_fail_closed(tmp_path):
     broken.write_bytes(b"not xz")
     with pytest.raises(lzma.LZMAError):
         admit_and_load_cnf(broken)
+
+
+@pytest.mark.parametrize("compression", ["none", "gzip", "xz"])
+@pytest.mark.parametrize("change", ["same-size-comment", "shorter-whitespace", "growth"])
+def test_replay_rejects_changed_decoded_bytes_even_when_semantics_match(
+    tmp_path, monkeypatch, compression, change,
+):
+    from experiments.general_competition import competition_input
+
+    content = TEXT.encode("ascii")
+    suffix = {"none": ".cnf", "gzip": ".cnf.gz", "xz": ".cnf.xz"}[compression]
+    source = tmp_path / ("source" + suffix)
+    source.write_bytes({"none": lambda data: data,
+                        "gzip": lambda data: gzip.compress(data, mtime=0),
+                        "xz": lzma.compress}[compression](content))
+    changed = {"same-size-comment": content.replace(b"identity", b"IDENTITY"),
+               "shorter-whitespace": content[:-1],
+               "growth": content + b" " * (1 << 20)}[change]
+    open_replay = competition_input._open_for_replay
+    opened = []
+
+    def mutate_before_replay(path, replay_compression):
+        # XZ replay uses the private decoded file; plain/gzip use the source.
+        path.write_bytes(gzip.compress(changed, mtime=0)
+                         if replay_compression == "gzip" else changed)
+        stream = open_replay(path, replay_compression)
+        opened.append(stream)
+        return stream
+
+    monkeypatch.setattr(competition_input, "_open_for_replay", mutate_before_replay)
+    expected_error = MemoryError if change == "growth" else ValueError
+    with pytest.raises(expected_error, match="DIMACS|decoded identity"):
+        admit_and_load_cnf(source)
+    assert opened[0].closed
+
+
+@pytest.mark.parametrize("compression", ["gzip", "xz"])
+def test_replay_rejects_changed_compressed_source_with_identical_decoded_bytes(
+    tmp_path, monkeypatch, compression,
+):
+    from experiments.general_competition import competition_input
+
+    content = TEXT.encode("ascii")
+    source = tmp_path / ("source.cnf." + {"gzip": "gz", "xz": "xz"}[compression])
+    if compression == "gzip":
+        original = gzip.compress(content, mtime=0)
+        changed = gzip.compress(content, mtime=1)
+        assert len(original) == len(changed)
+        assert gzip.decompress(original) == gzip.decompress(changed)
+    else:
+        original = lzma.compress(content)
+        changed = lzma.compress(content, check=lzma.CHECK_CRC32)
+        assert lzma.decompress(original) == lzma.decompress(changed)
+    source.write_bytes(original)
+    replay = competition_input._replay_clauses
+
+    def mutate_source_before_replay(path, receipt):
+        source.write_bytes(changed)
+        return replay(path, receipt)
+
+    monkeypatch.setattr(competition_input, "_replay_clauses", mutate_source_before_replay)
+    with pytest.raises(ValueError, match="source identity changed"):
+        admit_and_load_cnf(source)

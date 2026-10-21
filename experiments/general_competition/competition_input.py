@@ -18,6 +18,7 @@ from typing import BinaryIO
 
 from experiments.general_competition.binary_core import Clause
 from experiments.general_competition.cnf_admission import (
+    _BoundedReader,
     CNFAdmission,
     DEFAULT_MAX_DIMACS_BYTES,
     DEFAULT_MAX_SOURCE_BYTES,
@@ -89,8 +90,9 @@ def _replay_clauses(path: Path, receipt: CNFAdmission) -> tuple[Clause, ...]:
     line_number = 0
 
     stream = _open_for_replay(path, receipt.compression)
+    reader = _BoundedReader(stream, receipt.dimacs_bytes)
     try:
-        for raw_line in stream:
+        while raw_line := reader.readline():
             line_number += 1
             try:
                 stripped = raw_line.decode("ascii").strip()
@@ -155,6 +157,8 @@ def _replay_clauses(path: Path, receipt: CNFAdmission) -> tuple[Clause, ...]:
     finally:
         stream.close()
 
+    if reader.count != receipt.dimacs_bytes or reader.hash.hexdigest() != receipt.dimacs_sha256:
+        raise ValueError("replay decoded identity differs from admission receipt")
     if not header_seen:
         raise ValueError("missing DIMACS header")
     if current:
@@ -175,7 +179,11 @@ def admit_and_load_cnf(
     max_dimacs_bytes: int = DEFAULT_MAX_DIMACS_BYTES,
     max_variable_bitmap_bytes: int = DEFAULT_MAX_VARIABLE_BITMAP_BYTES,
 ) -> AdmittedCNF:
-    """Return a strict receipt and the exact admitted clause sequence."""
+    """Return clauses bound to the decoded bytes and rechecked source receipt.
+
+    The final source recheck detects persistent changes during admission/replay;
+    it is not a filesystem lock or an atomic snapshot against hostile writers.
+    """
     max_source_bytes = _positive(max_source_bytes, "max_source_bytes")
     max_dimacs_bytes = _positive(max_dimacs_bytes, "max_dimacs_bytes")
     max_variable_bitmap_bytes = _positive(
@@ -192,7 +200,10 @@ def admit_and_load_cnf(
             max_dimacs_bytes=max_dimacs_bytes,
             max_variable_bitmap_bytes=max_variable_bitmap_bytes,
         )
-        return AdmittedCNF(receipt, _replay_clauses(source, receipt))
+        clauses = _replay_clauses(source, receipt)
+        if _source_identity(source, max_source_bytes) != (receipt.source_bytes, receipt.source_sha256):
+            raise ValueError("source identity changed during admission or replay")
+        return AdmittedCNF(receipt, clauses)
 
     source_bytes, source_sha256 = _source_identity(source, max_source_bytes)
     with tempfile.TemporaryDirectory(prefix="spectra-general-cnf-") as temporary:
@@ -213,4 +224,6 @@ def admit_and_load_cnf(
         )
         replay_receipt = replace(receipt, compression="none")
         clauses = _replay_clauses(plain, replay_receipt)
+    if _source_identity(source, max_source_bytes) != (receipt.source_bytes, receipt.source_sha256):
+        raise ValueError("source identity changed during admission or replay")
     return AdmittedCNF(receipt, clauses)

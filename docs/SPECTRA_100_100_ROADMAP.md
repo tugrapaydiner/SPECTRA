@@ -12,6 +12,8 @@
 > Neither a hidden win nor independent replication has been established.
 > A subsequent admission repair bounds the requested decoded line size, including
 > gzip inputs. It changes no frozen result, score, or scientific gate.
+> Competition replay now rechecks decoded bytes and the original source identity;
+> semantic equivalence alone is not accepted as the recorded input's identity.
 
 **Document type:** living research and engineering roadmap
 **Last reviewed:** 2026-10-21
