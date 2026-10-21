@@ -5,6 +5,9 @@
 > in draft PR #76. The historic scores below have not been promoted. The latest
 > engineering and measured evidence is tracked in
 > [the exposed campaign report](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md).
+> The frozen native baseline has produced independently confirmed invalid SAT
+> models. Its correctness gate is failed; the repair and validation are tracked
+> separately from the unchanged baseline evidence.
 > Neither a hidden win nor independent replication has been established.
 
 **Document type:** living research and engineering roadmap
@@ -36,7 +39,7 @@ The gates in this file are **conjunctive**. One major red gate blocks the final 
 
 ---
 
-## 2. Current strict snapshot
+## 2. Original strict audit snapshot
 
 ### Overall position
 
@@ -50,7 +53,9 @@ The gates in this file are **conjunctive**. One major red gate blocks the final 
 | Ready to merge under the “beat everyone” objective | **42/100** | No |
 | Broad “we beat the competition generally” claim | **22/100** | Not defensible yet |
 
-These are working audit scores, not scientific statistics.
+These are the supplied audit's working scores at the original audit head, not
+scientific statistics or a reassessment after the newly observed native failures.
+The current gate ledger and linked campaign report take precedence for new work.
 
 ### Current repository health
 
@@ -685,7 +690,7 @@ A competition victory can establish track leadership. A full project-level 100/1
 
 | Gate | Requirement | Current state |
 |---|---|---|
-| G0 | Correct SAT models and accepted UNSAT proofs | **Mostly passed internally** |
+| G0 | Correct SAT models and accepted UNSAT proofs | **Failed for the frozen native baseline: invalid models retained; repair under validation** |
 | G1 | General arbitrary-CNF input contract | **Mostly passed** |
 | G2 | First place under official-style scoring | **Not passed** |
 | G3 | Portability and robustness | **Passed internally** |
@@ -706,13 +711,11 @@ A competition victory can establish track leadership. A full project-level 100/1
 | Balanced prospective first place plus outside replication | `GENERAL_SAT_LEADERSHIP` |
 | All scientific, release, and adoption gates | **100/100 project state** |
 
-Current honest label:
-
-```text
-GENERAL_FRONTEND_READY
-```
-
-The project is not yet a `DEVELOPMENT_LEADER` on general CNF.
+The supplied audit's `GENERAL_FRONTEND_READY` label describes its previous
+frontend evidence. It does not certify standalone native SPECTRA-G. The current
+standalone engine is undergoing correctness repair after the exposed campaign
+found invalid SAT models. The project is not a `DEVELOPMENT_LEADER` on general
+CNF, and no competitive or 100/100 claim is accepted.
 
 ---
 

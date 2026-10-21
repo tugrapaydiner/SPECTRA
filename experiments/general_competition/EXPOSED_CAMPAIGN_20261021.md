@@ -1,6 +1,9 @@
 # Exposed general-CNF development campaign — 2026-10-21
 
-**Status:** first attempt retained as incomplete; unchanged inventory and field will be rerun with verified post-check lossless evidence compression.
+**Status:** full restart in progress from `1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5`; the first attempt is retained as incomplete.
+**Correctness finding:** two native SAT models have already been confirmed
+invalid. SPECTRA-G is disqualified under the frozen campaign rules; the remaining
+cells continue to be collected. A subsequent repair cannot erase this result.
 **Claim boundary:** exposed development evidence only. This is not an official
 competition run, a complete modern field, a hidden confirmation, or independent
 replication. The supplied [100/100 roadmap](../../docs/SPECTRA_100_100_ROADMAP.md)
@@ -43,8 +46,10 @@ The selection file SHA-256 is
 `dad14ec29395eab1f67ceddfc8bbc023ee9341e6c33ec01ea3daf44be96b9f5e`.
 The metadata database hashes and every source URL/hash are in the receipt. This
 does not establish near-duplicate or family leakage control. All formulas are
-public and exposed, and unknown metadata remains a separate stratum even if a
-checked solver later establishes its verdict.
+public and exposed. The declared protocol keeps unknown metadata in a separate
+stratum. Review found that the frozen runner instead infers some unknown strata
+from checked answers; the original calculation is retained as `legacy-v1` and
+any corrected table must be reported as a separate derivation.
 
 These deliberately short, size-bounded development limits are not the roadmap's
 5,000-second/32-GiB official-style confirmation. The host is shared, not exclusive;
@@ -145,6 +150,39 @@ Evidence includes complete cells, raw streams, exit codes, elapsed/CPU time,
 per-process peak RSS, native statistics, complete models, proofs, checker logs,
 admission receipts, source/build identities and an evidence SHA-256 manifest.
 The admitted original is retained once rather than duplicated for every solver.
+
+### Confirmed native model failures
+
+Two independently parsed model/CNF pairs establish actual clause violations,
+not missing assignments or a checker-format mismatch:
+
+| Frozen cell | Family | Original clauses falsified | First falsified clause (1-based) |
+|---|---|---:|---|
+| `00003/solver-000` | modcircuits | 2 | 72: `1 3 2 4` (all four variables false) |
+| `00017/solver-000` | sgen | 27 | 13889: `64 65` (both variables false) |
+
+Both models contain exactly one ordered assignment for every declared variable.
+A separately written parser and `python-sat` agree with the retained checker.
+The source archive hashes match, and decompression reproduces the original
+admitted CNFs. The forensic receipt SHA-256 is
+`a63e422c00a20a2f124d6deb5525e281d437a344a0d7d6a5e9cec9bc6baf5701`.
+The native decision-heap relevance invariant is under investigation; any fix is
+validated as a different source identity. Performance tuning is paused.
+
+### Scoring and verification repairs
+
+The current runner records `declared-inventory-v2` for new campaigns. It keeps the
+39/39/18 inventory strata fixed, preserves valid answers that conflict with
+metadata while requiring adjudication before ranking, and distinguishes the
+pinned checkers' exact allocation failures from invalid proofs. These corrections
+do not modify the frozen baseline source or its raw records. The historical
+official-score replay retains its original default behavior.
+
+A separate offline verifier checks file and decoded-content hashes, private input
+integrity, complete cells, process/checker receipts, and recomputed rankings. It
+replays archives without a policy field as `legacy-v1`. Optional fresh answer
+checks require trusted local code and temporary input copies; stored commands are
+never executed by default. See [the reproduction guide](../../docs/DEVELOPMENT.md#scoring-policy-and-offline-evidence-verification).
 
 ## Corrected earlier frontend accounting
 
