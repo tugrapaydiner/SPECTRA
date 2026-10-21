@@ -19,3 +19,25 @@ fixture whose witnesses and corruption paths are independently checked by curren
 unit tests. New large evidence must be published as a release or workflow artifact,
 not committed under `results/`. Recover an old archive only in a detached or
 isolated worktree, for example with `git show archive/research-history-20261016:<path>`.
+
+## Retired CPU-development replay files
+
+The `retired_development_scaffolding` section of
+[`HISTORICAL_ARCHIVES.json`](HISTORICAL_ARCHIVES.json) records 27 raw replay logs,
+JUnit reports, comparison-row files and local drivers retired on 2026-10-21.
+Every file was checked against the already-existing archive's Git blob identity
+before removal. The manifest retains its exact original path, byte count, Git
+blob SHA and SHA-256 digest. Compact summaries, source inventories, failures,
+and substantive research reports remain in the active checkout.
+
+Recover these files from the immutable archive commit, independently of future
+branch moves:
+
+```bash
+git fetch origin archive/research-history-20261016
+git show 0b68898f3e64063ac3dc8904ae42f0b33590e7af:results/cpu_progress/validation/pytest_fast.log > /tmp/spectra-pytest-fast.log
+```
+
+Use the same `git show <archive_commit>:<path>` form for every entry in the
+manifest and verify its SHA-256 before replay. This is archival of prior
+development evidence, including negative runs; it changes no research result.

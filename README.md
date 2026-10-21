@@ -45,7 +45,7 @@ synthetic development graphs and do not replace the frozen WAP result above.
 **Package: Python 3.10+ · Flagship complete-call result: Python 3.13 · MIT-licensed project code · CPU-first · explicit verification boundaries**
 
 The active checkout is intentionally lean: current source, tests, compact summaries,
-and seven permanent workflows. Bulky historical evidence and retired experiment
+and eight permanent workflows. Bulky historical evidence and retired experiment
 branch histories remain available from `archive/research-history-20261016` and the
 original immutable commits rather than being duplicated in every clone.
 
@@ -203,6 +203,22 @@ assert verify_session_output(packet, result.output)
 The API contract, packet layouts, CLI, resource accounting and claim boundary are
 documented in [Proof-carrying exact queries](docs/EXACT_API.md). This is not a
 general SAT or colouring-superiority claim.
+
+## General-CNF research track
+
+Standalone native **SPECTRA-G** and the **SPECTRA-assisted portfolio** are separate
+experimental entries. The native CDCL engine, checked SAT models, UNSAT proof
+replay, and arbitrary-CNF admission contracts are developed under the
+[general competition protocol](experiments/general_competition/PROTOCOL.md).
+The assisted entry uses the disclosed
+[structural frontend policy](experiments/general_competition/FRONTEND_POLICY.md)
+and upstream solvers; its results do not measure standalone native performance.
+
+Current performance inputs are exposed development data. A complete modern-field
+first-place result, a prospective hidden SAT/UNSAT victory, and outside replication
+have not been established. Development remains on `finish-part3` in
+[draft PR #76](https://github.com/tugrapaydiner/SPECTRA/pull/76). The specialized
+results above do not establish general SAT leadership.
 
 ## Quotient API boundary
 
