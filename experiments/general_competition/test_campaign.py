@@ -14,7 +14,7 @@ import sys
 import pytest
 
 from .campaign import (
-    _status, check_model, digest, load_inventory, load_solvers,
+    _status, checker_resource_diagnostic, check_model, digest, load_inventory, load_solvers,
     run_campaign, run_process, score_campaign, stage_input,
 )
 
@@ -519,3 +519,157 @@ def test_campaign_storage_failure_retains_cell_and_refuses_partial_ranking(tmp_p
     assert "standings" not in result
     assert (args.out / "cells.jsonl").is_file()
     assert (args.out / "evidence-sha256.json").is_file()
+
+
+def test_declared_policy_preserves_unknown_strata_and_subtrack_tie_breaks():
+    inventory = {"instances": [
+        {"id": "sat", "family": "sat-family", "expected": "SAT"},
+        {"id": "unknown-sat", "family": "sat-family", "expected": "UNKNOWN"},
+        {"id": "unsat", "family": "unsat-family", "expected": "UNSAT"},
+        {"id": "unknown-unsat", "family": "unsat-family", "expected": "UNKNOWN"},
+    ]}
+    field = {"solvers": [{"id": "a"}, {"id": "z"}]}
+    cells = []
+    for ident in ("a", "z"):
+        for row in inventory["instances"]:
+            answer = "UNSAT" if "unsat" in row["id"] else "SAT"
+            is_unknown = row["expected"] == "UNKNOWN"
+            status = "TIMEOUT" if ident == "a" and is_unknown else answer + "_VERIFIED"
+            runtime = 5.0 if status == "TIMEOUT" else 0.2 if is_unknown else 2.0
+            cells.append(cell(ident, row["id"], row["family"], row["expected"], status, runtime))
+    legacy = score_campaign(cells, inventory, field, 5)
+    assert legacy == score_campaign(cells, inventory, field, 5, scoring_policy="legacy-v1")
+    assert "scoring_policy" not in legacy and "verified_answer_counts" not in legacy
+    assert legacy["unknown_instances"] == 0
+    declared = score_campaign(cells, inventory, field, 5, scoring_policy="declared-inventory-v2")
+    assert (declared["sat_instances"], declared["unsat_instances"], declared["unknown_instances"]) == (1, 1, 2)
+    old = {row["solver_id"]: row for row in legacy["standings"]}
+    current = {row["solver_id"]: row for row in declared["standings"]}
+    for ident, row in current.items():
+        assert row["overall_par2"] == old[ident]["overall_par2"] and row["solved"] == old[ident]["solved"]
+        assert row["sat_par2"] == row["unsat_par2"] == "2.0"
+        assert row["sat_solved"] == row["unsat_solved"] == 1
+    # Unknown solves must not break a tie inside either predeclared subtrack.
+    assert current["a"]["sat_rank"] == current["a"]["unsat_rank"] == 1
+    assert old["z"]["sat_rank"] == old["z"]["unsat_rank"] == 1
+    assert declared["verified_answer_counts"]["z"] == {"SAT": 2, "UNSAT": 2, "metadata_unknown": 2}
+    assert all(table["unknown_instances"] == 1 for table in declared["families"].values())
+
+
+@pytest.mark.parametrize("status,receipt", [
+    ("SAT_VERIFIED", False), ("SAT_VERIFIED", True), ("INVALID_VERDICT_CONFLICT", False),
+])
+def test_declared_scoring_refuses_metadata_conflict_instead_of_disqualifying_solver(status, receipt):
+    inventory = {"instances": [{"id": "i", "family": "logic", "expected": "UNSAT"}]}
+    field = {"solvers": [{"id": "a"}]}
+    result = cell(expected="UNSAT", status=status)
+    if receipt:
+        result["metadata_conflict"] = {"expected": "UNSAT", "verified_answer": "SAT", "disposition": "NEEDS_ADJUDICATION"}
+    with pytest.raises(ValueError, match="metadata verdict conflict requires adjudication"):
+        score_campaign([result], inventory, field, 5, scoring_policy="declared-inventory-v2")
+    if status == "INVALID_VERDICT_CONFLICT":
+        legacy = score_campaign([result], inventory, field, 5)
+        assert legacy["standings"][0]["disqualified"]
+
+
+def test_campaign_scoring_policy_cannot_be_silently_misspelled():
+    with pytest.raises(ValueError, match="scoring_policy"):
+        score_campaign([], {"instances": []}, {"solvers": []}, 5, scoring_policy="declared-v2")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.parametrize("answer", ["SAT", "UNSAT"])
+def test_new_campaign_retains_verified_metadata_conflict_and_refuses_ranking(tmp_path, answer):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 1\n1 0\n" if answer == "SAT" else "p cnf 1 2\n1 0\n-1 0\n")
+    entry = solver()
+    if answer == "UNSAT":
+        entry = solver(code="import pathlib,sys; pathlib.Path(sys.argv[2]).write_text('0\\n'); print('s UNSATISFIABLE'); raise SystemExit(20)")
+        entry["proof_checker"] = {"command": [sys.executable, "-c", "print('s VERIFIED')", "{cnf}", "{proof}"],
+                                  "success_line": "s VERIFIED"}
+    expected = "UNSAT" if answer == "SAT" else "SAT"
+    inventory, field = manifests(tmp_path, [instance(cnf, expected=expected)], [entry])
+    args = arguments(tmp_path, inventory, field)
+    summary = run_campaign(args)
+    assert summary["status"] == "INVALID_CAMPAIGN" and "standings" not in summary
+    assert "requires adjudication" in summary["error"]
+    retained = json.loads((args.out / "cells.jsonl").read_text())
+    assert retained["status"] == answer + "_VERIFIED"
+    assert retained["metadata_conflict"] == {"expected": expected, "verified_answer": answer, "disposition": "NEEDS_ADJUDICATION"}
+    assert json.loads((args.out / "campaign.json").read_text())["scoring_policy"] == "declared-inventory-v2"
+    assert (args.out / "evidence-sha256.json").is_file()
+
+
+@pytest.mark.parametrize("proof_format,code,stdout,stderr,expected", [
+    ("DRAT", 0, "c MEMOUT: reallocation of proof list failed", "", "CHECKER_RESOURCE_FAILURE"),
+    ("DRUP", 1, "s MEMORY ALLOCATION ERROR", "", "CHECKER_RESOURCE_FAILURE"),
+    ("DSR", 255, "", "Ran out of memory on xcalloc()", "CHECKER_RESOURCE_FAILURE"),
+    ("DSR", 1, "", "Ran out of memory on xcalloc()", "INVALID_PROOF"),
+    ("DSR", 255, "", "c Error: Unable to open the file missing-proof.dsr", "INVALID_PROOF"),
+    ("DRAT", 1, "s NOT VERIFIED", "", "INVALID_PROOF"),
+    ("DRAT", 0, "warning: c MEMOUT: reallocation of proof list failed", "", "INVALID_PROOF"),
+    ("PB3", 1, "", "There is no contradicting constraint in the database.", "INVALID_PROOF"),
+])
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_checker_resource_diagnostics_do_not_become_invalid_proofs(tmp_path, proof_format, code, stdout, stderr, expected):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 2\n1 0\n-1 0\n")
+    entry = solver("proof", "import pathlib,sys; pathlib.Path(sys.argv[2]).write_text('0\\n'); print('s UNSATISFIABLE'); raise SystemExit(20)",
+                   proof_format=proof_format)
+    checker_code = f"import sys; print({stdout!r}); print({stderr!r}, file=sys.stderr); raise SystemExit({code})"
+    entry["proof_checker"] = {"command": [sys.executable, "-c", checker_code, "{cnf}", "{proof}"], "success_line": "s VERIFIED"}
+    inventory, field = manifests(tmp_path, [instance(cnf, expected="UNSAT")], [entry])
+    args = arguments(tmp_path, inventory, field)
+    summary = run_campaign(args)
+    retained = json.loads((args.out / "cells.jsonl").read_text())
+    assert retained["status"] == expected
+    assert summary["standings"][0]["solved"] == 0
+    assert summary["standings"][0]["disqualified"] == (expected == "INVALID_PROOF")
+    assert ("checker_resource_diagnostic" in retained) == (expected == "CHECKER_RESOURCE_FAILURE")
+
+
+def test_dsr_io_failure_only_recognizes_explicit_lsr_output():
+    process = {"returncode": 255, "command": ["/trusted/dsr-trim", "/input.cnf", "/proof.dsr", "/derived.lsr"]}
+    output_error = "c Error: Unable to open the file /derived.lsr"
+    assert checker_resource_diagnostic("DSR", process, [], [output_error]) == output_error
+    assert checker_resource_diagnostic("DSR", process, [], ["c Error: Unable to open the file /proof.dsr"]) is None
+    assert checker_resource_diagnostic("DSR", {**process, "returncode": 1}, [], [output_error]) is None
+    assert checker_resource_diagnostic("DRAT", process, [], [output_error]) is None
+
+
+@pytest.mark.parametrize("requested,expected", [
+    (None, "declared-inventory-v2"), ("declared-inventory-v2", "declared-inventory-v2"),
+    ("legacy-v1", "legacy-v1"),
+])
+def test_scoring_policy_cli_default_and_explicit_choices(tmp_path, monkeypatch, requested, expected):
+    from . import campaign
+    observed = []
+
+    def capture(args):
+        observed.append(args.scoring_policy)
+        return {"status": "CLI_ONLY_TEST"}
+
+    monkeypatch.setattr(campaign, "run_campaign", capture)
+    command = ["run", "--inventory", str(tmp_path / "inventory.json"),
+               "--solvers", str(tmp_path / "solvers.json"), "--out", str(tmp_path / "out"),
+               "--checker", str(tmp_path / "checker")]
+    if requested is not None:
+        command += ["--scoring-policy", requested]
+    assert campaign.main(command) == 0 and observed == [expected]
+    with pytest.raises(SystemExit) as error:
+        campaign.main(command + ["--scoring-policy", "unrecognized"])
+    assert error.value.code == 2
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_explicit_legacy_run_preserves_historical_metadata_conflict_status(tmp_path):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 1\n1 0\n")
+    inventory, field = manifests(tmp_path, [instance(cnf, expected="UNSAT")], [solver()])
+    args = arguments(tmp_path, inventory, field)
+    args.scoring_policy = "legacy-v1"
+    result = run_campaign(args)
+    retained = json.loads((args.out / "cells.jsonl").read_text())
+    assert retained["status"] == "INVALID_VERDICT_CONFLICT" and "metadata_conflict" not in retained
+    assert result["standings"][0]["disqualified"] and "scoring_policy" not in result
+    assert json.loads((args.out / "campaign.json").read_text())["scoring_policy"] == "legacy-v1"

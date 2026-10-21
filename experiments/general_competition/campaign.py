@@ -517,6 +517,43 @@ def _status(process: dict, answer: str, timeout: float, accepted_exit_codes: dic
     return answer
 
 
+def checker_resource_diagnostic(proof_format: str, process: dict, stdout_lines, stderr_lines) -> str | None:
+    """Recognize specific pinned checker failures without excusing proof rejection.
+
+    drat-trim's retained source exits zero for its explicit MEMOUT diagnostics;
+    its initial allocation failure instead prints MEMORY ALLOCATION ERROR.
+    The bundled dsr-trim allocation wrappers exit(-1), observed as code 255.
+    Generic nonzero codes and unrecognized messages remain proof failures.
+    """
+    proof_format = proof_format.upper()
+    code = process.get("returncode")
+    if proof_format in ("DRAT", "DRUP") and code in (0, 1):
+        memory = re.compile(
+            r"c MEMOUT: (?:reallocation failed for watch list of -?[0-9]+|"
+            r"dependencies reallocation failed|reallocation of proof list failed|"
+            r"failed to reallocate lrat table|reallocation of clause database failed|"
+            r"failed to reallocate buffer|reallocation of DB failed)"
+        )
+        for raw in stdout_lines:
+            line = raw.strip()
+            if (line == "s MEMORY ALLOCATION ERROR" or memory.fullmatch(line)
+                    or re.fullmatch(r"c MEMOUT reallocation of hash table [0-9]+ failed", line)):
+                return line
+    elif proof_format == "DSR" and code == 255:
+        command = process.get("command", [])
+        # dsr-trim CNF DSR LSR uses the third positional path for output. A
+        # generic fopen failure could instead mean a missing solver proof.
+        output_path = (command[3] if len(command) == 4
+                       and Path(command[0]).name == "dsr-trim" else None)
+        for raw in stderr_lines:
+            line = raw.strip()
+            if re.fullmatch(r"Ran out of memory on x(?:malloc|calloc|realloc)\(\)", line):
+                return line
+            if output_path is not None and line == f"c Error: Unable to open the file {output_path}":
+                return line
+    return None
+
+
 def _score_csv(cells: list[dict], timeout: float) -> bytes:
     stream = io.StringIO(newline="")
     writer = csv.writer(stream)
@@ -530,7 +567,17 @@ def _score_csv(cells: list[dict], timeout: float) -> bytes:
     return stream.getvalue().encode("utf-8")
 
 
-def score_campaign(cells: list[dict], inventory: dict, field: dict, timeout: float) -> dict:
+def score_campaign(cells: list[dict], inventory: dict, field: dict, timeout: float,
+                   *, scoring_policy: str = "legacy-v1") -> dict:
+    """Score retained cells under an explicit, backward-compatible stratum policy.
+
+    Legacy reconstruction intentionally preserves frozen v1 behavior. New
+    campaigns keep metadata-unknown instances in their predeclared stratum and
+    refuse a ranking when checked evidence contradicts inventory metadata.
+    """
+    if scoring_policy not in ("legacy-v1", "declared-inventory-v2"):
+        raise ValueError("unsupported campaign scoring_policy")
+    declared_policy = scoring_policy == "declared-inventory-v2"
     expected = {(solver["id"], instance["id"]) for solver in field["solvers"] for instance in inventory["instances"]}
     actual = [(cell["solver_id"], cell["instance_id"]) for cell in cells]
     if len(set(actual)) != len(actual) or set(actual) != expected:
@@ -549,12 +596,20 @@ def score_campaign(cells: list[dict], inventory: dict, field: dict, timeout: flo
             raise ValueError("cell runtime must be finite and nonnegative")
         if entry["status"] in SOLVED and elapsed > timeout:
             raise ValueError("solved cell exceeds the declared timeout")
+        if declared_policy:
+            verified_answer = {"SAT_VERIFIED": "SAT", "UNSAT_VERIFIED": "UNSAT"}.get(entry["status"])
+            metadata_verdict = source.get("expected", entry["expected"])
+            if (entry["status"] == "INVALID_VERDICT_CONFLICT" or "metadata_conflict" in entry
+                    or (verified_answer is not None and metadata_verdict not in ("UNKNOWN", verified_answer))):
+                raise ValueError("metadata verdict conflict requires adjudication; no campaign ranking accepted")
     solvers = [solver["id"] for solver in field["solvers"]]
-    result = score_bytes(_score_csv(cells, timeout), timeout_seconds=Decimal(str(timeout)), solver_ids=solvers).to_record()
+    result = score_bytes(_score_csv(cells, timeout), timeout_seconds=Decimal(str(timeout)),
+                         solver_ids=solvers, infer_unknown_verdicts=not declared_policy).to_record()
     families = {}
     for family in sorted({instance["family"] for instance in inventory["instances"]}):
         subset = [cell for cell in cells if cell["family"] == family]
-        families[family] = score_bytes(_score_csv(subset, timeout), timeout_seconds=Decimal(str(timeout)), solver_ids=solvers).to_record()
+        families[family] = score_bytes(_score_csv(subset, timeout), timeout_seconds=Decimal(str(timeout)),
+                                      solver_ids=solvers, infer_unknown_verdicts=not declared_policy).to_record()
     # A wrong result disqualifies the solver across the campaign, including
     # family and subtrack ranks where the particular wrong cell is absent.
     disqualified = {row["solver_id"] for row in result["standings"] if row["disqualified"]}
@@ -576,12 +631,23 @@ def score_campaign(cells: list[dict], inventory: dict, field: dict, timeout: flo
                  "peak_rss_kib": max((c.get("peak_rss_kib") or 0 for c in cells if c["solver_id"] == solver), default=0),
                  "checking_seconds": sum(c.get("checking_seconds", 0) for c in cells if c["solver_id"] == solver)}
         for solver in solvers}
+    if declared_policy:
+        result["scoring_policy"] = scoring_policy
+        result["verified_answer_counts"] = {
+            solver: {"SAT": sum(c["solver_id"] == solver and c["status"] == "SAT_VERIFIED" for c in cells),
+                     "UNSAT": sum(c["solver_id"] == solver and c["status"] == "UNSAT_VERIFIED" for c in cells),
+                     "metadata_unknown": sum(c["solver_id"] == solver and c["status"] in SOLVED
+                                             and c["expected"] == "UNKNOWN" for c in cells)}
+            for solver in solvers}
     return result
 
 
 def run_campaign(args: argparse.Namespace) -> dict:
     _positive(args.timeout, "timeout")
     _positive(args.checker_timeout, "checker_timeout")
+    scoring_policy = getattr(args, "scoring_policy", "declared-inventory-v2")
+    if scoring_policy not in ("legacy-v1", "declared-inventory-v2"):
+        raise ValueError("unsupported campaign scoring_policy")
     compression_enabled = getattr(args, "compress_evidence", False)
     if type(compression_enabled) is not bool:
         raise ValueError("compress_evidence must be Boolean")
@@ -597,6 +663,7 @@ def run_campaign(args: argparse.Namespace) -> dict:
     shutil.copyfile(field_path, destination / "solvers.json")
     checker = args.checker.resolve()
     configuration = {"schema": "spectra.general_campaign.v1", "evidence_class": "EXPOSED_DEVELOPMENT",
+                     "scoring_policy": scoring_policy,
                      "started_at_utc": datetime.now(timezone.utc).isoformat(),
                      "inventory_sha256": digest(inventory_path), "solver_field_sha256": digest(field_path),
                      "timeout_seconds": args.timeout, "checker_timeout_seconds": args.checker_timeout,
@@ -759,10 +826,18 @@ def run_campaign(args: argparse.Namespace) -> dict:
                     checked = run_process(check_command, cell_dir / "check", timeout=args.checker_timeout,
                                           workdir=cell_dir / "check", **limits)
                     cell["checking_seconds"] = checked["elapsed_seconds"]
+                    resource_diagnostic = (checker_resource_diagnostic(
+                        solver.get("proof_format", "DRAT"), checked,
+                        _lines_bounded(cell_dir / "check" / "stdout.txt"),
+                        _lines_bounded(cell_dir / "check" / "stderr.txt"))
+                        if status == "UNSAT" and configuration["scoring_policy"] == "declared-inventory-v2" else None)
                     if checked["timed_out"] or checked["elapsed_seconds"] > args.checker_timeout:
                         cell["status"] = "CHECKER_TIMEOUT"
                     elif checked["spawn_error"] or checked["returncode"] is None or checked["returncode"] < 0:
                         cell["status"] = "CHECKER_RESOURCE_FAILURE"
+                    elif resource_diagnostic is not None:
+                        cell["status"] = "CHECKER_RESOURCE_FAILURE"
+                        cell["checker_resource_diagnostic"] = resource_diagnostic
                     elif status == "SAT":
                         cell["status"] = ("SAT_VERIFIED" if checked["returncode"] == 0 else
                                           "INVALID_MODEL" if checked["returncode"] == 65 else
@@ -771,7 +846,12 @@ def run_campaign(args: argparse.Namespace) -> dict:
                         accepted = any(line.strip() == success_line for line in _lines_bounded(cell_dir / "check" / "stdout.txt"))
                         cell["status"] = "UNSAT_VERIFIED" if checked["returncode"] in accepted_codes and accepted and proof.is_file() else "INVALID_PROOF"
                     if cell["status"] in SOLVED and instance["expected"] not in ("UNKNOWN", answer):
-                        cell["status"] = "INVALID_VERDICT_CONFLICT"
+                        if scoring_policy == "legacy-v1":
+                            cell["status"] = "INVALID_VERDICT_CONFLICT"
+                        else:
+                            cell["metadata_conflict"] = {"expected": instance["expected"],
+                                                         "verified_answer": answer,
+                                                         "disposition": "NEEDS_ADJUDICATION"}
                 final_integrity = {"solver_input_sha256": digest(solver_cnf) if solver_cnf.is_file() else None,
                                    "original_cnf_sha256": digest(cnf) if cnf.is_file() else None,
                                    "source_sha256": digest(source) if source.is_file() else None}
@@ -839,7 +919,8 @@ def run_campaign(args: argparse.Namespace) -> dict:
             raise ValueError("campaign source, executable, checker or manifest changed during execution")
         if original_input_mutations:
             raise ValueError("original admitted CNF or source changed during execution")
-        summary = score_campaign(cells, inventory, field, args.timeout)
+        summary = score_campaign(cells, inventory, field, args.timeout,
+                                 scoring_policy=configuration["scoring_policy"])
         summary.update(evidence_class="EXPOSED_DEVELOPMENT", declared_field_complete=True,
                        complete_roadmap_field_verified=False, exact_semantic_duplicate_pairs=duplicates,
                        claim=configuration["claim"])
@@ -862,6 +943,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--memory-mib", type=int, default=4096)
     run.add_argument("--output-mib", type=int, default=1024)
     run.add_argument("--dimacs-mib", type=int, default=2048)
+    run.add_argument("--scoring-policy", choices=("legacy-v1", "declared-inventory-v2"),
+                     default="declared-inventory-v2",
+                     help="new runs preserve declared strata; legacy-v1 explicitly reproduces historical policy")
     run.add_argument("--compress-evidence", action="store_true",
                      help="losslessly XZ-compress large checked artifacts outside all timing endpoints")
     native = sub.add_parser("native", help="standalone native worker; checking is external")

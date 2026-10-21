@@ -198,9 +198,17 @@ def score_field(
     timeout_seconds: Decimal = Decimal("5000"),
     solver_suffix: str | None = "[main]",
     solver_ids: Iterable[str] | None = None,
+    infer_unknown_verdicts: bool = True,
 ) -> ScoreReceipt:
-    """Recompute a complete rectangular solver field and deterministic ranking."""
+    """Recompute a complete field, optionally keeping undeclared strata unknown.
+
+    Official and legacy tables infer an unknown instance's stratum from checked
+    answers. A predeclared inventory can disable that inference without changing
+    overall PAR-2 or weakening cross-solver verdict consistency checks.
+    """
     timeout_seconds = _positive_decimal(timeout_seconds, "timeout_seconds")
+    if type(infer_unknown_verdicts) is not bool:
+        raise ValueError("infer_unknown_verdicts must be Boolean")
     if type(rows) is not tuple or any(type(row) is not ScoreRow for row in rows):
         raise ValueError("rows must be a tuple of ScoreRow values")
     if (
@@ -231,6 +239,7 @@ def score_field(
 
     by_solver: dict[str, dict[str, ScoreRow]] = {}
     verdicts: dict[str, str] = {}
+    evidence_verdicts: dict[str, str] = {}
     for row in selected:
         cells = by_solver.setdefault(row.solver_id, {})
         if row.instance_id in cells:
@@ -245,10 +254,12 @@ def score_field(
             raise ValueError("one score cell has conflicting verdict evidence")
         if candidates:
             verdict = next(iter(candidates))
-            previous = verdicts.get(row.instance_id)
+            previous = evidence_verdicts.get(row.instance_id)
             if previous is not None and previous != verdict:
                 raise ValueError("benchmark verdict differs across solvers")
-            verdicts[row.instance_id] = verdict
+            evidence_verdicts[row.instance_id] = verdict
+            if row.declared_result or infer_unknown_verdicts:
+                verdicts[row.instance_id] = verdict
 
     instance_sets = {
         solver: frozenset(cells) for solver, cells in by_solver.items()
@@ -280,9 +291,14 @@ def score_field(
                 sat_par2=_mean(cells[instance].score for instance in sat_ids),
                 unsat_par2=_mean(cells[instance].score for instance in unsat_ids),
                 solved=len(solved_rows),
-                sat_solved=sum(_SOLVED[row.status] == "sat" for row in solved_rows),
+                sat_solved=sum(
+                    _SOLVED[row.status] == "sat"
+                    and (infer_unknown_verdicts or row.instance_id in sat_ids)
+                    for row in solved_rows
+                ),
                 unsat_solved=sum(
                     _SOLVED[row.status] == "unsat" for row in solved_rows
+                    if infer_unknown_verdicts or row.instance_id in unsat_ids
                 ),
                 instances=len(reference),
                 sat_instances=len(sat_ids),
@@ -327,6 +343,7 @@ def score_bytes(
     timeout_seconds: Decimal = Decimal("5000"),
     solver_suffix: str | None = "[main]",
     solver_ids: Iterable[str] | None = None,
+    infer_unknown_verdicts: bool = True,
 ) -> ScoreReceipt:
     rows = parse_scores(data, timeout_seconds=timeout_seconds)
     return score_field(
@@ -336,6 +353,7 @@ def score_bytes(
         timeout_seconds=timeout_seconds,
         solver_suffix=solver_suffix,
         solver_ids=solver_ids,
+        infer_unknown_verdicts=infer_unknown_verdicts,
     )
 
 

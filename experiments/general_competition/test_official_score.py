@@ -225,3 +225,38 @@ def test_score_field_rejects_non_rows():
             source_sha256="4" * 64,
             source_rows=2,
         )
+
+
+def test_declared_unknown_strata_preserve_means_and_solved_membership():
+    data = HEADER + b"".join((
+        b"a[main],known,4,sat-verified,4,sat\n",
+        b"a[main],unknown-sat,1,sat-verified,1,\n",
+        b"a[main],unknown-unsat,2,unsat-verified,2,\n",
+        b"b[main],known,4,sat-verified,4,sat\n",
+        b"b[main],unknown-sat,5000,solver-timeout,10000,\n",
+        b"b[main],unknown-unsat,2,unsat-verified,2,\n",
+    ))
+    legacy = score_bytes(data)
+    assert legacy == score_bytes(data, infer_unknown_verdicts=True)
+    assert (legacy.sat_instances, legacy.unsat_instances, legacy.unknown_instances) == (2, 1, 0)
+    declared = score_bytes(data, infer_unknown_verdicts=False)
+    assert (declared.sat_instances, declared.unsat_instances, declared.unknown_instances) == (1, 0, 2)
+    old = {row.solver_id: row for row in legacy.standings}
+    for row in declared.standings:
+        assert row.overall_par2 == old[row.solver_id].overall_par2
+        assert row.solved == old[row.solver_id].solved
+        assert row.sat_par2 == Decimal(4) and row.unsat_par2 is None
+        assert row.sat_solved == 1 and row.unsat_solved == 0
+
+
+@pytest.mark.parametrize("infer_unknown_verdicts", [False, True])
+def test_unknown_stratum_policy_never_hides_opposite_checked_answers(infer_unknown_verdicts):
+    data = HEADER + b"a[main],unknown,1,sat-verified,1,\nb[main],unknown,1,unsat-verified,1,\n"
+    with pytest.raises(ValueError, match="verdict differs"):
+        score_bytes(data, infer_unknown_verdicts=infer_unknown_verdicts)
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "false"])
+def test_unknown_stratum_policy_requires_boolean(value):
+    with pytest.raises(ValueError, match="infer_unknown_verdicts must be Boolean"):
+        score_bytes(field_bytes(), infer_unknown_verdicts=value)
