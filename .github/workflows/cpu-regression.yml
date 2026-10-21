@@ -38,6 +38,7 @@ jobs:
             experiments/general_competition/cnf_admission.py \
             experiments/general_competition/competition_input.py \
             experiments/general_competition/campaign.py \
+            experiments/general_competition/campaign_verify.py \
             experiments/general_competition/exposed_inventory.py \
             experiments/general_competition/binary_core.py \
             experiments/general_competition/residual_solver.py \
@@ -48,6 +49,7 @@ jobs:
             experiments/general_competition/test_cnf_admission.py \
             experiments/general_competition/test_competition_input.py \
             experiments/general_competition/test_campaign.py \
+            experiments/general_competition/test_campaign_verify.py \
             experiments/general_competition/test_exposed_inventory.py \
             experiments/general_competition/test_binary_core.py \
             experiments/general_competition/test_residual_solver.py \
@@ -58,6 +60,7 @@ jobs:
             experiments/general_competition/test_cnf_admission.py \
             experiments/general_competition/test_competition_input.py \
             experiments/general_competition/test_campaign.py \
+            experiments/general_competition/test_campaign_verify.py \
             experiments/general_competition/test_exposed_inventory.py \
             experiments/general_competition/test_binary_core.py \
             experiments/general_competition/test_residual_solver.py \

@@ -112,6 +112,43 @@ confirmation, independent replication, official competition rank, or the 100/100
 gate. Preserve evidence beyond expiring CI artifacts as described in
 [the release guide](RELEASING.md#repository-boundary).
 
+### Scoring policy and offline evidence verification
+
+New campaigns default to `--scoring-policy declared-inventory-v2`. This keeps
+metadata-unknown formulas in their predeclared stratum, reports actual verified
+answers separately, and refuses a ranking if checked evidence contradicts the
+inventory metadata. Recognized checker allocation failures earn no solve; they
+do not become proof disqualifications. Unrecognized proof rejections remain
+invalid evidence.
+
+The frozen 2026-10-21 baseline predates this policy field. Its original receipts
+must be replayed as `legacy-v1`, including the historical inference of unknown
+strata. A corrected table is a separately identified derivation, not a rewrite of
+the original campaign. Explicit `--scoring-policy legacy-v1` is available when
+reproducing that policy with the current runner.
+
+Verify a downloaded, extracted evidence directory with a separately retained
+SHA-256 of its `evidence-sha256.json`:
+
+```bash
+python -m experiments.general_competition.campaign_verify /absolute/path/evidence \
+  --expected-manifest-sha256 EXPECTED_SHA256 \
+  --recheck-models
+```
+
+The default verification path executes no commands from the archive. It checks
+the exact file inventory, original CNFs, lossless compression receipts, complete
+solver/formula rectangle, process records, and recomputed scores under the
+recorded policy. Fresh model checks use temporary copies. Fresh proof checks
+require explicitly supplied trusted local checker paths; DSR and pseudo-Boolean
+formats need their declared interfaces through `TrustedProofChecker`.
+
+Archive consistency does not establish independent replication, hidden-set
+integrity, source-to-binary rebuild linkage, or independently measured timings.
+Without an external manifest pin, verification establishes internal consistency
+only. Keep the verifier report outside the evidence directory so the archived
+file inventory remains unchanged.
+
 ## Flagship reproduction
 
 The WAP confirmation result is immutable. Follow
