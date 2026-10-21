@@ -1,9 +1,15 @@
 # Exposed general-CNF development campaign — 2026-10-21
 
-**Status:** full restart in progress from `1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5`; the first attempt is retained as incomplete.
-**Correctness finding:** two native SAT models have already been confirmed
-invalid. SPECTRA-G is disqualified under the frozen campaign rules; the remaining
-cells continue to be collected. A subsequent repair cannot erase this result.
+**Status:** the original 768-cell restart and separate 96-case repaired validation
+are complete. Both archives passed post-run verification and fresh checks of
+every reported verified answer. The first attempt remains retained as incomplete.
+The separately frozen heap experiment also finished all 256 cells and returned
+`NOT_ESTABLISHED`; its candidate is not adopted.
+**Correctness finding:** all ten invalid native SAT models have been independently
+confirmed. The original SPECTRA-G entry is disqualified under the frozen rules.
+The repaired source returned nine checked answers and 87 timeouts; nine of the
+originally invalid cases remain unresolved. A subsequent repair cannot erase
+the original result.
 **Claim boundary:** exposed development evidence only. This is not an official
 competition run, a complete modern field, a hidden confirmation, or independent
 replication. The supplied [100/100 roadmap](../../docs/SPECTRA_100_100_ROADMAP.md)
@@ -49,7 +55,7 @@ does not establish near-duplicate or family leakage control. All formulas are
 public and exposed. The declared protocol keeps unknown metadata in a separate
 stratum. Review found that the frozen runner instead infers some unknown strata
 from checked answers; the original calculation is retained as `legacy-v1` and
-any corrected table must be reported as a separate derivation.
+the corrected table is reported as a separate derivation below.
 
 These deliberately short, size-bounded development limits are not the roadmap's
 5,000-second/32-GiB official-style confirmation. The host is shared, not exclusive;
@@ -108,6 +114,55 @@ The original input, proof and checker logs are retained. The competitor is not
 patched and the negative case is not removed. A table of benchmark outcomes must
 not be described as a proof-clean validation of this submission.
 
+## Completed original baseline
+
+The run at `1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5` finished at approximately
+18:45 UTC on 2026-10-21 with all **768 unique cells** and exit code zero. Its
+[unchanged physical-file manifest](exposed_evidence_manifest_20261021.json)
+lists 6,341 files and has SHA-256
+`a6bef0af6bd2b7bf603e4eee7f7a421ad20e693d8bb52e14d368fdb68dd59551`.
+There were no recorded artifact changes or original-input mutations.
+
+| Position | Solver | Verified SAT | Verified UNSAT | Timeouts | Other outcomes | Overall PAR-2 (s) |
+|---|---|---:|---:|---:|---|---:|
+| 1 | satsuma-iter+kissat | 9 | 15 | 71 | 1 checker timeout | 7.7091 |
+| 2 | Kissat-MAB-HyPre | 6 | 12 | 51 | 27 unknown | 8.2304 |
+| 3 | Kissat | 8 | 5 | 82 | 1 resource failure | 8.7491 |
+| 4 | CaDiCaL | 9 | 3 | 83 | 1 resource failure | 8.8150 |
+| 5 | EDA-Kissat-v2 | 7 | 3 | 85 | 1 resource failure | 9.0071 |
+| 6 | AE_kissat2025_MAB | 6 | 3 | 87 | — | 9.0855 |
+| 7 | Glucose-4.2.1 | 5 | 2 | 77 | 12 resource failures | 9.3205 |
+| **DQ** | **SPECTRA-G** | **6** | **2** | **78** | **10 invalid models** | 9.2272, diagnostic only |
+
+PAR-2 is the mean runtime with ten seconds charged for every unsolved case.
+Invalid answers disqualify the whole solver before ranking, regardless of its
+numerical mean. SAT/UNSAT columns count verified returned answers, including
+answers on metadata-unknown cases. They are distinct from the declared-stratum
+score denominators. The table retains the original `legacy-v1` calculation;
+the separate declared-strata derivation leaves every overall score, rank,
+solved count and global disqualification unchanged.
+
+The [768 original score rows](exposed_scores_20261021.csv),
+[unchanged legacy summary](exposed_summary_legacy_20261021.json), and
+[separate declared-strata summary](exposed_summary_declared_20261021.json) are
+available directly in this tree. Both summaries retain every family table.
+These are byte-identical copies of their respective measured or derived files;
+the new filenames do not change their policy or source identity.
+
+The 15 solver resource failures retain return code `-25`; they are not silently
+described as memory exhaustion. Satsuma's one checker timeout retains a
+0.644784352-second solver run and a 30.041780312-second checker run and earns no
+solve. The earlier HyPre smoke-test rejection remains outside this 96-case table.
+
+Fresh post-run verification checked all 6,341 physical files, decoded and checked
+all 811 compressed files, replayed the complete grid and scores, and accepted
+all **56 SAT models and 45 UNSAT proofs** using explicitly pinned local checkers.
+No verified answer was left unchecked. The fresh-check log manifest is
+`6dc20f9e1c763412d0580393318ce2a28228f8ef0e1451d542409ed140da8562`;
+the successful archive-verification report is
+`d15b89c4eb0300ce361b3d4793d8580cff9d999c3966d4e08b1032107d42d9b6`.
+These are local rechecks, not outside replication or renewed solve timings.
+
 ## Storage repair and retained incomplete attempt
 
 The initial run used source `9eee856fbac3e9e1bf334f3dca4c8f40e271f82e`. It was
@@ -122,8 +177,8 @@ solver/checker limits and order. The only harness change is optional post-check
 lossless XZ compression, outside the solve/check timers. Every compressed file
 records both original and stored sizes/hashes; decompression must reproduce the
 original bytes before the uncompressed copy is removed. Compression failures
-abort with retained evidence and no ranking. The published restart source and
-full evidence archive identities will be recorded with the results. Evidence
+abort with retained evidence and no ranking. The restart source and final
+evidence-manifest identity are recorded above. Evidence
 output for the restart uses a memory-backed filesystem because the shared disk
 cannot hold the retained campaign. This is applied equally to every solver and
 is another reason the result must not be presented as an official-hardware run.
@@ -153,8 +208,8 @@ The admitted original is retained once rather than duplicated for every solver.
 
 ### Confirmed native model failures
 
-Two independently parsed model/CNF pairs establish actual clause violations,
-not missing assignments or a checker-format mismatch:
+The first two independently diagnosed model/CNF pairs establish actual clause
+violations:
 
 | Frozen cell | Family | Original clauses falsified | First falsified clause (1-based) |
 |---|---|---:|---|
@@ -173,21 +228,63 @@ wrong models byte for byte and found 19 and 88 relevant variables, respectively,
 left unassigned with zero activity. A four-variable regression reproduces the
 same failure with two clauses.
 
+The completed all-failure audit independently confirms **all ten** retained
+`INVALID_MODEL` cells. Every witness is complete and ordered; the independent
+parser, Python-SAT clause parser and retained checker's first failure agree.
+Across those witnesses, 5,615 original clauses are falsified. The full forensic
+receipt is retained with SHA-256
+`363a815f91f4cfab2e801e11125d88d58c315746d8fb6be793cd803aebb8e546`.
+The compact [verification and failure receipt](exposed_verification_20261021.json)
+binds every case to its original CNF and model hashes. Mechanistic instrumentation
+reproduced the first two failures above; the clause audit does not claim a
+separate instrumented root-cause reproduction for each of the remaining eight.
+
+| Instance index | Family | Falsified original clauses | Repaired outcome |
+|---|---|---:|---|
+| 00003 | modcircuits | 2 | TIMEOUT |
+| 00017 | sgen | 27 | TIMEOUT |
+| 00027 | social-golfer | 120 | TIMEOUT |
+| 00031 | social-golfer | 252 | TIMEOUT |
+| 00041 | heule-folkman | 3,144 | TIMEOUT |
+| 00050 | st-connectivity-principle | 20 | TIMEOUT |
+| 00055 | binary-pigeon-hole | 2 | TIMEOUT |
+| 00064 | random-csp | 31 | SAT_VERIFIED |
+| 00071 | pythagorean-triples | 1,683 | TIMEOUT |
+| 00074 | fixed-shape-random | 334 | TIMEOUT |
+
+### Separate repaired validation
+
 The repair at source `cb14031d4187c4cba5cccb37984ecf59d59bfdae` records variable
 occurrence independently of floating-point priority. The regression fails on the
 original engine and passes with the repair; all 21 native tests pass locally with
 external DRAT checking. The [separate validation plan](native_validation_plan_20261021.json)
-freezes a native-only rerun of all 96 formulas after the original 768-cell
-baseline finishes. A repaired timeout is still unresolved, and a later successful
-solve cannot erase a baseline failure. No cross-run speedup or new eight-entry
-ranking is claimed. The earlier heap optimization plan remains suspended and
-ran zero ablation cells.
+froze a native-only rerun of all 96 formulas after the original 768-cell baseline.
+It started at 18:45:37 UTC and finished at 18:54:07 UTC with exit code zero.
+The result is **7 SAT_VERIFIED, 2 UNSAT_VERIFIED and 87 TIMEOUT**. There are no
+recorded invalid answers, checker failures, resource failures or admission
+failures. The original six verified SAT and two verified UNSAT answers retain
+their verdicts; one formerly invalid case now has a verified SAT answer and the
+other nine remain unresolved. All 78 original native timeouts remain timeouts.
 
-### Prospective repaired-source heap experiment
+The [repaired physical-file manifest](repaired_evidence_manifest_20261021.json)
+has SHA-256
+`0ac536b565d759164e7462e5e6c614fc9b293475525ff57eee51e0893ec00408`.
+Fresh post-run checks accepted all seven models and both proofs. The separate
+verification manifest, including all 96 status transitions and every fresh log,
+is `2f36665a698a59c49fe54176b0382462c726e053a8a087c8a0ff9a4ff07a4ab4`.
+The measured native library is
+`89ad45c8af2c4aaa7416eadbdd9b9c1f63e11547d465f0774ead97eaec28572f`.
+
+A timeout supplies no corrected answer or long-search correctness result. This
+separate one-entry run does not supply a new eight-entry ranking or paired
+speedup. The earlier v1 heap optimization plan remains suspended with zero
+ablation cells; its replacement v2 plan and outcome are separate below.
+
+### Completed repaired-source heap experiment
 
 The [v2 plan](heap_ablation_plan_20261021.json),
 [unchanged 32-formula subset](heap_ablation_inventory_20261021.json), and
-[preparation receipt](heap_ablation_freeze_20261021.json) are published before any
+[preparation receipt](heap_ablation_freeze_20261021.json) were published before any
 candidate build or A/B execution. The subset was selected from structural
 metadata before observing outcomes; it is not chosen from successful solves.
 The plan SHA-256 is
@@ -196,10 +293,10 @@ the controller SHA-256 is
 `f6d3e8954e00e2f835f828a60721b21b77fd848434862ccecea2929977b5318e`.
 The original plan and all preparation revisions remain retained.
 
-Execution requires the complete original 768-cell baseline and the separate
+Execution required the complete original 768-cell baseline and the separate
 96-case repaired validation, each bound to an independently retained final
 manifest hash. Every returned repaired answer must pass its checker; timeouts
-and unknowns remain unresolved. Only then may the controller build both arms
+and unknowns remain unresolved. After those checks, the controller built both arms
 from repaired source `cb14031d4187c4cba5cccb37984ecf59d59bfdae`. The sole candidate
 change avoids queuing an activity bump for an already assigned variable.
 
@@ -214,6 +311,36 @@ result is retained. A missing criterion yields `NOT_ESTABLISHED`; thresholds
 will not be relaxed after results. Passing permits review, not automatic merging
 or a full-field, hidden-set, independent-replication or 100/100 claim.
 
+The run started at 19:27:16 UTC and finished at 19:38:17 UTC on 2026-10-21.
+All **256 cells** and all four complete 64-cell campaign grids are retained.
+The frozen conclusion is **`NOT_ESTABLISHED`**, and the heap change is not
+incorporated into the production engine. The fixed-budget comparison has
+22 exact returned pairs and ten pairs where both arms timed out. Two timeouts
+do not establish identical search traces. Each endpoint repeat has one exact
+completed SAT pair and 31 pairs where both arms timed out; the common completed
+population is one case, below the required eight. Original native work on that
+population is also below the required one second in every repeat.
+
+No completed trace conflicts, invalid answers, resource failures, checker
+failures, admission failures or artifact drift were recorded. Overall PAR-2
+did not regress in any endpoint repeat, but that does not overcome the unmet
+coverage and work criteria. Conditional phase totals from the 22 returned
+fixed-budget pairs remain diagnostic only. They include approximately 3.18
+seconds of original Python packing wall time and 0.56 seconds of original
+native ABI wall time; these measurements motivate a separate packing study,
+not a relaxed interpretation of this experiment.
+
+The complete experiment manifest is
+`e01dc39bc5657520173fa30aca965a0348d9928a6e628634c70fb1def8759239`,
+and its frozen report is
+`cfc8ebd164a06c2b5658f4073cc5080871e0e1c14ae341129972c41f3e130681`.
+The [combined results receipt](exposed_results_20261021.json) binds the baseline,
+all fresh checks, the separate scoring derivation, repaired validation and this
+experiment to their original manifests. Its SHA-256 is
+`0b2b7dcd795a01461005950c16c87c3fd2956d6932cf30e77eddebfaef47b85b`.
+Raw preservation is separate from this receipt: these local checks do not
+establish a permanent public release or independent replication.
+
 ### Scoring and verification repairs
 
 The current runner records `declared-inventory-v2` for new campaigns. It keeps the
@@ -222,6 +349,19 @@ metadata while requiring adjudication before ranking, and distinguishes the
 pinned checkers' exact allocation failures from invalid proofs. These corrections
 do not modify the frozen baseline source or its raw records. The historical
 official-score replay retains its original default behavior.
+
+For the completed original campaign, the explicit derivation policy is
+`declared-v2-preserve-original-global-dq-v1`. The original legacy summary has
+39 SAT, 42 UNSAT and 15 unknown cases because three declared-unknown formulas
+received verified UNSAT answers. The separate derivation restores the declared
+39/39/18 strata and retains those five verified solver answers in overall scoring.
+Satsuma has 12 verified answers in the declared-UNSAT stratum and three UNSAT
+answers on unknown cases; HyPre has ten and two respectively. No metadata
+conflicts were found. There were no `INVALID_PROOF` cells, so **zero cell
+classifications change**. Original cells, score CSV and summaries are retained
+byte for byte; all original global disqualifications remain in force.
+The derivation manifest is
+`32c29f82e589c11f82efccf2aa1d868c073e12cc69699fd714b4e58acf32fd52`.
 
 A separate offline verifier checks file and decoded-content hashes, private input
 integrity, complete cells, process/checker receipts, and recomputed rankings. It

@@ -5,12 +5,16 @@
 
 **Current correctness status (2026-10-21):** the frozen campaign at source
 [1f6a913](https://github.com/tugrapaydiner/SPECTRA/commit/1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5)
-produced two independently confirmed invalid SAT models from standalone
-SPECTRA-G. That entry is disqualified and fails G0. The
+completed all 768 cells and produced ten invalid SAT models from standalone
+SPECTRA-G. That source remains disqualified and fails G0. The
 [retained failure record](EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
-identifies the cases and evidence. Performance tuning is paused while correctness
-is investigated. A repair must be validated under a new source identity; it does
-not replace the failed baseline or establish a leadership label.
+identifies the cases and evidence. The occurrence-tracking repair at
+`cb14031d4187c4cba5cccb37984ecf59d59bfdae` completed its separate 96-case
+validation with seven checked SAT answers, two checked UNSAT proofs and 87
+timeouts. Nine originally invalid cases remain unresolved. Any performance
+experiment uses its own frozen plan and acceptance criteria; neither bounded
+repair validation nor an optimization replaces the failed baseline or
+establishes a leadership label.
 
 The objective of this phase is to earn the broadest technically defensible solver
 leadership claim. It is not permission to relabel the existing binary-list exact

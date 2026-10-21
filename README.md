@@ -208,10 +208,14 @@ general SAT or colouring-superiority claim.
 
 **Correctness gate failed for the frozen native baseline.** The campaign at
 source [1f6a913](https://github.com/tugrapaydiner/SPECTRA/commit/1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5)
-recorded [two independently confirmed invalid SAT models](experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
-from standalone SPECTRA-G. That entry is disqualified, and performance tuning is
-paused. Any later repair requires validation under its own source identity; it
-cannot change this baseline result or establish a leadership claim.
+completed all 768 measurements and recorded
+[ten invalid SAT models](experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
+from standalone SPECTRA-G. That source remains disqualified. The separately
+identified occurrence-tracking repair completed the same 96 formulas with seven
+checked SAT answers, two checked UNSAT proofs and 87 timeouts. Nine of the ten
+formerly invalid cases still time out. This bounded repair validation does not
+resolve those cases, replace the original result or establish general-CNF
+leadership.
 
 Standalone native **SPECTRA-G** and the **SPECTRA-assisted portfolio** are separate
 experimental entries. The native CDCL engine, checked SAT models, UNSAT proof

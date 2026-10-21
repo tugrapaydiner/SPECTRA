@@ -5,9 +5,10 @@
 > in draft PR #76. The historic scores below have not been promoted. The latest
 > engineering and measured evidence is tracked in
 > [the exposed campaign report](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md).
-> The frozen native baseline has produced independently confirmed invalid SAT
-> models. Its correctness gate is failed; the repair and validation are tracked
-> separately from the unchanged baseline evidence.
+> The complete frozen native baseline retains ten invalid SAT models and fails
+> its correctness gate. The separate repaired 96-case run returned seven checked
+> SAT answers, two checked UNSAT proofs and 87 timeouts; nine originally invalid
+> cases remain unresolved. The original failed evidence is unchanged.
 > Neither a hidden win nor independent replication has been established.
 
 **Document type:** living research and engineering roadmap
@@ -690,7 +691,7 @@ A competition victory can establish track leadership. A full project-level 100/1
 
 | Gate | Requirement | Current state |
 |---|---|---|
-| G0 | Correct SAT models and accepted UNSAT proofs | **Failed for the frozen native baseline: invalid models retained; repair under validation** |
+| G0 | Correct SAT models and accepted UNSAT proofs | **Failed for the frozen native baseline: ten invalid models retained. Separate repaired panel: nine checked answers, 87 unresolved cases** |
 | G1 | General arbitrary-CNF input contract | **Mostly passed** |
 | G2 | First place under official-style scoring | **Not passed** |
 | G3 | Portability and robustness | **Passed internally** |
@@ -713,9 +714,10 @@ A competition victory can establish track leadership. A full project-level 100/1
 
 The supplied audit's `GENERAL_FRONTEND_READY` label describes its previous
 frontend evidence. It does not certify standalone native SPECTRA-G. The current
-standalone engine is undergoing correctness repair after the exposed campaign
-found invalid SAT models. The project is not a `DEVELOPMENT_LEADER` on general
-CNF, and no competitive or 100/100 claim is accepted.
+standalone engine has a separately measured occurrence-tracking repair after the
+exposed campaign found invalid SAT models. The bounded repaired panel leaves 87
+cases unresolved, including nine originally invalid cases. The project is not a
+`DEVELOPMENT_LEADER` on general CNF, and no competitive or 100/100 claim is accepted.
 
 ---
 
