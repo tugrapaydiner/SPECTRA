@@ -26,22 +26,39 @@ python -m pip install build
 python -m build --outdir .release-check/dist
 python scripts/check_current_installation.py \
   --dist .release-check/dist --out .release-check/install
-
-The concise current-build form is:
-
-```bash
-python scripts/check_current_installation.py --dist dist/current --out install-check
-```
 .release-check/install/venv/bin/python -I scripts/check_exact_installation.py \
   --out .release-check/install/exact.json
 .release-check/install/venv/bin/python -I scripts/check_exam_repair_installation.py \
   --out .release-check/install/exam-repair.json
 ```
 
+The concise current-build form is:
+
+```bash
+python scripts/check_current_installation.py --dist dist/current --out install-check
+```
+
 The canonical fast CPU matrix runs on Python 3.11 and 3.13. It executes the active
 test suite, native builds, the optimizer/energy smoke test, release checks, and the
 active-tree budget. It no longer replays multi-megabyte historical archives on every
 pull request.
+
+### Permanent workflow dependencies
+
+All eight permanent workflows pin external Actions to full immutable commit SHAs.
+The official major-version refs were verified through GitHub's `git/ref/tags`
+API on 2026-10-21:
+
+| Action | Verified major ref | Pinned source |
+|---|---|---|
+| `actions/checkout` | `v4` | [`11d5960a326750d5838078e36cf38b85af677262`](https://github.com/actions/checkout/commit/11d5960a326750d5838078e36cf38b85af677262) |
+| `actions/setup-python` | `v5` | [`a26af69be951a213d495a4c3e4e4022e16d87065`](https://github.com/actions/setup-python/commit/a26af69be951a213d495a4c3e4e4022e16d87065) |
+| `actions/upload-artifact` | `v4` | [`ea165f8d65b6e75b540449e92b4886f43607fa02`](https://github.com/actions/upload-artifact/commit/ea165f8d65b6e75b540449e92b4886f43607fa02) |
+| `actions/download-artifact` | `v4` | [`d3f86a106a0bac45b974a628896c90dbdf5c8093`](https://github.com/actions/download-artifact/commit/d3f86a106a0bac45b974a628896c90dbdf5c8093) |
+
+The active-tree audit rejects mutable action refs. Updating a pin requires an
+explicit source review; a later movement of a major-version tag does not change
+the workflow's code. Local actions inherit the checked-out source identity.
 
 ## Exact-query development
 

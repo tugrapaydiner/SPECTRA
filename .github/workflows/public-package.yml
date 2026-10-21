@@ -23,11 +23,11 @@ jobs:
       OPENBLAS_NUM_THREADS: '1'
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 1
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ matrix.python }}
       - name: Record exact source identity
@@ -87,7 +87,7 @@ jobs:
                  for p in sorted(root.rglob('*')) if p.is_file() and p.name!='SHA256.json'}
           (root/'SHA256.json').write_text(json.dumps(files,indent=2,sort_keys=True)+'\n')
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: public-package-${{ matrix.python }}-${{ github.run_id }}

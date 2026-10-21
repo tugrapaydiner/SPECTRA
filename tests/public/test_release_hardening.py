@@ -28,6 +28,34 @@ def module(name):
 
 wheel_check = module('check_current_installation')
 readiness = module('check_release_readiness')
+active_tree = module('check_active_tree')
+
+
+@pytest.mark.parametrize('reference', [
+    'actions/checkout@v4', 'actions/setup-python@main',
+    'actions/upload-artifact@ea165f8', 'docker://ubuntu:latest',
+    '${{ inputs.action }}', './tools/../../outside',
+])
+def test_mutable_or_escaping_workflow_action_is_rejected(reference):
+    with pytest.raises(ValueError):
+        active_tree._action_references(f'      - uses: {reference}\n', 'workflow.yml')
+
+
+@pytest.mark.parametrize('reference', [
+    'actions/checkout@' + 'a' * 40,
+    'owner/repo/.github/workflows/reuse.yml@' + 'b' * 40,
+    'docker://example/image@sha256:' + 'c' * 64,
+    './.github/actions/local',
+])
+def test_immutable_and_source_local_actions_are_accepted(reference):
+    text = f'      - uses: "{reference}" # pinned source\n'
+    assert active_tree._action_references(text, 'workflow.yml') == [reference]
+
+
+def test_current_workflow_actions_are_immutable():
+    report = active_tree.check(ROOT)
+    assert report['action_steps_checked'] > 0
+    assert len(report['active_workflows']) == 8
 
 
 @pytest.mark.parametrize('raw', [
