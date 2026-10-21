@@ -1,0 +1,375 @@
+{
+  "complete_roadmap_field_verified": false,
+  "drat_checker": {
+    "build_commands": [
+      "make -j2"
+    ],
+    "path": "/workspace/scratch/6f0d5187396f/spectra-campaign/drat-trim/drat-trim",
+    "sha256": "f8d971dc5956a73fa37e655a44ba8f6d128976acfedff7129f2ed251b234af1a",
+    "source_commit": "2e3b2dc0ecf938addbd779d42877b6ed69d9a985",
+    "source_url": "https://github.com/marijnheule/drat-trim"
+  },
+  "evidence_class": "EXPOSED_DEVELOPMENT",
+  "frozen_before_execution": true,
+  "limits": {
+    "checker_timeout_seconds": 30,
+    "dimacs_mib": 64,
+    "memory_mib_per_process": 4096,
+    "output_mib_per_file": 64,
+    "timeout_seconds": 5
+  },
+  "missing_roadmap_entries": [
+    "Lymphosat",
+    "kissat-sc2024",
+    "full official 2026 Main field including Satsuma-iter+AE-Kissat-MAB"
+  ],
+  "schema": "spectra.general_solver_field.v1",
+  "scope": "Shared-host short-limit exposed baseline; not hidden, official or independent.",
+  "selection_sha256": "dad14ec29395eab1f67ceddfc8bbc023ee9341e6c33ec01ea3daf44be96b9f5e",
+  "solvers": [
+    {
+      "artifact_paths": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/native-before/spectra_g_cdcl.so",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/native-before/build.json"
+      ],
+      "command": [
+        "/workspace/scratch/6f0d5187396f/.spectra-venv/bin/python",
+        "-m",
+        "experiments.general_competition.campaign",
+        "native",
+        "--library",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/native-before/spectra_g_cdcl.so",
+        "--cnf",
+        "{cnf}",
+        "--proof",
+        "{proof}",
+        "--stats",
+        "{stats}"
+      ],
+      "expected_artifact_sha256": {
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/native-before/build.json": "5b4723f7c54411930a24451e2f2f63dc0bdb1d99697443809dfe5a62bdef14f4",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/native-before/spectra_g_cdcl.so": "5d0ba93527696d5518fe632405c81c6652dd0c8cfec9af5d8f4d5eb78d810800"
+      },
+      "id": "SPECTRA-G",
+      "native_build": {
+        "command": [
+          "/usr/bin/g++",
+          "-std=c++17",
+          "-shared",
+          "-fPIC",
+          "-fvisibility=hidden",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-fno-fast-math",
+          "-ffp-contract=off",
+          "-O3",
+          "-DNDEBUG",
+          "/workspace/scratch/6f0d5187396f/SPECTRA/experiments/general_competition/native_cdcl.cpp",
+          "-o",
+          "/workspace/scratch/6f0d5187396f/spectra-campaign/native-before/spectra_g_cdcl.so"
+        ],
+        "compiler": "/usr/bin/g++",
+        "compiler_version": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "elapsed_ns": 2772513641,
+        "library": "spectra_g_cdcl.so",
+        "library_sha256": "5d0ba93527696d5518fe632405c81c6652dd0c8cfec9af5d8f4d5eb78d810800",
+        "machine": "x86_64",
+        "platform": "Linux-6.18.55-x86_64-with-glibc2.39",
+        "sanitizer": "none",
+        "schema": "spectra.general_native_cdcl_build.v1",
+        "source": "native_cdcl.cpp",
+        "source_sha256": "89b6fc42281c856310e79770cc551e4db57038534adfbf10bd1de4504949167f",
+        "stderr": "",
+        "stdout": ""
+      },
+      "proof_format": "DRUP",
+      "source_commit": "904629a1acfbdca964f8355a7e74b182007eb6e5",
+      "source_url": "https://github.com/tugrapaydiner/SPECTRA",
+      "track": "standalone-native",
+      "upstream_engines": []
+    },
+    {
+      "artifact_paths": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/cadical/build/cadical"
+      ],
+      "build_commands": [
+        "./configure",
+        "make -j3"
+      ],
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/cadical/build/cadical",
+        "{cnf}",
+        "{proof}"
+      ],
+      "expected_artifact_sha256": {
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/cadical/build/cadical": "d3ffd6c0a13ee8081f7d4be4e9e4f919503b1740ec1010472132fbb7080c00b9"
+      },
+      "id": "CaDiCaL",
+      "proof_format": "DRAT",
+      "source_commit": "c60730422e758ef1cebe7aeddf2dda31c996bf04",
+      "source_url": "https://github.com/arminbiere/cadical",
+      "track": "upstream-baseline",
+      "upstream_engines": [
+        "CaDiCaL"
+      ]
+    },
+    {
+      "artifact_paths": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/kissat/build/kissat"
+      ],
+      "build_commands": [
+        "./configure",
+        "make -j3"
+      ],
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/kissat/build/kissat",
+        "{cnf}",
+        "{proof}"
+      ],
+      "expected_artifact_sha256": {
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/kissat/build/kissat": "334334c2ee917c7a0e5b48d3430c7d3fb25f8b2237577a3ad2f4c826cb9d9033"
+      },
+      "id": "Kissat",
+      "proof_format": "DRAT",
+      "source_commit": "8af8e56f174b778aef3aa45af9f739b2a5f492c2",
+      "source_url": "https://github.com/arminbiere/kissat",
+      "track": "upstream-baseline",
+      "upstream_engines": [
+        "Kissat"
+      ]
+    },
+    {
+      "artifact_paths": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/glucose/simp/glucose"
+      ],
+      "build_commands": [
+        "make -C simp -j2"
+      ],
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/glucose/simp/glucose",
+        "-certified",
+        "-certified-output={proof}",
+        "-model",
+        "{cnf}"
+      ],
+      "expected_artifact_sha256": {
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/glucose/simp/glucose": "e53b4789608825dedc502208ea05b98cf584771eed089283658d19fd2eeebecf"
+      },
+      "id": "Glucose-4.2.1",
+      "proof_format": "DRAT",
+      "source_commit": "fbf47723e7f2f03847bef3418e9a3df90dacc34b",
+      "source_url": "https://github.com/audemard/glucose",
+      "track": "upstream-baseline",
+      "upstream_engines": [
+        "Glucose-4.2.1"
+      ]
+    },
+    {
+      "artifact_paths": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build/kissat",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/AE_kissat2025_MAB/run.sh"
+      ],
+      "build_commands": [
+        "bash build.sh"
+      ],
+      "build_log": {
+        "path": "build-ae2025.log",
+        "sha256": "2ec965acd2cbb4b7823176d703658efb5f7fc7bec89de08735925d2117d0d32a"
+      },
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build/kissat",
+        "{cnf}",
+        "{proof}"
+      ],
+      "expected_artifact_sha256": {
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build.sh": "ac03ad70a876966023d0e740c7be9c799df6869d8c60c76f16c2792511787ada",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build/kissat": "0dd0a1494a03f40b4a787bd5af03c517ca90dbd54591400c03ddc6c28c791780",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/AE_kissat2025_MAB/run.sh": "a50f2a2fb33dd185181513d198d23bff0d0a80fa4951caa5db5dd418379251fe"
+      },
+      "id": "AE_kissat2025_MAB",
+      "proof_format": "DRAT",
+      "source_archive_sha256": "069cc73be6ca20e2d1f22cf63dec858026deab041bf3b98bfa20c6676697013c",
+      "source_url": "https://satcompetition.github.io/2025/downloads/solvers/main/AE_kissat2025_MAB.tar.xz",
+      "track": "upstream-baseline",
+      "upstream_engines": [
+        "AE_kissat2025_MAB"
+      ]
+    },
+    {
+      "artifact_paths": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build/kissat",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/run-parsl.sh"
+      ],
+      "build_commands": [
+        "bash build.sh"
+      ],
+      "build_log": {
+        "path": "build-eda.log",
+        "sha256": "e99c6e1dfa2f63ec181a8254d801a885afd28ea3439e5cfd9a66c49ff607231f"
+      },
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build/kissat",
+        "--quiet",
+        "{cnf}",
+        "{proof}"
+      ],
+      "expected_artifact_sha256": {
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build.sh": "0d8e3f4a70cab7538e1bd9dac9d66215009f31cda87303743778309a8842ba7c",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build/kissat": "59d6a03c7068f702fa6e3c94be0d8976be20a188a332e8a9258d953bf6a1190c",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/run-parsl.sh": "9294a0ba423a8af821a0033f0b5b5c7e790bafb89be29b91b5d0c9424d12ccb0"
+      },
+      "id": "EDA-Kissat-v2",
+      "proof_format": "DRAT",
+      "source_archive_sha256": "53a73890c4094bb9da680e7d6676effd9058cbbd212c32d60cd0d91458645c7c",
+      "source_url": "https://satcompetition.github.io/2026/downloads/solvers/yalun.tar.xz",
+      "track": "upstream-baseline",
+      "upstream_engines": [
+        "EDA-Kissat-v2"
+      ]
+    },
+    {
+      "artifact_paths": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/satsuma",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/kissat",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/ae_kissat_mab",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/kissat/build/kissat",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/AE_kissat2025_MAB/build/kissat",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/satsuma",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/dsr-trim",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/lsr-check",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/compress",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/build.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/check_sat.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/docker.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/original-run.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_base.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_satsuma_ae_kissat.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_satsuma_kissat.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/test.sh"
+      ],
+      "build_notes": [
+        "Parent ran official build.sh and forced fresh rebuilds of Satsuma and dsr-trim to avoid stale archived build products.",
+        "Copied freshly rebuilt solver/satsuma-dev/satsuma to the official src/satsuma location, matching original build.sh.",
+        "Original competition configuration and wrapper retained.",
+        "Absolute archived generated makefile symlinks were skipped during safe extraction; configure regenerated local build links."
+      ],
+      "command": [
+        "/usr/bin/bash",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh",
+        "{cnf}",
+        "{proof}"
+      ],
+      "expected_artifact_sha256": {
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/ae_kissat_mab": "9d238636efeb53de3159bf876891bd0d18f55a9723ad712e7ea9cc4153d453b8",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/build.sh": "eedbadab70094101c1b82996c56a184b31e968561a0e1c4bb784dfad641a1521",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/check_sat.sh": "9aae984d6f54fb90479faaa5266dbdac34141b53a2952089e42d254eae70c91e",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/docker.sh": "038fa0cec4d9956d50200dac97285df1f952a980bbbee470aa7c31c548359eb1",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/compress": "ce4fdb7cc05a492016eabda053cd37796449dd3c3b14dd1881c3d80708f3d501",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/dsr-trim": "195b23f991a1d282804ceda0fb74685017f15f74d113cfb6ce5914a28660f56d",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/lsr-check": "41ed75e03de54a3bf7f716075c9da25d00aec18a7b85b4bae6871bfce9f0ab31",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/kissat": "0dbb90026e34aa787692f12d41d8fe358f1e21056d95f093b92b6d6fa6883b14",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/original-run.sh": "a90f66bc27f4f2b8ab08d4d0c06768bf79991b7b4ee4ddd56c1482507149d30e",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh": "0ed15b3bc2347843fb985da170b47d3bb4caad9d412acda1fa955942af29ea5f",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run.sh": "7f1f22f4d7cf395a7a2a4511e99c7d09e9d8c83a3a011ed713f47c2d9891388e",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_base.sh": "53faad9fbdf653df88ba58d36625553fe042936bc9eabcd1b62a99f90712d4da",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_satsuma_ae_kissat.sh": "c4915ee163f1a1304f819659b161b649ab8111d3b3a091ca8770702062514302",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_satsuma_kissat.sh": "a90f66bc27f4f2b8ab08d4d0c06768bf79991b7b4ee4ddd56c1482507149d30e",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/satsuma": "2588c934cc7acbe92ad2ab13976263b90207b8a1dd7100785f33da38045e937b",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/AE_kissat2025_MAB/build/kissat": "9d238636efeb53de3159bf876891bd0d18f55a9723ad712e7ea9cc4153d453b8",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/kissat/build/kissat": "0dbb90026e34aa787692f12d41d8fe358f1e21056d95f093b92b6d6fa6883b14",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/satsuma": "2588c934cc7acbe92ad2ab13976263b90207b8a1dd7100785f33da38045e937b",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/test.sh": "b1770f26eaaf2339794b16c0a3f7a0c6ba9f1fd93e6138cdd88805380e03245f"
+      },
+      "id": "satsuma-iter+kissat",
+      "proof_checker": {
+        "accepted_exit_codes": [
+          0
+        ],
+        "command": [
+          "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/dsr-trim",
+          "{cnf}",
+          "{proof}",
+          "{proof}.lsr"
+        ],
+        "success_line": "s VERIFIED UNSAT"
+      },
+      "proof_format": "DSR",
+      "source_archive_sha256": "1951097402831eaaa9cdd6b670a09b9e9cbe1714e16d48b17d420e3b40816623",
+      "source_url": "https://satcompetition.github.io/2026/downloads/solvers/anders.tar.xz",
+      "track": "upstream-baseline",
+      "upstream_engines": [
+        "Satsuma-iter",
+        "bundled Kissat"
+      ]
+    },
+    {
+      "accepted_exit_codes": {
+        "SAT": [
+          0,
+          10
+        ],
+        "UNSAT": [
+          0,
+          20
+        ]
+      },
+      "artifact_paths": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build/kissat",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/satsuma",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/run-parsl.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build.sh",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/veripb-bundled/veripb"
+      ],
+      "build_notes": [
+        "Initial original build retained archived Satsuma executable because make considered it current; forced rebuild then compiled all sources with original flags.",
+        "The absolute generated src/src/makefile archive symlink was excluded during safe extraction; configure regenerated it inside the scratch checkout.",
+        "Original compiler format warning in Satsuma/parser.h:805 retained in hypre-forced-build.log; no source edited.",
+        "Official run-parsl.sh does not propagate the SAT/UNSAT code, returning 0 after final cleanup. Permit 0 only for this solver with checked status and evidence.",
+        "Contradictory-unit UNSAT smoke produced a proof rejected by VeriPB3.0.2; retain as INVALID_PROOF. No competitor core or proof patch."
+      ],
+      "checker_provenance": "Bundled prebuilt VeriPB3.0.2 from official SAT Competition2026 Lymphosat submission green.tar.xz; not rebuilt from source.",
+      "command": [
+        "/usr/bin/bash",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/run-parsl.sh",
+        "{cnf}",
+        "{proof}"
+      ],
+      "expected_artifact_sha256": {
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/satsuma": "04441e149630e72b19336d1b4bd88eb075f10bc26b22eb6e5672bb3fa55c9840",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build.sh": "17d53817214de008f197be8ea2a7b310c216da18f1ee4e4d30e914c2fa7788ea",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build/kissat": "59307acd660779eaa8ae6ca5a22cadf00e9b1b92df7773de563c142fdee35223",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/run-parsl.sh": "c197ff3da506f0ce5b9ad9510feafb029abb79cc9e394b92c1e5a9dd71015e2a",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/veripb-bundled/veripb": "2e5fa5ef07c655640e6fff0d3f41561eab1502ec2e48766cca60287625935674"
+      },
+      "id": "Kissat-MAB-HyPre",
+      "proof_checker": {
+        "accepted_exit_codes": [
+          0
+        ],
+        "command": [
+          "/workspace/scratch/6f0d5187396f/spectra-campaign/veripb-bundled/veripb",
+          "--cnf",
+          "{cnf}",
+          "{proof}"
+        ],
+        "success_line": "s VERIFIED UNSATISFIABLE"
+      },
+      "proof_format": "VeriPB 3.0",
+      "retained_smoke_limitations": [
+        "contradictory-unit UNSAT proof rejected by VeriPB3.0.2"
+      ],
+      "source_archive_sha256": "398d9eb8dce74b4d5d185384b41ffb39580639b068c9ac23eec48cf8f15f42ec",
+      "source_url": "https://satcompetition.github.io/2026/downloads/solvers/zheng.tar.xz",
+      "track": "upstream-baseline",
+      "upstream_engines": [
+        "Kissat-MAB-HyPre",
+        "bundled Satsuma"
+      ]
+    }
+  ]
+}

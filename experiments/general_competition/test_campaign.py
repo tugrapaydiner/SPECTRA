@@ -1,0 +1,407 @@
+"""Adversarial contracts for exposed campaign evidence, not performance claims."""
+from __future__ import annotations
+
+import argparse
+import gzip
+import hashlib
+import json
+import lzma
+import os
+from pathlib import Path
+import shutil
+import sys
+
+import pytest
+
+from .campaign import (
+    _status, check_model, digest, load_inventory, load_solvers,
+    run_campaign, run_process, score_campaign, stage_input,
+)
+
+
+def store(path, value):
+    path.write_text(json.dumps(value), encoding="utf-8")
+    return path
+
+
+def instance(path, ident="i", family="logic", expected="SAT"):
+    return {"id": ident, "family": family, "path": str(path), "sha256": digest(path),
+            "expected": expected, "source_url": "https://example.invalid/test-only"}
+
+
+def solver(ident="baseline", code="print('s SATISFIABLE'); print('v 1 0'); raise SystemExit(10)", **updates):
+    item = {"id": ident, "track": "upstream-baseline", "source_commit": "a" * 40,
+            "upstream_engines": ["test-only-fake-solver"],
+            "command": [sys.executable, "-c", code, "{cnf}", "{proof}"]}
+    item.update(updates)
+    return item
+
+
+def manifests(tmp_path, instances, solvers):
+    return (store(tmp_path / "inventory.json", {"schema": "spectra.general_inventory.v1", "instances": instances}),
+            store(tmp_path / "solvers.json", {"schema": "spectra.general_solver_field.v1", "solvers": solvers}))
+
+
+def arguments(tmp_path, inventory, field, checker=None):
+    return argparse.Namespace(inventory=inventory, solvers=field, out=tmp_path / "evidence",
+                              checker=checker or tmp_path / "missing-checker", timeout=2.0,
+                              checker_timeout=2.0, memory_mib=512, output_mib=16, dimacs_mib=16)
+
+
+def cell(solver_id="a", instance_id="i", family="logic", expected="SAT", status="SAT_VERIFIED", elapsed=1.0):
+    return {"solver_id": solver_id, "instance_id": instance_id, "family": family,
+            "expected": expected, "status": status, "elapsed_seconds": elapsed}
+
+
+@pytest.mark.parametrize("extension,compress", [("cnf", lambda x: x), ("cnf.gz", gzip.compress), ("cnf.xz", lzma.compress)])
+def test_staging_preserves_exact_decompressed_bytes_and_identity(tmp_path, extension, compress):
+    original = b"c original whitespace\np cnf 2 2\n 1  -2 0\n2 0\n"
+    source = tmp_path / ("source." + extension)
+    source.write_bytes(compress(original))
+    target = tmp_path / "input.cnf"
+    stage_input(source, digest(source), target, 1024)
+    assert target.read_bytes() == original
+    receipt = json.loads((tmp_path / "admission.json").read_text())
+    assert receipt["original_source_sha256"] == digest(source)
+    assert receipt["dimacs_sha256"] == hashlib.sha256(original).hexdigest()
+
+
+def test_staging_rejects_mutated_source_and_decompression_overflow(tmp_path):
+    source = tmp_path / "source.gz"
+    source.write_bytes(gzip.compress(b"p cnf 1 1\n1 0\n"))
+    with pytest.raises(ValueError, match="SHA-256"):
+        stage_input(source, "0" * 64, tmp_path / "out", 100)
+    with pytest.raises(MemoryError, match="byte limit"):
+        stage_input(source, digest(source), tmp_path / "out", 4)
+
+
+@pytest.mark.parametrize("witness", ["s SATISFIABLE\nv -1 0\n", "v 1 -1 0\n", "v 2 0\n", "v 1\n", "v 1 0 1\n", "v bogus 0\n"])
+def test_model_checker_rejects_wrong_contradictory_out_of_range_and_malformed(tmp_path, witness):
+    cnf, out = tmp_path / "input.cnf", tmp_path / "stdout.txt"
+    cnf.write_text("p cnf 1 1\n1 0\n")
+    out.write_text(witness)
+    with pytest.raises(ValueError):
+        check_model(cnf, out, tmp_path / "complete.model")
+    assert not (tmp_path / "complete.model").exists()
+
+
+def test_model_checker_independently_completes_absent_variables_and_retains_full_model(tmp_path):
+    cnf, out = tmp_path / "input.cnf", tmp_path / "stdout.txt"
+    cnf.write_text("p cnf 3 2\n1 2 0\n-3 0\n")
+    out.write_text("s SATISFIABLE\nv 1 0\n")
+    check_model(cnf, out, tmp_path / "complete.model")
+    assert "v 1 -2 -3\n" in (tmp_path / "complete.model").read_text()
+
+
+def test_empty_clause_never_accepts_model(tmp_path):
+    cnf, out = tmp_path / "input.cnf", tmp_path / "stdout.txt"
+    cnf.write_text("p cnf 0 1\n0\n")
+    out.write_text("v 0\n")
+    with pytest.raises(ValueError, match="fails original clause"):
+        check_model(cnf, out, tmp_path / "complete.model")
+
+
+def test_manifest_requires_pinned_sources_and_disclosed_track(tmp_path):
+    field = tmp_path / "field.json"
+    good = solver()
+    good.pop("source_commit")
+    store(field, {"schema": "spectra.general_solver_field.v1", "solvers": [good]})
+    with pytest.raises(ValueError, match="source_commit or"):
+        load_solvers(field)
+    good["source_archive_sha256"] = "b" * 64
+    store(field, {"schema": "spectra.general_solver_field.v1", "solvers": [good]})
+    assert load_solvers(field)["solvers"][0]["source_archive_sha256"] == "b" * 64
+    good["track"] = "standalone-native"
+    store(field, {"schema": "spectra.general_solver_field.v1", "solvers": [good]})
+    with pytest.raises(ValueError, match="must not include upstream"):
+        load_solvers(field)
+
+
+def test_manifest_duplicate_ids_cannot_silently_replace_cells(tmp_path):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 0 0\n")
+    path, _ = manifests(tmp_path, [instance(cnf), instance(cnf)], [solver()])
+    with pytest.raises(ValueError, match="duplicate"):
+        load_inventory(path)
+
+
+def test_score_rejects_missing_extra_and_duplicate_declared_cells():
+    inventory = {"instances": [{"id": "i", "family": "logic"}]}
+    field = {"solvers": [{"id": "a"}, {"id": "b"}]}
+    for cells in ([cell()], [cell(), cell()], [cell(), cell("b"), cell("c")]):
+        with pytest.raises(ValueError, match="missing declared cells"):
+            score_campaign(cells, inventory, field, 10)
+
+
+def test_score_penalizes_invalid_answers_and_retains_subtrack_and_family_losses():
+    inventory = {"instances": [{"id": "sat", "family": "easy"}, {"id": "unsat", "family": "hard"}]}
+    field = {"solvers": [{"id": "a"}, {"id": "b"}]}
+    cells = [cell("a", "sat", "easy", "SAT", "SAT_VERIFIED", 1),
+             cell("a", "unsat", "hard", "UNSAT", "INVALID_PROOF", 0.1),
+             cell("b", "sat", "easy", "SAT", "TIMEOUT", 10),
+             cell("b", "unsat", "hard", "UNSAT", "UNSAT_VERIFIED", 2)]
+    result = score_campaign(cells, inventory, field, 10)
+    a = next(row for row in result["standings"] if row["solver_id"] == "a")
+    assert a["disqualified"] and a["solved"] == 1 and a["unsat_par2"] == "20"
+    assert result["standings"][0]["solver_id"] == "b"
+    assert set(result["families"]) == {"easy", "hard"}
+    assert result["resource_summary"]["a"]["statuses"]["INVALID_PROOF"] == 1
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process limits")
+def test_timeout_and_spawn_failure_keep_raw_streams_and_process_receipts(tmp_path):
+    result = run_process([sys.executable, "-c", "import time; print('started', flush=True); time.sleep(5)"],
+                         tmp_path / "timeout", timeout=0.2, memory_mib=128, output_mib=1)
+    assert result["timed_out"] and result["returncode"] < 0
+    assert "started" in (tmp_path / "timeout" / "stdout.txt").read_text()
+    assert (tmp_path / "timeout" / "process.json").is_file()
+    assert result["peak_rss_kib"] > 0
+    result = run_process([str(tmp_path / "no-executable")], tmp_path / "missing", timeout=1, memory_mib=128, output_mib=1)
+    assert result["spawn_error"] and (tmp_path / "missing" / "stderr.txt").exists()
+
+
+def test_answer_cannot_outrun_timeout_or_wrong_exit_code():
+    process = {"timed_out": False, "elapsed_seconds": 1.5, "spawn_error": None, "returncode": 10}
+    assert _status(process, "SAT", 1) == "TIMEOUT"
+    process["elapsed_seconds"] = 0.1
+    assert _status(process, "SAT", 1) == "SAT"
+    process["returncode"] = 20
+    assert _status(process, "SAT", 1) == "INVALID_OUTPUT"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_campaign_retains_checked_sat_invalid_model_unknown_and_admission_failure(tmp_path):
+    cnf, missing = tmp_path / "input.cnf", tmp_path / "missing.cnf"
+    cnf.write_text("p cnf 1 1\n1 0\n")
+    missing_entry = instance(cnf, "missing")
+    missing_entry["path"] = str(missing)
+    inventory, field = manifests(tmp_path, [instance(cnf), missing_entry], [
+        solver("valid"), solver("invalid", "print('s SATISFIABLE'); print('v -1 0'); raise SystemExit(10)"),
+        solver("unknown", "print('s UNKNOWN')")])
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert result["instance_count"] == 2 and result["solver_count"] == 3
+    assert result["complete_roadmap_field_verified"] is False
+    assert result["evidence_class"] == "EXPOSED_DEVELOPMENT"
+    cells = [json.loads(line) for line in (tmp_path / "evidence" / "cells.jsonl").read_text().splitlines()]
+    assert len(cells) == 6
+    assert CounterFor(cells) == {"SAT_VERIFIED": 1, "INVALID_MODEL": 1, "UNKNOWN": 1, "ADMISSION_FAILURE": 3}
+    hashes = json.loads((tmp_path / "evidence" / "evidence-sha256.json").read_text())
+    for filename, expected in hashes.items():
+        assert digest(tmp_path / "evidence" / filename) == expected
+    with pytest.raises(FileExistsError):
+        run_campaign(arguments(tmp_path, inventory, field))
+
+
+def CounterFor(cells):
+    from collections import Counter
+    return dict(Counter(row["status"] for row in cells))
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.parametrize("kind,expected", [("unsupported", "UNAVAILABLE_CHECKER"),
+    ("reject", "INVALID_PROOF"), ("wrong-exit", "INVALID_PROOF"),
+    ("misleading-token", "INVALID_PROOF"), ("accepted", "UNSAT_VERIFIED")])
+def test_proof_status_requires_supported_checker_exact_token_and_exit_code(tmp_path, kind, expected):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 2\n1 0\n-1 0\n")
+    code = "import pathlib,sys; pathlib.Path(sys.argv[2]).write_text('0\\n'); print('s UNSATISFIABLE'); raise SystemExit(20)"
+    checker_code = {"reject": "print('s NOT VERIFIED'); raise SystemExit(1)",
+                    "wrong-exit": "print('s VERIFIED'); raise SystemExit(1)",
+                    "misleading-token": "print('warning: s VERIFIED is absent')",
+                    "accepted": "print('s VERIFIED')"}.get(kind, "print('s VERIFIED')")
+    entry = solver("proof", code, proof_format="DSR" if kind == "unsupported" else "DRAT")
+    if kind != "unsupported":
+        entry["proof_checker"] = {"command": [sys.executable, "-c", checker_code, "{cnf}", "{proof}"], "success_line": "s VERIFIED"}
+    inventory, field = manifests(tmp_path, [instance(cnf, expected="UNSAT")], [entry])
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert result["resource_summary"]["proof"]["statuses"] == {expected: 1}
+    assert result["standings"][0]["disqualified"] == (expected == "INVALID_PROOF")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_missing_checker_does_not_falsely_disqualify_valid_proof(tmp_path):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 2\n1 0\n-1 0\n")
+    code = "import pathlib,sys; pathlib.Path(sys.argv[2]).write_text('0\\n'); print('s UNSATISFIABLE'); raise SystemExit(20)"
+    inventory, field = manifests(tmp_path, [instance(cnf, expected="UNSAT")], [solver("proof", code)])
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert result["resource_summary"]["proof"]["statuses"] == {"CHECKER_RESOURCE_FAILURE": 1}
+    assert not result["standings"][0]["disqualified"]
+
+
+@pytest.mark.skipif(os.name != "posix" or shutil.which("g++") is None, reason="native build")
+def test_native_worker_emits_independently_checkable_complete_model_and_budget_unknown(tmp_path):
+    from .native_cdcl import build_native_cdcl
+    library = build_native_cdcl(tmp_path / "build")
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 3 2\n1 2 3 0\n-1 2 0\n")
+    command = [sys.executable, "-m", "experiments.general_competition.campaign", "native",
+               "--library", str(library), "--cnf", "{cnf}", "--proof", "{proof}", "--stats", "{stats}"]
+    native = solver("native", command=command, track="standalone-native", upstream_engines=[], artifact_paths=[str(library)])
+    inventory, field = manifests(tmp_path, [instance(cnf)], [native])
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert result["resource_summary"]["native"]["statuses"] == {"SAT_VERIFIED": 1}
+    stats = json.loads((tmp_path / "evidence" / "instances" / "00000" / "solver-000" / "stats.json").read_text())
+    assert stats["independent_checking_included"] is False
+    assert stats["proof_generation_included_in_solve"] is True
+    assert "decisions" in stats["stats"]
+    config = json.loads((tmp_path / "evidence" / "campaign.json").read_text())
+    assert config["artifact_sha256"]["native"][str(library)] == digest(library)
+
+
+def test_score_rejects_cell_family_verdict_and_runtime_mutation():
+    inventory = {"instances": [{"id": "i", "family": "logic", "expected": "SAT"}]}
+    field = {"solvers": [{"id": "a"}]}
+    for mutated in (cell(family="removed-hard-family"), cell(expected="UNSAT"),
+                    cell(elapsed=float("nan")), cell(elapsed=11)):
+        with pytest.raises(ValueError):
+            score_campaign([mutated], inventory, field, 10)
+
+
+def test_wrong_answer_disqualifies_solver_in_other_families_and_subtracks():
+    inventory = {"instances": [{"id": "sat", "family": "easy"}, {"id": "unsat", "family": "hard"}]}
+    field = {"solvers": [{"id": "a"}, {"id": "b"}]}
+    cells = [cell("a", "sat", "easy", "SAT", "SAT_VERIFIED", 1),
+             cell("a", "unsat", "hard", "UNSAT", "INVALID_PROOF", 0.1),
+             cell("b", "sat", "easy", "SAT", "SAT_VERIFIED", 2),
+             cell("b", "unsat", "hard", "UNSAT", "UNSAT_VERIFIED", 2)]
+    result = score_campaign(cells, inventory, field, 10)
+    assert result["families"]["easy"]["standings"][0]["solver_id"] == "b"
+    assert result["standings"][0]["sat_rank"] == 1
+    assert result["standings"][1]["sat_rank"] == 2
+    assert result["families"]["easy"]["standings"][1]["disqualified"]
+
+
+@pytest.mark.skipif(os.name != "posix" or shutil.which("g++") is None, reason="native build")
+def test_complete_campaign_native_unsat_passes_real_external_drat_trim(tmp_path):
+    checker_path = os.environ.get("DRAT_TRIM")
+    if not checker_path:
+        pytest.skip("set DRAT_TRIM to the pinned external checker")
+    from .native_cdcl import build_native_cdcl
+    library = build_native_cdcl(tmp_path / "build")
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 2 4\n1 2 0\n-1 2 0\n1 -2 0\n-1 -2 0\n")
+    command = [sys.executable, "-m", "experiments.general_competition.campaign", "native",
+               "--library", str(library), "--cnf", "{cnf}", "--proof", "{proof}", "--stats", "{stats}"]
+    native = solver("native", command=command, track="standalone-native", upstream_engines=[])
+    inventory, field = manifests(tmp_path, [instance(cnf, expected="UNSAT")], [native])
+    result = run_campaign(arguments(tmp_path, inventory, field, Path(checker_path)))
+    assert result["resource_summary"]["native"]["statuses"] == {"UNSAT_VERIFIED": 1}
+    assert result["standings"][0]["unsat_solved"] == 1
+    cells = [json.loads(line) for line in (tmp_path / "evidence" / "cells.jsonl").read_text().splitlines()]
+    assert cells[0]["proof_bytes"] > 0 and cells[0]["checking_seconds"] > 0
+
+
+def test_model_checker_handles_admitted_comment_syntax(tmp_path):
+    cnf, out = tmp_path / "input.cnf", tmp_path / "stdout.txt"
+    cnf.write_text("comment without a space after c\np cnf 1 1\n1 0\n")
+    out.write_text("v 1 0\n")
+    check_model(cnf, out, tmp_path / "complete.model")
+    assert (tmp_path / "complete.model").is_file()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.parametrize("late_phase,expected", [("check", "CHECKER_TIMEOUT"), ("admission-process", "ADMISSION_FAILURE")])
+def test_late_successful_checker_or_admission_cannot_escape_deadline(tmp_path, monkeypatch, late_phase, expected):
+    from . import campaign
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 1\n1 0\n")
+    inventory, field = manifests(tmp_path, [instance(cnf)], [solver()])
+    real = campaign.run_process
+
+    def late(command, destination, **limits):
+        record = real(command, destination, **limits)
+        if destination.name == late_phase:
+            assert record["returncode"] == 0
+            record["timed_out"] = False
+            record["elapsed_seconds"] = limits["timeout"] + 0.01
+        return record
+
+    monkeypatch.setattr(campaign, "run_process", late)
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert result["resource_summary"]["baseline"]["statuses"] == {expected: 1}
+    assert result["standings"][0]["solved"] == 0
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_solver_cannot_change_original_cnf_or_contaminate_next_solver(tmp_path):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 1\n-1 0\n")
+    malicious = "import pathlib,sys; pathlib.Path(sys.argv[1]).write_text('p cnf 1 1\\n1 0\\n'); print('s SATISFIABLE'); print('v 1 0'); raise SystemExit(10)"
+    correct = "print('s SATISFIABLE'); print('v -1 0'); raise SystemExit(10)"
+    inventory, field = manifests(tmp_path, [instance(cnf)], [solver("mutator", malicious), solver("honest", correct)])
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert result["resource_summary"]["mutator"]["statuses"] == {"INVALID_INPUT_MUTATION": 1}
+    assert result["resource_summary"]["honest"]["statuses"] == {"SAT_VERIFIED": 1}
+    assert result["standings"][0]["solver_id"] == "honest"
+    root = tmp_path / "evidence" / "instances" / "00000"
+    assert (root / "input.cnf").read_text() == cnf.read_text()
+    assert (root / "solver-000" / "input.cnf").read_text() == "p cnf 1 1\n1 0\n"
+    assert not (root / "solver-001" / "input.cnf").exists()
+    assert not (root / "solver-000" / "complete.model").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_declared_artifact_hash_mismatch_cannot_run_solver(tmp_path):
+    cnf, artifact = tmp_path / "input.cnf", tmp_path / "artifact"
+    cnf.write_text("p cnf 1 1\n1 0\n")
+    artifact.write_text("unexpected build")
+    entry = solver(expected_artifact_sha256={str(artifact): "b" * 64})
+    inventory, field = manifests(tmp_path, [instance(cnf)], [entry])
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert result["resource_summary"]["baseline"]["statuses"] == {"SOURCE_IDENTITY_FAILURE": 1}
+    assert not (tmp_path / "evidence" / "instances" / "00000" / "solver-000" / "solve").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_artifact_change_during_campaign_invalidates_ranking_and_keeps_raw_cells(tmp_path):
+    cnf, artifact = tmp_path / "input.cnf", tmp_path / "artifact"
+    cnf.write_text("p cnf 1 1\n1 0\n")
+    artifact.write_text("original build")
+    code = f"import pathlib; pathlib.Path({str(artifact)!r}).write_text('changed build'); print('s SATISFIABLE'); print('v 1 0'); raise SystemExit(10)"
+    entry = solver(code=code, expected_artifact_sha256={str(artifact): digest(artifact)})
+    inventory, field = manifests(tmp_path, [instance(cnf)], [entry])
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert result["status"] == "INVALID_CAMPAIGN"
+    assert result["cells_retained"] == 1
+    assert (tmp_path / "evidence" / "cells.jsonl").is_file()
+    assert (tmp_path / "evidence" / "evidence-sha256.json").is_file()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_solver_cells_have_private_working_directories(tmp_path):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 1\n1 0\n")
+    code = "import pathlib; assert not pathlib.Path('solver-cache').exists(); pathlib.Path('solver-cache').write_text('private'); print('s SATISFIABLE'); print('v 1 0'); raise SystemExit(10)"
+    inventory, field = manifests(tmp_path, [instance(cnf)], [solver("first", code), solver("second", code)])
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert all(row["solved"] == 1 for row in result["standings"])
+
+
+def test_score_rejects_relabeling_assisted_entry_as_standalone():
+    inventory = {"instances": [{"id": "i", "family": "logic", "expected": "SAT"}]}
+    field = {"solvers": [{"id": "a", "track": "assisted-portfolio"}]}
+    entry = {**cell(), "track": "standalone-native"}
+    with pytest.raises(ValueError, match="track differs"):
+        score_campaign([entry], inventory, field, 10)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+def test_corrupting_shared_original_invalidates_whole_ranking(tmp_path):
+    cnf = tmp_path / "input.cnf"
+    cnf.write_text("p cnf 1 1\n-1 0\n")
+    code = "import pathlib,sys; pathlib.Path(sys.argv[1]).parent.parent.joinpath('input.cnf').write_text('p cnf 1 1\\n1 0\\n'); print('s SATISFIABLE'); print('v 1 0'); raise SystemExit(10)"
+    inventory, field = manifests(tmp_path, [instance(cnf)], [solver("mutator", code), solver("innocent")])
+    result = run_campaign(arguments(tmp_path, inventory, field))
+    assert result["status"] == "INVALID_CAMPAIGN"
+    assert "original admitted CNF" in result["error"]
+    assert result["cells_retained"] == 2
+
+
+def test_alternative_solver_exit_codes_require_explicit_declaration():
+    process = {"timed_out": False, "elapsed_seconds": 0.1, "spawn_error": None, "returncode": 0}
+    assert _status(process, "SAT", 1) == "INVALID_OUTPUT"
+    assert _status(process, "UNSAT", 1) == "INVALID_OUTPUT"
+    declaration = {"SAT": [0, 10], "UNSAT": [0, 20]}
+    assert _status(process, "SAT", 1, declaration) == "SAT"
+    assert _status(process, "UNSAT", 1, declaration) == "UNSAT"
