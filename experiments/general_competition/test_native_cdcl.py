@@ -50,6 +50,44 @@ def test_raw_native_abi_rejects_excess_variables_before_indexing(runtime, nvars)
     assert size.value == 0
 
 
+def test_activity_underflow_preserves_relevant_variables(tmp_path, monkeypatch):
+    from experiments.general_competition import native_cdcl
+
+    # Exercise the native rescaling invariant directly: a full search requires
+    # tens of thousands of conflicts to reach the same four rescalings. Variables
+    # 1 and 2 occur in an unsatisfied clause; variable 4 is genuinely absent.
+    source = native_cdcl.SOURCE.resolve().as_posix()
+    harness = tmp_path / "activity_underflow.cpp"
+    harness.write_text(
+        '#include "' + source + '"\n' + r"""
+SPECTRA_EXPORT int spectra_g_test_activity_underflow() {
+  Solver solver(4);
+  const int clause[] = {1, 2};
+  const int unit[] = {3};
+  solver.add_initial(clause, clause + 2);
+  solver.add_initial(unit, unit + 1);
+  solver.initialize_heap();
+  for (int step = 0; step < 4; ++step) {
+    solver.var_increment = 1e101;
+    solver.bump_variable(3);
+  }
+  if (solver.activity[1] != 0.0 || solver.activity[2] != 0.0) return 1;
+  if (solver.solve(100, 10000) != 10) return 2;
+  if (solver.literal_value(1) <= 0 && solver.literal_value(2) <= 0) return 3;
+  if (solver.values[4] != 0) return 4;
+  return 0;
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(native_cdcl, "SOURCE", harness)
+    library = ctypes.CDLL(str(build_native_cdcl(tmp_path / "underflow-build")))
+    check = library.spectra_g_test_activity_underflow
+    check.argtypes = []
+    check.restype = ctypes.c_int
+    assert check() == 0
+
+
 def brute_sat(nvars, clauses):
     canonical = canonical_cnf(nvars, clauses)
     return any(

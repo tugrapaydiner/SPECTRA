@@ -65,6 +65,8 @@ struct Solver {
   std::vector<int> reasons;
   std::vector<std::int8_t> phases;
   std::vector<double> activity;
+  // Relevance must survive floating-point activity rescaling and underflow.
+  std::vector<std::uint8_t> occurs;
   std::vector<std::int64_t> polarity_bias;
   std::vector<std::uint64_t> heap_generation;
   std::priority_queue<HeapEntry> variable_heap;
@@ -86,6 +88,7 @@ struct Solver {
         reasons(static_cast<std::size_t>(variables + 1), -1),
         phases(static_cast<std::size_t>(variables + 1), 1),
         activity(static_cast<std::size_t>(variables + 1), 0.0),
+        occurs(static_cast<std::size_t>(variables + 1), 0),
         polarity_bias(static_cast<std::size_t>(variables + 1), 0),
         heap_generation(static_cast<std::size_t>(variables + 1), 0),
         seen(static_cast<std::size_t>(variables + 1), 0),
@@ -182,6 +185,7 @@ struct Solver {
         std::uint64_t{1} << std::max(0, 16 - std::min(static_cast<int>(width), 16));
     for (const int literal : row) {
       const int var = variable(literal);
+      occurs[static_cast<std::size_t>(var)] = 1;
       activity[static_cast<std::size_t>(var)] += static_cast<double>(weight);
       polarity_bias[static_cast<std::size_t>(var)] +=
           literal > 0 ? static_cast<std::int64_t>(weight)
@@ -262,7 +266,7 @@ struct Solver {
 
   void initialize_heap() {
     for (int var = 1; var <= nvars; ++var) {
-      if (activity[static_cast<std::size_t>(var)] > 0.0) push_heap(var);
+      if (occurs[static_cast<std::size_t>(var)]) push_heap(var);
     }
   }
 
@@ -270,7 +274,7 @@ struct Solver {
     variable_heap = std::priority_queue<HeapEntry>();
     for (int var = 1; var <= nvars; ++var) {
       const auto index = static_cast<std::size_t>(var);
-      if (values[index] == 0 && activity[index] > 0.0) push_heap(var);
+      if (values[index] == 0 && occurs[index]) push_heap(var);
     }
   }
 
