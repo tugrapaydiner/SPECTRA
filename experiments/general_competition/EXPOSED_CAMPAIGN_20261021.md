@@ -341,6 +341,52 @@ experiment to their original manifests. Its SHA-256 is
 Raw preservation is separate from this receipt: these local checks do not
 establish a permanent public release or independent replication.
 
+### Prospective all-corpus packing study
+
+The separate [packing-study freeze](packing_study_freeze_20261021.json) has
+SHA-256 `b41de4391dd74046d421305224a0ae34ade30a78c371cb6fd85e2b170354b29f`.
+It publishes the complete exact controller, unchanged helper and tested test
+source as losslessly encoded payloads, with their individual byte counts and
+hashes. Both existing public inventory references and their exact reconstruction
+rules are included. The controller requires the immutable published Git blob
+and an identical HTTPS readback before creating a candidate. At this checkpoint,
+no candidate has been created or measured.
+
+Both arms start from repaired source
+`cb14031d4187c4cba5cccb37984ecf59d59bfdae` and use the same measured native
+library. The sole prospective change replaces Python list/splat ABI packing with
+native-width array buffers and lifetime-retaining ctypes views. Canonicalization,
+native C++, search policy, and the prior unsuccessful heap change remain outside
+this transformation. A width mismatch takes the original packing path over the
+already canonical data.
+
+The study requires 17 mandatory unit groups, exact canonical/literal/offset
+comparisons on all 96 formulas, and three paired full-corpus packing repeats
+(576 timed calls). Each clock encloses the complete `_pack_cnf` call, including
+canonicalization; imports, admission, hashing and checking are outside it.
+The native comparison retains 64 fixed-budget cells on the original structural
+32-case subset (256 conflicts, 30-second ceiling) and 576 endpoint cells
+(all 96 formulas, both arms, three repeats, five-second ceiling).
+
+Eligibility requires at least a 10% reduction in aggregate full-corpus packing
+CPU time in **every** repeat, with at least one second of original CPU work per
+repeat. Every byte probe must pass, all 32 fixed-budget pairs must return exact
+matching traces, and overall all-cell endpoint PAR-2 must not regress in any
+repeat. Invalid answers, admission/artifact/checker/resource failures, incomplete
+coverage and conflicting completed traces block eligibility. Timeouts retain
+their penalties and cannot establish trace equivalence. No result-driven subset,
+threshold change, retry or extra repetition is permitted. Passing allows manual
+review; it does not merge a change or establish general solver leadership.
+
+Before publication, 45 synthetic harness checks passed and static preflight
+verified 528 prerequisite evidence files plus the pinned inputs and artifacts.
+These preparation checks did not execute the candidate or benchmark workloads.
+The freeze is a prospective local exposed protocol: its public payloads reconstruct
+the harness, but its host-specific runtime paths and prerequisite evidence hashes
+are not a self-contained public runtime bundle. Permanent public raw evidence,
+hidden confirmation, outside replication and the roadmap's 100/100 claim remain
+open. Earlier failed and inconclusive experiments are unchanged.
+
 ### Scoring and verification repairs
 
 The current runner records `declared-inventory-v2` for new campaigns. It keeps the
