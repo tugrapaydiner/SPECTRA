@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 from dataclasses import replace
 from itertools import combinations, product
 import json
@@ -30,6 +31,23 @@ from experiments.general_competition.native_cdcl import (
 def runtime(tmp_path_factory):
     root = tmp_path_factory.mktemp("native-cdcl")
     return NativeCDCLRuntime(build_native_cdcl(root))
+
+
+@pytest.mark.parametrize("nvars", [10_000_001, 1 << 30, (1 << 31) - 1, (1 << 32) - 1])
+def test_raw_native_abi_rejects_excess_variables_before_indexing(runtime, nvars):
+    # Call the exported ABI directly: Python's canonical_cnf guard must not be
+    # the only protection against signed overflow in 2 * nvars / nvars + 1.
+    offsets = (ctypes.c_uint64 * 1)(0)
+    output = ctypes.c_void_p(1)
+    size = ctypes.c_size_t(123)
+    code = runtime._library.spectra_g_native_solve(
+        nvars, None, 0, offsets, 0, 0, 0,
+        ctypes.byref(output), ctypes.byref(size),
+    )
+    assert code == 1
+    assert runtime._library.spectra_g_native_error() == b"too many variables"
+    assert output.value is None
+    assert size.value == 0
 
 
 def brute_sat(nvars, clauses):

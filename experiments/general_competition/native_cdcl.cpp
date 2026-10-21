@@ -20,6 +20,9 @@
 namespace {
 
 thread_local std::string last_error;
+// Match canonical_cnf's public admission bound before allocating or computing
+// signed watch indices. The raw ABI must enforce this without the Python wrapper.
+constexpr std::uint32_t max_native_variables = 10000000;
 
 struct Clause {
   std::vector<int> lits;
@@ -631,7 +634,7 @@ SPECTRA_EXPORT int spectra_g_native_solve(
   *output = nullptr;
   *output_size = 0;
   try {
-    if (nvars > static_cast<std::uint32_t>(std::numeric_limits<int>::max())) {
+    if (nvars > max_native_variables) {
       throw std::invalid_argument("too many variables");
     }
     if (!offsets || (literal_count && !literals)) {
