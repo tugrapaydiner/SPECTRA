@@ -13,24 +13,32 @@ from collections import Counter
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 from pathlib import Path
 from statistics import median
+import subprocess
 from time import perf_counter_ns
 from typing import Iterable
 from urllib.request import Request, urlopen
 
 from experiments.general_competition.adaptive_backend import (
     POLICY,
+    RESULT_CLASSIFICATIONS,
+    choose_frontend,
+    classify_comparison,
     compare_adaptive_backend,
 )
 from experiments.general_competition.competition_input import admit_and_load_cnf
-from experiments.general_competition.matched_backend import prepare_matched_formula
+from experiments.general_competition.matched_backend import (
+    ModelValidationError,
+    prepare_matched_formula,
+)
 from experiments.general_competition.native_binary_core import (
     NativeBinaryCore,
     build_native_binary_core,
 )
 
-SCHEMA = "spectra.general_exposed_panel.v3"
+SCHEMA = "spectra.general_exposed_panel.v4"
 BASE_URL = "https://benchmark-database.de/file/"
 MAX_DOWNLOAD_BYTES = 512 << 20
 
@@ -89,6 +97,86 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def summarize_samples(samples: list[dict]) -> dict:
+    """Keep every cell while separating algorithm work from fallback variation."""
+    counts = Counter(sample["result_classification"] for sample in samples)
+    if set(counts) - set(RESULT_CLASSIFICATIONS):
+        raise ValueError("sample has an unknown result classification")
+    timed_classes = {
+        "SPECTRA_NATIVE_WIN", "SPECTRA_FRONTEND_WIN", "UPSTREAM_FALLBACK_PARITY", "LOSS"
+    }
+    timed = [sample for sample in samples if sample["result_classification"] in timed_classes]
+    if any(classify_comparison(sample) != sample["result_classification"] for sample in timed):
+        raise ValueError("sample classification disagrees with its checked comparison evidence")
+    frontend = [sample for sample in timed if sample["adaptive_decision"] == "reduce"]
+    fallback = [sample for sample in timed if sample["result_classification"] == "UPSTREAM_FALLBACK_PARITY"]
+
+    def ratios(rows: list[dict]) -> tuple[float | None, float | None]:
+        values = [sample["hybrid_over_plain"] for sample in rows]
+        if not values:
+            return None, None
+        return median(values), math.exp(math.fsum(math.log(value) for value in values) / len(values))
+
+    overall_median, overall_geomean = ratios(timed)
+    frontend_median, frontend_geomean = ratios(frontend)
+    fallback_median, fallback_geomean = ratios(fallback)
+    return {
+        "classification_counts": {name: counts[name] for name in RESULT_CLASSIFICATIONS},
+        "spectra_native_wins": counts["SPECTRA_NATIVE_WIN"],
+        "spectra_frontend_wins": counts["SPECTRA_FRONTEND_WIN"],
+        "upstream_fallback_parity": counts["UPSTREAM_FALLBACK_PARITY"],
+        "cells": len(samples),
+        "timed_cells": len(timed),
+        "non_timing_cells": len(samples) - len(timed),
+        "frontend_cells": len(frontend),
+        "median_hybrid_over_plain": overall_median,
+        "geometric_mean_hybrid_over_plain": overall_geomean,
+        "frontend_median_hybrid_over_plain": frontend_median,
+        "frontend_geometric_mean_hybrid_over_plain": frontend_geomean,
+        "fallback_median_hybrid_over_plain": fallback_median,
+        "fallback_geometric_mean_hybrid_over_plain": fallback_geomean,
+        "decisions": dict(sorted(Counter(
+            sample.get("adaptive_decision") or "not_run" for sample in samples
+        ).items())),
+    }
+
+
+def _failure_sample(
+    error: Exception,
+    *,
+    phase: str,
+    repeat: int,
+    decision: str | None = None,
+    elapsed_ns: int | None = None,
+    attempted: bool = False,
+) -> dict:
+    if isinstance(error, ModelValidationError):
+        classification = "INVALID_MODEL"
+    elif isinstance(error, (TimeoutError, subprocess.TimeoutExpired)):
+        classification = "TIMEOUT"
+    elif isinstance(error, (MemoryError, OSError, subprocess.CalledProcessError)):
+        classification = "RESOURCE_FAILURE"
+    else:
+        classification = "UNKNOWN"
+    record = {
+        "schema": "spectra.general_panel_failure.v1",
+        "result_classification": classification,
+        "adaptive_policy": POLICY,
+        "adaptive_decision": decision,
+        "accepted_for_timing": False,
+        "attempted": attempted,
+        "repeat": repeat,
+        "execution_order": "plain-first" if repeat % 2 == 0 else "hybrid-first",
+        "phase": phase,
+        "error_type": type(error).__name__,
+        "error": str(error),
+        "elapsed_until_failure_ns": elapsed_ns,
+    }
+    if isinstance(error, ModelValidationError):
+        record["rejected_evidence"] = error.evidence
+    return record
+
+
 def run_panel(
     directory: str | Path,
     *,
@@ -101,76 +189,104 @@ def run_panel(
     root.mkdir(parents=True, exist_ok=True)
     native_directory = root / "native-binary-core"
     native_library = native_directory / "libspectra_general_core.so"
-    if not native_library.is_file():
-        native_library = build_native_binary_core(native_directory)
-    native_core = NativeBinaryCore(native_library)
+    initialization_error = None
+    try:
+        if not native_library.is_file():
+            native_library = build_native_binary_core(native_directory)
+        native_core = NativeBinaryCore(native_library)
+    except Exception as error:
+        initialization_error = error
     cases = []
+    correctness_failure = False
 
     for case in PANEL:
-        source = _download(case, root / "instances")
-        admitted = admit_and_load_cnf(
-            source,
-            max_source_bytes=MAX_DOWNLOAD_BYTES,
-            max_dimacs_bytes=2 << 30,
-        )
-        prepared_started = perf_counter_ns()
-        prepared = prepare_matched_formula(admitted.nvars, admitted.clauses)
-        canonicalization_ns = perf_counter_ns() - prepared_started
-        packing_started = perf_counter_ns()
-        native_prepared = native_core.prepare_canonical(
-            prepared.nvars,
-            prepared.clauses,
-        )
-        native_packing_ns = perf_counter_ns() - packing_started
-
-        samples = []
-        for repeat in range(repeats):
-            order = "plain-first" if repeat % 2 == 0 else "hybrid-first"
-            comparison = compare_adaptive_backend(
-                prepared,
-                solver_name=solver_name,
-                order=order,
-                native_core=native_core,
-                native_prepared=native_prepared,
-            )
-            if not comparison.accepted_for_timing:
-                raise RuntimeError("SAT-only exposed panel produced an unaccepted answer")
-            samples.append(comparison.record())
-
-        ratios = [sample["hybrid_over_plain"] for sample in samples]
-        cases.append({
+        record = {
             "instance_id": case.instance_id,
             "source": BASE_URL + case.instance_id,
-            "source_bytes": admitted.receipt.source_bytes,
-            "source_sha256": _sha256(source),
-            "dimacs_sha256": admitted.receipt.dimacs_sha256,
-            "semantic_sha256": admitted.receipt.semantic_sha256,
-            "variables": admitted.receipt.declared_variables,
-            "declared_clauses": admitted.receipt.declared_clauses,
-            "canonical_clauses": len(prepared.clauses),
-            "empty_clauses": prepared.empty_clauses,
-            "unit_clauses": prepared.unit_clauses,
-            "binary_clauses": prepared.binary_clauses,
-            "long_clauses": prepared.long_clauses,
-            "untimed_canonicalization_ns": canonicalization_ns,
-            "untimed_native_packing_ns": native_packing_ns,
-            "problem_class": admitted.receipt.problem_class,
             "expected": case.expected,
             "reference_solver": case.reference_solver,
             "reference_seconds": case.reference_seconds,
-            "samples": samples,
-            "median_hybrid_over_plain": median(ratios),
-            "hybrid_wins": sum(ratio < 1.0 for ratio in ratios),
-            "decisions": dict(sorted(Counter(
-                sample["adaptive_decision"] for sample in samples
-            ).items())),
-        })
+        }
+        samples = []
+        if initialization_error is not None or correctness_failure:
+            error = initialization_error or RuntimeError("not run after an earlier correctness failure")
+            phase = "native_initialization" if initialization_error is not None else "blocked_by_correctness_failure"
+            samples = [_failure_sample(error, phase=phase, repeat=repeat) for repeat in range(repeats)]
+        else:
+            phase = "acquisition"
+            try:
+                source = _download(case, root / "instances")
+                record.update({"source_bytes": source.stat().st_size, "source_sha256": _sha256(source)})
+                phase = "admission"
+                admitted = admit_and_load_cnf(
+                    source,
+                    max_source_bytes=MAX_DOWNLOAD_BYTES,
+                    max_dimacs_bytes=2 << 30,
+                )
+                record.update({
+                    "dimacs_sha256": admitted.receipt.dimacs_sha256,
+                    "semantic_sha256": admitted.receipt.semantic_sha256,
+                    "variables": admitted.receipt.declared_variables,
+                    "declared_clauses": admitted.receipt.declared_clauses,
+                    "problem_class": admitted.receipt.problem_class,
+                })
+                phase = "preparation"
+                prepared_started = perf_counter_ns()
+                prepared = prepare_matched_formula(admitted.nvars, admitted.clauses)
+                canonicalization_ns = perf_counter_ns() - prepared_started
+                packing_started = perf_counter_ns()
+                native_prepared = native_core.prepare_canonical(prepared.nvars, prepared.clauses)
+                record.update({
+                    "canonical_clauses": len(prepared.clauses),
+                    "empty_clauses": prepared.empty_clauses,
+                    "unit_clauses": prepared.unit_clauses,
+                    "binary_clauses": prepared.binary_clauses,
+                    "long_clauses": prepared.long_clauses,
+                    "untimed_canonicalization_ns": canonicalization_ns,
+                    "untimed_native_packing_ns": perf_counter_ns() - packing_started,
+                })
+            except Exception as error:
+                samples = [_failure_sample(error, phase=phase, repeat=repeat) for repeat in range(repeats)]
+            else:
+                decision, _ = choose_frontend(prepared)
+                for repeat in range(repeats):
+                    order = "plain-first" if repeat % 2 == 0 else "hybrid-first"
+                    if correctness_failure:
+                        sample = _failure_sample(
+                            RuntimeError("not run after an earlier correctness failure"),
+                            phase="blocked_by_correctness_failure", repeat=repeat, decision=decision,
+                        )
+                    else:
+                        started = perf_counter_ns()
+                        try:
+                            comparison = compare_adaptive_backend(
+                                prepared,
+                                solver_name=solver_name,
+                                order=order,
+                                native_core=native_core,
+                                native_prepared=native_prepared,
+                            )
+                            sample = comparison.record()
+                            sample.update({"repeat": repeat, "execution_order": order, "attempted": True})
+                        except Exception as error:
+                            sample = _failure_sample(
+                                error, phase="comparison", repeat=repeat, decision=decision,
+                                elapsed_ns=perf_counter_ns() - started, attempted=True,
+                            )
+                        if sample["result_classification"] in ("INVALID_MODEL", "INVALID_PROOF"):
+                            correctness_failure = True
+                    samples.append(sample)
+        record.update({"samples": samples, **summarize_samples(samples)})
+        cases.append(record)
 
     all_samples = [sample for case in cases for sample in case["samples"]]
-    all_ratios = [sample["hybrid_over_plain"] for sample in all_samples]
+    summary = summarize_samples(all_samples)
     return {
         "schema": SCHEMA,
-        "status": "MEASURED",
+        "status": (
+            "FAILED_CORRECTNESS" if correctness_failure
+            else "INCOMPLETE" if summary["non_timing_cells"] else "MEASURED"
+        ),
         "solver": solver_name,
         "frontend": POLICY,
         "repeats": repeats,
@@ -184,16 +300,18 @@ def run_panel(
             "are retained diagnostics outside the metric; every sample rebuilds the "
             "selected candidate path and the matched CaDiCaL control from scratch"
         ),
-        "median_hybrid_over_plain": median(all_ratios),
-        "hybrid_wins": sum(ratio < 1.0 for ratio in all_ratios),
-        "decisions": dict(sorted(Counter(
-            sample["adaptive_decision"] for sample in all_samples
-        ).items())),
-        "cells": len(all_ratios),
+        "win_accounting": (
+            "only checked distinct SPECTRA work can be an algorithm win; plain-route "
+            "cells are UPSTREAM_FALLBACK_PARITY at every timing ratio; equality is "
+            "a non-winning LOSS for the reducer; unverified UNSAT is UNKNOWN; "
+            "all-cell ratios are diagnostics, not estimates of frontend speedup"
+        ),
+        **summary,
         "cases": cases,
         "claim_boundary": (
             "exposed SAT-only development result; same CaDiCaL fallback; not PAR-2, "
-            "not a hidden holdout, not Main-track proof compliance, and not general leadership"
+            "not standalone native SPECTRA-G, not a hidden holdout, not Main-track "
+            "proof compliance, and not general leadership"
         ),
     }
 
@@ -211,6 +329,8 @@ def main(argv: Iterable[str] | None = None) -> None:
     with args.out.open("x", encoding="utf-8") as stream:
         stream.write(text)
     print(text, end="")
+    if report["status"] != "MEASURED":
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

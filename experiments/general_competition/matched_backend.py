@@ -21,6 +21,14 @@ from experiments.general_competition.binary_core import (
 )
 
 
+class ModelValidationError(RuntimeError):
+    """A rejected SAT witness with its output retained for the panel receipt."""
+
+    def __init__(self, message: str, *, evidence: dict | None = None):
+        super().__init__(message)
+        self.evidence = evidence if evidence is not None else {}
+
+
 @dataclass(frozen=True)
 class PreparedFormula:
     """One canonical formula prepared outside the measured solver endpoint."""
@@ -101,18 +109,26 @@ def prepare_matched_formula(
 
 def _complete_model(raw: list[int] | None, nvars: int) -> tuple[bool, ...]:
     if raw is None:
-        raise RuntimeError("SAT backend returned no model")
+        raise ModelValidationError(
+            "SAT backend returned no model", evidence={"raw_model": raw}
+        )
     values: dict[int, bool] = {}
     for literal in raw:
         if type(literal) is not int or literal == 0:
-            raise RuntimeError("SAT backend returned a malformed model literal")
+            raise ModelValidationError(
+                "SAT backend returned a malformed model literal",
+                evidence={"raw_model": raw},
+            )
         variable = abs(literal)
         if variable > nvars:
             continue
         value = literal > 0
         previous = values.get(variable)
         if previous is not None and previous != value:
-            raise RuntimeError("SAT backend returned contradictory model values")
+            raise ModelValidationError(
+                "SAT backend returned contradictory model values",
+                evidence={"raw_model": raw},
+            )
         values[variable] = value
     return tuple(values.get(variable, False) for variable in range(1, nvars + 1))
 
@@ -148,10 +164,23 @@ def run_backend(
     elapsed = perf_counter_ns() - started
 
     if sat:
-        model = _complete_model(raw_model, nvars)
+        try:
+            model = _complete_model(raw_model, nvars)
+        except ModelValidationError as error:
+            error.evidence.update({"elapsed_ns": elapsed, "solver": solver_name})
+            raise
         verified = model_satisfies(nvars, clauses, model)
         if not verified:
-            raise RuntimeError("original-clause checker rejected backend SAT model")
+            raise ModelValidationError(
+                "original-clause checker rejected backend SAT model",
+                evidence={
+                    "raw_model": raw_model,
+                    "model": model,
+                    "elapsed_ns": elapsed,
+                    "solver": solver_name,
+                    "stats": stats,
+                },
+            )
         status = "SAT_CHECKED"
     else:
         model = ()
@@ -252,7 +281,10 @@ def compare_prepared_backend(
         if residual.status == "SAT_CHECKED":
             lifted = core.lift(residual.model)
             if not model_satisfies(nvars, canonical, lifted):
-                raise RuntimeError("lifted model fails the canonical original CNF")
+                raise ModelValidationError(
+                    "lifted model fails the canonical original CNF",
+                    evidence={"residual": asdict(residual), "lifted_model": lifted},
+                )
             return BackendRun(
                 **{
                     **asdict(residual),
@@ -262,19 +294,26 @@ def compare_prepared_backend(
             )
         return residual
 
-    if order == "plain-first":
-        plain = run_backend(nvars, canonical, solver_name=solver_name)
-        hybrid = hybrid_run()
-    else:
-        hybrid = hybrid_run()
-        plain = run_backend(nvars, canonical, solver_name=solver_name)
+    completed_arms = {}
+    for arm in (("plain", "hybrid") if order == "plain-first" else ("hybrid", "plain")):
+        try:
+            result = (
+                run_backend(nvars, canonical, solver_name=solver_name)
+                if arm == "plain" else hybrid_run()
+            )
+        except ModelValidationError as error:
+            error.evidence.update({
+                "failed_arm": arm,
+                "completed_arms": {key: asdict(value) for key, value in completed_arms.items()},
+                "core_elapsed_ns": core_elapsed,
+            })
+            raise
+        completed_arms[arm] = result
+    plain, hybrid = completed_arms["plain"], completed_arms["hybrid"]
 
     plain_sat = plain.status == "SAT_CHECKED"
     hybrid_sat = hybrid.status == "SAT_CHECKED"
     answers_agree = plain_sat == hybrid_sat
-    if not answers_agree:
-        raise RuntimeError("matched backend arms disagree on SAT status")
-
     hybrid_total = core_elapsed + hybrid.elapsed_ns
     ratio = hybrid_total / max(plain.elapsed_ns, 1)
     accepted = plain_sat and hybrid_sat and plain.model_verified and hybrid.model_verified
