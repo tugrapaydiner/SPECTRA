@@ -180,8 +180,39 @@ external DRAT checking. The [separate validation plan](native_validation_plan_20
 freezes a native-only rerun of all 96 formulas after the original 768-cell
 baseline finishes. A repaired timeout is still unresolved, and a later successful
 solve cannot erase a baseline failure. No cross-run speedup or new eight-entry
-ranking is claimed. Performance tuning remains paused; the earlier heap
-optimization plan ran zero ablation cells.
+ranking is claimed. The earlier heap optimization plan remains suspended and
+ran zero ablation cells.
+
+### Prospective repaired-source heap experiment
+
+The [v2 plan](heap_ablation_plan_20261021.json),
+[unchanged 32-formula subset](heap_ablation_inventory_20261021.json), and
+[preparation receipt](heap_ablation_freeze_20261021.json) are published before any
+candidate build or A/B execution. The subset was selected from structural
+metadata before observing outcomes; it is not chosen from successful solves.
+The plan SHA-256 is
+`ae2915bb84026dfc28fecb5c688e21a400e1efb046dfd21e25e5d58be1aafa32`;
+the controller SHA-256 is
+`f6d3e8954e00e2f835f828a60721b21b77fd848434862ccecea2929977b5318e`.
+The original plan and all preparation revisions remain retained.
+
+Execution requires the complete original 768-cell baseline and the separate
+96-case repaired validation, each bound to an independently retained final
+manifest hash. Every returned repaired answer must pass its checker; timeouts
+and unknowns remain unresolved. Only then may the controller build both arms
+from repaired source `cb14031d4187c4cba5cccb37984ecf59d59bfdae`. The sole candidate
+change avoids queuing an activity bump for an already assigned variable.
+
+The experiment retains 64 fixed-budget cells (256 conflicts, two seconds) and
+192 endpoint cells (three paired repeats, two seconds), with both arms rebuilt
+using identical compiler settings. All 32 fixed-budget traces must match exactly.
+No endpoint repeat may regress in overall PAR-2. The plan also requires at least
+eight common completed cases, a minimum amount of measured native work, and at
+least a 5% reduction in each repeat and in aggregate fixed-budget native ABI CPU
+time. Every mismatch, timeout, checker failure, regression and inconclusive
+result is retained. A missing criterion yields `NOT_ESTABLISHED`; thresholds
+will not be relaxed after results. Passing permits review, not automatic merging
+or a full-field, hidden-set, independent-replication or 100/100 claim.
 
 ### Scoring and verification repairs
 
