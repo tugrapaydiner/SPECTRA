@@ -13,6 +13,7 @@ import gzip
 import hashlib
 import json
 from pathlib import Path
+import sys
 from typing import BinaryIO, Iterable
 
 DEFAULT_MAX_SOURCE_BYTES = 2 * 1024 * 1024 * 1024
@@ -61,7 +62,11 @@ class _BoundedReader:
         self.hash = hashlib.sha256()
 
     def readline(self) -> bytes:
-        line = self._stream.readline()
+        # Bound the read itself, not just the returned length: a gzip member may
+        # expand to one enormous physical line. One extra byte distinguishes EOF
+        # exactly at the limit from an over-limit stream without requesting the
+        # rest. The decoder can still buffer a limited amount of read-ahead.
+        line = self._stream.readline(min(self._limit - self.count + 1, sys.maxsize))
         self.count += len(line)
         if self.count > self._limit:
             raise MemoryError("DIMACS input exceeds max_dimacs_bytes")

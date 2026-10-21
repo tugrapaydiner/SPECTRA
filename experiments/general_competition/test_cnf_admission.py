@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import gzip
+import io
 import json
 from pathlib import Path
+import sys
 
 import pytest
 
-from experiments.general_competition.cnf_admission import admit_cnf, main
+from experiments.general_competition.cnf_admission import _BoundedReader, admit_cnf, main
 
 
 def write(path: Path, text: str) -> Path:
@@ -94,6 +96,83 @@ def test_byte_and_index_limits_fail_closed(tmp_path):
         admit_cnf(path, max_dimacs_bytes=4)
     with pytest.raises(MemoryError, match="variable bitmap"):
         admit_cnf(path, max_variable_bitmap_bytes=1)
+
+
+def test_decompressed_read_is_bounded_before_allocating_the_next_line():
+    class GuardedStream(io.BytesIO):
+        def readline(self, size=-1):
+            # A small synthetic stream exposes the allocation contract without
+            # actually expanding a huge gzip member in the test process.
+            assert 0 < size <= 17 - self.tell()
+            return super().readline(size)
+
+    stream = GuardedStream(b"p cnf 1 1\n" + b"1 " * 1000)
+    reader = _BoundedReader(stream, 16)
+    assert reader.readline() == b"p cnf 1 1\n"
+    with pytest.raises(MemoryError, match="DIMACS"):
+        reader.readline()
+    assert stream.tell() == 17
+
+
+@pytest.mark.parametrize("compressed", [False, True])
+@pytest.mark.parametrize("trailing_newline", [False, True])
+def test_exact_decoded_byte_limit_accepts_eof_without_changing_identity(
+    tmp_path, compressed, trailing_newline,
+):
+    content = b"p cnf 1 1\n1 0" + (b"\n" if trailing_newline else b"")
+    path = tmp_path / ("limit.cnf.gz" if compressed else "limit.cnf")
+    path.write_bytes(gzip.compress(content, mtime=0) if compressed else content)
+    original = admit_cnf(path)
+    assert admit_cnf(path, max_dimacs_bytes=len(content)) == original
+    assert admit_cnf(path, max_dimacs_bytes=sys.maxsize) == original
+    assert admit_cnf(path, max_dimacs_bytes=sys.maxsize + 1) == original
+    with pytest.raises(MemoryError, match="DIMACS"):
+        admit_cnf(path, max_dimacs_bytes=len(content) - 1)
+
+
+@pytest.mark.parametrize("prefix", [b"c ", b" ", b"p cnf 1 1\n1 "])
+def test_gzip_long_physical_line_stops_at_decoded_budget(tmp_path, monkeypatch, prefix):
+    from experiments.general_competition import cnf_admission
+
+    path = tmp_path / "long-line.cnf.gz"
+    path.write_bytes(gzip.compress(prefix + b" " * (1 << 20), mtime=0))
+    opened = []
+    original_open = cnf_admission._open_dimacs
+
+    class GuardedGzip:
+        def __init__(self, stream):
+            self.stream = stream
+            self.decoded = 0
+
+        def readline(self, size=-1):
+            assert 0 < size <= 65 - self.decoded
+            line = self.stream.readline(size)
+            self.decoded += len(line)
+            return line
+
+        def close(self):
+            self.stream.close()
+
+    def guarded_open(source):
+        stream, compression = original_open(source)
+        guarded = GuardedGzip(stream)
+        opened.append(guarded)
+        return guarded, compression
+
+    monkeypatch.setattr(cnf_admission, "_open_dimacs", guarded_open)
+    with pytest.raises(MemoryError, match="DIMACS"):
+        admit_cnf(path, max_dimacs_bytes=64)
+    assert opened[0].decoded == 65
+    assert opened[0].stream.closed
+
+
+@pytest.mark.parametrize("compressed", [False, True])
+def test_bounded_read_still_rejects_non_ascii_dimacs(tmp_path, compressed):
+    content = b"p cnf 1 1\n1 0\nc " + "\u00e9".encode("utf-8")
+    path = tmp_path / ("non-ascii.cnf.gz" if compressed else "non-ascii.cnf")
+    path.write_bytes(gzip.compress(content, mtime=0) if compressed else content)
+    with pytest.raises(ValueError, match="DIMACS must be ASCII"):
+        admit_cnf(path, max_dimacs_bytes=len(content))
 
 
 def test_comments_and_whitespace_do_not_change_semantic_identity(tmp_path):

@@ -112,6 +112,12 @@ confirmation, independent replication, official competition rank, or the 100/100
 gate. Preserve evidence beyond expiring CI artifacts as described in
 [the release guide](RELEASING.md#repository-boundary).
 
+Admission bounds each decoded physical-line read by the remaining DIMACS byte
+budget plus one overflow-probe byte. This prevents unbounded physical-line reads;
+gzip may buffer a limited amount ahead. Inputs exactly at the limit remain valid,
+with or without a final newline; accepted receipts are unchanged. This is an
+input-read bound, not a total process-RSS guarantee.
+
 ### Scoring policy and offline evidence verification
 
 New campaigns default to `--scoring-policy declared-inventory-v2`. This keeps

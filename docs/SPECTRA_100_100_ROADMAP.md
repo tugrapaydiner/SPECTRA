@@ -10,6 +10,8 @@
 > SAT answers, two checked UNSAT proofs and 87 timeouts; nine originally invalid
 > cases remain unresolved. The original failed evidence is unchanged.
 > Neither a hidden win nor independent replication has been established.
+> A subsequent admission repair bounds the requested decoded line size, including
+> gzip inputs. It changes no frozen result, score, or scientific gate.
 
 **Document type:** living research and engineering roadmap
 **Last reviewed:** 2026-10-21
