@@ -104,7 +104,9 @@ def _parse_int(token: bytes, *, line_number: int) -> int:
         value = int(text, 10)
     except (UnicodeDecodeError, ValueError) as exc:
         raise ValueError(f"line {line_number}: non-integer DIMACS token") from exc
-    if any(byte not in b"+-0123456789" for byte in token):
+    # int() accepts underscores and whitespace. Keep the strict ASCII grammar
+    # while scanning digits in C instead of one Python step per byte.
+    if not token.lstrip(b"+-").isdigit():
         raise ValueError(f"line {line_number}: malformed integer token")
     return value
 

@@ -138,7 +138,11 @@ def _replay_clauses(path: Path, receipt: CNFAdmission) -> tuple[Clause, ...]:
                 raise ValueError(f"line {line_number}: clause data precedes header")
 
             for token in stripped.split():
-                if any(character not in "+-0123456789" for character in token):
+                # Valid tokens take the C-level digit scan. Preserve the original
+                # error classification for malformed sign sequences on the cold path.
+                if not token.lstrip("+-").isdigit() and any(
+                    character not in "+-0123456789" for character in token
+                ):
                     raise ValueError(f"line {line_number}: malformed integer token")
                 try:
                     literal = int(token, 10)

@@ -225,3 +225,38 @@ def test_header_counts_preserve_supported_signed_and_zero_padded_integers(
     path.write_bytes(gzip.compress(content, mtime=0) if compressed else content)
     receipt = admit_cnf(path)
     assert (receipt.declared_variables, receipt.declared_clauses) == expected
+
+
+def test_numeric_token_fast_path_matches_strict_reference_byte_space():
+    from itertools import chain, product
+    from experiments.general_competition.cnf_admission import _parse_int
+
+    def reference(token):
+        try:
+            value = int(token.decode("ascii"), 10)
+        except (UnicodeDecodeError, ValueError) as error:
+            raise ValueError("line 7: non-integer DIMACS token") from error
+        if any(byte not in b"+-0123456789" for byte in token):
+            raise ValueError("line 7: malformed integer token")
+        return value
+
+    def outcome(parse, token):
+        try:
+            return ("value", parse(token))
+        except ValueError as error:
+            return ("error", str(error), type(error.__cause__).__name__)
+
+    # Every one/two-byte token includes non-ASCII, ASCII whitespace, NUL,
+    # signs, and separators. Longer combinations cover repeated signs and
+    # Python's accepted underscore syntax without broadening DIMACS grammar.
+    samples = chain(
+        (b"",),
+        (bytes((a,)) for a in range(256)),
+        (bytes((a, b)) for a in range(256) for b in range(256)),
+        (bytes(row) for width in (3, 4) for row in product(b"+-01_ \t", repeat=width)),
+        (str(value).encode("ascii") for value in (-(1 << 64), 1 << 64, 10 ** 200)),
+        (text.encode("utf-8") for text in ("١", "１", "²", "−1", "\u00a01")),
+        (b"9" * 5000,),
+    )
+    for token in samples:
+        assert outcome(lambda value: _parse_int(value, line_number=7), token) == outcome(reference, token), token

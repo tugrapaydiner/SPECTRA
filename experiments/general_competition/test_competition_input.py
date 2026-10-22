@@ -181,3 +181,67 @@ def test_replay_checks_header_tokens_even_with_matching_identity(tmp_path, count
                       dimacs_bytes=len(content), dimacs_sha256=digest)
     with pytest.raises(ValueError, match="header counts"):
         competition_input._replay_clauses(source, receipt)
+
+
+@pytest.mark.parametrize("token", [
+    "+1", "-1", "01", "+01", "-01", "0", "+0", "-0", "00",
+    "1_0", "++1", "+-1", "--1", "-+1", "+", "-", "1.0", "1e0",
+    "١", "１", "²", "−1", "\x00", "9223372036854775808",
+])
+@pytest.mark.parametrize("position", ["variables", "clauses", "literal"])
+def test_replay_integer_grammar_matches_admission(tmp_path, token, position):
+    from dataclasses import replace
+    import hashlib
+    from experiments.general_competition import competition_input
+
+    source = tmp_path / "tokens.cnf"
+    source.write_bytes(b"p cnf 1 1\n1 0\n")
+    original = admit_and_load_cnf(source).receipt
+    if position == "variables":
+        content = f"p cnf {token} 1\n1 0\n".encode("utf-8")
+    elif position == "clauses":
+        content = f"p cnf 1 {token}\n1 0\n".encode("utf-8")
+    else:
+        content = f"p cnf 1 1\n{token} 0\n".encode("utf-8")
+    source.write_bytes(content)
+    try:
+        admitted = admit_and_load_cnf(source, max_variable_bitmap_bytes=1024)
+    except (ValueError, MemoryError):
+        # Byte identity alone cannot bypass the replay parser's grammar/range
+        # checks. Huge variable headers are bounded by admission, while replay
+        # only checks the supplied dimensions against the trusted receipt.
+        digest = hashlib.sha256(content).hexdigest()
+        receipt = replace(original, source_bytes=len(content), dimacs_bytes=len(content),
+                          source_sha256=digest, dimacs_sha256=digest)
+        with pytest.raises(ValueError):
+            competition_input._replay_clauses(source, receipt)
+    else:
+        assert competition_input._replay_clauses(source, admitted.receipt) == admitted.clauses
+
+
+@pytest.mark.parametrize(("token", "message"), [
+    ("+", "non-integer"), ("-", "non-integer"),
+    ("1+2", "non-integer"), ("1-2", "non-integer"),
+    ("0+0", "non-integer"), ("1+-2", "non-integer"),
+    ("++1", "non-integer"), ("--1", "non-integer"),
+    ("+-1", "non-integer"), ("-+1", "non-integer"),
+    ("1_0", "malformed integer"), ("1.0", "malformed integer"),
+    ("1e0", "malformed integer"),
+])
+def test_replay_preserves_numeric_error_messages(tmp_path, token, message):
+    from dataclasses import replace
+    import hashlib
+    from experiments.general_competition import competition_input
+
+    source = tmp_path / "tokens.cnf"
+    source.write_bytes(b"p cnf 2 1\n1 0\n")
+    receipt = admit_and_load_cnf(source).receipt
+    content = f"p cnf 2 1\n{token} 0\n".encode("ascii")
+    source.write_bytes(content)
+    digest = hashlib.sha256(content).hexdigest()
+    receipt = replace(receipt, source_bytes=len(content), dimacs_bytes=len(content),
+                      source_sha256=digest, dimacs_sha256=digest)
+    with pytest.raises(ValueError) as caught:
+        competition_input._replay_clauses(source, receipt)
+    suffix = "non-integer DIMACS token" if message == "non-integer" else "malformed integer token"
+    assert str(caught.value) == f"line 2: {suffix}"
