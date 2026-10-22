@@ -81,7 +81,10 @@ struct Solver {
   double var_decay = 0.95;
   bool root_conflict = false;
   Stats stats;
-  std::vector<std::vector<int>> proof;
+  // Clause IDs stay stable, and learned literals remain available after search
+  // deletion. Retain proof order without duplicating each learned clause; -1
+  // records the final empty clause.
+  std::vector<int> proof_clause_ids;
 
   explicit Solver(int variables)
       : nvars(variables), watches(static_cast<std::size_t>(2 * variables)),
@@ -151,7 +154,7 @@ struct Solver {
 
   int add_clause(std::vector<int> row, bool learned, int lbd = 0) {
     if (row.empty()) {
-      if (learned) proof.emplace_back();
+      if (learned) proof_clause_ids.push_back(-1);
       root_conflict = true;
       return -1;
     }
@@ -174,7 +177,7 @@ struct Solver {
           .push_back(id);
     }
     if (learned) {
-      proof.push_back(stored.lits);
+      proof_clause_ids.push_back(id);
       ++stats.learned_clauses;
       stats.learned_literals += stored.lits.size();
     }
@@ -351,7 +354,7 @@ struct Solver {
       Clause &clause = clauses[static_cast<std::size_t>(candidates[index])];
       clause.deleted = true;
       watched_literals[static_cast<std::size_t>(candidates[index])] = {0, 0};
-      std::vector<int>().swap(clause.lits);
+      // The proof still references these immutable literals by clause ID.
       ++stats.deleted_clauses;
     }
     ++stats.reductions;
@@ -520,12 +523,12 @@ struct Solver {
   int solve(std::uint64_t max_conflicts,
             std::uint64_t max_learned_literals) {
     if (root_conflict) {
-      proof.emplace_back();
+      proof_clause_ids.push_back(-1);
       return 20;
     }
     int conflict = propagate();
     if (conflict >= 0) {
-      proof.emplace_back();
+      proof_clause_ids.push_back(-1);
       return 20;
     }
 
@@ -539,7 +542,7 @@ struct Solver {
       if (conflict >= 0) {
         ++stats.conflicts;
         if (decision_level() == 0) {
-          proof.emplace_back();
+          proof_clause_ids.push_back(-1);
           return 20;
         }
         if (stats.conflicts > max_conflicts) return 1;
@@ -552,7 +555,7 @@ struct Solver {
         }
         const int learned_id = add_clause(learned, true, learned_lbd);
         if (learned_id < 0 || !enqueue(learned[0], learned_id)) {
-          proof.emplace_back();
+          proof_clause_ids.push_back(-1);
           return 20;
         }
         if (stats.conflicts >= next_reduction) {
@@ -619,8 +622,13 @@ std::vector<std::uint8_t> encode_result(const Solver &solver, int status) {
       out.push_back(solver.values[static_cast<std::size_t>(var)] > 0 ? 1 : 0);
     }
   } else if (status == 20) {
-    append_u32(out, static_cast<std::uint32_t>(solver.proof.size()));
-    for (const auto &clause : solver.proof) {
+    append_u32(out, static_cast<std::uint32_t>(solver.proof_clause_ids.size()));
+    for (const int clause_id : solver.proof_clause_ids) {
+      if (clause_id == -1) {
+        append_u32(out, 0);
+        continue;
+      }
+      const auto &clause = solver.clauses[static_cast<std::size_t>(clause_id)].lits;
       append_u32(out, static_cast<std::uint32_t>(clause.size()));
       for (const int literal : clause) append_i32(out, literal);
     }

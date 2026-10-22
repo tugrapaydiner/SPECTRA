@@ -272,6 +272,92 @@ def test_native_replay_rejects_inconsistent_budget_receipts(runtime, result_api)
     ))
 
 
+def test_native_replay_checks_solved_conflict_budgets(runtime, result_api):
+    solve, verify = result_api
+    clauses = all_blocking_clauses(3)
+    # A final root conflict is checked before the conflict budget. The three
+    # admitted learned clauses therefore allow UNSAT at conflict four.
+    unsat = solve(runtime, 3, clauses, max_conflicts=3)
+    assert unsat.status == "UNSAT_VERIFIED"
+    assert unsat.stats.conflicts == unsat.max_conflicts + 1
+    assert verify(3, clauses, unsat)
+    assert not verify(3, clauses, replace(unsat, max_conflicts=2))
+
+    root_clauses = ((1,), (-1,))
+    root = solve(runtime, 1, root_clauses, max_conflicts=0, max_learned_literals=0)
+    assert root.status == "UNSAT_VERIFIED"
+    assert root.stats.conflicts == 0
+    assert verify(1, root_clauses, root)
+
+    sat_clauses = ((1, 2, 3),)
+    sat = solve(runtime, 3, sat_clauses, max_conflicts=0)
+    assert sat.status == "SAT_VERIFIED"
+    assert verify(3, sat_clauses, sat)
+    assert not verify(3, sat_clauses, replace(
+        sat, stats=replace(sat.stats, conflicts=1)
+    ))
+
+
+@pytest.mark.parametrize("field", ["learned_clauses", "learned_literals"])
+def test_native_replay_matches_unsat_proof_to_statistics(runtime, result_api, field):
+    solve, verify = result_api
+    clauses = all_blocking_clauses(3)
+    result = solve(runtime, 3, clauses)
+    assert result.status == "UNSAT_VERIFIED"
+    assert getattr(result.stats, field) > 0
+    assert not verify(3, clauses, replace(
+        result, stats=replace(result.stats, **{field: 0})
+    ))
+
+
+def test_native_replay_rejects_impossible_learned_literal_budget(runtime, result_api):
+    solve, verify = result_api
+    clauses = all_blocking_clauses(3)
+    result = solve(runtime, 3, clauses, max_learned_literals=0)
+    assert result.reason == "learned_literal_budget"
+    assert verify(3, clauses, result)
+    # No learned clause can contain more than one literal per native variable.
+    assert not verify(3, clauses, replace(
+        result, max_learned_literals=result.stats.learned_literals + 3
+    ))
+
+
+def test_native_replay_uses_residual_variables_for_learned_budget(runtime):
+    clauses = all_blocking_clauses(3) + ((4,), (5,))
+    result = solve_general_native(runtime, 5, clauses, max_learned_literals=0)
+    assert result.reason == "learned_literal_budget"
+    assert result.residual_variables == 3
+    assert verify_native_result(5, clauses, result)
+    assert not verify_native_result(5, clauses, replace(
+        result, max_learned_literals=result.stats.learned_literals + 3
+    ))
+
+
+@pytest.mark.parametrize("clauses", [(), ((1,), (-1,))])
+@pytest.mark.parametrize("counter", [
+    "decisions", "propagations", "conflicts", "restarts", "learned_clauses",
+    "learned_literals", "reductions", "deleted_clauses",
+])
+def test_native_replay_requires_zero_shortcut_statistics(runtime, clauses, counter):
+    result = solve_general_native(runtime, 1, clauses)
+    assert verify_native_result(1, clauses, result)
+    assert not verify_native_result(1, clauses, replace(
+        result, stats=replace(result.stats, **{counter: 1})
+    ))
+
+
+@pytest.mark.parametrize("clauses,reason", [
+    ((), "model"),
+    (((1, 2, 3),), "binary_core_model"),
+])
+def test_native_replay_requires_reason_to_match_solver_path(runtime, clauses, reason):
+    result = solve_general_native(runtime, 3, clauses)
+    assert result.status == "SAT_VERIFIED"
+    assert result.reason != reason
+    assert verify_native_result(3, clauses, result)
+    assert not verify_native_result(3, clauses, replace(result, reason=reason))
+
+
 @pytest.mark.parametrize("field", ["max_conflicts", "max_learned_literals"])
 def test_native_replay_rejects_out_of_abi_budget(runtime, result_api, field):
     solve, verify = result_api
@@ -553,3 +639,79 @@ assert verify_native_result(5, clauses, result)
         check=True,
         timeout=120,
     )
+
+
+def test_native_proof_ids_preserve_deleted_rows_and_relocation(tmp_path, monkeypatch):
+    from experiments.general_competition import native_cdcl
+
+    source = native_cdcl.SOURCE.resolve().as_posix()
+    harness = tmp_path / "proof_ids.cpp"
+    harness.write_text(
+        '#include "' + source + '"\n' + r"""
+SPECTRA_EXPORT int spectra_g_test_proof_ids() {
+  Solver solver(11);
+  // These 2,048 blocking clauses form a real UNSAT formula whose search learns
+  // and deletes clauses. The ordinary reduction test independently checks RUP.
+  for (unsigned mask = 0; mask < (1u << 11); ++mask) {
+    std::vector<int> row;
+    for (int var = 1; var <= 11; ++var)
+      row.push_back(mask & (1u << (var - 1)) ? var : -var);
+    solver.add_initial(row.data(), row.data() + row.size());
+  }
+  solver.initialize_heap();
+  solver.clauses.reserve(solver.clauses.capacity() + 1);
+  if (solver.solve(10000000, 100000000) != 20) return 1;
+  if (!solver.stats.reductions || !solver.stats.deleted_clauses) return 2;
+
+  std::size_t proof_index = 0;
+  std::size_t deleted_rows = 0;
+  for (std::size_t id = 0; id < solver.clauses.size(); ++id) {
+    const Clause &clause = solver.clauses[id];
+    if (!clause.learned) continue;
+    if (proof_index >= solver.proof_clause_ids.size() ||
+        solver.proof_clause_ids[proof_index++] != static_cast<int>(id)) return 3;
+    if (clause.lits.empty()) return 4;
+    if (clause.deleted) ++deleted_rows;
+  }
+  if (deleted_rows != solver.stats.deleted_clauses ||
+      proof_index != solver.stats.learned_clauses ||
+      solver.proof_clause_ids.size() != proof_index + 1 ||
+      solver.proof_clause_ids.back() != -1) return 5;
+
+  const auto encoded = encode_result(solver, 20);
+  // Construct the proof payload independently from the append-only clause
+  // arena, including deleted rows, to catch dropped or reordered additions.
+  if (encoded.size() < 76) return 6;
+  std::vector<std::uint8_t> expected(encoded.begin(), encoded.begin() + 76);
+  append_u32(expected, static_cast<std::uint32_t>(proof_index + 1));
+  for (const Clause &clause : solver.clauses) {
+    if (!clause.learned) continue;
+    append_u32(expected, static_cast<std::uint32_t>(clause.lits.size()));
+    for (int literal : clause.lits) append_i32(expected, literal);
+  }
+  append_u32(expected, 0);
+  if (encoded != expected) return 7;
+  // Force relocation explicitly instead of depending on vector growth policy.
+  solver.clauses.reserve(solver.clauses.capacity() + 1);
+  if (encode_result(solver, 20) != encoded) return 8;
+
+  Solver root(1);
+  root.add_clause({}, false);
+  if (root.solve(0, 0) != 20 ||
+      root.proof_clause_ids != std::vector<int>({-1})) return 9;
+  // SGC1 header, UNSAT status, one variable, zero counters, one empty addition.
+  std::vector<std::uint8_t> root_expected(84, 0);
+  root_expected[0] = 'S'; root_expected[1] = 'G';
+  root_expected[2] = 'C'; root_expected[3] = '1';
+  root_expected[4] = 20; root_expected[8] = 1; root_expected[76] = 1;
+  return encode_result(root, 20) == root_expected ? 0 : 10;
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(native_cdcl, "SOURCE", harness)
+    library = ctypes.CDLL(str(build_native_cdcl(tmp_path / "proof-id-build")))
+    check = library.spectra_g_test_proof_ids
+    check.argtypes = []
+    check.restype = ctypes.c_int
+    assert check() == 0

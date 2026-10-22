@@ -595,7 +595,23 @@ def _valid_native_evidence(result: DirectNativeResult | NativeSolveResult) -> bo
     )
 
 
-def _valid_unknown_budget(result: DirectNativeResult | NativeSolveResult) -> bool:
+def _valid_solved_native_statistics(
+    result: DirectNativeResult | NativeSolveResult,
+) -> bool:
+    if result.status == "SAT_VERIFIED":
+        return result.stats.conflicts <= result.max_conflicts
+    # Root conflicts terminate before the budget check. An UNSAT proof retains
+    # every learned clause and adds exactly one final empty clause.
+    return (
+        result.stats.conflicts <= result.max_conflicts + 1
+        and result.proof_clauses == result.stats.learned_clauses + 1
+        and result.proof_literals == result.stats.learned_literals
+    )
+
+
+def _valid_unknown_budget(
+    result: DirectNativeResult | NativeSolveResult, native_variables: int,
+) -> bool:
     """Check consistency with native exit conditions, not a replay of the search."""
     if result.model != () or result.proof is not None:
         return False
@@ -604,7 +620,12 @@ def _valid_unknown_budget(result: DirectNativeResult | NativeSolveResult) -> boo
         return result.stats.conflicts == result.max_conflicts + 1
     if result.reason == "learned_literal_budget":
         # This check follows conflict admission and precedes the learned addition.
-        return 0 < result.stats.conflicts <= result.max_conflicts
+        # A learned clause contains at most one literal per native variable.
+        return (
+            0 < result.stats.conflicts <= result.max_conflicts
+            and result.max_learned_literals - result.stats.learned_literals
+            < native_variables
+        )
     return False
 
 
@@ -633,6 +654,7 @@ def verify_direct_native_result(
     if result.status == "SAT_VERIFIED":
         return (
             result.reason == "model"
+            and _valid_solved_native_statistics(result)
             and result.proof is None
             and len(result.model) == nvars
             and model_satisfies(nvars, canonical, result.model)
@@ -640,6 +662,7 @@ def verify_direct_native_result(
     if result.status == "UNSAT_VERIFIED":
         return (
             result.reason == "drup"
+            and _valid_solved_native_statistics(result)
             and result.model == ()
             and result.proof is not None
             and verify_drup_proof(
@@ -650,7 +673,7 @@ def verify_direct_native_result(
                 max_literals=max(result.proof_literals, 1),
             )
         )
-    return _valid_unknown_budget(result)
+    return _valid_unknown_budget(result, nvars)
 
 
 def write_drup(path: str | Path, proof: DRUPProof) -> Path:
@@ -771,9 +794,28 @@ def verify_native_result(
         or result.residual_clauses != len(result.core.residual_clauses)
     ):
         return False
+    if result.core.contradiction or not result.core.residual_clauses:
+        if (
+            result.stats != NativeStats(0, 0, 0, 0, 0, 0, 0, 0)
+            or result.proof is not None
+        ):
+            return False
+        if result.core.contradiction:
+            return (
+                result.status == "UNSAT_VERIFIED"
+                and result.reason == "binary_core"
+                and result.model == ()
+            )
+        return (
+            result.status == "SAT_VERIFIED"
+            and result.reason == "binary_core_model"
+            and len(result.model) == nvars
+            and model_satisfies(nvars, canonical, result.model)
+        )
     if result.status == "SAT_VERIFIED":
         return (
-            result.reason in ("model", "binary_core_model")
+            result.reason == "model"
+            and _valid_solved_native_statistics(result)
             and result.proof is None
             and len(result.model) == nvars
             and model_satisfies(nvars, canonical, result.model)
@@ -781,10 +823,9 @@ def verify_native_result(
     if result.status == "UNSAT_VERIFIED":
         if result.model != ():
             return False
-        if result.core.contradiction:
-            return result.reason == "binary_core" and result.proof is None
         return (
             result.reason == "drup"
+            and _valid_solved_native_statistics(result)
             and result.proof is not None
             and verify_drup_proof(
                 result.core.reduced_nvars,
@@ -794,8 +835,4 @@ def verify_native_result(
                 max_literals=max(result.proof_literals, 1),
             )
         )
-    return (
-        not result.core.contradiction
-        and bool(result.core.residual_clauses)
-        and _valid_unknown_budget(result)
-    )
+    return _valid_unknown_budget(result, result.residual_variables)
