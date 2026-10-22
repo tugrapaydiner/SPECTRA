@@ -36,13 +36,6 @@
 > checks failed before the fix; all 26 input-loader and 379 general-CNF checks pass
 > afterward. This engineering repair adds no solved formula or scientific gate
 > claim.
-> A separate [minimization scratch-buffer study](../experiments/general_competition/minimization_scratch_study_20261022.json)
-> now freezes one native allocation-reuse candidate on all ten original failure
-> cases. Three paired 50,000-conflict repeats require exact learned-prefix, model,
-> counter and terminal-state agreement before any CPU benefit can be claimed.
-> This new exposed study does not execute the blocked packing plan, adopt the
-> candidate, or change earlier outcomes. Its measurements are not started at the
-> freeze checkpoint.
 
 **Document type:** living research and engineering roadmap
 **Last reviewed:** 2026-10-22
@@ -52,7 +45,7 @@
 **Current pull request:** draft PR #76
 **Current rule:** do not open another working branch and do not merge merely because CI is green.
 
-**Packing-study v2 resumption dependency:** retrieve the original `postrun-verification-96x8`,
+**Next resumption dependency:** retrieve the original `postrun-verification-96x8`,
 `repaired-verification-96`, and `completed-result-report` trees with their pinned
 manifests, and the exact frozen checker/native build. The
 [recovery record](../experiments/general_competition/reproduction_recovery_20261022.json)
@@ -60,10 +53,6 @@ retains the missing paths and expected hashes, recovered receipts, both failed
 static preflights, and completed CI run/artifact identities. The v2 plan is
 unchanged. Outside hidden-set custody, replication, expert review and operator
 validation still require attributable external participation.
-
-Other exposed development can continue under separately frozen plans with their
-own exact inputs, builds, limits and evidence. A new study must not be described
-as execution of the blocked v2 plan or replacement of its original prerequisites.
 
 ---
 

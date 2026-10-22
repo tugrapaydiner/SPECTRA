@@ -88,6 +88,100 @@ SPECTRA_EXPORT int spectra_g_test_activity_underflow() {
     assert check() == 0
 
 
+def test_compact_watch_pairs_track_moves_rebuild_and_deletion(tmp_path, monkeypatch):
+    from experiments.general_competition import native_cdcl
+
+    source = native_cdcl.SOURCE.resolve().as_posix()
+    harness = tmp_path / "watch_pairs.cpp"
+    harness.write_text(
+        '#include "' + source + '"\n' + r"""
+bool valid_watch_pairs(const Solver &s) {
+  if (s.watched_literals.size() != s.clauses.size()) return false;
+  std::vector<int> counts(s.clauses.size(), 0);
+  for (std::size_t slot = 0; slot < s.watches.size(); ++slot) {
+    for (int id : s.watches[slot]) {
+      const Clause &c = s.clauses[id];
+      if (c.deleted || (slot != s.watch_index(c.lits[c.watch0]) &&
+                        slot != s.watch_index(c.lits[c.watch1]))) return false;
+      ++counts[id];
+    }
+  }
+  for (std::size_t id = 0; id < s.clauses.size(); ++id) {
+    const Clause &c = s.clauses[id];
+    const auto pair = s.watched_literals[id];
+    if (c.deleted) {
+      if (pair.first || pair.second || counts[id]) return false;
+    } else if (pair.first != c.lits[c.watch0] || pair.second != c.lits[c.watch1] ||
+               counts[id] != (c.watch0 == c.watch1 ? 1 : 2)) return false;
+  }
+  return true;
+}
+
+SPECTRA_EXPORT int spectra_g_test_watch_pairs() {
+  Solver s(4);
+  const int row[] = {1, 2, 3};
+  s.add_initial(row, row + 3);
+  s.initialize_heap();
+  if (!valid_watch_pairs(s)) return 1;
+  s.trail_limits.push_back(0);
+  if (!s.enqueue(-1, -1) || s.propagate() != -1) return 2;
+  if (s.watched_literals[0] != std::make_pair(3, 2) || !valid_watch_pairs(s)) return 3;
+  s.backtrack(0);
+  s.trail_limits.push_back(0);
+  if (!s.enqueue(1, -1) || s.propagate() != -1) return 4;
+  s.trail_limits.push_back(static_cast<int>(s.trail.size()));
+  if (!s.enqueue(-2, -1) || s.propagate() != -1) return 5;
+  // Literal 1 satisfies the clause after backtracking. The second watch must
+  // still move from 2 to 1, exactly as the original propagation algorithm does.
+  if (s.watched_literals[0] != std::make_pair(3, 1) || s.values[3] || !valid_watch_pairs(s)) return 6;
+  s.watched_literals[0] = {0, 0};
+  s.rebuild_watches();
+  if (!valid_watch_pairs(s)) return 7;
+  s.backtrack(0);
+  s.trail_limits.push_back(0);
+  if (!s.enqueue(-1, -1) || s.propagate() != -1) return 8;
+  s.trail_limits.push_back(static_cast<int>(s.trail.size()));
+  if (!s.enqueue(-2, -1) || s.propagate() != -1) return 9;
+  if (s.values[3] != 1 || s.reasons[3] != 0 || !valid_watch_pairs(s)) return 10;
+
+  Solver unit(1);
+  unit.add_clause({1}, false);
+  unit.initialize_heap();
+  if (unit.watched_literals[0] != std::make_pair(1, 1) || !valid_watch_pairs(unit)) return 11;
+  unit.trail_limits.push_back(0);
+  if (!unit.enqueue(-1, -1) || unit.propagate() != 0) return 12;
+  Solver conflict(5);
+  for (const auto &clause : std::vector<std::vector<int>>{{1, 2, 3}, {1, 2}, {1, 4}, {1, 5}})
+    conflict.add_initial(clause.data(), clause.data() + clause.size());
+  conflict.initialize_heap();
+  conflict.trail_limits.push_back(0);
+  if (!conflict.enqueue(-1, -1) || !conflict.enqueue(-2, -1) || conflict.propagate() != 1) return 13;
+  if (conflict.watches[conflict.watch_index(1)] != std::vector<int>({1, 2, 3}) ||
+      !valid_watch_pairs(conflict)) return 14;
+
+  Solver reduction(4);
+  reduction.add_initial(row, row + 3);
+  for (int index = 0; index < 32; ++index) reduction.add_clause({1, 2, 3}, true, 3);
+  reduction.reduce_database();
+  if (reduction.stats.deleted_clauses != 16 || !valid_watch_pairs(reduction)) return 15;
+  // Preserve the original stale-registration skip without dereferencing a
+  // nonmatching compact pair as if it represented a current watch.
+  reduction.watches[reduction.watch_index(4)].push_back(0);
+  reduction.trail_limits.push_back(0);
+  if (!reduction.enqueue(-4, -1) || reduction.propagate() != -1) return 16;
+  return reduction.watches[reduction.watch_index(4)].empty() && valid_watch_pairs(reduction) ? 0 : 17;
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(native_cdcl, "SOURCE", harness)
+    library = ctypes.CDLL(str(build_native_cdcl(tmp_path / "watch-pair-build")))
+    check = library.spectra_g_test_watch_pairs
+    check.argtypes = []
+    check.restype = ctypes.c_int
+    assert check() == 0
+
+
 def brute_sat(nvars, clauses):
     canonical = canonical_cnf(nvars, clauses)
     return any(

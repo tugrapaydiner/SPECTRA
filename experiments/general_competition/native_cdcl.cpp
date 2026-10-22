@@ -60,6 +60,8 @@ struct Solver {
   int nvars;
   std::vector<Clause> clauses;
   std::vector<std::vector<int>> watches;
+  // Keep the watched literals together so satisfied clauses need no clause load.
+  std::vector<std::pair<int, int>> watched_literals;
   std::vector<std::int8_t> values;
   std::vector<int> levels;
   std::vector<int> reasons;
@@ -162,6 +164,9 @@ struct Solver {
     const int id = static_cast<int>(clauses.size());
     clauses.push_back(std::move(clause));
     Clause &stored = clauses.back();
+    watched_literals.emplace_back(
+        stored.lits[static_cast<std::size_t>(stored.watch0)],
+        stored.lits[static_cast<std::size_t>(stored.watch1)]);
     watches[watch_index(stored.lits[static_cast<std::size_t>(stored.watch0)])]
         .push_back(id);
     if (stored.watch1 != stored.watch0) {
@@ -209,22 +214,18 @@ struct Solver {
       std::size_t write = 0;
       for (std::size_t read = 0; read < watching.size(); ++read) {
         const int clause_id = watching[read];
-        Clause &clause = clauses[static_cast<std::size_t>(clause_id)];
-        if (clause.deleted) continue;
-        int false_slot = -1;
-        if (clause.lits[static_cast<std::size_t>(clause.watch0)] == -assigned) {
-          false_slot = 0;
-        } else if (clause.lits[static_cast<std::size_t>(clause.watch1)] == -assigned) {
-          false_slot = 1;
-        } else {
-          continue;
-        }
-        const int other_pos = false_slot == 0 ? clause.watch1 : clause.watch0;
-        const int other_literal = clause.lits[static_cast<std::size_t>(other_pos)];
+        const auto watched = watched_literals[static_cast<std::size_t>(clause_id)];
+        const int false_slot = watched.first == -assigned ? 0
+            : watched.second == -assigned ? 1 : -1;
+        if (false_slot < 0) continue;
+        const int other_literal = false_slot == 0 ? watched.second : watched.first;
         if (literal_value(other_literal) > 0) {
           watching[write++] = clause_id;
           continue;
         }
+        Clause &clause = clauses[static_cast<std::size_t>(clause_id)];
+        if (clause.deleted) continue;
+        const int other_pos = false_slot == 0 ? clause.watch1 : clause.watch0;
 
         int replacement = -1;
         for (int index = 0; index < static_cast<int>(clause.lits.size()); ++index) {
@@ -238,10 +239,15 @@ struct Solver {
           }
         }
         if (replacement >= 0) {
-          if (false_slot == 0) clause.watch0 = replacement;
-          else clause.watch1 = replacement;
-          watches[watch_index(clause.lits[static_cast<std::size_t>(replacement)])]
-              .push_back(clause_id);
+          const int replacement_literal = clause.lits[static_cast<std::size_t>(replacement)];
+          if (false_slot == 0) {
+            clause.watch0 = replacement;
+            watched_literals[static_cast<std::size_t>(clause_id)].first = replacement_literal;
+          } else {
+            clause.watch1 = replacement;
+            watched_literals[static_cast<std::size_t>(clause_id)].second = replacement_literal;
+          }
+          watches[watch_index(replacement_literal)].push_back(clause_id);
           continue;
         }
 
@@ -305,6 +311,9 @@ struct Solver {
       if (clause.watch1 < 0 || clause.watch1 >= static_cast<int>(clause.lits.size())) {
         clause.watch1 = clause.lits.size() > 1 ? 1 : 0;
       }
+      watched_literals[static_cast<std::size_t>(id)] = {
+          clause.lits[static_cast<std::size_t>(clause.watch0)],
+          clause.lits[static_cast<std::size_t>(clause.watch1)]};
       watches[watch_index(clause.lits[static_cast<std::size_t>(clause.watch0)])]
           .push_back(id);
       if (clause.watch1 != clause.watch0) {
@@ -341,6 +350,7 @@ struct Solver {
     for (std::size_t index = 0; index < remove; ++index) {
       Clause &clause = clauses[static_cast<std::size_t>(candidates[index])];
       clause.deleted = true;
+      watched_literals[static_cast<std::size_t>(candidates[index])] = {0, 0};
       std::vector<int>().swap(clause.lits);
       ++stats.deleted_clauses;
     }

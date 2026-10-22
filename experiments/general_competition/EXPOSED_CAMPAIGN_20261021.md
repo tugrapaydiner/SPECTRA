@@ -525,36 +525,6 @@ controller, helper and tests; host-specific runtime/prerequisite dependencies
 remain explicit. Neither freeze establishes a self-contained public release,
 hidden-set validation, external replication or general solver leadership.
 
-### Prospective minimization scratch-buffer study — 2026-10-22
-
-The [separate study record](minimization_scratch_study_20261022.json) freezes one
-candidate: reuse the stack and touched-variable buffers in clause minimization,
-clearing both at every invocation. Traversal order, marker cleanup, learned-clause
-logic and every other native operation stay the same. Existing code allocates
-fresh buffers for each attempted literal removal; this motivates testing the
-allocation cost, without assuming a measured benefit.
-
-All ten original failure cases remain in their original order. Three paired
-repeats alternate baseline/candidate order by case and repeat, with 50,000
-conflicts, 100 million cumulative learned literals, 60-second solve/check limits,
-4,096 MiB per-process address space, and 64 MiB per-file output. The plan binds
-newly built baseline/candidate harnesses, the exact original and canonical inputs,
-Python, checker and execution environment before any exposed solve. These new
-builds do not replace the absent frozen packing-study artifacts.
-
-Eligibility requires exact ordered learned prefixes, models, native counters and
-terminal invariant receipts in all 30 pairs, with identical output across repeats;
-every prefix/model must independently check. Each repeat must save at least 5% aggregate native solve CPU, with at least
-one second of baseline aggregate work. Cases with baseline median CPU of at least
-0.25 seconds must avoid a greater-than-10% median slowdown. Every pair must keep
-candidate post-exec peak memory within 110% of baseline plus 1 MiB. All failures,
-timeouts and incomplete cells remain disqualifying evidence; thresholds are not
-changed after results open.
-
-This is a narrow fixed-work experiment, with no adoption, solved-count, end-to-end
-ranking, hidden-set, outside-replication or G0 claim. Production native source is
-unchanged. Measurements are not started at the freeze checkpoint.
-
 ### Continuation environment recovery — 2026-10-22
 
 The [recovery checkpoint](reproduction_recovery_20261022.json) records work at
