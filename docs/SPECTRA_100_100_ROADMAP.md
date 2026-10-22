@@ -12,6 +12,8 @@
 > longer-budget diagnostic and retained-proof check now give verified corrected
 > answers for two of the ten original failure cases; eight remain unresolved.
 > The original failed evidence and every recorded timeout are unchanged.
+> A separate fixed-conflict audit checked 473,640 learned additions and all ten
+> terminal states, including UNKNOWN cases. It adds no solved cases or G0 claim.
 > Neither a hidden win nor independent replication has been established.
 > A subsequent admission repair bounds the requested decoded line size, including
 > gzip inputs. It changes no frozen result, score, or scientific gate.

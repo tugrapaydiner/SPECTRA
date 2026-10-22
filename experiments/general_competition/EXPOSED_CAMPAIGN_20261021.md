@@ -318,6 +318,47 @@ UNSAT; eight remain unresolved. This does not close full G0 or establish a
 performance rank, speedup, hidden-set result or outside replication. Local raw
 payload retention and hashes do not establish a permanent public archive.
 
+### Bounded learned-prefix and terminal-state audit
+
+The [combined audit record](native_derivation_audit_20261022.json) retains a
+separate locally frozen plan, exact harness/control sources, all ten outcomes,
+checker logs and the 102-file raw manifest. The final plan was reviewed before
+any of the ten original cases executed. Its SHA-256 is
+`9ca0f4a4e8226702d15a62bdc30cc52794f81bb207f83780bab6a25cf65bcff2`.
+The two superseded, unexecuted pre-review plans remain in the raw bundle.
+
+The unchanged `cb14031` native kernel was included in a private C++ harness that
+retains learned clauses on SAT and UNKNOWN as well as UNSAT. All ten original
+failure cases ran once in their original order, with a configured 50,000-conflict
+budget, 60-second solver/checker limits and the same 4,096-MiB per-process and
+64-MiB per-file ceilings. The existing solver increments its conflict counter
+before testing `conflicts > max_conflicts`, so a budget stop records **50,001
+conflicts and 50,000 learned additions**. This behavior was declared before the
+run; neither the source nor the observations were changed to conceal it.
+
+All **473,640 learned additions / 25,353,801 literals** passed pinned
+`drat-trim -f -U` forward RUP checking. Its exact `s DERIVATION` result and exit
+one mean an accepted incomplete derivation, **not an UNSAT refutation**. Positive,
+unsound, malformed, false-empty-clause, RAT-only and deadline-boundary controls
+are retained. The runner rejects elapsed time above the frozen budget even when
+a just-late process exit is reaped without the supervisor's timeout flag.
+
+All ten terminal states passed checks of causal live reasons, watched-clause
+registrations, unassigned relevant-variable heap coverage, cleared analysis
+scratch, and proof/statistics consistency. The nine budget-limited searches each
+reached 13 restarts and nine database reductions. Nine terminal states contained
+zero-activity relevant variables, up to 6,490 in one case; this is a terminal
+observation, not an event trace proving which variables were requeued or chosen.
+
+The outcomes are **nine UNKNOWN_WITH_VERIFIED_DERIVATION and one already-known
+SAT_AND_PREFIX_VERIFIED**. The SAT model was also checked against all 14,577
+original clauses. No new defect or additional solved case was established:
+corrected answer coverage remains two of ten, with eight unresolved. These
+prefix/state checks are not exhaustive solver correctness, ABI serialization
+coverage, a performance comparison, full G0 closure or outside-team replication.
+Raw prefixes are retained losslessly outside the active tree; the user-retained
+bundle is not a signed permanent public archive.
+
 ### Completed repaired-source heap experiment
 
 The [v2 plan](heap_ablation_plan_20261021.json),
