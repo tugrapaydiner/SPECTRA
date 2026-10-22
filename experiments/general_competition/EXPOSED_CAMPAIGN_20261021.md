@@ -420,7 +420,7 @@ experiment to their original manifests. Its SHA-256 is
 Raw preservation is separate from this receipt: these local checks do not
 establish a permanent public release or independent replication.
 
-### Prospective all-corpus packing study
+### Packing study v1: retained admission failure
 
 The separate [packing-study freeze](packing_study_freeze_20261021.json) has
 SHA-256 `b41de4391dd74046d421305224a0ae34ade30a78c371cb6fd85e2b170354b29f`.
@@ -428,8 +428,8 @@ It publishes the complete exact controller, unchanged helper and tested test
 source as losslessly encoded payloads, with their individual byte counts and
 hashes. Both existing public inventory references and their exact reconstruction
 rules are included. The controller requires the immutable published Git blob
-and an identical HTTPS readback before creating a candidate. At this checkpoint,
-no candidate has been created or measured.
+and an identical HTTPS readback before creating a candidate. At the original
+v1 freeze checkpoint, no candidate had been created or measured.
 
 Both arms start from repaired source
 `cb14031d4187c4cba5cccb37984ecf59d59bfdae` and use the same measured native
@@ -465,6 +465,65 @@ the harness, but its host-specific runtime paths and prerequisite evidence hashe
 are not a self-contained public runtime bundle. Permanent public raw evidence,
 hidden confirmation, outside replication and the roadmap's 100/100 claim remain
 open. Earlier failed and inconclusive experiments are unchanged.
+
+The v1 execution ran from 21:03:24 to 21:06:58 UTC on 21 October 2026 and
+ended **NOT_ESTABLISHED**. All 96 untimed pair workers were attempted: 93
+returned exact canonical, literal and offset identities; three exited before
+either packing call. All 17 mandatory unit groups passed separately, including
+35 untimed packing calls and 10 small direct native ABI calls. The corpus phase
+completed 186 untimed calls and retained six unstarted calls. All **576 timed
+packing calls and 640 native campaign cells are NOT_RUN**. This attempt provides
+no packing-time or endpoint-performance result, and no candidate was adopted.
+
+The three errors came from a harness assertion equating GBD selection metadata
+with DIMACS declared variable counts. Both counts remain retained:
+
+| Original index | Instance ID | Catalog variables | DIMACS declared variables | Clauses in both |
+|---|---|---:|---:|---:|
+| 5 | `587150fb7b12a6b5dd7e4a9446b9713b` | 1,889 | 1,890 | 12,666 |
+| 18 | `211938776d92f11870a687abd11d55a4` | 1,000 | 1,001 | 9,897 |
+| 33 | `f746dae2050dd4aa48bcd53e8bd897b4` | 74,776 | 74,804 | 393,322 |
+
+The strict parser's declared counts are correct for the admitted inputs. Their
+source hashes did not change. The full frozen output contains 2,855 files; all
+2,854 payload hashes and the exact file inventory were independently verified.
+The final manifest is
+`e82ba27e9cf37bf6e462d245a3eab851b2eb4bc591af1e929b77346238621f5c`.
+A read-only report replay returned the byte-identical report
+`bf014313158ac8c8aafab539834805594d370f00d28648ac53f5dd139eb974b3`.
+The [retained v1 result](packing_study_v1_result_20261021.json) publishes exact
+lossless report, planned-cell accounting and error payloads. Its complete embedded
+decoder reconstructs the original manifest from the pinned public Git source
+tree, one candidate-file hash override, and all 896 other manifest rows. The
+reconstructed 2,854-row manifest must match the original byte count and hash.
+Subsidiary arithmetic comparisons on zero timing data are not performance evidence.
+
+### Prospective packing study v2
+
+The [separately versioned v2 freeze](packing_study_v2_freeze_20261021.json) has
+SHA-256 `383caac9c1b3efd77eb6427cf96ddf4dac0475f3861b206d25f6eda8767a909d`.
+It corrects only the harness's input identity binding and retains the complete
+failed v1 attempt. It pins all 96 previously verified strict admission receipts:
+DIMACS declared variables and clauses, exact decompressed bytes/hash, semantic
+hash, and original compressed bytes/hash. The catalog metadata stays unchanged.
+All 96 compressed identities and raw decompressed identities were independently
+checked against those earlier receipts without rerunning either packer or solver.
+
+Every new pair retains its complete admission receipt before checking those
+seven frozen fields. Both live execution and report replay require the expected
+receipt, configuration and exact integer dimensions. Missing or changed identity
+records fail closed. The candidate transformation, source/native binary, original
+96-case population and 32-case subset, order, phase counts, resource limits,
+deadlines, clocks, thresholds and rejection rules are unchanged. This is a new
+full experiment; no selected v1 cells are retried or reused as v2 measurements.
+
+Before this v2 publication, 67 synthetic regression checks passed, an independent
+review found no blocking issue, and static preflight verified the same 528
+prerequisite files plus all pinned inputs and artifacts. No v2 candidate has been
+created or measured at publication. Its published payloads reconstruct the exact
+controller, helper and tests; host-specific runtime/prerequisite dependencies
+remain explicit. Neither freeze establishes a self-contained public release,
+hidden-set validation, external replication or general solver leadership.
 
 ### Scoring and verification repairs
 
