@@ -385,8 +385,9 @@ def check_drat(
         text=True,
         timeout=timeout_seconds,
     )
-    combined = completed.stdout + "\n" + completed.stderr
-    verified = completed.returncode == 0 and "VERIFIED" in combined.upper()
+    verified = completed.returncode == 0 and any(
+        line.strip() == "s VERIFIED" for line in completed.stdout.splitlines()
+    )
     return DratCheck(
         schema="spectra.general_drat_check.v1",
         verified=verified,

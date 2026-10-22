@@ -114,3 +114,59 @@ def test_checker_timeout_must_be_positive(tmp_path):
     checker = Path(os.environ.get("DRAT_TRIM", "/bin/true"))
     with pytest.raises(ValueError, match="positive"):
         check_drat(checker, tmp_path / "missing.cnf", tmp_path / "missing.drat", timeout_seconds=0)
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "stderr", "expected"),
+    [
+        (0, "s NOT VERIFIED\n", "", False),
+        (0, "c proof not verified\n", "", False),
+        (0, "c VERIFIED derivation: all lemmas preserve satisfiability\n"
+            "s DERIVATION\n", "", False),
+        (0, "c s VERIFIED\n", "", False),
+        (0, "s VERIFIED extra\n", "", False),
+        (0, "", "s VERIFIED\n", False),
+        (0, "s verified\n", "", False),
+        (1, "s VERIFIED\n", "", False),
+        (-9, "s VERIFIED\n", "", False),
+        (0, "", "", False),
+        (0, "s VERIFIED\n", "", True),
+        (0, "  s VERIFIED  \r\n", "", True),
+    ],
+    ids=["negative-status", "comment-only", "derivation-only", "commented-token",
+         "extra-token", "stderr-only", "wrong-case", "nonzero-exit", "killed",
+         "empty-output", "positive-status", "surrounding-whitespace"],
+)
+def test_checker_requires_exact_stdout_refutation_status(
+    tmp_path, monkeypatch, returncode, stdout, stderr, expected,
+):
+    import subprocess
+    from experiments.general_competition import proof_backend
+
+    completed = subprocess.CompletedProcess([], returncode, stdout, stderr)
+    monkeypatch.setattr(proof_backend.subprocess, "run", lambda *a, **kw: completed)
+    receipt = check_drat(tmp_path / "checker", tmp_path / "input.cnf",
+                         tmp_path / "proof.drat")
+    assert receipt.verified is expected
+    assert (receipt.stdout, receipt.stderr) == (stdout, stderr)
+
+
+def test_checker_accepts_retained_real_drat_refutation_output(tmp_path, monkeypatch):
+    import json
+    import subprocess
+    from experiments.general_competition import proof_backend
+
+    evidence = json.loads(Path(__file__).with_name(
+        "native_long_search_results_20261021.json"
+    ).read_text(encoding="utf-8"))["separate_proof_check"]
+    process = evidence["result"]["process"]
+    assert evidence["result"]["classification"] == "UNSAT_VERIFIED"
+    completed = subprocess.CompletedProcess(
+        process["command"], process["returncode"], evidence["stdout"], evidence["stderr"]
+    )
+    monkeypatch.setattr(proof_backend.subprocess, "run", lambda *a, **kw: completed)
+    receipt = check_drat(tmp_path / "checker", tmp_path / "input.cnf",
+                         tmp_path / "proof.drat")
+    assert receipt.verified
+    assert receipt.stdout == evidence["stdout"]
+    assert receipt.stderr == evidence["stderr"]
