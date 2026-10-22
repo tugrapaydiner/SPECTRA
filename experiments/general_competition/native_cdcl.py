@@ -556,6 +556,58 @@ def solve_cnf_native(
     return result
 
 
+def _valid_native_evidence(result: DirectNativeResult | NativeSolveResult) -> bool:
+    """Validate receipt containers and ABI counters before inspecting payloads."""
+    if (
+        type(result.stats) is not NativeStats
+        or type(result.model) is not tuple
+        or any(type(value) is not bool for value in result.model)
+    ):
+        return False
+    if any(type(value) is not int or not 0 <= value < 1 << 64 for value in (
+        result.max_conflicts, result.max_learned_literals,
+        result.stats.decisions, result.stats.propagations, result.stats.conflicts,
+        result.stats.restarts, result.stats.learned_clauses,
+        result.stats.learned_literals, result.stats.reductions,
+        result.stats.deleted_clauses,
+    )):
+        return False
+    if (
+        any(type(value) is not int or value < 0 for value in (
+            result.proof_clauses, result.proof_literals, result.elapsed_ns,
+        ))
+        or result.stats.learned_literals > result.max_learned_literals
+    ):
+        return False
+    proof = result.proof
+    if proof is None:
+        return result.proof_clauses == result.proof_literals == 0
+    if (
+        type(proof) is not DRUPProof
+        or proof.schema != PROOF_SCHEMA
+        or type(proof.additions) is not tuple
+        or any(type(row) is not tuple for row in proof.additions)
+    ):
+        return False
+    return (
+        result.proof_clauses == len(proof.additions)
+        and result.proof_literals == sum(map(len, proof.additions))
+    )
+
+
+def _valid_unknown_budget(result: DirectNativeResult | NativeSolveResult) -> bool:
+    """Check consistency with native exit conditions, not a replay of the search."""
+    if result.model != () or result.proof is not None:
+        return False
+    if result.reason == "conflict_budget":
+        # The kernel stops at the first conflict exceeding the configured limit.
+        return result.stats.conflicts == result.max_conflicts + 1
+    if result.reason == "learned_literal_budget":
+        # This check follows conflict admission and precedes the learned addition.
+        return 0 < result.stats.conflicts <= result.max_conflicts
+    return False
+
+
 def verify_direct_native_result(
     nvars: int,
     clauses: Iterable[Iterable[int]],
@@ -571,31 +623,11 @@ def verify_direct_native_result(
     if (
         result.schema != "spectra.general_native_direct.v1"
         or result.status not in ("SAT_VERIFIED", "UNSAT_VERIFIED", "UNKNOWN")
-        or type(result.stats) is not NativeStats
+        or not _valid_native_evidence(result)
+        or type(result.variables) is not int
+        or type(result.clauses) is not int
         or result.variables != nvars
         or result.clauses != len(canonical)
-        or any(type(value) is not int or value < 0 for value in (
-            result.max_conflicts,
-            result.max_learned_literals,
-            result.stats.decisions,
-            result.stats.propagations,
-            result.stats.conflicts,
-            result.stats.restarts,
-            result.stats.learned_clauses,
-            result.stats.learned_literals,
-            result.stats.reductions,
-            result.stats.deleted_clauses,
-            result.proof_clauses,
-            result.proof_literals,
-            result.elapsed_ns,
-        ))
-        or result.stats.learned_literals > result.max_learned_literals
-        or result.proof_clauses != (
-            0 if result.proof is None else len(result.proof.additions)
-        )
-        or result.proof_literals != (
-            0 if result.proof is None else sum(map(len, result.proof.additions))
-        )
     ):
         return False
     if result.status == "SAT_VERIFIED":
@@ -618,11 +650,7 @@ def verify_direct_native_result(
                 max_literals=max(result.proof_literals, 1),
             )
         )
-    return (
-        result.reason in ("conflict_budget", "learned_literal_budget")
-        and result.model == ()
-        and result.proof is None
-    )
+    return _valid_unknown_budget(result)
 
 
 def write_drup(path: str | Path, proof: DRUPProof) -> Path:
@@ -733,38 +761,21 @@ def verify_native_result(
     if (
         result.schema != RESULT_SCHEMA
         or result.status not in ("SAT_VERIFIED", "UNSAT_VERIFIED", "UNKNOWN")
-        or type(result.stats) is not NativeStats
+        or not _valid_native_evidence(result)
         or any(type(value) is not int or value < 0 for value in (
-            result.max_conflicts,
-            result.max_learned_literals,
-            result.stats.decisions,
-            result.stats.propagations,
-            result.stats.conflicts,
-            result.stats.restarts,
-            result.stats.learned_clauses,
-            result.stats.learned_literals,
-            result.stats.reductions,
-            result.stats.deleted_clauses,
             result.residual_variables,
             result.residual_clauses,
-            result.proof_clauses,
-            result.proof_literals,
-            result.elapsed_ns,
         ))
-        or result.stats.learned_literals > result.max_learned_literals
         or not verify_binary_core(nvars, canonical, result.core)
         or result.residual_variables != result.core.reduced_nvars
         or result.residual_clauses != len(result.core.residual_clauses)
-        or result.proof_clauses != (0 if result.proof is None else len(result.proof.additions))
-        or result.proof_literals != (
-            0 if result.proof is None else sum(map(len, result.proof.additions))
-        )
     ):
         return False
     if result.status == "SAT_VERIFIED":
         return (
             result.reason in ("model", "binary_core_model")
             and result.proof is None
+            and len(result.model) == nvars
             and model_satisfies(nvars, canonical, result.model)
         )
     if result.status == "UNSAT_VERIFIED":
@@ -783,10 +794,8 @@ def verify_native_result(
                 max_literals=max(result.proof_literals, 1),
             )
         )
-    if result.model != () or result.proof is not None:
-        return False
-    if result.reason == "conflict_budget":
-        return result.stats.conflicts > result.max_conflicts
-    if result.reason == "learned_literal_budget":
-        return result.stats.conflicts <= result.max_conflicts
-    return False
+    return (
+        not result.core.contradiction
+        and bool(result.core.residual_clauses)
+        and _valid_unknown_budget(result)
+    )

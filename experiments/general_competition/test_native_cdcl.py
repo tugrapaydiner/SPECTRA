@@ -149,6 +149,97 @@ def test_direct_native_budget_is_unknown(runtime):
     assert verify_direct_native_result(5, clauses, result)
 
 
+@pytest.fixture(params=["direct", "reduced"])
+def result_api(request):
+    if request.param == "direct":
+        return solve_cnf_native, verify_direct_native_result
+    return solve_general_native, verify_native_result
+
+
+def test_native_replay_rejects_inconsistent_budget_receipts(runtime, result_api):
+    solve, verify = result_api
+    clauses = all_blocking_clauses(5)
+    conflict = solve(runtime, 5, clauses, max_conflicts=0)
+    assert conflict.status == "UNKNOWN"
+    assert conflict.stats.conflicts == 1
+    assert verify(5, clauses, conflict)
+    assert not verify(5, clauses, replace(conflict, max_conflicts=1))
+    assert not verify(5, clauses, replace(conflict, reason="learned_literal_budget"))
+    assert not verify(5, clauses, replace(
+        conflict, stats=replace(conflict.stats, conflicts=2)
+    ))
+
+    learned = solve(runtime, 5, clauses, max_learned_literals=0)
+    assert learned.status == "UNKNOWN"
+    assert learned.stats.conflicts > 0
+    assert verify(5, clauses, learned)
+    assert not verify(5, clauses, replace(
+        learned, stats=replace(learned.stats, conflicts=0)
+    ))
+
+
+@pytest.mark.parametrize("field", ["max_conflicts", "max_learned_literals"])
+def test_native_replay_rejects_out_of_abi_budget(runtime, result_api, field):
+    solve, verify = result_api
+    clauses = ((1, 2, 3),)
+    result = solve(runtime, 3, clauses)
+    assert verify(3, clauses, result)
+    assert not verify(3, clauses, replace(result, **{field: 1 << 64}))
+
+
+def test_native_replay_rejects_out_of_abi_statistics(runtime, result_api):
+    solve, verify = result_api
+    clauses = ((1, 2, 3),)
+    result = solve(runtime, 3, clauses)
+    assert not verify(3, clauses, replace(
+        result, stats=replace(result.stats, decisions=1 << 64)
+    ))
+
+
+@pytest.mark.parametrize("model", [None, [True, True, True], (1, 1, 1), (True,)])
+def test_native_replay_rejects_malformed_model(runtime, result_api, model):
+    solve, verify = result_api
+    clauses = ((1, 2, 3),)
+    result = solve(runtime, 3, clauses)
+    assert result.status == "SAT_VERIFIED"
+    assert not verify(3, clauses, replace(result, model=model))
+
+
+@pytest.mark.parametrize("proof", [
+    object(), DRUPProof("wrong", ((),)),
+    DRUPProof("spectra.general_drup.v1", None),
+    DRUPProof("spectra.general_drup.v1", (None,)),
+    DRUPProof("spectra.general_drup.v1", (1,)),
+    DRUPProof("spectra.general_drup.v1", [()]),
+])
+def test_native_replay_rejects_malformed_proof(runtime, result_api, proof):
+    solve, verify = result_api
+    clauses = all_blocking_clauses(3)
+    result = solve(runtime, 3, clauses)
+    assert result.status == "UNSAT_VERIFIED"
+    assert not verify(3, clauses, replace(
+        result, proof=proof, proof_clauses=1, proof_literals=0
+    ))
+
+
+@pytest.mark.parametrize("field", ["variables", "clauses"])
+@pytest.mark.parametrize("value", [True, 1.0])
+def test_direct_native_replay_requires_exact_dimensions(runtime, field, value):
+    result = solve_cnf_native(runtime, 1, ((1,),))
+    assert not verify_direct_native_result(
+        1, ((1,),), replace(result, **{field: value})
+    )
+
+
+@pytest.mark.parametrize("clauses", [(), ((1,), (-1,))])
+def test_native_replay_rejects_unknown_for_binary_core_shortcut(runtime, clauses):
+    result = solve_general_native(runtime, 1, clauses, max_conflicts=0)
+    assert result.status != "UNKNOWN"
+    forged = replace(result, status="UNKNOWN", model=(), reason="conflict_budget",
+                     stats=replace(result.stats, conflicts=1))
+    assert not verify_native_result(1, clauses, forged)
+
+
 def test_native_sat_model_is_lifted_and_checked(runtime):
     clauses = (
         (1, -2),

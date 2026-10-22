@@ -127,6 +127,16 @@ persistent source changes, not every possible race with a hostile writer; use
 immutable inputs for a scientific run. The additional source read is part of the
 current loader's work, not a retrofit of any frozen timing measurement.
 
+Native result replay checks both the direct and binary-core paths against the
+native ABI's unsigned 64-bit budgets and counters. A conflict-budget `UNKNOWN`
+must report exactly one conflict beyond its limit; learned-literal exhaustion
+requires a positive conflict count within that limit. A core that already settles
+the formula cannot yield a native-budget `UNKNOWN`. Malformed model and DRUP
+containers are rejected before counting or replaying their payloads. These are
+receipt-consistency checks, not an independent reconstruction of interrupted
+search or a solution to the unresolved failure cases. Native solver code, frozen
+experiments and retained observations are unchanged.
+
 ### Scoring policy and offline evidence verification
 
 New campaigns default to `--scoring-policy declared-inventory-v2`. This keeps
