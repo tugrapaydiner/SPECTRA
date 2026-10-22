@@ -525,6 +525,51 @@ controller, helper and tests; host-specific runtime/prerequisite dependencies
 remain explicit. Neither freeze establishes a self-contained public release,
 hidden-set validation, external replication or general solver leadership.
 
+### Continuation environment recovery — 2026-10-22
+
+The [recovery checkpoint](reproduction_recovery_20261022.json) records work at
+source `74c296d5b83ec5764594a98fdc538f1ac69c0c7f`, tree
+`6096814dd15f343573ddfb0845ee3d78957d33ac`. Receipt validation at that source
+passed 374 general-CNF tests with no skips, including the native sanitizer and
+external proof checks. All seven automatic workflows completed successfully;
+their run IDs and GitHub-reported artifact ZIP digests are retained in the
+checkpoint. These are internal engineering checks, and the CI artifacts expire.
+
+All 96 original public sources were reacquired with zero failures and zero
+replacements, totaling 20,309,108 compressed bytes. The recovered inventory is
+byte-identical to the frozen inventory, SHA-256
+`b2b7c072b538e6e70645cd0b9974cdc873c061b01ffcdb3315bdfae157737501`.
+Current strict admission and clause replay matched all seven frozen v2 identity
+fields on every input: declared variables/clauses, decoded bytes/hash, semantic
+hash, and compressed source bytes/hash. All 96 new admission receipts, the exact
+checking script and its complete output are retained in the recovery checkpoint.
+This validates input identity, without invoking a solver or packing candidate.
+
+The exact published v2 controller, helper and test payloads were reconstructed;
+all 67 synthetic harness checks passed again. Public data also restored both
+inventories, all 96 compressed sources, nine pinned source files, both original
+archive-verification summaries and the completed result report at their frozen
+paths. Each of these 110 files matched its predeclared hash. The pinned Python
+executable already matches. This is partial reconstruction of public bytes, not
+recovery of complete original evidence trees or an executable runtime bundle.
+
+The first static preflight stopped at the missing original inventory path.
+After exact public reconstruction, a separately retained static preflight stopped
+at the missing pinned `drat-trim` binary. The native library/build receipt and
+the three original prerequisite manifests are also absent, as is the repaired
+completion receipt. Those manifests bind further supporting files; recovering
+the seven directly identified missing files alone would not establish full
+preflight success. Expected paths and hashes are retained in the checkpoint.
+Newly built tools and newly generated checks cannot substitute for these pinned
+bytes under the existing freeze.
+
+Both failed preflights and their outputs remain retained. No v2 candidate was
+created, no packing or native campaign cell executed, and no threshold or frozen
+rule changed. The original v1 failure, heap experiment, baseline invalid models
+and all timeouts remain unchanged. Corrected answer coverage is still two of ten
+original failure cases, with eight unresolved. Hidden evaluation, independent
+replication, permanent public raw archives and the 100/100 claim remain open.
+
 ### Scoring and verification repairs
 
 The current runner records `declared-inventory-v2` for new campaigns. It keeps the

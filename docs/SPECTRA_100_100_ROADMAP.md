@@ -19,6 +19,16 @@
 > gzip inputs. It changes no frozen result, score, or scientific gate.
 > Competition replay now rechecks decoded bytes and the original source identity;
 > semantic equivalence alone is not accepted as the recorded input's identity.
+> Receipt hardening at `74c296d5b83ec5764594a98fdc538f1ac69c0c7f` passed all
+> 374 general-CNF tests locally and all seven automatic workflows. A subsequent
+> [recovery checkpoint](../experiments/general_competition/reproduction_recovery_20261022.json)
+> reacquired all 96 original exposed inputs without replacement and matched all
+> seven frozen identity fields for every input. The reconstructed packing harness
+> passed 67 synthetic checks. Its v2 execution remains blocked: original archive
+> manifests and supporting files, plus the exact checker/native build, are absent
+> from the continuation environment. Public summaries were reconstructed exactly;
+> they do not replace those prerequisites. No candidate or new campaign ran, and
+> no scientific gate or historic score changed.
 
 **Document type:** living research and engineering roadmap
 **Last reviewed:** 2026-10-22
@@ -27,6 +37,15 @@
 **Continuation checkpoint:** the measured source and later review head are recorded in the linked campaign report.
 **Current pull request:** draft PR #76
 **Current rule:** do not open another working branch and do not merge merely because CI is green.
+
+**Next resumption dependency:** retrieve the original `postrun-verification-96x8`,
+`repaired-verification-96`, and `completed-result-report` trees with their pinned
+manifests, and the exact frozen checker/native build. The
+[recovery record](../experiments/general_competition/reproduction_recovery_20261022.json)
+retains the missing paths and expected hashes, recovered receipts, both failed
+static preflights, and completed CI run/artifact identities. The v2 plan is
+unchanged. Outside hidden-set custody, replication, expert review and operator
+validation still require attributable external participation.
 
 ---
 
