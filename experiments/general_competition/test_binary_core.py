@@ -203,3 +203,40 @@ def test_exhaustive_small_formula_model_equivalence():
                 assert lifted_models(core) == original
             checked += 1
     assert checked > 3000
+
+
+@pytest.mark.parametrize(
+    ("clauses", "prefix"),
+    [(((1,),), (-1,)), ((), (1, -1))],
+    ids=["fixed-value", "projected-pair"],
+)
+@pytest.mark.parametrize("invalid", [0, 2, True, 1.0, "1"])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_assumption_conflict_does_not_hide_invalid_suffix(
+    clauses, prefix, invalid, one_shot,
+):
+    core = build_binary_core(1, clauses)
+    values = (*prefix, invalid)
+    assumptions = (value for value in values) if one_shot else values
+    with pytest.raises(ValueError, match="assumption"):
+        core.project_assumptions(assumptions)
+
+
+@pytest.mark.parametrize(
+    ("clauses", "assumptions"),
+    [(((1,),), (-1, 1)), ((), (1, -1, 1))],
+    ids=["fixed-value", "projected-pair"],
+)
+def test_valid_contradictory_assumptions_consume_the_complete_iterator(
+    clauses, assumptions,
+):
+    core = build_binary_core(1, clauses)
+    seen = []
+
+    def values():
+        for literal in assumptions:
+            seen.append(literal)
+            yield literal
+
+    assert core.project_assumptions(values()) is None
+    assert seen == list(assumptions)

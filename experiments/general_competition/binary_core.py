@@ -89,22 +89,28 @@ class BinaryCore:
                 _validate_literal(literal, self.original_nvars, "assumption")
             return None
         projected: dict[int, int] = {}
+        conflict = False
         for literal in literals:
             _validate_literal(literal, self.original_nvars, "assumption")
+            if conflict:
+                continue
             index = abs(literal) - 1
             target = self.mapping[index]
             requested = literal > 0
             if target == 0:
                 if self.fixed[index] != requested:
-                    return None
+                    conflict = True
                 continue
             reduced = target if requested else -target
             variable = abs(reduced)
             sign = 1 if reduced > 0 else -1
             previous = projected.get(variable)
             if previous is not None and previous != sign:
-                return None
+                conflict = True
+                continue
             projected[variable] = sign
+        if conflict:
+            return None
         return tuple(variable * projected[variable] for variable in sorted(projected))
 
 
