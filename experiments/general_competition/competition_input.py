@@ -113,6 +113,9 @@ def _replay_clauses(path: Path, receipt: CNFAdmission) -> tuple[Clause, ...]:
                 if len(fields) != 4 or fields[:2] != ["p", "cnf"]:
                     raise ValueError(f"line {line_number}: expected 'p cnf N M'")
                 try:
+                    if any(character not in "+-0123456789"
+                           for token in fields[2:] for character in token):
+                        raise ValueError("malformed integer token")
                     declared_variables = int(fields[2], 10)
                     declared_clauses = int(fields[3], 10)
                 except ValueError as error:

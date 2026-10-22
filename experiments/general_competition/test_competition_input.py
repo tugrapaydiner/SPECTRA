@@ -108,3 +108,35 @@ def test_replay_rejects_changed_compressed_source_with_identical_decoded_bytes(
     monkeypatch.setattr(competition_input, "_replay_clauses", mutate_source_before_replay)
     with pytest.raises(ValueError, match="source identity changed"):
         admit_and_load_cnf(source)
+
+
+@pytest.mark.parametrize("counts", ["1_0 1", "10 0_1"])
+@pytest.mark.parametrize("compression", ["none", "gzip", "xz"])
+def test_loader_rejects_header_digit_separators(tmp_path, counts, compression):
+    content = f"p cnf {counts}\n1 0\n".encode("ascii")
+    suffix = {"none": ".cnf", "gzip": ".cnf.gz", "xz": ".cnf.xz"}[compression]
+    source = tmp_path / ("counts" + suffix)
+    source.write_bytes({"none": lambda data: data,
+                        "gzip": lambda data: gzip.compress(data, mtime=0),
+                        "xz": lzma.compress}[compression](content))
+    with pytest.raises(ValueError, match="header counts"):
+        admit_and_load_cnf(source)
+
+
+@pytest.mark.parametrize("counts", ["1_0 1", "10 0_1"])
+def test_replay_checks_header_tokens_even_with_matching_identity(tmp_path, counts):
+    from dataclasses import replace
+    import hashlib
+    from experiments.general_competition import competition_input
+
+    source = tmp_path / "counts.cnf"
+    source.write_bytes(b"p cnf 10 1\n1 0\n")
+    receipt = admit_and_load_cnf(source).receipt
+    content = f"p cnf {counts}\n1 0\n".encode("ascii")
+    source.write_bytes(content)
+    digest = hashlib.sha256(content).hexdigest()
+    # A matching byte/semantic receipt does not make Python-only syntax DIMACS.
+    receipt = replace(receipt, source_bytes=len(content), source_sha256=digest,
+                      dimacs_bytes=len(content), dimacs_sha256=digest)
+    with pytest.raises(ValueError, match="header counts"):
+        competition_input._replay_clauses(source, receipt)

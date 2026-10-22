@@ -79,6 +79,7 @@ def test_clauses_can_span_lines_and_gzip_has_separate_source_identity(tmp_path):
         ("p cnf 1 1\n1\nc no\n0\n", "unfinished clause"),
         ("p sat 1 1\n1 0\n", "expected 'p cnf"),
         ("p cnf -1 0\n", "non-negative"),
+        ("p cnf 0 -1\n", "non-negative"),
         ("p cnf 1 1\n1x 0\n", "non-integer"),
     ],
 )
@@ -196,3 +197,31 @@ def test_cli_refuses_to_overwrite_receipt(tmp_path, capsys):
     assert printed == retained
     with pytest.raises(FileExistsError):
         main((str(path), "--out", str(output)))
+
+
+@pytest.mark.parametrize("counts", ["1_0 1", "10 0_1", "\u0661 1", "1 \u0661"])
+@pytest.mark.parametrize("compressed", [False, True])
+def test_header_counts_reject_python_separators_and_non_ascii_digits(
+    tmp_path, counts, compressed,
+):
+    content = f"p cnf {counts}\n1 0\n".encode("utf-8")
+    path = tmp_path / ("counts.cnf.gz" if compressed else "counts.cnf")
+    path.write_bytes(gzip.compress(content, mtime=0) if compressed else content)
+    with pytest.raises(ValueError, match="header counts|ASCII"):
+        admit_cnf(path)
+
+
+@pytest.mark.parametrize(
+    ("counts", "body", "expected"),
+    [("+1 01", "1 0\n", (1, 1)), ("01 +1", "1 0\n", (1, 1)),
+     ("-0 +0", "", (0, 0))],
+)
+@pytest.mark.parametrize("compressed", [False, True])
+def test_header_counts_preserve_supported_signed_and_zero_padded_integers(
+    tmp_path, counts, body, expected, compressed,
+):
+    content = f"p cnf {counts}\n{body}".encode("ascii")
+    path = tmp_path / ("counts.cnf.gz" if compressed else "counts.cnf")
+    path.write_bytes(gzip.compress(content, mtime=0) if compressed else content)
+    receipt = admit_cnf(path)
+    assert (receipt.declared_variables, receipt.declared_clauses) == expected

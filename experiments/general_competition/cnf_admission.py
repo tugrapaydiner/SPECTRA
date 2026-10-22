@@ -217,8 +217,12 @@ def admit_cnf(
                 if len(fields) != 4 or fields[0] != "p" or fields[1] != "cnf":
                     raise ValueError(f"line {line_number}: expected 'p cnf N M'")
                 try:
-                    declared_variables = int(fields[2], 10)
-                    declared_clauses = int(fields[3], 10)
+                    declared_variables = _parse_int(
+                        fields[2].encode("ascii"), line_number=line_number
+                    )
+                    declared_clauses = _parse_int(
+                        fields[3].encode("ascii"), line_number=line_number
+                    )
                 except ValueError as exc:
                     raise ValueError(
                         f"line {line_number}: invalid DIMACS header counts"
