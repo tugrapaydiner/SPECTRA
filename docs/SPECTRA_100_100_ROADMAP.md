@@ -1,6 +1,6 @@
 # SPECTRA — Roadmap to a Real 100/100
 
-> **Continuation checkpoint — 2026-10-21:** This document preserves the supplied
+> **Continuation checkpoint — 2026-10-22:** This document preserves the supplied
 > audit and its strict scientific gates. Development continues on `finish-part3`
 > in draft PR #76. The historic scores below have not been promoted. The latest
 > engineering and measured evidence is tracked in
@@ -8,7 +8,10 @@
 > The complete frozen native baseline retains ten invalid SAT models and fails
 > its correctness gate. The separate repaired 96-case run returned seven checked
 > SAT answers, two checked UNSAT proofs and 87 timeouts; nine originally invalid
-> cases remain unresolved. The original failed evidence is unchanged.
+> cases remained unresolved under its five-second solve budget. A separate
+> longer-budget diagnostic and retained-proof check now give verified corrected
+> answers for two of the ten original failure cases; eight remain unresolved.
+> The original failed evidence and every recorded timeout are unchanged.
 > Neither a hidden win nor independent replication has been established.
 > A subsequent admission repair bounds the requested decoded line size, including
 > gzip inputs. It changes no frozen result, score, or scientific gate.
@@ -16,7 +19,7 @@
 > semantic equivalence alone is not accepted as the recorded input's identity.
 
 **Document type:** living research and engineering roadmap
-**Last reviewed:** 2026-10-21
+**Last reviewed:** 2026-10-22
 **Canonical working branch:** `finish-part3`
 **Original audit head:** `904629a1acfbdca964f8355a7e74b182007eb6e5`
 **Continuation checkpoint:** the measured source and later review head are recorded in the linked campaign report.
@@ -695,7 +698,7 @@ A competition victory can establish track leadership. A full project-level 100/1
 
 | Gate | Requirement | Current state |
 |---|---|---|
-| G0 | Correct SAT models and accepted UNSAT proofs | **Failed for the frozen native baseline: ten invalid models retained. Separate repaired panel: nine checked answers, 87 unresolved cases** |
+| G0 | Correct SAT models and accepted UNSAT proofs | **Failed for the frozen native baseline: ten invalid models retained. Separate repaired five-second panel: nine checked answers, 87 timeouts. Later original-failure checks: two of ten verified, eight unresolved; full G0 remains open** |
 | G1 | General arbitrary-CNF input contract | **Mostly passed** |
 | G2 | First place under official-style scoring | **Not passed** |
 | G3 | Portability and robustness | **Passed internally** |
@@ -719,8 +722,11 @@ A competition victory can establish track leadership. A full project-level 100/1
 The supplied audit's `GENERAL_FRONTEND_READY` label describes its previous
 frontend evidence. It does not certify standalone native SPECTRA-G. The current
 standalone engine has a separately measured occurrence-tracking repair after the
-exposed campaign found invalid SAT models. The bounded repaired panel leaves 87
-cases unresolved, including nine originally invalid cases. The project is not a
+exposed campaign found invalid SAT models. The five-second repaired panel left
+87 cases unresolved, including nine originally invalid cases. The separate
+longer-budget diagnostic and retained-proof check now provide checked corrected
+answers for two of the ten original failure cases; eight remain unresolved. This
+does not rescore the five-second panel or close full G0. The project is not a
 `DEVELOPMENT_LEADER` on general CNF, and no competitive or 100/100 claim is accepted.
 
 ---

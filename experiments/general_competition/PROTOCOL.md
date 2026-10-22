@@ -3,7 +3,7 @@
 **Status:** development protocol, not frozen confirmation evidence  
 **Starting source:** `832302a30d8d4d04a48afb418610ad49b94c3ad1`
 
-**Current correctness status (2026-10-21):** the frozen campaign at source
+**Current correctness status (2026-10-22):** the frozen campaign at source
 [1f6a913](https://github.com/tugrapaydiner/SPECTRA/commit/1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5)
 completed all 768 cells and produced ten invalid SAT models from standalone
 SPECTRA-G. That source remains disqualified and fails G0. The
@@ -11,7 +11,9 @@ SPECTRA-G. That source remains disqualified and fails G0. The
 identifies the cases and evidence. The occurrence-tracking repair at
 `cb14031d4187c4cba5cccb37984ecf59d59bfdae` completed its separate 96-case
 validation with seven checked SAT answers, two checked UNSAT proofs and 87
-timeouts. Nine originally invalid cases remain unresolved. Any performance
+timeouts. A separate longer-budget diagnostic and retained-proof check now
+provide corrected, independently checked answers for two original failure cases;
+eight remain unresolved. Both original runs and all timeouts are unchanged. Any performance
 experiment uses its own frozen plan and acceptance criteria; neither bounded
 repair validation nor an optimization replaces the failed baseline or
 establishes a leadership label.

@@ -7,9 +7,10 @@ The separately frozen heap experiment also finished all 256 cells and returned
 `NOT_ESTABLISHED`; its candidate is not adopted.
 **Correctness finding:** all ten invalid native SAT models have been independently
 confirmed. The original SPECTRA-G entry is disqualified under the frozen rules.
-The repaired source returned nine checked answers and 87 timeouts; nine of the
-originally invalid cases remain unresolved. A subsequent repair cannot erase
-the original result.
+The repaired source returned nine checked answers and 87 timeouts in its first
+validation. The separate longer-search diagnostic and retained-proof check below
+now give verified corrected answers for two of the ten original failure cases;
+eight remain unresolved. Later evidence cannot erase the original result.
 **Claim boundary:** exposed development evidence only. This is not an official
 competition run, a complete modern field, a hidden confirmation, or independent
 replication. The supplied [100/100 roadmap](../../docs/SPECTRA_100_100_ROADMAP.md)
@@ -279,6 +280,43 @@ A timeout supplies no corrected answer or long-search correctness result. This
 separate one-entry run does not supply a new eight-entry ranking or paired
 speedup. The earlier v1 heap optimization plan remains suspended with zero
 ablation cells; its replacement v2 plan and outcome are separate below.
+
+### Longer-search correctness diagnostic and retained-proof check
+
+The [separate diagnostic plan](native_long_search_plan_20261021.json) was locally
+frozen and its SHA-256 recorded before solving on 2026-10-21 at 23:54 UTC. It was
+not an externally registered hidden experiment. All ten original invalid-model
+cases were reacquired from the recorded public URLs, with both compressed and
+original decoded hashes checked. The unchanged repaired source `cb14031` was
+rebuilt with GCC 14.2.0 and run in a separate checkout on a shared Linux x86-64
+host with Python 3.12.14. The exact compiler/build, source, checker, environment,
+case order and budgets are retained in the plan.
+
+Each case received one 60-second solve attempt, with 30-second admission and
+independent-check budgets, 4,096 MiB per-process address space, and 64 MiB input
+and per-file output limits. All ten cells completed: **1 SAT_VERIFIED, 8 TIMEOUT,
+and 1 CHECKER_TIMEOUT**. The verified random-CSP case was already verified in the
+five-second repaired run. This diagnostic alone therefore left the same nine
+original cases unresolved. All 139 evidence files and 11 compressed payloads
+passed post-run identity and lossless round-trip verification; a fresh offline
+archive check also rechecked all ten compressed sources and the SAT model.
+
+The sgen case `26114429758a203d651f4df87c94de4c` returned UNSAT after approximately
+41 seconds and retained a 15,087,704-byte DRUP proof. Its original checker was
+killed at the unchanged 30-second limit. A [separately frozen proof-check plan](native_long_proof_plan_20261022.json)
+then allowed one 300-second verification of those exact proof/CNF bytes with the
+same pinned checker and flags, without rerunning the solver. That check exited
+zero with `s VERIFIED` after **37.19 seconds**. The proof, original CNF and checker
+hashes were unchanged. The original `CHECKER_TIMEOUT` cell remains untouched;
+this is additional correctness evidence, not a rescored benchmark cell.
+
+The [compact evidence record](native_long_search_results_20261021.json) retains
+all ten outcomes, both plans' hashes, the physical-file manifest, lossless
+storage receipts, the separate checker logs and the archive-verification report.
+Two original failure cases now have checked corrected answers, one SAT and one
+UNSAT; eight remain unresolved. This does not close full G0 or establish a
+performance rank, speedup, hidden-set result or outside replication. Local raw
+payload retention and hashes do not establish a permanent public archive.
 
 ### Completed repaired-source heap experiment
 
