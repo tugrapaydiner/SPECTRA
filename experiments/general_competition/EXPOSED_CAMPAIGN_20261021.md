@@ -556,7 +556,15 @@ never executed by default. See [the reproduction guide](../../docs/DEVELOPMENT.m
 ## Corrected earlier frontend accounting
 
 [The accounting receipt](panel_accounting_20261021.json) preserves both the
-original CI panel and a derived classification; no old timing was overwritten.
+original CI panel and its derived classification in a lossless XZ/Base85 wrapper.
+Its embedded Python decoder accepts both this wrapper and the original plain
+JSON, verifies the complete original bytes and summary, and writes only to a new
+output file. The restored document is 1,207,539 bytes with SHA-256
+`9f7f534b36563531175d2bc99e2fd356db95e2fab986a490df83989bead5253e`.
+The [original plain JSON at the immutable prior commit](https://raw.githubusercontent.com/tugrapaydiner/SPECTRA/166cefd0e0d53cc0bf490321a0405a0e06ad8c59/experiments/general_competition/panel_accounting_20261021.json)
+remains available for readers expecting its original structure. Every observation,
+model, timing, classification and metadata field is retained; this representation
+change adds no measurement and overwrites no earlier result.
 Original artifact: run `39612064795`, artifact `12351182490`, ZIP SHA-256
 `5b2e30bb6448cf7304719d3c27f7497ca69535a158fc11c7b5586c144eec7035`.
 
