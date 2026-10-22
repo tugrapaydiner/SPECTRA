@@ -47,6 +47,47 @@ def test_xz_limits_and_malformed_data_fail_closed(tmp_path):
         admit_and_load_cnf(broken)
 
 
+@pytest.mark.parametrize("destination_is_source", [False, True])
+def test_xz_staging_preserves_files_when_exclusive_creation_fails(
+    tmp_path, destination_is_source,
+):
+    from experiments.general_competition.competition_input import _copy_xz
+
+    source = tmp_path / "input.cnf.xz"
+    source.write_bytes(lzma.compress(TEXT.encode("ascii")))
+    destination = source if destination_is_source else tmp_path / "existing.cnf"
+    if destination != source:
+        destination.write_bytes(b"previously retained evidence\n")
+    original_source = source.read_bytes()
+    original_destination = destination.read_bytes()
+
+    with pytest.raises(FileExistsError):
+        _copy_xz(source, destination, 1024)
+
+    assert source.read_bytes() == original_source
+    assert destination.read_bytes() == original_destination
+
+
+@pytest.mark.parametrize("failure", ["truncated", "limit", "missing-source"])
+def test_xz_staging_removes_its_new_output_on_failure(tmp_path, failure):
+    from experiments.general_competition.competition_input import _copy_xz
+
+    source = tmp_path / "input.cnf.xz"
+    compressed = lzma.compress(TEXT.encode("ascii"))
+    if failure != "missing-source":
+        source.write_bytes(compressed[:-8] if failure == "truncated" else compressed)
+    destination = tmp_path / "new.cnf"
+    error = {"truncated": EOFError, "limit": MemoryError,
+             "missing-source": FileNotFoundError}[failure]
+
+    with pytest.raises(error):
+        _copy_xz(source, destination, 4 if failure == "limit" else 1024)
+
+    assert not destination.exists()
+    if source.exists():
+        assert source.read_bytes() == (compressed[:-8] if failure == "truncated" else compressed)
+
+
 @pytest.mark.parametrize("compression", ["none", "gzip", "xz"])
 @pytest.mark.parametrize("change", ["same-size-comment", "shorter-whitespace", "growth"])
 def test_replay_rejects_changed_decoded_bytes_even_when_semantics_match(

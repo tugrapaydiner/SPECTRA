@@ -29,6 +29,13 @@
 > from the continuation environment. Public summaries were reconstructed exactly;
 > they do not replace those prerequisites. No candidate or new campaign ran, and
 > no scientific gate or historic score changed.
+> The XZ staging cleanup now preserves an existing destination after exclusive
+> creation fails, including a destination equal to the source. Separate regression
+> checks retain the prior deletion failures and verify cleanup of newly created
+> outputs after decode, byte-limit and source-open failures: two preservation
+> checks failed before the fix; all 26 input-loader and 379 general-CNF checks pass
+> afterward. This engineering repair adds no solved formula or scientific gate
+> claim.
 
 **Document type:** living research and engineering roadmap
 **Last reviewed:** 2026-10-22

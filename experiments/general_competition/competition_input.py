@@ -59,8 +59,11 @@ def _source_identity(path: Path, limit: int) -> tuple[int, str]:
 
 def _copy_xz(source: Path, destination: Path, limit: int) -> None:
     written = 0
+    # Cleanup owns only a file this call created. In particular, an exclusive
+    # open failure must not unlink an existing destination (or the source).
+    output = destination.open("xb")
     try:
-        with lzma.open(source, "rb") as input_stream, destination.open("xb") as output:
+        with output, lzma.open(source, "rb") as input_stream:
             while chunk := input_stream.read(_READ_CHUNK):
                 written += len(chunk)
                 if written > limit:

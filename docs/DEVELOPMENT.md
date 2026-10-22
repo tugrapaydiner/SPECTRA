@@ -118,6 +118,11 @@ gzip may buffer a limited amount ahead. Inputs exactly at the limit remain valid
 with or without a final newline; accepted receipts are unchanged. This is an
 input-read bound, not a total process-RSS guarantee.
 
+XZ staging creates its temporary output exclusively and removes only an output
+created by that call when reading, decoding or the byte limit fails. An existing
+destination is preserved, including when it is the source file itself. Successful
+admission receipts and solver behavior are unchanged by this cleanup repair.
+
 The competition loader also binds replay to the admitted decoded byte count and
 SHA-256, not just equivalent clauses. It rejects comment/whitespace changes and
 growth between admission and replay, then rechecks the original source bytes so
