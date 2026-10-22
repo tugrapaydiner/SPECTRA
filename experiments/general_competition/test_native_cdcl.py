@@ -798,3 +798,193 @@ SPECTRA_EXPORT int spectra_g_test_proof_ids() {
     check.argtypes = []
     check.restype = ctypes.c_int
     assert check() == 0
+
+
+def test_indexed_heap_matches_linear_selection_and_preserves_membership(tmp_path, monkeypatch):
+    from experiments.general_competition import native_cdcl
+
+    # Check decision priority independently of the heap implementation, including
+    # rounded-to-zero ties, lazy assigned entries, and backtrack reinsertion.
+    source = native_cdcl.SOURCE.resolve().as_posix()
+    harness = tmp_path / "indexed_heap.cpp"
+    harness.write_text(
+        '#include "' + source + '"\n' + r"""
+static void require(bool result, const char *message) {
+  if (!result) throw std::runtime_error(message);
+}
+
+static void valid_heap(const Solver &s) {
+  std::vector<int> count(static_cast<std::size_t>(s.nvars + 1), 0);
+  std::size_t relevant = 0;
+  for (int var = 1; var <= s.nvars; ++var) relevant += s.occurs[var] != 0;
+  require(s.variable_heap.size() <= relevant, "heap exceeds relevant variable count");
+  for (std::size_t index = 0; index < s.variable_heap.size(); ++index) {
+    const int var = s.variable_heap[index];
+    require(var >= 1 && var <= s.nvars, "heap variable range");
+    require(s.occurs[var], "unused variable inserted");
+    require(++count[var] == 1, "duplicate heap variable");
+    require(s.heap_positions[var] == static_cast<int>(index), "reverse position mismatch");
+    if (index) {
+      const int parent = s.variable_heap[(index - 1) / 2];
+      require(s.activity[parent] > s.activity[var] ||
+          (s.activity[parent] == s.activity[var] && parent < var), "heap order mismatch");
+    }
+  }
+  for (int var = 1; var <= s.nvars; ++var) {
+    require((s.heap_positions[var] >= 0) == (count[var] == 1), "absent position mismatch");
+    if (s.occurs[var] && !s.values[var]) require(count[var] == 1, "missing relevant variable");
+  }
+}
+
+static int reference(const Solver &s) {
+  int best = 0;
+  for (int var = 1; var <= s.nvars; ++var) {
+    if (!s.occurs[var] || s.values[var]) continue;
+    if (!best || s.activity[var] > s.activity[best] ||
+        (s.activity[var] == s.activity[best] && var < best)) best = var;
+  }
+  return best;
+}
+
+static int choose_and_assign(Solver &s) {
+  const int expected = reference(s);
+  const int actual = s.choose_variable();
+  require(actual == expected, "decision differs from linear reference");
+  if (actual) {
+    s.trail_limits.push_back(static_cast<int>(s.trail.size()));
+    require(s.enqueue(actual, -1), "decision assignment rejected");
+  }
+  valid_heap(s);
+  return actual;
+}
+
+static void test_permutations_and_ties() {
+  std::vector<int> priorities{0, 1, 2, 3, 4, 5};
+  do {
+    for (unsigned mask = 0; mask < 64; ++mask) {
+      Solver s(7);
+      for (int var = 1; var <= 6; ++var) {
+        s.occurs[var] = 1;
+        s.activity[var] = (mask & (1u << (var - 1))) ? 0.0 : priorities[var - 1];
+      }
+      s.activity[7] = 1e99;  // Relevance, not activity, controls membership.
+      s.initialize_heap();
+      valid_heap(s);
+      for (int index = 0; index < 6; ++index) require(choose_and_assign(s) != 0, "early exhaustion");
+      require(choose_and_assign(s) == 0, "unused variable selected");
+      s.backtrack(0);
+      valid_heap(s);
+      s.rebuild_heap();
+      valid_heap(s);
+      for (int index = 0; index < 6; ++index) choose_and_assign(s);
+    }
+  } while (std::next_permutation(priorities.begin(), priorities.end()));
+}
+
+static void test_updates_backtracks_and_rebuilds() {
+  Solver s(33);
+  for (int var = 1; var <= 32; ++var) s.occurs[var] = 1;
+  s.initialize_heap();
+  s.var_increment = 0.25;
+  std::uint32_t random = 0x417cf091u;
+  for (int step = 0; step < 20000; ++step) {
+    random = random * 1664525u + 1013904223u;
+    const int var = 1 + static_cast<int>((random >> 8) % 32);
+    switch (random % 5) {
+      case 0:
+      case 1:
+        s.bump_variable(var);  // Includes assigned variables still in the heap.
+        s.push_heap(var);      // Repeated insertion must not create duplicates.
+        break;
+      case 2:
+        if (!choose_and_assign(s)) s.backtrack(0);
+        break;
+      case 3:
+        if (s.decision_level()) s.backtrack(static_cast<int>((random >> 16) % s.decision_level()));
+        break;
+      case 4:
+        s.rebuild_heap();
+        break;
+    }
+    valid_heap(s);
+  }
+  s.backtrack(0);
+  while (choose_and_assign(s)) {}
+}
+
+static void test_rescale_and_zero_activity() {
+  Solver s(4);
+  s.occurs[1] = s.occurs[2] = s.occurs[3] = 1;
+  s.activity[1] = 1e-250;
+  s.activity[2] = 2e-250;
+  s.activity[4] = 1e99;
+  s.initialize_heap();
+  require(s.variable_heap.front() == 2, "initial tiny activity ordering");
+  s.trail_limits.push_back(0);
+  require(s.enqueue(3, -1), "rescale assignment rejected");
+  s.var_increment = 1e101;
+  s.bump_variable(3);
+  require(s.activity[1] == 0.0 && s.activity[2] == 0.0, "underflow not exercised");
+  require(s.heap_positions[3] == -1, "rescale retained assigned membership");
+  valid_heap(s);
+  require(choose_and_assign(s) == 1, "underflow tie break changed");
+  require(choose_and_assign(s) == 2, "zero activity variable lost");
+  require(choose_and_assign(s) == 0, "unused variable included");
+  s.backtrack(0);
+  valid_heap(s);
+  require(choose_and_assign(s) == 3, "assigned rescaled variable not reinserted");
+  require(choose_and_assign(s) == 1 && choose_and_assign(s) == 2, "reinserted zero ties changed");
+}
+
+static void test_assigned_entry_lifetimes() {
+  Solver s(4);
+  for (int var = 1; var <= 3; ++var) {
+    s.occurs[var] = 1;
+    s.activity[var] = 4 - var;
+  }
+  s.initialize_heap();
+  s.trail_limits.push_back(0);
+  require(s.enqueue(1, -1), "lazy assignment rejected");
+  require(s.heap_positions[1] >= 0, "assignment eagerly removed heap entry");
+  s.backtrack(0);
+  valid_heap(s);
+  require(s.variable_heap.size() == 3, "present entry duplicated on backtrack");
+  s.trail_limits.push_back(0);
+  require(s.enqueue(1, -1), "second lazy assignment rejected");
+  require(choose_and_assign(s) == 2, "assigned root was selected");
+  require(s.heap_positions[1] == -1, "assigned root was not discarded");
+  s.backtrack(0);
+  valid_heap(s);
+  require(s.variable_heap.size() == 3, "discarded entry not restored once");
+  require(choose_and_assign(s) == 1 && choose_and_assign(s) == 2 &&
+      choose_and_assign(s) == 3 && choose_and_assign(s) == 0, "pop/reinsert ordering changed");
+}
+
+SPECTRA_EXPORT int spectra_g_test_indexed_heap() {
+  try {
+    Solver empty(0);
+    empty.initialize_heap();
+    empty.rebuild_heap();
+    require(empty.choose_variable() == 0, "empty solver selection");
+    test_permutations_and_ties();
+    test_updates_backtracks_and_rebuilds();
+    test_rescale_and_zero_activity();
+    test_assigned_entry_lifetimes();
+    return 0;
+  } catch (const std::exception &error) {
+    last_error = error.what();
+    return 1;
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(native_cdcl, "SOURCE", harness)
+    library = ctypes.CDLL(str(build_native_cdcl(tmp_path / "indexed-heap-build")))
+    check = library.spectra_g_test_indexed_heap
+    check.argtypes = []
+    check.restype = ctypes.c_int
+    error = library.spectra_g_native_error
+    error.argtypes = []
+    error.restype = ctypes.c_char_p
+    assert check() == 0, error().decode("utf-8")

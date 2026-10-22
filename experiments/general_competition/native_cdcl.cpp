@@ -4,7 +4,6 @@
 #include <cstring>
 #include <limits>
 #include <new>
-#include <queue>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -45,17 +44,6 @@ struct Stats {
   std::uint64_t deleted_clauses = 0;
 };
 
-struct HeapEntry {
-  double activity;
-  int negative_variable;
-  std::uint64_t generation;
-
-  bool operator<(const HeapEntry &other) const {
-    if (activity != other.activity) return activity < other.activity;
-    return negative_variable < other.negative_variable;
-  }
-};
-
 struct Solver {
   int nvars;
   std::vector<Clause> clauses;
@@ -70,8 +58,8 @@ struct Solver {
   // Relevance must survive floating-point activity rescaling and underflow.
   std::vector<std::uint8_t> occurs;
   std::vector<std::int64_t> polarity_bias;
-  std::vector<std::uint64_t> heap_generation;
-  std::priority_queue<HeapEntry> variable_heap;
+  std::vector<int> heap_positions;
+  std::vector<int> variable_heap;
   std::vector<std::uint8_t> seen;
   std::vector<std::uint8_t> minimize_seen;
   std::vector<int> trail;
@@ -95,7 +83,7 @@ struct Solver {
         activity(static_cast<std::size_t>(variables + 1), 0.0),
         occurs(static_cast<std::size_t>(variables + 1), 0),
         polarity_bias(static_cast<std::size_t>(variables + 1), 0),
-        heap_generation(static_cast<std::size_t>(variables + 1), 0),
+        heap_positions(static_cast<std::size_t>(variables + 1), -1),
         seen(static_cast<std::size_t>(variables + 1), 0),
         minimize_seen(static_cast<std::size_t>(variables + 1), 0) {}
 
@@ -267,10 +255,63 @@ struct Solver {
     return -1;
   }
 
+  bool heap_before(int left, int right) const {
+    const double a = activity[static_cast<std::size_t>(left)];
+    const double b = activity[static_cast<std::size_t>(right)];
+    return a != b ? a > b : left < right;
+  }
+
+  void sift_heap_up(std::size_t position) {
+    const int var = variable_heap[position];
+    while (position > 0) {
+      const std::size_t parent = (position - 1) / 2;
+      const int parent_var = variable_heap[parent];
+      if (!heap_before(var, parent_var)) break;
+      variable_heap[position] = parent_var;
+      heap_positions[static_cast<std::size_t>(parent_var)] = static_cast<int>(position);
+      position = parent;
+    }
+    variable_heap[position] = var;
+    heap_positions[static_cast<std::size_t>(var)] = static_cast<int>(position);
+  }
+
+  void sift_heap_down(std::size_t position) {
+    const int var = variable_heap[position];
+    while (2 * position + 1 < variable_heap.size()) {
+      std::size_t child = 2 * position + 1;
+      if (child + 1 < variable_heap.size() &&
+          heap_before(variable_heap[child + 1], variable_heap[child])) {
+        ++child;
+      }
+      const int child_var = variable_heap[child];
+      if (!heap_before(child_var, var)) break;
+      variable_heap[position] = child_var;
+      heap_positions[static_cast<std::size_t>(child_var)] = static_cast<int>(position);
+      position = child;
+    }
+    variable_heap[position] = var;
+    heap_positions[static_cast<std::size_t>(var)] = static_cast<int>(position);
+  }
+
   void push_heap(int var) {
     const auto index = static_cast<std::size_t>(var);
-    const std::uint64_t generation = ++heap_generation[index];
-    variable_heap.push(HeapEntry{activity[index], -var, generation});
+    if (heap_positions[index] < 0) {
+      heap_positions[index] = static_cast<int>(variable_heap.size());
+      variable_heap.push_back(var);
+    }
+    sift_heap_up(static_cast<std::size_t>(heap_positions[index]));
+  }
+
+  int pop_heap() {
+    const int var = variable_heap.front();
+    const int last = variable_heap.back();
+    variable_heap.pop_back();
+    heap_positions[static_cast<std::size_t>(var)] = -1;
+    if (!variable_heap.empty()) {
+      variable_heap[0] = last;
+      sift_heap_down(0);
+    }
+    return var;
   }
 
   void initialize_heap() {
@@ -280,10 +321,19 @@ struct Solver {
   }
 
   void rebuild_heap() {
-    variable_heap = std::priority_queue<HeapEntry>();
+    variable_heap.clear();
+    std::fill(heap_positions.begin(), heap_positions.end(), -1);
     for (int var = 1; var <= nvars; ++var) {
       const auto index = static_cast<std::size_t>(var);
-      if (values[index] == 0 && occurs[index]) push_heap(var);
+      if (values[index] == 0 && occurs[index]) {
+        heap_positions[index] = static_cast<int>(variable_heap.size());
+        variable_heap.push_back(var);
+      }
+    }
+    // Rescaling can collapse distinct activities into ties through underflow.
+    // Rebuild using both the rounded activities and the variable-ID tie break.
+    for (std::size_t index = variable_heap.size() / 2; index > 0; --index) {
+      sift_heap_down(index - 1);
     }
   }
 
@@ -502,20 +552,9 @@ struct Solver {
   }
 
   int choose_variable() {
-    const std::size_t rebuild_limit =
-        static_cast<std::size_t>(8) * static_cast<std::size_t>(nvars) + 1024;
-    if (variable_heap.size() > rebuild_limit) rebuild_heap();
     while (!variable_heap.empty()) {
-      const HeapEntry entry = variable_heap.top();
-      const int var = -entry.negative_variable;
-      const auto index = static_cast<std::size_t>(var);
-      if (values[index] != 0 || entry.generation != heap_generation[index]
-          || entry.activity != activity[index]) {
-        variable_heap.pop();
-        continue;
-      }
-      variable_heap.pop();
-      return var;
+      const int var = pop_heap();
+      if (values[static_cast<std::size_t>(var)] == 0) return var;
     }
     return 0;
   }
