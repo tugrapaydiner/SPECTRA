@@ -527,19 +527,30 @@ def _arc_is_justified(source: int, target: int, reason: Clause) -> bool:
     return False
 
 
+def _literal_tuple(value: object, nvars: int) -> bool:
+    return type(value) is tuple and all(
+        type(literal) is int and 0 < abs(literal) <= nvars
+        for literal in value
+    )
+
+
 def _tree_spans(
     nodes: set[int], root: int, edges: tuple[Arc, ...], *, inward: bool,
     clause_set: set[Clause], nvars: int,
 ) -> bool:
-    if len(edges) != len(nodes) - 1:
+    if type(edges) is not tuple or len(edges) != len(nodes) - 1:
         return False
     adjacency: dict[int, list[int]] = {}
-    for source, target, reason in edges:
+    for edge in edges:
+        if type(edge) is not tuple or len(edge) != 3:
+            return False
+        source, target, reason = edge
+        if (type(source) is not int or type(target) is not int
+                or not _literal_tuple(reason, nvars)):
+            return False
         if (source not in nodes or target not in nodes or reason not in clause_set
                 or not _arc_is_justified(source, target, reason)):
             return False
-        _validate_literal(source, nvars, "proof literal")
-        _validate_literal(target, nvars, "proof literal")
         if inward:
             adjacency.setdefault(target, []).append(source)
         else:
@@ -560,19 +571,20 @@ def _verify_component_proofs(
     canonical: tuple[Clause, ...],
     proofs: tuple[ComponentProof, ...],
 ) -> dict[int, int] | None:
+    if type(proofs) is not tuple:
+        return None
     clause_set = set(canonical)
     owner: dict[int, int] = {}
     for index, proof in enumerate(proofs):
-        if type(proof) is not ComponentProof or not proof.nodes:
+        if (type(proof) is not ComponentProof
+                or not _literal_tuple(proof.nodes, nvars)
+                or not 0 < len(proof.nodes) <= 2 * nvars
+                or type(proof.root) is not int):
             return None
         nodes = set(proof.nodes)
         if len(nodes) != len(proof.nodes) or proof.root not in nodes:
             return None
         for literal in nodes:
-            try:
-                _validate_literal(literal, nvars, "proof literal")
-            except ValueError:
-                return None
             if literal in owner:
                 return None
             owner[literal] = index
@@ -595,9 +607,13 @@ def _replay_units(
     trace: tuple[UnitStep, ...],
 ) -> tuple[tuple[int, ...], bool]:
     values = [0] * (nvars + 1)
+    if type(trace) is not tuple or len(trace) > nvars:
+        return tuple(values), False
     clause_set = set(clauses)
     for step in trace:
-        if type(step) is not UnitStep or step.reason not in clause_set:
+        if (type(step) is not UnitStep
+                or not _literal_tuple(step.reason, nvars)
+                or step.reason not in clause_set):
             return tuple(values), False
         literal = step.literal
         try:
@@ -655,7 +671,34 @@ def verify_binary_core(
     except (TypeError, ValueError):
         return False
     if (
-        core.schema != "spectra.general_binary_core.v1"
+        type(core.schema) is not str
+        or type(core.canonical_sha256) is not str
+        or type(core.conflict_kind) is not str
+        or any(type(value) is not int or value < 0 for value in (
+            core.original_nvars, core.normalized_clause_count,
+            core.unit_input_clauses, core.binary_input_clauses,
+            core.long_input_clauses, core.class_count, core.conflict_variable,
+            core.reduced_nvars, core.equivalent_variables_removed,
+            core.propagated_classes,
+        ))
+        or not core.reduced_nvars <= core.class_count <= nvars
+        or core.conflict_variable > nvars
+        or core.equivalent_variables_removed > nvars
+        or core.propagated_classes > core.class_count
+        or not _literal_tuple(core.class_literals, core.class_count)
+        or type(core.mapping) is not tuple
+        or len(core.mapping) != nvars
+        or any(type(value) is not int or abs(value) > core.reduced_nvars
+               for value in core.mapping)
+        or type(core.fixed) is not tuple
+        or len(core.fixed) != nvars
+        or any(type(value) is not bool for value in core.fixed)
+        or type(core.residual_clauses) is not tuple
+        or any(not _literal_tuple(row, core.reduced_nvars)
+               for row in core.residual_clauses)
+        or (core.conflict_clause is not None
+            and not _literal_tuple(core.conflict_clause, core.class_count))
+        or core.schema != "spectra.general_binary_core.v1"
         or core.original_nvars != nvars
         or core.canonical_sha256 != canonical_sha256(nvars, canonical)
         or core.normalized_clause_count != len(canonical)
@@ -690,30 +733,26 @@ def verify_binary_core(
 
     if core.conflict_kind not in ("", "unit") or core.conflict_variable != 0:
         return False
-    if len(core.class_literals) != nvars or type(core.class_count) is not int:
-        return False
-    used = {abs(value) for value in core.class_literals}
-    if used != set(range(1, core.class_count + 1)):
+    if len(core.class_literals) != nvars:
         return False
 
-    for class_index in range(1, core.class_count + 1):
-        members = [
-            variable for variable, target in enumerate(core.class_literals, 1)
-            if abs(target) == class_index
-        ]
-        if not members:
-            return False
-        representative = min(members)
-        if core.class_literals[representative - 1] != class_index:
-            return False
-        for variable in members:
-            target = core.class_literals[variable - 1]
-            related_literal = variable if target > 0 else -variable
-            if related_literal == representative:
-                continue
-            if (owner.get(representative) is None
-                    or owner.get(representative) != owner.get(related_literal)):
+    # Visiting variables in order finds each class's minimum representative
+    # once, instead of rescanning the entire mapping for every class.
+    representatives = [0] * core.class_count
+    for variable, target in enumerate(core.class_literals, 1):
+        class_index = abs(target)
+        representative = representatives[class_index - 1]
+        if not representative:
+            if target != class_index:
                 return False
+            representatives[class_index - 1] = variable
+            continue
+        related_literal = variable if target > 0 else -variable
+        if (owner.get(representative) is None
+                or owner.get(representative) != owner.get(related_literal)):
+            return False
+    if not all(representatives):
+        return False
 
     try:
         substituted = _substitute(core.class_count, canonical, core.class_literals)

@@ -119,6 +119,137 @@ def test_receipt_bound_build_rejects_tampering(tmp_path, exact_build):
         ExactRuntime(library)
 
 
+@pytest.mark.parametrize('interrupted_link', (1, 2))
+def test_native_publication_rolls_back_links_published_before_interruption(
+        tmp_path, monkeypatch, interrupted_link):
+    from spectra import _native_build
+
+    staging = tmp_path / 'staging'
+    staging.mkdir()
+    target = staging / 'native.so'
+    target.write_bytes(b'compiled bytes')
+    library = tmp_path / target.name
+    link = _native_build.os.link
+    calls = 0
+
+    def interrupted(source, destination):
+        nonlocal calls
+        link(source, destination)
+        calls += 1
+        if calls == interrupted_link:
+            raise OSError('interrupted publication')
+
+    monkeypatch.setattr(_native_build.os, 'link', interrupted)
+    with pytest.raises(OSError, match='interrupted publication'):
+        _native_build.publish_build(target, library, {'complete': True})
+    assert not library.exists()
+    assert not library.with_name('build.json').exists()
+
+
+@pytest.mark.parametrize('replacement', ('file', 'dangling-symlink'))
+def test_native_publication_preserves_other_writer_outputs(tmp_path, monkeypatch, replacement):
+    from spectra import _native_build
+
+    if replacement == 'dangling-symlink' and os.name != 'posix':
+        pytest.skip('unprivileged symlink creation is not portable on Windows')
+    staging = tmp_path / 'staging'
+    staging.mkdir()
+    target = staging / 'native.so'
+    target.write_bytes(b'compiled bytes')
+    library = tmp_path / target.name
+    receipt = tmp_path / 'build.json'
+    receipt.write_bytes(b'existing receipt')
+    link = _native_build.os.link
+
+    def replace_before_receipt(source, destination):
+        if Path(destination) == receipt:
+            library.unlink()
+            if replacement == 'file':
+                library.write_bytes(b'another writer\'s library')
+            else:
+                library.symlink_to(tmp_path / 'missing-library')
+        link(source, destination)
+
+    monkeypatch.setattr(_native_build.os, 'link', replace_before_receipt)
+    with pytest.raises(FileExistsError):
+        _native_build.publish_build(target, library, {'complete': True})
+    assert receipt.read_bytes() == b'existing receipt'
+    if replacement == 'file':
+        assert library.read_bytes() == b'another writer\'s library'
+    else:
+        assert library.is_symlink() and not library.exists()
+
+
+@pytest.mark.parametrize('existing_output', ('library', 'receipt'))
+def test_native_publication_preserves_a_preexisting_link_to_staged_inode(
+        tmp_path, monkeypatch, existing_output):
+    from spectra import _native_build
+
+    staging = tmp_path / 'staging'
+    staging.mkdir()
+    target = staging / 'native.so'
+    target.write_bytes(b'compiled bytes')
+    library = tmp_path / target.name
+    receipt = tmp_path / 'build.json'
+    link = _native_build.os.link
+    preexisting = library if existing_output == 'library' else receipt
+
+    def race(source, destination):
+        if Path(destination) == preexisting:
+            link(source, destination)
+        link(source, destination)  # The second link must fail with EEXIST.
+
+    monkeypatch.setattr(_native_build.os, 'link', race)
+    with pytest.raises(FileExistsError):
+        _native_build.publish_build(target, library, {'complete': True})
+    assert preexisting.is_file()
+    if existing_output == 'receipt':
+        assert json.loads(receipt.read_text()) == {'complete': True}
+        assert not library.exists()
+
+
+def test_native_load_guard_rechecks_receipt_and_remembers_failed_loads(tmp_path):
+    from spectra._native_build import native_load_guard
+
+    library = tmp_path / 'not-loaded.so'
+    library.write_bytes(b'first identity')
+    identity = hashlib.sha256(library.read_bytes()).hexdigest()
+    with pytest.raises(ValueError, match='hash differs'):
+        with native_load_guard(library, '0' * 64):
+            pytest.fail('a mismatching receipt must not enter the loader')
+    with pytest.raises(RuntimeError, match='injected loader failure'):
+        with native_load_guard(library, identity):
+            raise RuntimeError('injected loader failure')
+    with native_load_guard(library, identity):
+        pass
+    library.write_bytes(b'second identity')
+    with pytest.raises(ValueError, match='already loaded with different bytes'):
+        with native_load_guard(library):
+            pytest.fail('a previous failed loader may have retained its handle')
+
+
+@pytest.mark.skipif(os.name != 'posix', reason='replacing a loaded extension requires POSIX unlink')
+@pytest.mark.parametrize('research', (False, True))
+def test_exact_runtime_rejects_changed_bytes_at_a_loaded_path(exact_build, tmp_path, research):
+    runtime_type = ExactRuntime
+    if research:
+        from experiments.compiled_query.exact import ExactRuntime as runtime_type
+    library = tmp_path / exact_build.name
+    receipt = tmp_path / 'build.json'
+    shutil.copy2(exact_build, library)
+    shutil.copy2(exact_build.with_name('build.json'), receipt)
+    runtime_type(library)
+    runtime_type(library)
+    changed = library.read_bytes() + b'\x00'
+    library.unlink()
+    library.write_bytes(changed)
+    record = json.loads(receipt.read_text())
+    record['library_sha256'] = hashlib.sha256(changed).hexdigest()
+    receipt.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match='already loaded with different bytes'):
+        runtime_type(library)
+
+
 def test_native_session_returns_checked_sat_and_unsat(exact_runtime):
     problem = tiny_problem()
     unsat_query = ((0, 1), (1, 1))

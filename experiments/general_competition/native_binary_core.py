@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 import ctypes
 import hashlib
 import json
-import os
 from pathlib import Path
 import platform
 import shutil
@@ -22,6 +21,8 @@ import sys
 import tempfile
 import time
 from typing import Iterable
+
+from spectra._native_build import native_load_guard, publish_build, snapshot_source
 
 SOURCE = Path(__file__).with_name("native_binary_core.cpp")
 NATIVE_ABI = 1
@@ -82,7 +83,8 @@ def build_native_binary_core(
     started = time.perf_counter_ns()
     with tempfile.TemporaryDirectory(dir=destination) as temporary:
         target = Path(temporary) / library.name
-        command = [executable, *flags, str(SOURCE.resolve()), "-o", str(target)]
+        source, source_sha256 = snapshot_source(SOURCE, Path(temporary))
+        command = [executable, *flags, str(source), "-o", str(target)]
         completed = subprocess.run(
             command,
             capture_output=True,
@@ -106,7 +108,7 @@ def build_native_binary_core(
             "schema": "spectra.general_native_build.v1",
             "native_abi": NATIVE_ABI,
             "library_name": library.name,
-            "source_sha256": _sha256(SOURCE),
+            "source_sha256": source_sha256,
             "library_sha256": _sha256(target),
             "command": command,
             "sanitizer": sanitizer,
@@ -117,15 +119,7 @@ def build_native_binary_core(
             "stdout": completed.stdout,
             "stderr": completed.stderr,
         }
-        os.link(target, library)
-        try:
-            with receipt.open("x", encoding="utf-8") as stream:
-                json.dump(record, stream, indent=2, sort_keys=True)
-                stream.write("\n")
-        except BaseException:
-            library.unlink(missing_ok=True)
-            receipt.unlink(missing_ok=True)
-            raise
+        publish_build(target, library, record)
     return library
 
 
@@ -202,7 +196,8 @@ class NativeBinaryCore:
         if receipt.get("library_sha256") != _sha256(path):
             raise ValueError("native general-CNF library hash differs")
 
-        module = ctypes.CDLL(str(path))
+        with native_load_guard(path, receipt["library_sha256"]):
+            module = ctypes.CDLL(str(path))
         module.spectra_general_abi.argtypes = []
         module.spectra_general_abi.restype = ctypes.c_uint32
         if module.spectra_general_abi() != NATIVE_ABI:

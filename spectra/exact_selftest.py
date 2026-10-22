@@ -17,6 +17,7 @@ import platform
 import sys
 
 from . import __version__
+from ._json import load_file, read_bounded
 from .evidence import (
     FORMAT as EVIDENCE_FORMAT,
     capture,
@@ -63,16 +64,11 @@ def _validate_max_bytes(max_bytes: int) -> None:
 
 
 def _read_bounded(path: Path, max_bytes: int) -> bytes:
-    _validate_max_bytes(max_bytes)
-    with path.open("rb") as stream:
-        data = stream.read(max_bytes + 1)
-    if len(data) > max_bytes:
-        raise ValueError(f"{path} exceeds max-bytes")
-    return data
+    return read_bounded(path, max_bytes=max_bytes)
 
 
 def _load_json(path: Path, max_bytes: int) -> dict:
-    value = json.loads(_read_bounded(path, min(max_bytes, _JSON_MAX_BYTES)))
+    value = load_file(path, max_bytes=min(max_bytes, _JSON_MAX_BYTES))
     if type(value) is not dict:
         raise ValueError(f"{path} must contain a JSON object")
     return value
@@ -325,7 +321,7 @@ def run_exact_selftest(
     names = sorted(
         path.relative_to(root).as_posix()
         for path in root.rglob("*")
-        if path.is_file() and path.name != "SHA256.json"
+        if path.is_file() and path != root / "SHA256.json"
     )
     manifest = capture(root, names)
     verify(root, manifest, required=names)
@@ -379,7 +375,7 @@ def verify_exact_selftest(
     actual = {
         path.relative_to(root).as_posix()
         for path in root.rglob("*")
-        if path.is_file() and path.name != "SHA256.json"
+        if path.is_file() and path != manifest_path
     }
     _require(actual == set(entries), "self-test directory contains unbound or missing files")
     _require("selftest.json" in entries, "self-test report is not frozen")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from itertools import product
+import hashlib
 import json
 import random
 import shutil
@@ -184,6 +185,23 @@ def test_build_is_receipt_bound_and_refuses_replacement(native_runtime, tmp_path
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="source hash"):
+        NativeBinaryCore(library)
+
+
+def test_native_core_rejects_changed_bytes_at_a_loaded_path(native_runtime, tmp_path):
+    library = tmp_path / native_runtime.path.name
+    receipt = tmp_path / "build.json"
+    shutil.copy2(native_runtime.path, library)
+    shutil.copy2(native_runtime.path.with_name("build.json"), receipt)
+    NativeBinaryCore(library)
+    NativeBinaryCore(library)
+    changed = library.read_bytes() + b"\x00"
+    library.unlink()
+    library.write_bytes(changed)
+    record = json.loads(receipt.read_text())
+    record["library_sha256"] = hashlib.sha256(changed).hexdigest()
+    receipt.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="already loaded with different bytes"):
         NativeBinaryCore(library)
 
 

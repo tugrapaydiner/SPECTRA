@@ -133,6 +133,23 @@ def test_strict_reader_stays_dependency_free():
                     'assert not ({"torch", "numpy"} & sys.modules.keys())'], check=True, cwd=ROOT)
 
 
+def test_exact_verify_large_cap_does_not_allocate_the_limit(tmp_path, capsys):
+    import struct
+    from spectra.exact import ExactProblem, pack_session_packet
+
+    problem = ExactProblem.create(1, 1, (), (1,))
+    packet = tmp_path / "request.sbc1"
+    packet.write_bytes(pack_session_packet(problem, ((),)))
+    output = tmp_path / "answer.scq2"
+    # One SAT row, colour zero, with no contradiction proof.
+    output.write_bytes(struct.pack("<4sIQBBI", b"SCQ2", 1, 1, 1, 0, 0))
+    assert main([
+        "exact", "verify", str(packet), str(output),
+        "--max-bytes", str(sys.maxsize - 1),
+    ]) == 0
+    assert json.loads(capsys.readouterr().out)["verified"] is True
+
+
 def make_wheel(directory, *, metadata=None, missing=None, extra=None):
     directory.mkdir(exist_ok=True)
     wheel = directory / f'spectra-{__version__}-py3-none-any.whl'

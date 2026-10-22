@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import ctypes
 from dataclasses import replace
+import hashlib
+import importlib
 from itertools import combinations, product
 import json
 import os
+from pathlib import Path
 import random
 import shutil
 import subprocess
@@ -31,6 +34,86 @@ from experiments.general_competition.native_cdcl import (
 def runtime(tmp_path_factory):
     root = tmp_path_factory.mktemp("native-cdcl")
     return NativeCDCLRuntime(build_native_cdcl(root))
+
+
+_BUILDERS = (
+    ("spectra.exact", "build_exact_runtime"),
+    ("experiments.compiled_query.exact", "build_exact_runtime"),
+    ("experiments.general_competition.native_cdcl", "build_native_cdcl"),
+    ("experiments.general_competition.native_binary_core", "build_native_binary_core"),
+)
+
+
+@pytest.mark.parametrize("module_name,builder_name", _BUILDERS)
+@pytest.mark.parametrize("event", ("source-edit", "receipt-collision", "compiler-failure"))
+def test_native_build_publication_and_source_identity(
+        tmp_path, monkeypatch, module_name, builder_name, event):
+    module = importlib.import_module(module_name)
+    if module_name.endswith("native_binary_core") and sys.platform != "linux":
+        pytest.skip("binary-core builder supports Linux only")
+    source = tmp_path / module.SOURCE.name
+    original = b"// original source bytes\n"
+    source.write_bytes(original)
+    destination = tmp_path / "build"
+    sentinel = b"another writer's receipt\n"
+    compiled = []
+
+    def compiler(command, **_kwargs):
+        sources = [Path(arg) for arg in command if arg.endswith(".cpp")]
+        if sources:
+            snapshot = sources[0]
+            assert snapshot != source and snapshot.name == source.name
+            source.write_bytes(b"// edited while the compiler runs\n")
+            assert snapshot.read_bytes() == original
+            compiled.append(snapshot)
+            target = (
+                Path(command[command.index("-o") + 1]) if "-o" in command
+                else Path(next(arg[5:] for arg in command if arg.startswith("/OUT:")))
+            )
+            target.write_bytes(original)
+            if event == "receipt-collision":
+                (destination / "build.json").write_bytes(sentinel)
+            if event == "compiler-failure":
+                return subprocess.CompletedProcess(command, 1, "", "injected compiler failure")
+        return subprocess.CompletedProcess(command, 0, "test compiler\n", "")
+
+    monkeypatch.setattr(module, "SOURCE", source)
+    monkeypatch.setattr(module.shutil, "which", lambda name: name)
+    monkeypatch.setattr(module.subprocess, "run", compiler)
+    builder = getattr(module, builder_name)
+    if event == "source-edit":
+        library = builder(destination)
+        receipt = json.loads(library.with_name("build.json").read_text())
+        assert receipt["source_sha256"] == hashlib.sha256(original).hexdigest()
+        assert receipt["library_sha256"] == hashlib.sha256(library.read_bytes()).hexdigest()
+        assert compiled and not compiled[0].exists()
+    elif event == "receipt-collision":
+        with pytest.raises(FileExistsError):
+            builder(destination)
+        assert (destination / "build.json").read_bytes() == sentinel
+        assert list(destination.iterdir()) == [destination / "build.json"]
+    else:
+        with pytest.raises(RuntimeError, match="injected compiler failure"):
+            builder(destination)
+        assert not list(destination.iterdir())
+
+
+@pytest.mark.skipif(os.name != "posix", reason="replacing a loaded library requires POSIX unlink")
+def test_native_runtime_rejects_changed_bytes_at_a_loaded_path(runtime, tmp_path):
+    library = tmp_path / runtime.path.name
+    receipt = library.with_name("build.json")
+    shutil.copy2(runtime.path, library)
+    shutil.copy2(runtime.path.with_name("build.json"), receipt)
+    NativeCDCLRuntime(library)
+    NativeCDCLRuntime(library)  # Reusing exactly the same bytes is supported.
+    changed = library.read_bytes() + b"\x00"
+    library.unlink()
+    library.write_bytes(changed)
+    record = json.loads(receipt.read_text())
+    record["library_sha256"] = hashlib.sha256(changed).hexdigest()
+    receipt.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="already loaded with different bytes"):
+        NativeCDCLRuntime(library)
 
 
 @pytest.mark.parametrize("nvars", [10_000_001, 1 << 30, (1 << 31) - 1, (1 << 32) - 1])

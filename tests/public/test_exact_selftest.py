@@ -51,6 +51,38 @@ def test_audit_refuses_an_already_loaded_native_module(tmp_path, monkeypatch):
         verify_exact_selftest(tmp_path)
 
 
+@pytest.mark.parametrize("reader", ["audit", "compare"])
+@pytest.mark.parametrize("raw", [
+    b'{"schema":"wrong","schema":"right"}',
+    b'{"elapsed_ns":NaN}',
+    b'{"elapsed_ns":1e999}',
+    b'{"nested":' + b'[' * 10000 + b']' * 10000 + b'}',
+], ids=["duplicate-key", "nonfinite", "overflowing-float", "deep-nesting"])
+def test_exact_artifact_json_rejects_ambiguous_or_unbounded_values(tmp_path, reader, raw):
+    from spectra.exact_compare import _load_report
+    from spectra.exact_selftest import _load_json
+
+    path = tmp_path / "selftest.json"
+    path.write_bytes(raw)
+    with pytest.raises(ValueError):
+        if reader == "audit":
+            _load_json(path, max_bytes=1 << 20)
+        else:
+            _load_report(tmp_path, max_bytes=1 << 20)
+
+
+def test_exact_audit_binary_limit_is_not_an_allocation_request(tmp_path):
+    from spectra.exact_selftest import _read_bounded
+
+    path = tmp_path / "packet.sbc1"
+    payload = b"a small retained artifact"
+    path.write_bytes(payload)
+    assert _read_bounded(path, max_bytes=sys.maxsize - 1) == payload
+    assert _read_bounded(path, max_bytes=len(payload)) == payload
+    with pytest.raises(ValueError, match="exceeds"):
+        _read_bounded(path, max_bytes=len(payload) - 1)
+
+
 @pytest.mark.skipif(
     sys.platform not in ("linux", "win32") or not _compiler_available(),
     reason="supported native compiler is unavailable",
@@ -168,12 +200,26 @@ def test_cli_exact_selftest_and_fresh_no_native_audit(tmp_path):
     assert bounded.returncode == 2
     assert "exceeds max-bytes" in bounded.stderr.lower()
 
-    unbound = root / "unbound.txt"
-    unbound.write_text("not frozen\n", encoding="utf-8")
-    extra = _run("exact", "audit", root)
-    assert extra.returncode == 2
-    assert "unbound or missing" in extra.stderr.lower()
-    unbound.unlink()
+    for unbound in (root / "unbound.txt", root / "native" / "SHA256.json"):
+        unbound.write_text("not frozen\n", encoding="utf-8")
+        extra = _run("exact", "audit", root)
+        assert extra.returncode == 2
+        assert "unbound or missing" in extra.stderr.lower()
+        unbound.unlink()
+
+    huge_cap = _run("exact", "audit", root, "--max-bytes", sys.maxsize - 1)
+    assert huge_cap.returncode == 0, huge_cap.stderr
+    assert json.loads(huge_cap.stdout) == audit
+
+    manifest_path = root / "SHA256.json"
+    original_manifest = manifest_path.read_text(encoding="utf-8")
+    manifest_path.write_text(
+        '{"format":"wrong",' + original_manifest[1:], encoding="utf-8",
+    )
+    ambiguous = _run("exact", "audit", root)
+    assert ambiguous.returncode == 2
+    assert "duplicate JSON key" in ambiguous.stderr
+    manifest_path.write_text(original_manifest, encoding="utf-8")
 
     report_path = root / "selftest.json"
     original_report = report_path.read_text(encoding="utf-8")

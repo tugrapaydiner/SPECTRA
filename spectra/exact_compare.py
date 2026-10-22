@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from . import __version__
+from ._json import load_file
 from .exact import DEFAULT_BYTES, EXACT_API_VERSION, EXACT_NATIVE_ABI
 from .exact_selftest import SCHEMA as SELFTEST_SCHEMA, verify_exact_selftest
 
@@ -26,11 +27,7 @@ def _validate_max_bytes(max_bytes: int) -> None:
 
 def _load_report(root: Path, max_bytes: int) -> dict:
     path = root / "selftest.json"
-    with path.open("rb") as stream:
-        data = stream.read(min(max_bytes, _JSON_MAX_BYTES) + 1)
-    if len(data) > min(max_bytes, _JSON_MAX_BYTES):
-        raise ValueError(f"{path} exceeds max-bytes")
-    value = json.loads(data)
+    value = load_file(path, max_bytes=min(max_bytes, _JSON_MAX_BYTES))
     if type(value) is not dict:
         raise ValueError(f"{path} must contain a JSON object")
     return value

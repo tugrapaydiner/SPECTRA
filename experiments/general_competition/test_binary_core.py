@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import builtins
 from itertools import combinations, product
 
 import pytest
@@ -170,6 +171,104 @@ def test_replay_rejects_unproved_variable_merge():
         equivalent_variables_removed=1,
     )
     assert not verify_binary_core(3, clauses, malicious)
+
+
+def test_singleton_class_replay_work_is_linear(monkeypatch):
+    from experiments.general_competition import binary_core
+
+    # Count literal inspections, not elapsed time: unused declared variables
+    # must not cause a complete mapping scan for every singleton class.
+    nvars = 128
+    core = build_binary_core(nvars, ())
+    inspections = 0
+
+    def counted_abs(value):
+        nonlocal inspections
+        inspections += 1
+        return builtins.abs(value)
+
+    monkeypatch.setattr(binary_core, "abs", counted_abs, raising=False)
+    assert verify_binary_core(nvars, (), core)
+    assert inspections <= 16 * nvars
+
+
+def test_class_grouping_preserves_signed_and_noncontiguous_members():
+    clauses = ((1, 3), (-1, -3), (2, -5), (-2, 5), (3, 4, 6))
+    core = build_binary_core(6, clauses)
+    assert core.class_literals == (1, 2, -1, 3, 2, 4)
+    assert verify_binary_core(6, clauses, core)
+    assert lifted_models(core) == models(6, canonical_cnf(6, clauses))
+    # Negating a representative or changing the sign of a proved member must
+    # still fail even when its absolute class index is unchanged.
+    for changed in ((-1, 2, -1, 3, 2, 4), (1, 2, 1, 3, 2, 4)):
+        assert not verify_binary_core(
+            6, clauses, replace(core, class_literals=changed)
+        )
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("component_proofs", None), ("component_proofs", [None]),
+    ("component_proofs", (None,)),
+    ("class_literals", None), ("class_literals", [1]),
+    ("class_literals", ("1",)), ("class_literals", (True,)),
+    ("class_literals", (0,)), ("class_literals", (2,)),
+    ("class_count", True), ("class_count", 1.0),
+    ("unit_trace", None), ("unit_trace", [None]), ("unit_trace", (None,)),
+    ("mapping", None), ("mapping", (True,)),
+    ("fixed", None), ("fixed", (0,)),
+    ("residual_clauses", None), ("residual_clauses", ([1],)),
+    ("conflict_clause", [1]), ("conflict_kind", []),
+    ("original_nvars", True), ("normalized_clause_count", False),
+    ("reduced_nvars", True), ("propagated_classes", -1),
+])
+def test_replay_rejects_malformed_core_receipt(field, value):
+    core = build_binary_core(1, ())
+    assert not verify_binary_core(1, (), replace(core, **{field: value}))
+
+
+def test_replay_bounds_class_count_before_allocating(monkeypatch):
+    from experiments.general_competition import binary_core
+
+    core = build_binary_core(1, ())
+
+    def bounded_range(*args):
+        values = builtins.range(*args)
+        assert len(values) <= 2, "receipt count reached an allocation loop"
+        return values
+
+    monkeypatch.setattr(binary_core, "range", bounded_range, raising=False)
+    assert not verify_binary_core(1, (), replace(core, class_count=10**12))
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("nodes", None), ("nodes", ([1],)), ("nodes", (True, -2)),
+    ("root", []), ("root", True),
+    ("outward", None), ("outward", ((1, 2),)),
+    ("outward", (([], 2, (1, 2)),)),
+    ("outward", ((1, 2, [1, 2]),)),
+    ("outward", ((True, 2, (1, 2)),)),
+    ("inward", (None,)),
+])
+def test_replay_rejects_malformed_component_receipt(field, value):
+    clauses = ((1, -2), (-1, 2))
+    core = build_binary_core(2, clauses)
+    changed = replace(core.component_proofs[0], **{field: value})
+    assert not verify_binary_core(
+        2, clauses,
+        replace(core, component_proofs=(changed,) + core.component_proofs[1:]),
+    )
+
+
+@pytest.mark.parametrize(("literal", "reason"), [
+    (True, (1,)), (1.0, (1,)), ([], (1,)),
+    (1, [1]), (1, ([1],)), (1, (True,)),
+])
+def test_replay_rejects_malformed_unit_receipt(literal, reason):
+    clauses = ((1,),)
+    core = build_binary_core(1, clauses)
+    assert not verify_binary_core(
+        1, clauses, replace(core, unit_trace=(UnitStep(literal, reason),))
+    )
 
 
 def test_assumptions_are_all_validated_even_after_contradiction():

@@ -5,9 +5,17 @@ on:
     branches: [main]
   pull_request:
     paths:
+      - 'pyproject.toml'
+      - 'spectra/__init__.py'
+      - 'spectra/_json.py'
+      - 'spectra/_native_build.py'
       - 'spectra/exact*.py'
       - 'spectra/_native/exact_binary.cpp'
       - 'spectra/cli.py'
+      - 'spectra/evidence.py'
+      - 'spectra/exam_repair.py'
+      - 'spectra/itc2007_exam.py'
+      - 'spectra/svm_build.py'
       - 'tests/public/test_exact_api.py'
       - 'tests/public/test_exact_selftest.py'
       - 'tests/public/test_exact_compare.py'
@@ -20,6 +28,12 @@ on:
       - 'scripts/check_current_installation.py'
       - 'docs/EXACT_API.md'
       - 'docs/EXACT_REPLICATION.md'
+      - 'experiments/compiled_query/exact.py'
+      - 'experiments/compiled_query/exact_native.cpp'
+      - 'experiments/compiled_query/test_exact.py'
+      - 'experiments/compiled_query/test_transfer_hardening.py'
+      - 'experiments/compiled_query/test_proof_replay.py'
+      - 'experiments/compiled_query/test_linear_construction.py'
       - 'experiments/compiled_query/direct_twosat*'
       - 'experiments/compiled_query/DIRECT_2SAT_*'
       - 'experiments/compiled_query/cadical_exact*'
@@ -50,6 +64,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - {runner: ubuntu-24.04, python: '3.10'}
           - {runner: ubuntu-24.04, python: '3.11'}
           - {runner: ubuntu-24.04, python: '3.13'}
           - {runner: ubuntu-24.04-arm, python: '3.13'}
@@ -212,6 +227,10 @@ jobs:
           python-version: '3.13'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
+          name: exact-selftest-ubuntu-24.04-py3.10-${{ github.run_id }}
+          path: exact-bundles/linux-py310
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
           name: exact-selftest-ubuntu-24.04-py3.11-${{ github.run_id }}
           path: exact-bundles/linux-py311
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -231,6 +250,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m spectra exact compare \
+            exact-bundles/linux-py310 \
             exact-bundles/linux-py311 \
             exact-bundles/linux-py313 \
             exact-bundles/arm-py313 \
@@ -242,7 +262,7 @@ jobs:
 
           result = json.loads(Path('cross-platform.json').read_text())
           assert result['verified'] is True
-          assert result['bundles'] == 4
+          assert result['bundles'] == 5
           assert (result['cases'], result['queries'], result['sat'], result['unsat']) == (3, 13, 10, 3)
           assert result['proof_kinds'] == [1, 2, 3]
           assert result['selected_modes'] == {
@@ -255,7 +275,7 @@ jobs:
               'mixed-current-query': 'short_weak_compression',
               'strong-compression': 'scc_strong_compression',
           }
-          assert len(result['environments']) == 4
+          assert len(result['environments']) == 5
           assert result['native_execution'] is False
           assert result['native_module_loaded'] is False
           PY

@@ -27,6 +27,8 @@ import tempfile
 import time
 from typing import Iterable
 
+from spectra._native_build import native_load_guard, publish_build, snapshot_source
+
 from .binary_core import (
     BinaryCore,
     build_binary_core,
@@ -154,16 +156,13 @@ def build_native_cdcl(
             raise FileNotFoundError(compiler)
         if sanitizer != "none":
             raise NotImplementedError("sanitizer builds currently require clang++ or g++")
-        command = [
+        command_prefix = [
             resolved,
             "/nologo",
             "/std:c++17",
             "/O2",
             "/EHsc",
             "/LD",
-            str(SOURCE.resolve()),
-            "/link",
-            "/OUT:" + str(library),
         ]
         version_command = [resolved]
     else:
@@ -192,43 +191,40 @@ def build_native_cdcl(
                 "-fsanitize=" + sanitizer,
                 "-fno-sanitize-recover=all",
             ))
-        command = [resolved, *flags, str(SOURCE.resolve()), "-o", str(library)]
+        command_prefix = [resolved, *flags]
         version_command = [resolved, "--version"]
 
     started = time.perf_counter_ns()
     with tempfile.TemporaryDirectory(dir=destination) as temporary:
+        target = Path(temporary) / library.name
+        source, source_sha256 = snapshot_source(SOURCE, Path(temporary))
+        command = [*command_prefix, str(source)]
+        command += ["/link", "/OUT:" + str(target)] if os.name == "nt" else ["-o", str(target)]
         completed = _run(command, cwd=Path(temporary))
-        if not library.is_file():
+        if not target.is_file():
             raise RuntimeError("native CDCL library was not produced")
         try:
             version = _run(version_command, cwd=Path(temporary), timeout=30)
             compiler_text = version.stdout + version.stderr
         except RuntimeError as error:
             compiler_text = str(error)
-    record = {
-        "schema": BUILD_SCHEMA,
-        "source": SOURCE.name,
-        "source_sha256": _sha256(SOURCE),
-        "library": library.name,
-        "library_sha256": _sha256(library),
-        "compiler": resolved,
-        "compiler_version": compiler_text,
-        "command": command,
-        "stdout": completed.stdout,
-        "stderr": completed.stderr,
-        "sanitizer": sanitizer,
-        "platform": platform.platform(),
-        "machine": platform.machine(),
-        "elapsed_ns": time.perf_counter_ns() - started,
-    }
-    try:
-        with receipt.open("x", encoding="utf-8") as stream:
-            json.dump(record, stream, indent=2, sort_keys=True)
-            stream.write("\n")
-    except BaseException:
-        library.unlink(missing_ok=True)
-        receipt.unlink(missing_ok=True)
-        raise
+        record = {
+            "schema": BUILD_SCHEMA,
+            "source": SOURCE.name,
+            "source_sha256": source_sha256,
+            "library": library.name,
+            "library_sha256": _sha256(target),
+            "compiler": resolved,
+            "compiler_version": compiler_text,
+            "command": command,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "sanitizer": sanitizer,
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            "elapsed_ns": time.perf_counter_ns() - started,
+        }
+        publish_build(target, library, record)
     return library
 
 
@@ -329,7 +325,8 @@ class NativeCDCLRuntime:
     def __init__(self, library: str | Path):
         self.path = Path(library).resolve(strict=True)
         self.receipt = _check_receipt(self.path)
-        self._library = ctypes.CDLL(str(self.path))
+        with native_load_guard(self.path, self.receipt["library_sha256"]):
+            self._library = ctypes.CDLL(str(self.path))
         self._library.spectra_g_native_signature.argtypes = []
         self._library.spectra_g_native_signature.restype = ctypes.c_char_p
         self._library.spectra_g_native_error.argtypes = []

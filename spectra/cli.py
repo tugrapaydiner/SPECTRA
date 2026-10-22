@@ -7,19 +7,13 @@ from pathlib import Path
 import platform
 import sys
 from . import __version__
-from ._json import DEFAULT_MAX_BYTES, load_file
+from ._json import DEFAULT_MAX_BYTES, load_file, read_bounded
 
 EXACT_FILE_MAX_BYTES = 64 << 20
 
 
 def _read_binary(path: Path, *, max_bytes: int) -> bytes:
-    if type(max_bytes) is not int or not 1 <= max_bytes <= sys.maxsize - 1:
-        raise ValueError("max-bytes must be a positive bounded integer")
-    with path.open("rb") as stream:
-        data = stream.read(max_bytes + 1)
-    if len(data) > max_bytes:
-        raise ValueError(f"{path} exceeds max-bytes")
-    return data
+    return read_bounded(path, max_bytes=max_bytes)
 
 
 def _emit(value: dict, destination: Path | None) -> None:

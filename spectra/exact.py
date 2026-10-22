@@ -11,7 +11,6 @@ from dataclasses import dataclass
 import hashlib
 import importlib.util
 import json
-import os
 from pathlib import Path
 import platform
 import shutil
@@ -26,6 +25,7 @@ from typing import Iterable, Sequence
 
 from .exact_problem import ExactProblem
 from .exact_proof import decode_proof, verify_answer
+from ._native_build import native_load_guard, publish_build, snapshot_source
 
 SOURCE = Path(__file__).with_name('_native') / 'exact_binary.cpp'
 EXACT_API_VERSION = 1
@@ -72,6 +72,7 @@ def build_exact_runtime(directory: Path, *, compiler: str | None = None,
     start = time.perf_counter_ns()
     with tempfile.TemporaryDirectory(dir=dest) as tmp:
         target = Path(tmp) / library.name
+        source, source_sha256 = snapshot_source(SOURCE, Path(tmp))
         if windows:
             from spectra.svm_build import command_for
             if sysconfig.get_config_var('Py_DEBUG'):
@@ -80,10 +81,10 @@ def build_exact_runtime(directory: Path, *, compiler: str | None = None,
             import_library = Path(sys.base_prefix) / 'libs' / name
             if not import_library.is_file():
                 raise ValueError('CPython import library missing: ' + str(import_library))
-            command = command_for(SOURCE.resolve(), target, target='portable', compiler=cc,
+            command = command_for(source, target, target='portable', compiler=cc,
                 include=Path(sysconfig.get_path('include')), import_library=import_library)
         else:
-            command = [cc, *flags, '-I' + sysconfig.get_path('include'), str(SOURCE), '-o', str(target)]
+            command = [cc, *flags, '-I' + sysconfig.get_path('include'), str(source), '-o', str(target)]
         result = subprocess.run(command, cwd=tmp, capture_output=True, text=True,
                                 encoding='utf-8', errors='replace', timeout=120)
         if result.returncode:
@@ -94,22 +95,13 @@ def build_exact_runtime(directory: Path, *, compiler: str | None = None,
                       library_name=library.name, python_executable=sys.executable, python_version=sys.version,
                       python_implementation=platform.python_implementation(),
                       soabi=sysconfig.get_config_var('SOABI'), platform=platform.platform(),
-                      source_sha256=hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
+                      source_sha256=source_sha256,
                       library_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
                       command=command, sanitizer=sanitizer,
                       elapsed_ns=time.perf_counter_ns()-start,
                       compiler=version.stdout + version.stderr,
                       stdout=result.stdout, stderr=result.stderr)
-        os.link(target, library)
-        try:
-            with receipt.open('x') as stream:
-                json.dump(record, stream, sort_keys=True, indent=2)
-                stream.write('\n')
-        except BaseException:
-            # Never leave a newly published library with a missing/partial receipt.
-            library.unlink(missing_ok=True)
-            receipt.unlink(missing_ok=True)
-            raise
+        publish_build(target, library, record)
     return library
 
 
@@ -463,13 +455,15 @@ class ExactRuntime:
 
     def __init__(self, library: Path, *, verify_receipt: bool = True):
         self.build_receipt = _read_build_receipt(library) if verify_receipt else None
-        spec = importlib.util.spec_from_file_location('_spectra_exact_binary', Path(library).resolve())
-        if spec is None or spec.loader is None:
-            raise ValueError('invalid trusted native extension path')
-        self._module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self._module)
-        if self._module.abi() != EXACT_NATIVE_ABI:
-            raise ValueError('unsupported exact binary ABI')
+        identity = self.build_receipt['library_sha256'] if verify_receipt else None
+        with native_load_guard(Path(library), identity) as path:
+            spec = importlib.util.spec_from_file_location('_spectra_exact_binary', path)
+            if spec is None or spec.loader is None:
+                raise ValueError('invalid trusted native extension path')
+            self._module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(self._module)
+            if self._module.abi() != EXACT_NATIVE_ABI:
+                raise ValueError('unsupported exact binary ABI')
 
     def prepare(self, problem: ExactProblem, *, mode: str = 'scc',
                 max_bytes: int = DEFAULT_BYTES) -> 'ExactSession':
