@@ -136,7 +136,7 @@ def _compose_native_original_rup(
     max_proof_literals: int = 100_000_000,
     max_proof_bytes: int = 1_073_741_824,
 ) -> OriginalRUPComposition:
-    """Compose S, R, and retained native RUP additions without certifying them.
+    """Compose new S/R clauses and retained native RUP additions without certifying.
 
     This private helper is for the own native backend only, not arbitrary RAT
     composition. No native solve, proof replay, file write, or fallback occurs.
@@ -192,9 +192,10 @@ def _compose_native_original_rup(
         raise ValueError("noncontradictory reduction has a conflict variable")
 
     additions: list[Clause] = []
+    available_prefix = set(canonical)
     literal_count = byte_count = 0
 
-    def append(row: Clause) -> None:
+    def append(row: Clause, *, prefix: bool = False) -> None:
         nonlocal literal_count, byte_count
         if (
             type(row) is not tuple
@@ -204,6 +205,12 @@ def _compose_native_original_rup(
         values = set(row)
         if len(values) != len(row) or any(-lit in values for lit in row):
             raise ValueError("original proof clause contains duplicates or a tautology")
+        if prefix:
+            # Signed residual embeddings may reorder variables. Membership is
+            # by clause contents; backend rows bypass this filter entirely.
+            key = tuple(sorted(row, key=lambda lit: (abs(lit), lit)))
+            if key in available_prefix:
+                return
         next_literals = literal_count + len(row)
         next_bytes = byte_count + sum(len(str(lit)) + 1 for lit in row) + 2
         for observed, maximum, reason in (
@@ -215,6 +222,8 @@ def _compose_native_original_rup(
                 raise _OriginalProofBudgetExceeded(reason)
         additions.append(row)
         literal_count, byte_count = next_literals, next_bytes
+        if prefix:
+            available_prefix.add(key)
 
     def frontend_result(prefix_count: int, prefix_literals: int) -> OriginalRUPComposition:
         append(())
@@ -234,8 +243,8 @@ def _compose_native_original_rup(
             or reduction.class_count != 0
         ):
             raise ValueError("native SCC contradiction witness differs")
-        append((reduction.conflict_variable,))
-        return frontend_result(1, 1)
+        append((reduction.conflict_variable,), prefix=True)
+        return frontend_result(len(additions), literal_count)
 
     labels = reduction.class_literals
     count = reduction.class_count
@@ -268,14 +277,13 @@ def _compose_native_original_rup(
     def append_substituted() -> None:
         # Validate all branch evidence before calling this function: a tiny
         # certificate budget must never mask malformed native evidence.
-        # Bound unique storage while it grows, before sorting. Substitute the
-        # full row first; fixed literals are never omitted from S.
-        seen: set[Clause] = set()
+        # Substitute the full row first; fixed literals are never omitted from
+        # S. Original and already emitted clauses remain available because the
+        # composed RUP stream has no deletions, so their copies need not be sent.
         for row in canonical:
             normalized = canonical_cnf(nvars, (tuple(map(substitute, row)),))
-            if normalized and normalized[0] not in seen:
-                append(normalized[0])
-                seen.add(normalized[0])
+            if normalized:
+                append(normalized[0], prefix=True)
         additions.sort(key=lambda row: (len(row), row))
 
     if reduction.conflict_kind == "unit":
@@ -347,7 +355,7 @@ def _compose_native_original_rup(
 
     append_substituted()
     for row in residual:
-        append(embed(row))
+        append(embed(row), prefix=True)
     prefix_count, prefix_literals = len(additions), literal_count
     for index, row in enumerate(backend_proof.additions):
         if not row and index != len(backend_proof.additions) - 1:

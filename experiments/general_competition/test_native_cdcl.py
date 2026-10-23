@@ -1019,7 +1019,9 @@ def test_original_rup_requires_full_substitution_before_residual(native_proof_co
 
 
 def test_original_rup_composes_native_backend_in_original_namespace(native_proof_core, runtime):
-    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+    from experiments.general_competition.native_cdcl import (
+        _compose_native_original_rup, _OriginalProofBudgetExceeded,
+    )
 
     original = _equivalence_created_units() + (
         (-1, -3, 5, 6), (-1, -3, 5, -6),
@@ -1032,8 +1034,8 @@ def test_original_rup_composes_native_backend_in_original_namespace(native_proof
     assert code == 20 and model == () and proof is not None
     composed = _compose_native_original_rup(6, original, reduction, proof)
     assert verify_drup_proof(6, original, composed.proof)
-    assert composed.prefix_clauses == 10
-    assert composed.prefix_literals == 26
+    assert composed.prefix_clauses == 6
+    assert composed.prefix_literals == 10
     assert composed.backend_clauses == stats.learned_clauses + 1
     assert composed.backend_literals == stats.learned_literals
     assert composed.frontend_terminal_clauses == 0
@@ -1044,14 +1046,21 @@ def test_original_rup_composes_native_backend_in_original_namespace(native_proof
     assert composed.proof.additions[composed.prefix_clauses:] == expected_suffix
     assert composed.proof.additions.count(()) == 1
     assert not verify_drup_proof(6, original, DRUPProof(
-        proof.schema, composed.proof.additions[6:]))  # Remove all S, keep R.
+        proof.schema, composed.proof.additions[2:]))  # Remove new S units, keep R.
     serialized = "".join("".join(f"{lit} " for lit in row) + "0\n"
                          for row in composed.proof.additions)
     assert composed.proof_bytes == len(serialized.encode("ascii"))
+    # A cap sufficient for either prefix or backend alone is not a combined cap.
+    with pytest.raises(_OriginalProofBudgetExceeded, match="proof_literal_budget"):
+        _compose_native_original_rup(
+            6, original, reduction, proof,
+            max_proof_literals=max(composed.prefix_literals, composed.backend_literals))
 
 
 @pytest.mark.parametrize("nvars,original,kind,expected", (
     (2, ((1, 2), (1, -2), (-1, 2), (-1, -2)), "binary", ((1,), ())),
+    (2, ((1,), (1, 2), (1, -2), (-1, 2), (-1, -2)), "binary", ((),)),
+    (1, ((1,), (-1,)), "binary", ((),)),
     (5, _equivalence_created_units() + ((-5,), (-1, -3, 5)), "unit", None),
     (0, ((),), "unit", ((),)),
 ))
@@ -1064,10 +1073,12 @@ def test_original_rup_frontend_contradiction_branches(
     composed = _compose_native_original_rup(nvars, original, reduction)
     assert composed.backend_clauses == composed.backend_literals == 0
     assert composed.frontend_terminal_clauses == 1
+    assert composed.prefix_clauses == len(composed.proof.additions) - 1
+    assert composed.prefix_literals == sum(map(len, composed.proof.additions))
     assert verify_drup_proof(nvars, original, composed.proof)
     if expected is not None:
         assert composed.proof.additions == expected
-    if () not in original:
+    if () not in original and expected != ((),):
         assert not verify_drup_proof(nvars, original, DRUPProof(composed.proof.schema, ((),)))
 
 
@@ -1177,7 +1188,9 @@ def test_original_rup_signed_multihop_free_and_fixed_classes(
         for lit in row) for row in proof.additions)
     assert composed.proof.additions[composed.prefix_clauses:] == expected_suffix
     assert composed.backend_literals == stats.learned_literals
-    assert composed.prefix_clauses == len(substituted) + len(residual)
+    # In the free case the embedded residual is already entirely present in S.
+    assert composed.prefix_clauses == (9 if fixed_class else 8)
+    assert composed.prefix_literals == (21 if fixed_class else 24)
     assert verify_drup_proof(5, original, composed.proof)
 
 
@@ -1210,6 +1223,7 @@ def test_original_rup_large_original_ids_have_exact_byte_limits(native_proof_cor
     code, _, proof, stats, _ = runtime.solve_residual(3, reduction.residual_clauses)
     assert code == 20 and proof is not None and stats.learned_literals > 0
     composed = _compose_native_original_rup(100, original, reduction, proof)
+    assert composed.prefix_clauses == composed.prefix_literals == 0
     path = write_drup(tmp_path / "large-ids.drat", composed.proof)
     exact_bytes = len(path.read_bytes())
     assert composed.proof_bytes == exact_bytes
@@ -1223,11 +1237,11 @@ def test_original_rup_large_original_ids_have_exact_byte_limits(native_proof_cor
     with pytest.raises(_OriginalProofBudgetExceeded, match="proof_byte_budget"):
         _compose_native_original_rup(
             100, original, reduction, proof, max_proof_bytes=exact_bytes - 1)
-    # A cap sufficient for either prefix or backend alone is not a combined cap.
-    with pytest.raises(_OriginalProofBudgetExceeded, match="proof_literal_budget"):
-        _compose_native_original_rup(
-            100, original, reduction, proof,
-            max_proof_literals=max(composed.prefix_literals, composed.backend_literals))
+    assert _compose_native_original_rup(
+        100, original, reduction, proof,
+        max_proof_clauses=composed.backend_clauses,
+        max_proof_literals=composed.backend_literals,
+        max_proof_bytes=exact_bytes) == composed
     assert verify_drup_proof(100, original, composed.proof)
 
 
@@ -1302,6 +1316,102 @@ def test_original_rup_well_shaped_false_reduction_is_not_certified(native_proof_
     os.name != "posix" or not os.environ.get("DRAT_TRIM"),
     reason="bounded POSIX execution and pinned RUP-only checker are required",
 )
+@pytest.mark.parametrize("case", (
+    "identity", "identity-repeated-backend", "mixed", "mixed-permuted", "false-unit",
+))
+def test_original_rup_deduplicated_prefix_external_verdict(
+        native_proof_core, runtime, tmp_path, case):
+    from experiments.general_competition.campaign import run_process
+    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+
+    if case.startswith("identity"):
+        nvars, original = 3, all_blocking_clauses(3)
+        back = (1, 2, 3)
+        expected_prefix = ()
+    elif case.startswith("mixed"):
+        # Half of S is already original; all of the embedded R is in original
+        # or S. A signed class makes both kinds of overlap consequential.
+        nvars = 5
+        equivalences = ((1, 2), (-1, -2), (2, 3), (-2, -3))  # 1 = -2 = 3.
+        blocks = all_blocking_clauses(3)
+        original = equivalences + tuple(
+            tuple(target if lit > 0 else -target
+                  for lit, target in zip(row, (1 if index < 4 else -2, 4, 5)))
+            for index, row in enumerate(blocks))
+        expected_prefix = canonical_cnf(5, tuple(
+            (1,) + tuple(target if lit > 0 else -target
+                         for lit, target in zip(row[1:], (4, 5)))
+            for row in blocks[4:]))
+        back = (5, -1, 4) if case == "mixed-permuted" else (1, 4, 5)
+    else:
+        nvars = 6
+        original = _equivalence_created_units() + ((-1, -3, 5, 6),)
+        expected_prefix = ((1,), (3,))
+
+    reduction = native_proof_core.reduce(nvars, original)
+    assert not reduction.contradiction
+    if case == "false-unit":
+        # A validly shaped but false claim about this SAT formula must still
+        # fail independent checking after duplicate clauses are omitted.
+        reduction = replace(
+            reduction, contradiction=True, conflict_kind="unit", conflict_variable=0,
+            reduced_nvars=0, residual_clauses=((),), mapping=(0,) * nvars,
+            fixed=(False,) * nvars)
+        proof = None
+        expected_suffix = ((),)
+    else:
+        if case == "mixed-permuted":
+            # All blocking clauses are invariant under this signed permutation,
+            # but embedded row order differs from canonical original row order.
+            reduction = replace(reduction, mapping=(-2, 2, -2, 3, 1))
+        code, _, proof, _, _ = runtime.solve_residual(
+            reduction.reduced_nvars, reduction.residual_clauses)
+        assert code == 20 and proof is not None
+        if case == "identity-repeated-backend":
+            repeated = reduction.residual_clauses[0]
+            proof = DRUPProof(proof.schema, (repeated, repeated) + proof.additions)
+        expected_suffix = tuple(tuple(
+            back[abs(lit) - 1] if lit > 0 else -back[abs(lit) - 1] for lit in row
+        ) for row in proof.additions)
+
+    composed = _compose_native_original_rup(nvars, original, reduction, proof)
+    assert composed.proof.additions == expected_prefix + expected_suffix
+    assert composed.prefix_clauses == len(expected_prefix)
+    assert composed.prefix_literals == sum(map(len, expected_prefix))
+    assert composed.backend_clauses == (0 if proof is None else len(proof.additions))
+    assert composed.backend_literals == (0 if proof is None else sum(map(len, proof.additions)))
+    assert composed.frontend_terminal_clauses == (1 if proof is None else 0)
+    assert composed.proof.additions.count(()) == 1
+    formula = write_dimacs(tmp_path / "original.cnf", nvars, original)
+    proof_path = write_drup(tmp_path / "original.drat", composed.proof)
+    assert proof_path.stat().st_size == composed.proof_bytes
+    prefix_bytes = sum(map(len, proof_path.read_bytes().splitlines(keepends=True)[
+        :composed.prefix_clauses]))
+    assert prefix_bytes == (0 if case.startswith("identity") else
+                            36 if case.startswith("mixed") else 8)
+    assert _compose_native_original_rup(
+        nvars, original, reduction, proof,
+        max_proof_clauses=len(composed.proof.additions),
+        max_proof_literals=composed.prefix_literals + composed.backend_literals,
+        max_proof_bytes=composed.proof_bytes) == composed
+    checked = run_process(
+        [str(Path(os.environ["DRAT_TRIM"]).resolve()), str(formula), str(proof_path),
+         "-f", "-U", "-I"], tmp_path / "check", timeout=30,
+        memory_mib=512, output_mib=8)
+    assert not checked["timed_out"] and checked["spawn_error"] is None, checked
+    lines = {
+        line.strip() for line in (tmp_path / "check" / "stdout.txt").read_text().splitlines()
+    }
+    if case == "false-unit":
+        assert checked["returncode"] != 0 and "s VERIFIED" not in lines, checked
+    else:
+        assert checked["returncode"] == 0 and "s VERIFIED" in lines, checked
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or not os.environ.get("DRAT_TRIM"),
+    reason="bounded POSIX execution and pinned RUP-only checker are required",
+)
 def test_original_rup_genuine_prefix_retains_deleted_backend_additions(
         native_proof_core, runtime, tmp_path):
     from experiments.general_competition.campaign import run_process
@@ -1336,14 +1446,14 @@ code, model, proof, stats, residual = backend.solve_residual(
 assert code == 20 and model == () and proof is not None
 assert stats.reductions >= 1 and stats.deleted_clauses >= 1
 composed = _compose_native_original_rup(15, original, reduction, proof)
-assert composed.prefix_clauses == 4098 and composed.prefix_literals == 49154
+assert composed.prefix_clauses == 2050 and composed.prefix_literals == 22530
 assert composed.backend_clauses == stats.learned_clauses + 1
 assert composed.backend_literals == stats.learned_literals
 expected = tuple(tuple(abs(lit) + 4 if lit > 0 else -(abs(lit) + 4)
                        for lit in row) for row in proof.additions)
 assert composed.proof.additions[composed.prefix_clauses:] == expected
 assert composed.proof.additions.count(()) == 1
-assert not _rup_conflict(canonical_cnf(15, original), composed.proof.additions[2050], 15)
+assert not _rup_conflict(canonical_cnf(15, original), composed.proof.additions[2], 15)
 write_dimacs(out / 'original.cnf', 15, original)
 proof_path = write_drup(out / 'original.drat', composed.proof)
 assert proof_path.stat().st_size == composed.proof_bytes
@@ -1358,7 +1468,7 @@ print(json.dumps({'reductions': stats.reductions, 'deleted': stats.deleted_claus
     assert solved["returncode"] == 0, (tmp_path / "stress-solve" / "stderr.txt").read_text()
     observed = json.loads((tmp_path / "stress-solve" / "stdout.txt").read_text())
     assert observed["reductions"] >= 1 and observed["deleted"] >= 1
-    assert observed["prefix_clauses"] == 4098 and observed["backend_clauses"] > 1
+    assert observed["prefix_clauses"] == 2050 and observed["backend_clauses"] > 1
     checked = run_process(
         [str(Path(os.environ["DRAT_TRIM"]).resolve()), str(tmp_path / "original.cnf"),
          str(tmp_path / "original.drat"), "-f", "-U", "-I"],

@@ -761,7 +761,7 @@ def test_preprocessed_native_campaign_checks_original_models_and_proofs(
     assert [value["backend_called"] for value in stats] == [False, False, True, False, False, False, True]
     assert all(value["stats"]["conflicts"] == 0 for value in (stats[0], stats[1], *stats[3:6]))
     composed = stats[-1]["proof_composition"]
-    assert composed["prefix_clauses"] == 10 and composed["prefix_literals"] == 26
+    assert composed["prefix_clauses"] == 6 and composed["prefix_literals"] == 10
     assert composed["backend_clauses"] == stats[-1]["stats"]["learned_clauses"] + 1
     assert composed["backend_literals"] == stats[-1]["stats"]["learned_literals"]
     assert composed["frontend_terminal_clauses"] == 0
