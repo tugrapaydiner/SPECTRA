@@ -988,3 +988,383 @@ SPECTRA_EXPORT int spectra_g_test_indexed_heap() {
     error.argtypes = []
     error.restype = ctypes.c_char_p
     assert check() == 0, error().decode("utf-8")
+
+@pytest.fixture(scope="module")
+def native_proof_core(tmp_path_factory):
+    from experiments.general_competition.native_binary_core import NativeBinaryCore, build_native_binary_core
+
+    if sys.platform != "linux" or shutil.which("g++") is None:
+        pytest.skip("native binary-core builder currently requires Linux and g++")
+    return NativeBinaryCore(build_native_binary_core(
+        tmp_path_factory.mktemp("native-original-rup-core")))
+
+
+def _equivalence_created_units():
+    return ((-1, 2), (1, -2), (1, 2), (-3, 4), (3, -4), (3, 4))
+
+
+def test_original_rup_requires_full_substitution_before_residual(native_proof_core):
+    from experiments.general_competition.native_cdcl import _rup_conflict
+
+    original = _equivalence_created_units() + ((-1, -3, 5, 6),)
+    reduction = native_proof_core.reduce(6, original)
+    assert reduction.class_literals == (1, 1, 2, 2, 3, 4)
+    assert reduction.mapping == (0, 0, 0, 0, 1, 2)
+    assert reduction.residual_clauses == ((1, 2),)
+    canonical = canonical_cnf(6, original)
+    assert not _rup_conflict(canonical, (5, 6), 6)
+    substituted = ((1,), (3,), (-1, -3, 5, 6))
+    assert all(_rup_conflict(canonical, row, 6) for row in substituted)
+    assert _rup_conflict(canonical + substituted, (5, 6), 6)
+
+
+def test_original_rup_composes_native_backend_in_original_namespace(native_proof_core, runtime):
+    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+
+    original = _equivalence_created_units() + (
+        (-1, -3, 5, 6), (-1, -3, 5, -6),
+        (-1, -3, -5, 6), (-1, -3, -5, -6),
+    )
+    reduction = native_proof_core.reduce(6, original)
+    assert not reduction.contradiction
+    code, model, proof, stats, residual = runtime.solve_residual(
+        reduction.reduced_nvars, reduction.residual_clauses)
+    assert code == 20 and model == () and proof is not None
+    composed = _compose_native_original_rup(6, original, reduction, proof)
+    assert verify_drup_proof(6, original, composed.proof)
+    assert composed.prefix_clauses == 10
+    assert composed.prefix_literals == 26
+    assert composed.backend_clauses == stats.learned_clauses + 1
+    assert composed.backend_literals == stats.learned_literals
+    assert composed.frontend_terminal_clauses == 0
+    assert len(composed.proof.additions) == composed.prefix_clauses + composed.backend_clauses
+    expected_suffix = tuple(tuple(
+        (abs(lit) + 4) if lit > 0 else -(abs(lit) + 4) for lit in row
+    ) for row in proof.additions)
+    assert composed.proof.additions[composed.prefix_clauses:] == expected_suffix
+    assert composed.proof.additions.count(()) == 1
+    assert not verify_drup_proof(6, original, DRUPProof(
+        proof.schema, composed.proof.additions[6:]))  # Remove all S, keep R.
+    serialized = "".join("".join(f"{lit} " for lit in row) + "0\n"
+                         for row in composed.proof.additions)
+    assert composed.proof_bytes == len(serialized.encode("ascii"))
+
+
+@pytest.mark.parametrize("nvars,original,kind,expected", (
+    (2, ((1, 2), (1, -2), (-1, 2), (-1, -2)), "binary", ((1,), ())),
+    (5, _equivalence_created_units() + ((-5,), (-1, -3, 5)), "unit", None),
+    (0, ((),), "unit", ((),)),
+))
+def test_original_rup_frontend_contradiction_branches(
+        native_proof_core, nvars, original, kind, expected):
+    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+
+    reduction = native_proof_core.reduce(nvars, original)
+    assert reduction.contradiction and reduction.conflict_kind == kind
+    composed = _compose_native_original_rup(nvars, original, reduction)
+    assert composed.backend_clauses == composed.backend_literals == 0
+    assert composed.frontend_terminal_clauses == 1
+    assert verify_drup_proof(nvars, original, composed.proof)
+    if expected is not None:
+        assert composed.proof.additions == expected
+    if () not in original:
+        assert not verify_drup_proof(nvars, original, DRUPProof(composed.proof.schema, ((),)))
+
+
+def test_original_rup_exact_certificate_budgets(native_proof_core):
+    from experiments.general_competition.native_cdcl import _compose_native_original_rup, _OriginalProofBudgetExceeded
+
+    original = ((1, 2), (1, -2), (-1, 2), (-1, -2))
+    reduction = native_proof_core.reduce(2, original)
+    exact = dict(max_proof_clauses=2, max_proof_literals=1, max_proof_bytes=6)
+    composed = _compose_native_original_rup(2, original, reduction, **exact)
+    assert composed.proof_bytes == 6
+    for name, reason in (
+        ("max_proof_clauses", "proof_clause_budget"),
+        ("max_proof_literals", "proof_literal_budget"),
+        ("max_proof_bytes", "proof_byte_budget"),
+    ):
+        limited = {**exact, name: exact[name] - 1}
+        with pytest.raises(_OriginalProofBudgetExceeded) as error:
+            _compose_native_original_rup(2, original, reduction, **limited)
+        assert error.value.reason == reason
+    empty = native_proof_core.reduce(0, ((),))
+    assert _compose_native_original_rup(
+        0, ((),), empty, max_proof_clauses=1, max_proof_literals=0,
+        max_proof_bytes=2).proof.additions == ((),)
+    with pytest.raises(ValueError, match="exact uint64"):
+        _compose_native_original_rup(2, original, reduction, max_proof_clauses=True)
+
+
+def test_original_rup_rejects_malformed_composition_evidence(native_proof_core, runtime):
+    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+
+    original = _equivalence_created_units() + tuple(
+        (-1, -3) + tuple(5 + index if bit else -(5 + index)
+                        for index, bit in enumerate(bits))
+        for bits in product((False, True), repeat=2)
+    )
+    reduction = native_proof_core.reduce(6, original)
+    code, _, proof, _, _ = runtime.solve_residual(
+        reduction.reduced_nvars, reduction.residual_clauses)
+    assert code == 20 and proof is not None
+    for bad in (
+        replace(reduction, mapping=(0, 0, 0, 0, 1, 1)),
+        replace(reduction, class_literals=(-1, -1, 2, 2, 3, 4)),
+        replace(reduction, fixed=(True, False, True, True, False, False)),
+    ):
+        with pytest.raises(ValueError):
+            _compose_native_original_rup(6, original, bad, proof)
+    for bad_rows in (((1, 1), ()), ((1, -1), ()), ((0,), ()), ((3,), ()), ((), ())):
+        with pytest.raises(ValueError):
+            _compose_native_original_rup(
+                6, original, reduction, DRUPProof(proof.schema, bad_rows))
+
+
+def test_original_rup_does_not_mistake_rat_only_addition_for_rup():
+    from experiments.general_competition.native_cdcl import PROOF_SCHEMA
+
+    original = ((1, 2), (1, -2), (-1, 2), (-1, -2))
+    # Pure unused variable 3 makes (3) vacuously RAT, but not RUP. This stream
+    # must not pass merely because a DRAT checker can validate the refutation.
+    assert not verify_drup_proof(3, original, DRUPProof(PROOF_SCHEMA, ((3,), (1,), ())))
+
+
+@pytest.mark.parametrize("fixed_class", (False, True))
+def test_original_rup_signed_multihop_free_and_fixed_classes(
+        native_proof_core, runtime, fixed_class):
+    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+
+    # 1 = -2 = 3, with 1 as the positive original representative.
+    equivalences = ((1, 2), (-1, -2), (2, 3), (-2, -3))
+    if fixed_class:
+        original = equivalences + ((3,),) + tuple(
+            (2,) + tuple(abs(lit) + 3 if lit > 0 else -(abs(lit) + 3) for lit in row)
+            for row in all_blocking_clauses(2)
+        )
+        expected_mapping = (0, 0, 0, 1, 2)
+        expected_fixed = (True, False, True, False, False)
+        representatives = (4, 5)
+        expected_substitution = ((1,),) + tuple(
+            (-1,) + tuple(abs(lit) + 3 if lit > 0 else -(abs(lit) + 3) for lit in row)
+            for row in all_blocking_clauses(2)
+        )
+    else:
+        def original_literal(literal):
+            target = (-2, 4, 5)[abs(literal) - 1]
+            return target if literal > 0 else -target
+        original = equivalences + tuple(
+            tuple(map(original_literal, row)) for row in all_blocking_clauses(3))
+        expected_mapping = (1, -1, 1, 2, 3)
+        expected_fixed = (False,) * 5
+        representatives = (1, 4, 5)
+        expected_substitution = tuple(tuple(
+            representatives[abs(lit) - 1] if lit > 0 else -representatives[abs(lit) - 1]
+            for lit in row) for row in all_blocking_clauses(3))
+    reduction = native_proof_core.reduce(5, original)
+    assert not reduction.contradiction
+    assert reduction.class_literals == (1, -1, 1, 2, 3)
+    assert reduction.mapping == expected_mapping
+    assert reduction.fixed == expected_fixed
+    code, _, proof, stats, residual = runtime.solve_residual(
+        reduction.reduced_nvars, reduction.residual_clauses)
+    assert code == 20 and proof is not None
+    composed = _compose_native_original_rup(5, original, reduction, proof)
+    substituted = canonical_cnf(5, expected_substitution)
+    assert composed.proof.additions[:len(substituted)] == substituted
+    expected_suffix = tuple(tuple(
+        representatives[abs(lit) - 1] if lit > 0 else -representatives[abs(lit) - 1]
+        for lit in row) for row in proof.additions)
+    assert composed.proof.additions[composed.prefix_clauses:] == expected_suffix
+    assert composed.backend_literals == stats.learned_literals
+    assert composed.prefix_clauses == len(substituted) + len(residual)
+    assert verify_drup_proof(5, original, composed.proof)
+
+
+def test_native_original_signed_lifting_keeps_unused_header_variables(native_proof_core, runtime):
+    original = ((1, 2), (-1, -2), (2, 3), (-2, -3), (3,), (2, 4, 5))
+    reduction = native_proof_core.reduce(9, original)
+    assert not reduction.contradiction
+    code, model, proof, _, _ = runtime.solve_residual(
+        reduction.reduced_nvars, reduction.residual_clauses)
+    assert code == 10 and proof is None
+    lifted = reduction.lift(model)
+    assert len(lifted) == 9 and all(type(value) is bool for value in lifted)
+    assert lifted[:3] == (True, False, True)
+    assert model_satisfies(9, original, lifted)
+    assert all(any(lifted[abs(lit) - 1] == (lit > 0) for lit in row) for row in original)
+
+
+def test_original_rup_large_original_ids_have_exact_byte_limits(native_proof_core, runtime, tmp_path):
+    from experiments.general_competition.native_cdcl import (
+        _compose_native_original_rup, _OriginalProofBudgetExceeded,
+    )
+
+    # Dense backend variables 1,2,3 map to original IDs 98,99,100.
+    original = tuple((var,) for var in range(1, 98)) + tuple(tuple(
+        abs(lit) + 97 if lit > 0 else -(abs(lit) + 97) for lit in row
+    ) for row in all_blocking_clauses(3))
+    reduction = native_proof_core.reduce(100, original)
+    assert not reduction.contradiction and reduction.reduced_nvars == 3
+    assert reduction.mapping == (0,) * 97 + (1, 2, 3)
+    code, _, proof, stats, _ = runtime.solve_residual(3, reduction.residual_clauses)
+    assert code == 20 and proof is not None and stats.learned_literals > 0
+    composed = _compose_native_original_rup(100, original, reduction, proof)
+    path = write_drup(tmp_path / "large-ids.drat", composed.proof)
+    exact_bytes = len(path.read_bytes())
+    assert composed.proof_bytes == exact_bytes
+    suffix = composed.proof.additions[composed.prefix_clauses:]
+    raw_bytes = sum(sum(len(str(lit)) + 1 for lit in row) + 2 for row in proof.additions)
+    mapped_bytes = sum(sum(len(str(lit)) + 1 for lit in row) + 2 for row in suffix)
+    assert mapped_bytes > raw_bytes
+    assert _compose_native_original_rup(
+        100, original, reduction, proof, max_proof_bytes=exact_bytes
+    ) == composed
+    with pytest.raises(_OriginalProofBudgetExceeded, match="proof_byte_budget"):
+        _compose_native_original_rup(
+            100, original, reduction, proof, max_proof_bytes=exact_bytes - 1)
+    # A cap sufficient for either prefix or backend alone is not a combined cap.
+    with pytest.raises(_OriginalProofBudgetExceeded, match="proof_literal_budget"):
+        _compose_native_original_rup(
+            100, original, reduction, proof,
+            max_proof_literals=max(composed.prefix_literals, composed.backend_literals))
+    assert verify_drup_proof(100, original, composed.proof)
+
+
+def test_original_rup_rejects_bad_evidence_before_tiny_budget(native_proof_core, runtime):
+    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+
+    original = _equivalence_created_units() + tuple(
+        (-1, -3) + tuple(abs(lit) + 4 if lit > 0 else -(abs(lit) + 4) for lit in row)
+        for row in all_blocking_clauses(2))
+    reduction = native_proof_core.reduce(6, original)
+    code, _, proof, _, _ = runtime.solve_residual(2, reduction.residual_clauses)
+    assert code == 20 and proof is not None
+    tiny = dict(max_proof_clauses=0, max_proof_literals=0, max_proof_bytes=0)
+    with pytest.raises(TypeError, match="NativeReduction required"):
+        _compose_native_original_rup(6, original, object(), proof, **tiny)
+    for bad in (
+        replace(reduction, mapping=(0, 0, 0, 0, 1, 1)),
+        replace(reduction, mapping=[0, 0, 0, 0, 1, 2]),
+        replace(reduction, fixed=(True, False, True, True, False, False)),
+        replace(reduction, class_literals=(True, 1, 2, 2, 3, 4)),
+        replace(reduction, residual_clauses=((3,),)),
+    ):
+        with pytest.raises(ValueError):
+            _compose_native_original_rup(6, original, bad, proof, **tiny)
+    for bad in (
+        None, object(), DRUPProof("wrong", ((),)),
+        DRUPProof(proof.schema, ((1,),)),
+        DRUPProof(proof.schema, ([1], ())),
+        DRUPProof(proof.schema, ((True,), ())),
+        DRUPProof(proof.schema, ((1, 1), ())),
+        DRUPProof(proof.schema, ((1, -1), ())),
+        DRUPProof(proof.schema, ((), ())),
+    ):
+        with pytest.raises(ValueError):
+            _compose_native_original_rup(6, original, reduction, bad, **tiny)
+    quotient_original = _equivalence_created_units() + ((-5,), (-1, -3, 5))
+    quotient = native_proof_core.reduce(5, quotient_original)
+    assert quotient.conflict_kind == "unit"
+    with pytest.raises(ValueError, match="quotient conflict variable"):
+        _compose_native_original_rup(
+            5, quotient_original, replace(quotient, conflict_variable=1), **tiny)
+
+
+def test_original_empty_precedes_unrelated_binary_conflict(native_proof_core):
+    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+
+    original = ((), (1, 2), (1, -2), (-1, 2), (-1, -2))
+    reduction = native_proof_core.reduce(2, original)
+    assert reduction.conflict_kind == "binary"
+    composed = _compose_native_original_rup(2, original, reduction)
+    assert composed.proof.additions == ((),)
+    assert composed.prefix_clauses == composed.prefix_literals == 0
+    assert composed.frontend_terminal_clauses == 1 and composed.proof_bytes == 2
+    assert verify_drup_proof(2, original, composed.proof)
+
+
+def test_original_rup_well_shaped_false_reduction_is_not_certified(native_proof_core):
+    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+
+    original = _equivalence_created_units() + ((-1, -3, 5, 6),)
+    reduction = native_proof_core.reduce(6, original)
+    false_reduction = replace(
+        reduction, contradiction=True, conflict_kind="unit", conflict_variable=0,
+        reduced_nvars=0, residual_clauses=((),), mapping=(0,) * 6, fixed=(False,) * 6)
+    # Shape validation is not logical validation. The helper must not be exposed
+    # as a verified solver result: this well-shaped false claim still fails RUP.
+    composed = _compose_native_original_rup(6, original, false_reduction)
+    assert not verify_drup_proof(6, original, composed.proof)
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or not os.environ.get("DRAT_TRIM"),
+    reason="bounded POSIX execution and pinned RUP-only checker are required",
+)
+def test_original_rup_genuine_prefix_retains_deleted_backend_additions(
+        native_proof_core, runtime, tmp_path):
+    from experiments.general_competition.campaign import run_process
+
+    # Keep both the stress solve/composition and independent check supervised.
+    # Do not run the simple Python replay on this large certificate in pytest.
+    program = r"""
+import json
+from itertools import product
+from pathlib import Path
+import sys
+from experiments.general_competition.binary_core import canonical_cnf
+from experiments.general_competition.native_binary_core import NativeBinaryCore
+from experiments.general_competition.native_cdcl import (
+    NativeCDCLRuntime, _compose_native_original_rup, _rup_conflict, write_drup,
+)
+from experiments.general_competition.proof_backend import write_dimacs
+core = NativeBinaryCore(sys.argv[1])
+backend = NativeCDCLRuntime(sys.argv[2])
+out = Path(sys.argv[3])
+blocks = tuple(tuple(v if bit else -v for v, bit in enumerate(bits, 1))
+               for bits in product((False, True), repeat=11))
+equivalences = ((-1,2), (1,-2), (1,2), (-3,4), (3,-4), (3,4))
+original = equivalences + tuple((-1,-3) + tuple(
+    abs(lit) + 4 if lit > 0 else -(abs(lit) + 4) for lit in row) for row in blocks)
+reduction = core.reduce(15, original)
+assert not reduction.contradiction and reduction.reduced_nvars == 11
+assert reduction.residual_clauses == canonical_cnf(11, blocks)
+code, model, proof, stats, residual = backend.solve_residual(
+    11, reduction.residual_clauses, max_conflicts=10_000_000,
+    max_learned_literals=100_000_000)
+assert code == 20 and model == () and proof is not None
+assert stats.reductions >= 1 and stats.deleted_clauses >= 1
+composed = _compose_native_original_rup(15, original, reduction, proof)
+assert composed.prefix_clauses == 4098 and composed.prefix_literals == 49154
+assert composed.backend_clauses == stats.learned_clauses + 1
+assert composed.backend_literals == stats.learned_literals
+expected = tuple(tuple(abs(lit) + 4 if lit > 0 else -(abs(lit) + 4)
+                       for lit in row) for row in proof.additions)
+assert composed.proof.additions[composed.prefix_clauses:] == expected
+assert composed.proof.additions.count(()) == 1
+assert not _rup_conflict(canonical_cnf(15, original), composed.proof.additions[2050], 15)
+write_dimacs(out / 'original.cnf', 15, original)
+proof_path = write_drup(out / 'original.drat', composed.proof)
+assert proof_path.stat().st_size == composed.proof_bytes
+print(json.dumps({'reductions': stats.reductions, 'deleted': stats.deleted_clauses,
+                  'prefix_clauses': composed.prefix_clauses,
+                  'backend_clauses': composed.backend_clauses}))
+"""
+    solved = run_process(
+        [sys.executable, "-c", program, str(native_proof_core.path), str(runtime.path), str(tmp_path)],
+        tmp_path / "stress-solve", timeout=180, memory_mib=4096, output_mib=128)
+    assert not solved["timed_out"] and solved["spawn_error"] is None, solved
+    assert solved["returncode"] == 0, (tmp_path / "stress-solve" / "stderr.txt").read_text()
+    observed = json.loads((tmp_path / "stress-solve" / "stdout.txt").read_text())
+    assert observed["reductions"] >= 1 and observed["deleted"] >= 1
+    assert observed["prefix_clauses"] == 4098 and observed["backend_clauses"] > 1
+    checked = run_process(
+        [str(Path(os.environ["DRAT_TRIM"]).resolve()), str(tmp_path / "original.cnf"),
+         str(tmp_path / "original.drat"), "-f", "-U", "-I"],
+        tmp_path / "stress-check", timeout=120, memory_mib=4096, output_mib=128)
+    assert not checked["timed_out"] and checked["spawn_error"] is None, checked
+    assert checked["returncode"] == 0, checked
+    assert "s VERIFIED" in {
+        line.strip() for line in (tmp_path / "stress-check" / "stdout.txt").read_text().splitlines()
+    }

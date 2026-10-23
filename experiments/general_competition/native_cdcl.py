@@ -103,6 +103,262 @@ class DirectNativeResult:
     elapsed_ns: int
 
 
+@dataclass(frozen=True)
+class OriginalRUPComposition:
+    """Unverified original-CNF proof, with disjoint frontend/backend counts.
+
+    Constructing this object is not proof verification. The complete stream must
+    be checked against the original CNF under an independent resource budget.
+    """
+
+    proof: DRUPProof
+    prefix_clauses: int
+    prefix_literals: int
+    backend_clauses: int
+    backend_literals: int
+    frontend_terminal_clauses: int
+    proof_bytes: int
+
+
+class _OriginalProofBudgetExceeded(RuntimeError):
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _compose_native_original_rup(
+    nvars: int,
+    clauses: Iterable[Iterable[int]],
+    reduction,
+    backend_proof: DRUPProof | None = None,
+    *,
+    max_proof_clauses: int = 5_000_000,
+    max_proof_literals: int = 100_000_000,
+    max_proof_bytes: int = 1_073_741_824,
+) -> OriginalRUPComposition:
+    """Compose S, R, and retained native RUP additions without certifying them.
+
+    This private helper is for the own native backend only, not arbitrary RAT
+    composition. No native solve, proof replay, file write, or fallback occurs.
+    An endpoint using it must supervise construction and independent checking.
+    """
+    from .native_binary_core import NativeReduction
+
+    canonical = canonical_cnf(nvars, clauses)
+    limits = (
+        _uint64(max_proof_clauses, "max_proof_clauses"),
+        _uint64(max_proof_literals, "max_proof_literals"),
+        _uint64(max_proof_bytes, "max_proof_bytes"),
+    )
+    if type(reduction) is not NativeReduction:
+        raise TypeError("NativeReduction required")
+    if (
+        reduction.schema != "spectra.general_native_binary_core.v1"
+        or type(reduction.contradiction) is not bool
+        or reduction.conflict_kind not in ("", "binary", "unit")
+        or reduction.contradiction != bool(reduction.conflict_kind)
+        or reduction.original_nvars != nvars
+        or any(type(value) is not int or value < 0 for value in (
+            reduction.original_nvars, reduction.normalized_clause_count,
+            reduction.unit_input_clauses, reduction.binary_input_clauses,
+            reduction.long_input_clauses, reduction.class_count,
+            reduction.reduced_nvars, reduction.conflict_variable,
+            reduction.equivalent_variables_removed, reduction.propagated_classes,
+        ))
+        or reduction.normalized_clause_count != len(canonical)
+        or reduction.unit_input_clauses != sum(len(row) == 1 for row in canonical)
+        or reduction.binary_input_clauses != sum(len(row) == 2 for row in canonical)
+        or reduction.long_input_clauses != sum(len(row) >= 3 for row in canonical)
+        or type(reduction.mapping) is not tuple
+        or len(reduction.mapping) != nvars
+        or any(type(value) is not int for value in reduction.mapping)
+        or type(reduction.fixed) is not tuple
+        or len(reduction.fixed) != nvars
+        or any(type(value) is not bool for value in reduction.fixed)
+        or type(reduction.class_literals) is not tuple
+        or type(reduction.residual_clauses) is not tuple
+    ):
+        raise ValueError("native reduction structure differs")
+    if reduction.contradiction:
+        if (
+            backend_proof is not None
+            or reduction.reduced_nvars != 0
+            or reduction.residual_clauses != ((),)
+            or any(reduction.mapping)
+            or any(reduction.fixed)
+        ):
+            raise ValueError("native contradiction evidence differs")
+    elif reduction.conflict_variable != 0:
+        raise ValueError("noncontradictory reduction has a conflict variable")
+
+    additions: list[Clause] = []
+    literal_count = byte_count = 0
+
+    def append(row: Clause) -> None:
+        nonlocal literal_count, byte_count
+        if (
+            type(row) is not tuple
+            or any(type(lit) is not int or lit == 0 or abs(lit) > nvars for lit in row)
+        ):
+            raise ValueError("original proof clause structure differs")
+        values = set(row)
+        if len(values) != len(row) or any(-lit in values for lit in row):
+            raise ValueError("original proof clause contains duplicates or a tautology")
+        next_literals = literal_count + len(row)
+        next_bytes = byte_count + sum(len(str(lit)) + 1 for lit in row) + 2
+        for observed, maximum, reason in (
+            (len(additions) + 1, limits[0], "proof_clause_budget"),
+            (next_literals, limits[1], "proof_literal_budget"),
+            (next_bytes, limits[2], "proof_byte_budget"),
+        ):
+            if observed > maximum:
+                raise _OriginalProofBudgetExceeded(reason)
+        additions.append(row)
+        literal_count, byte_count = next_literals, next_bytes
+
+    def frontend_result(prefix_count: int, prefix_literals: int) -> OriginalRUPComposition:
+        append(())
+        return OriginalRUPComposition(
+            DRUPProof(PROOF_SCHEMA, tuple(additions)), prefix_count,
+            prefix_literals, 0, 0, 1, byte_count,
+        )
+
+    if () in canonical:
+        if not reduction.contradiction:
+            raise ValueError("native reduction ignored an original empty clause")
+        return frontend_result(0, 0)
+    if reduction.conflict_kind == "binary":
+        if (
+            not 1 <= reduction.conflict_variable <= nvars
+            or reduction.class_literals != ()
+            or reduction.class_count != 0
+        ):
+            raise ValueError("native SCC contradiction witness differs")
+        append((reduction.conflict_variable,))
+        return frontend_result(1, 1)
+
+    labels = reduction.class_literals
+    count = reduction.class_count
+    if (
+        len(labels) != nvars
+        or not 0 <= count <= nvars
+        or any(type(label) is not int or not 1 <= abs(label) <= count for label in labels)
+        or reduction.equivalent_variables_removed != nvars - count
+        or not 0 <= reduction.propagated_classes <= count
+    ):
+        raise ValueError("native class labels differ")
+    representatives = [0] * (count + 1)
+    for variable, label in enumerate(labels, 1):
+        index = abs(label)
+        if representatives[index] == 0:
+            if label < 0:
+                raise ValueError("native representative orientation differs")
+            representatives[index] = variable
+    if (
+        any(rep == 0 for rep in representatives[1:])
+        or representatives[1:] != sorted(representatives[1:])
+    ):
+        raise ValueError("native representative coverage differs")
+
+    def substitute(literal: int) -> int:
+        label = labels[abs(literal) - 1]
+        target = representatives[abs(label)]
+        return target if (literal > 0) == (label > 0) else -target
+
+    def append_substituted() -> None:
+        # Validate all branch evidence before calling this function: a tiny
+        # certificate budget must never mask malformed native evidence.
+        # Bound unique storage while it grows, before sorting. Substitute the
+        # full row first; fixed literals are never omitted from S.
+        seen: set[Clause] = set()
+        for row in canonical:
+            normalized = canonical_cnf(nvars, (tuple(map(substitute, row)),))
+            if normalized and normalized[0] not in seen:
+                append(normalized[0])
+                seen.add(normalized[0])
+        additions.sort(key=lambda row: (len(row), row))
+
+    if reduction.conflict_kind == "unit":
+        if reduction.conflict_variable != 0:
+            raise ValueError("native quotient conflict variable differs")
+        append_substituted()
+        return frontend_result(len(additions), literal_count)
+
+    reduced_nvars = reduction.reduced_nvars
+    if (
+        not 0 <= reduced_nvars <= count
+        or reduction.propagated_classes != count - reduced_nvars
+    ):
+        raise ValueError("native residual variable count differs")
+    back = [0] * (reduced_nvars + 1)
+    for representative in representatives[1:]:
+        target = reduction.mapping[representative - 1]
+        if abs(target) > reduced_nvars:
+            raise ValueError("native mapping target is out of range")
+        if target:
+            if back[abs(target)]:
+                raise ValueError("native residual mapping is not injective")
+            back[abs(target)] = representative if target > 0 else -representative
+    if any(target == 0 for target in back[1:]):
+        raise ValueError("native residual mapping is incomplete")
+    for variable, label in enumerate(labels, 1):
+        representative = representatives[abs(label)]
+        target = reduction.mapping[representative - 1]
+        expected = target if label > 0 else -target
+        if reduction.mapping[variable - 1] != expected:
+            raise ValueError("native mapping disagrees within a class")
+        if target:
+            if reduction.fixed[variable - 1]:
+                raise ValueError("native free-class placeholder differs")
+        elif reduction.fixed[variable - 1] != (
+            reduction.fixed[representative - 1] == (label > 0)
+        ):
+            raise ValueError("native fixed values disagree within a class")
+    residual = reduction.residual_clauses
+    if canonical_cnf(reduced_nvars, residual) != residual or not residual or () in residual:
+        raise ValueError("noncontradictory native residual differs")
+    if (
+        type(backend_proof) is not DRUPProof
+        or backend_proof.schema != PROOF_SCHEMA
+        or type(backend_proof.additions) is not tuple
+        or not backend_proof.additions
+        or backend_proof.additions[-1] != ()
+    ):
+        raise ValueError("complete retained native RUP proof required")
+    for index, row in enumerate(backend_proof.additions):
+        if (
+            type(row) is not tuple
+            or any(type(lit) is not int or lit == 0 or abs(lit) > reduced_nvars for lit in row)
+        ):
+            raise ValueError("native residual proof literal differs")
+        values = set(row)
+        if len(values) != len(row) or any(-lit in values for lit in row):
+            raise ValueError("native proof contains duplicates or a tautology")
+        if not row and index != len(backend_proof.additions) - 1:
+            raise ValueError("native proof contains an early empty clause")
+
+    def embed(row: Clause) -> Clause:
+        if (
+            type(row) is not tuple
+            or any(type(lit) is not int or lit == 0 or abs(lit) > reduced_nvars for lit in row)
+        ):
+            raise ValueError("native residual proof literal differs")
+        return tuple(back[abs(lit)] if lit > 0 else -back[abs(lit)] for lit in row)
+
+    append_substituted()
+    for row in residual:
+        append(embed(row))
+    prefix_count, prefix_literals = len(additions), literal_count
+    for index, row in enumerate(backend_proof.additions):
+        if not row and index != len(backend_proof.additions) - 1:
+            raise ValueError("native proof contains an early empty clause")
+        append(embed(row))
+    return OriginalRUPComposition(
+        DRUPProof(PROOF_SCHEMA, tuple(additions)), prefix_count, prefix_literals,
+        len(backend_proof.additions), literal_count - prefix_literals, 0, byte_count,
+    )
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
