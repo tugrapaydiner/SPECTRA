@@ -227,4 +227,7 @@ jobs:
       - name: Verify the campaign worker and external checker together
         env:
           DRAT_TRIM: ${{ github.workspace }}/.official/drat-trim/drat-trim
-        run: python -m pytest experiments/general_competition/test_campaign.py::test_complete_campaign_native_unsat_passes_real_external_drat_trim -q
+        run: |
+          python -m pytest -q \
+            experiments/general_competition/test_campaign.py::test_complete_campaign_native_unsat_passes_real_external_drat_trim \
+            experiments/general_competition/test_campaign.py::test_preprocessed_native_campaign_checks_original_models_and_proofs

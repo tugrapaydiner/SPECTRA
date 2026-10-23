@@ -673,3 +673,173 @@ def test_explicit_legacy_run_preserves_historical_metadata_conflict_status(tmp_p
     assert retained["status"] == "INVALID_VERDICT_CONFLICT" and "metadata_conflict" not in retained
     assert result["standings"][0]["disqualified"] and "scoring_policy" not in result
     assert json.loads((args.out / "campaign.json").read_text())["scoring_policy"] == "legacy-v1"
+
+
+@pytest.fixture(scope="module")
+def preprocessed_native_libraries(tmp_path_factory):
+    if sys.platform != "linux" or shutil.which("g++") is None:
+        pytest.skip("native binary frontend currently requires Linux and g++")
+    from .native_binary_core import build_native_binary_core
+    from .native_cdcl import build_native_cdcl
+    root = tmp_path_factory.mktemp("preprocessed-native-worker")
+    return build_native_cdcl(root / "backend"), build_native_binary_core(root / "frontend")
+
+
+def _preprocessed_worker_args(tmp_path, libraries, nvars, rows, **limits):
+    from .proof_backend import write_dimacs
+    return argparse.Namespace(
+        cnf=write_dimacs(tmp_path / "input.cnf", nvars, rows),
+        library=libraries[0], binary_library=libraries[1],
+        proof=tmp_path / "proof.drat", stats=tmp_path / "stats.json",
+        **{"max_conflicts": 10000, "max_learned_literals": 100000,
+           "max_proof_clauses": 100000, "max_proof_literals": 1000000,
+           "max_proof_bytes": 10000000, **limits})
+
+
+def _preprocessed_unsat_rows():
+    # The quotient creates units; the residual alone is not a proof of the
+    # original. Both the substitution prefix and lifted backend are required.
+    return ((-1, 2), (1, -2), (1, 2), (-3, 4), (3, -4), (3, 4),
+            (-1, -3, 5, 6), (-1, -3, 5, -6),
+            (-1, -3, -5, 6), (-1, -3, -5, -6))
+
+
+def test_preprocessed_native_campaign_checks_original_models_and_proofs(
+    tmp_path, preprocessed_native_libraries,
+):
+    checker = os.environ.get("DRAT_TRIM")
+    if not checker:
+        pytest.skip("set DRAT_TRIM to the pinned external checker")
+    from .proof_backend import write_dimacs
+    fixtures = (
+        ("empty-sat", 0, (), "SAT"),
+        ("signed-model", 3, ((1, 2), (-1, -2), (1,)), "SAT"),
+        ("residual-model", 6, ((-1, 2), (1, -2), (3, 4, 5)), "SAT"),
+        ("empty-unsat", 0, ((),), "UNSAT"),
+        ("binary-conflict", 2, ((1, 2), (1, -2), (-1, 2), (-1, -2)), "UNSAT"),
+        ("quotient-conflict", 5, ((-1, 2), (1, -2), (1, 2), (-3, 4),
+                                (3, -4), (3, 4), (-5,), (-1, -3, 5)), "UNSAT"),
+        ("backend-proof", 6, _preprocessed_unsat_rows(), "UNSAT"),
+    )
+    entries = [instance(write_dimacs(tmp_path / (name + ".cnf"), nvars, rows),
+                        ident=name, expected=expected)
+               for name, nvars, rows, expected in fixtures]
+    backend, frontend = preprocessed_native_libraries
+    command = [sys.executable, "-m", "experiments.general_competition.campaign", "native",
+               "--library", str(backend), "--binary-library", str(frontend),
+               "--cnf", "{cnf}", "--proof", "{proof}", "--stats", "{stats}"]
+    # This pinned DRAT-trim returns 1 with "s VERIFIED" when the original
+    # already contains an empty clause. Declare its contract explicitly; the
+    # runner's default exit-0 requirement and historical scores stay intact.
+    entry = solver("native", command=command, track="standalone-native", upstream_engines=[],
+                   artifact_paths=[str(backend), str(frontend)], proof_checker={
+                       "command": [str(Path(checker).resolve()), "{cnf}", "{proof}"],
+                       "success_line": "s VERIFIED", "accepted_exit_codes": [0, 1]})
+    inventory, field = manifests(tmp_path, entries, [entry])
+    result = run_campaign(arguments(tmp_path, inventory, field, Path(checker)))
+    assert result["resource_summary"]["native"]["statuses"] == {
+        "SAT_VERIFIED": 3, "UNSAT_VERIFIED": 4}
+    stats = []
+    for index in range(len(fixtures)):
+        folder = tmp_path / "evidence/instances" / f"{index:05d}" / "solver-000"
+        value = json.loads((folder / "stats.json").read_text())
+        stats.append(value)
+        assert value["frontend"] == "native-binary-core-v1"
+        assert value["independent_checking_included"] is False
+        assert value["proof_generation_included_in_solve"] is False
+        assert value["worker_seconds"] >= sum(value[key] for key in (
+            "preprocessing_seconds", "native_solve_seconds", "proof_composition_seconds",
+            "output_serialization_seconds"))
+        assert value["frontend_library_sha256"] == digest(frontend)
+        assert value["proof_budget_reason"] is None
+        composition = value["proof_composition"]
+        if composition is not None:
+            proof = folder / "proof.drat"
+            assert proof.stat().st_size == composition["proof_bytes"]
+            assert len(proof.read_text().splitlines()) == sum(composition[key] for key in (
+                "prefix_clauses", "backend_clauses", "frontend_terminal_clauses"))
+    assert [value["backend_called"] for value in stats] == [False, False, True, False, False, False, True]
+    assert all(value["stats"]["conflicts"] == 0 for value in (stats[0], stats[1], *stats[3:6]))
+    composed = stats[-1]["proof_composition"]
+    assert composed["prefix_clauses"] == 10 and composed["prefix_literals"] == 26
+    assert composed["backend_clauses"] == stats[-1]["stats"]["learned_clauses"] + 1
+    assert composed["backend_literals"] == stats[-1]["stats"]["learned_literals"]
+    assert composed["frontend_terminal_clauses"] == 0
+
+
+@pytest.mark.parametrize("limit,reason", (
+    ("max_proof_clauses", "proof_clause_budget"),
+    ("max_proof_literals", "proof_literal_budget"),
+    ("max_proof_bytes", "proof_byte_budget"),
+))
+def test_preprocessed_worker_proof_budget_emits_unknown_without_partial_proof(
+    tmp_path, preprocessed_native_libraries, capsys, limit, reason,
+):
+    from .campaign import native_worker
+    args = _preprocessed_worker_args(tmp_path, preprocessed_native_libraries, 6,
+                                     _preprocessed_unsat_rows(), **{limit: 0})
+    assert native_worker(args) == 0
+    assert capsys.readouterr().out == "s UNKNOWN\n"
+    assert not args.proof.exists()
+    stats = json.loads(args.stats.read_text())
+    assert stats["status_code"] == 0 and stats["proof_budget_reason"] == reason
+    assert stats["backend_status_code"] == 20
+    assert stats["proof_composition"] is None and stats["backend_called"] is True
+
+
+@pytest.mark.parametrize("limit", ("max_conflicts", "max_learned_literals",
+                                   "max_proof_clauses", "max_proof_literals", "max_proof_bytes"))
+def test_preprocessed_worker_validates_limits_before_terminal_frontend(
+    tmp_path, preprocessed_native_libraries, limit, capsys,
+):
+    from .campaign import native_worker
+    args = _preprocessed_worker_args(tmp_path, preprocessed_native_libraries, 0, ((),), **{limit: -1})
+    with pytest.raises(ValueError):
+        native_worker(args)
+    assert not capsys.readouterr().out
+    assert not args.stats.exists() and not args.proof.exists()
+
+
+def test_preprocessed_worker_backend_unknown_is_not_upgraded(
+    tmp_path, preprocessed_native_libraries, capsys,
+):
+    from .campaign import native_worker
+    args = _preprocessed_worker_args(tmp_path, preprocessed_native_libraries, 6,
+                                     _preprocessed_unsat_rows(), max_conflicts=0)
+    assert native_worker(args) == 0
+    assert capsys.readouterr().out == "s UNKNOWN\n"
+    stats = json.loads(args.stats.read_text())
+    assert stats["status_code"] == 1 and stats["stats"]["conflicts"] == 1
+    assert stats["proof_budget_reason"] is None and stats["proof_composition"] is None
+    assert not args.proof.exists()
+
+
+def test_preprocessed_worker_frontend_proof_budget_keeps_backend_idle(
+    tmp_path, preprocessed_native_libraries, capsys,
+):
+    from .campaign import native_worker
+    args = _preprocessed_worker_args(tmp_path, preprocessed_native_libraries, 0, ((),),
+                                     max_proof_bytes=1)
+    assert native_worker(args) == 0
+    assert capsys.readouterr().out == "s UNKNOWN\n"
+    stats = json.loads(args.stats.read_text())
+    assert stats["proof_budget_reason"] == "proof_byte_budget"
+    assert stats["backend_called"] is False and stats["backend_status_code"] is None
+    assert stats["native_solve_seconds"] == 0 and not any(stats["stats"].values())
+    assert stats["proof_composition"] is None and not args.proof.exists()
+
+
+def test_preprocessed_worker_malformed_composition_is_not_a_budget_unknown(
+    tmp_path, preprocessed_native_libraries, monkeypatch, capsys,
+):
+    from . import native_cdcl
+    from .campaign import native_worker
+    def malformed(*args, **kwargs):
+        raise ValueError("malformed original-CNF evidence")
+    monkeypatch.setattr(native_cdcl, "_compose_native_original_rup", malformed)
+    args = _preprocessed_worker_args(tmp_path, preprocessed_native_libraries, 6,
+                                     _preprocessed_unsat_rows(), max_proof_bytes=0)
+    with pytest.raises(ValueError, match="malformed original-CNF evidence"):
+        native_worker(args)
+    assert not capsys.readouterr().out
+    assert not args.proof.exists() and not args.stats.exists()

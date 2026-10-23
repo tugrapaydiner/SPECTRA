@@ -438,17 +438,104 @@ def check_model(cnf: Path, stdout: Path, output: Path) -> None:
                       "completed_false_variables": receipt.declared_variables - assigned}))
 
 
+def _native_preprocessed_solve(args, admitted, runtime):
+    """Produce original-formula evidence; the campaign owns independent checking.
+
+    This runs inside the same supervised worker as search and serialization, so
+    preprocessing and proof composition consume the declared solver deadline.
+    Only the own native backend's RUP additions can use this composition path.
+    """
+    from .native_binary_core import NativeBinaryCore
+    from .native_cdcl import (
+        NativeStats, _compose_native_original_rup, _OriginalProofBudgetExceeded,
+    )
+
+    started = time.perf_counter()
+    core = NativeBinaryCore(args.binary_library)
+    reduction = core.reduce(admitted.nvars, admitted.clauses)
+    metadata = {
+        "frontend": "native-binary-core-v1",
+        "frontend_source_sha256": core.receipt["source_sha256"],
+        "frontend_library_sha256": core.receipt["library_sha256"],
+        "preprocessing_seconds": time.perf_counter() - started,
+        "residual_variables": reduction.reduced_nvars,
+        "residual_clauses": len(reduction.residual_clauses),
+        "native_solve_seconds": 0.0,
+        "backend_called": False,
+        "backend_status_code": None,
+        "proof_composition_seconds": 0.0,
+        "proof_generation_included_in_solve": False,
+        "proof_scope": "exact-original-cnf",
+        "proof_budget_reason": None,
+        "proof_composition": None,
+    }
+    stats = NativeStats(0, 0, 0, 0, 0, 0, 0, 0)
+    proof = None
+    model = ()
+    if reduction.contradiction:
+        status = 20
+    elif not reduction.residual_clauses:
+        status = 10
+        model = reduction.lift((False,) * reduction.reduced_nvars)
+    else:
+        started = time.perf_counter()
+        metadata["backend_called"] = True
+        status, residual_model, proof, stats, observed = runtime.solve_residual(
+            reduction.reduced_nvars, reduction.residual_clauses,
+            max_conflicts=args.max_conflicts,
+            max_learned_literals=args.max_learned_literals)
+        metadata["native_solve_seconds"] = time.perf_counter() - started
+        metadata["backend_status_code"] = status
+        if observed != reduction.residual_clauses:
+            raise ValueError("native residual canonicalization differs")
+        if status == 10:
+            model = reduction.lift(residual_model)
+    if status == 20:
+        started = time.perf_counter()
+        try:
+            composed = _compose_native_original_rup(
+                admitted.nvars, admitted.clauses, reduction, proof,
+                max_proof_clauses=args.max_proof_clauses,
+                max_proof_literals=args.max_proof_literals,
+                max_proof_bytes=args.max_proof_bytes)
+        except _OriginalProofBudgetExceeded as error:
+            # Never emit UNSAT with a truncated or residual-only certificate.
+            status, proof = 0, None
+            metadata["proof_budget_reason"] = error.reason
+        else:
+            proof = composed.proof
+            metadata["proof_composition"] = {
+                name: getattr(composed, name) for name in (
+                    "prefix_clauses", "prefix_literals", "backend_clauses",
+                    "backend_literals", "frontend_terminal_clauses", "proof_bytes")
+            }
+        metadata["proof_composition_seconds"] = time.perf_counter() - started
+    return status, model, proof, stats, metadata
+
+
 def native_worker(args: argparse.Namespace) -> int:
     from .competition_input import admit_and_load_cnf
-    from .native_cdcl import NativeCDCLRuntime, write_drup
+    from .native_cdcl import NativeCDCLRuntime, _uint64, write_drup
+    # Validate even when preprocessing settles the formula without a CDCL call.
+    for name in ("max_conflicts", "max_learned_literals"):
+        _uint64(getattr(args, name), name)
+    binary_library = getattr(args, "binary_library", None)
+    if binary_library is not None:
+        for name in ("max_proof_clauses", "max_proof_literals", "max_proof_bytes"):
+            _uint64(getattr(args, name), name)
     started = time.perf_counter()
     admitted = admit_and_load_cnf(args.cnf)
     runtime = NativeCDCLRuntime(args.library)
-    solver_started = time.perf_counter()
-    status, model, proof, stats, _ = runtime.solve_residual(
-        admitted.nvars, admitted.clauses, max_conflicts=args.max_conflicts,
-        max_learned_literals=args.max_learned_literals)
-    native_elapsed = time.perf_counter() - solver_started
+    if binary_library is None:
+        solver_started = time.perf_counter()
+        status, model, proof, stats, _ = runtime.solve_residual(
+            admitted.nvars, admitted.clauses, max_conflicts=args.max_conflicts,
+            max_learned_literals=args.max_learned_literals)
+        native_elapsed = time.perf_counter() - solver_started
+        metadata = {}
+    else:
+        status, model, proof, stats, metadata = _native_preprocessed_solve(args, admitted, runtime)
+        native_elapsed = metadata["native_solve_seconds"]
     serialization_started = time.perf_counter()
     if status == 10:
         print("s SATISFIABLE")
@@ -470,7 +557,8 @@ def native_worker(args: argparse.Namespace) -> int:
                            "worker_seconds": time.perf_counter() - started,
                            "proof_generation_included_in_solve": True,
                            "proof_generation_separately_measurable": False,
-                           "independent_checking_included": False})
+                           "independent_checking_included": False,
+                           **metadata})
     return status if status in (10, 20) else 0
 
 
@@ -953,6 +1041,14 @@ def main(argv: list[str] | None = None) -> int:
         native.add_argument("--" + flag, type=Path, required=True)
     native.add_argument("--max-conflicts", type=int, default=(1 << 64) - 1)
     native.add_argument("--max-learned-literals", type=int, default=100_000_000)
+    native.add_argument("--binary-library", type=Path,
+                        help="opt into native binary preprocessing with original-CNF RUP composition")
+    native.add_argument("--max-proof-clauses", type=int, default=5_000_000,
+                        help="composed certificate clause cap with --binary-library")
+    native.add_argument("--max-proof-literals", type=int, default=100_000_000,
+                        help="composed certificate literal cap with --binary-library")
+    native.add_argument("--max-proof-bytes", type=int, default=1_073_741_824,
+                        help="composed ASCII certificate byte cap with --binary-library")
     stage = sub.add_parser("stage", help=argparse.SUPPRESS)
     for flag in ("source", "out"):
         stage.add_argument("--" + flag, type=Path, required=True)
