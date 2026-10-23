@@ -45,7 +45,7 @@ synthetic development graphs and do not replace the frozen WAP result above.
 **Package: Python 3.10+ · Flagship complete-call result: Python 3.13 · MIT-licensed project code · CPU-first · explicit verification boundaries**
 
 The active checkout is intentionally lean: current source, tests, compact summaries,
-and seven permanent workflows. Bulky historical evidence and retired experiment
+and eight permanent workflows. Bulky historical evidence and retired experiment
 branch histories remain available from `archive/research-history-20261016` and the
 original immutable commits rather than being duplicated in every clone.
 
@@ -203,6 +203,38 @@ assert verify_session_output(packet, result.output)
 The API contract, packet layouts, CLI, resource accounting and claim boundary are
 documented in [Proof-carrying exact queries](docs/EXACT_API.md). This is not a
 general SAT or colouring-superiority claim.
+
+## General-CNF research track
+
+**Correctness gate failed for the frozen native baseline.** The campaign at
+source [1f6a913](https://github.com/tugrapaydiner/SPECTRA/commit/1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5)
+completed all 768 measurements and recorded
+[ten invalid SAT models](experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
+from standalone SPECTRA-G. That source remains disqualified. The separately
+identified occurrence-tracking repair completed the same 96 formulas with seven
+checked SAT answers, two checked UNSAT proofs and 87 timeouts. Nine of the ten
+formerly invalid cases still time out. This bounded repair validation does not
+resolve those cases, replace the original result or establish general-CNF
+leadership.
+
+Standalone native **SPECTRA-G** and the **SPECTRA-assisted portfolio** are separate
+experimental entries. The native CDCL engine, checked SAT models, UNSAT proof
+replay, and arbitrary-CNF admission contracts are developed under the
+[general competition protocol](experiments/general_competition/PROTOCOL.md).
+The assisted entry uses the disclosed
+[structural frontend policy](experiments/general_competition/FRONTEND_POLICY.md)
+and upstream solvers; its results do not measure standalone native performance.
+
+Current performance inputs are exposed development data. A complete modern-field
+first-place result, a prospective hidden SAT/UNSAT victory, and outside replication
+have not been established. Development remains on `finish-part3` in
+[draft PR #76](https://github.com/tugrapaydiner/SPECTRA/pull/76). The specialized
+results above do not establish general SAT leadership.
+
+The [100/100 roadmap](docs/SPECTRA_100_100_ROADMAP.md) defines the remaining gates.
+The [96-formula exposed campaign](experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
+records the native comparison protocol, corrected frontend accounting, retained
+failures, source identities and current evidence limits.
 
 ## Quotient API boundary
 

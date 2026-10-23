@@ -1,48 +1,84 @@
 name: exact-public-api
+
 on:
   push:
     branches: [main]
   pull_request:
     paths:
+      - 'pyproject.toml'
+      - 'spectra/__init__.py'
+      - 'spectra/_json.py'
+      - 'spectra/_native_build.py'
       - 'spectra/exact*.py'
       - 'spectra/_native/exact_binary.cpp'
       - 'spectra/cli.py'
+      - 'spectra/evidence.py'
+      - 'spectra/exam_repair.py'
+      - 'spectra/itc2007_exam.py'
+      - 'spectra/svm_build.py'
       - 'tests/public/test_exact_api.py'
+      - 'tests/public/test_exact_selftest.py'
+      - 'tests/public/test_exact_compare.py'
+      - 'tests/public/test_auto_selector_v11.py'
+      - 'tests/public/test_exact_edgeless.py'
       - 'tests/public/test_exam_repair.py'
       - 'tests/public/test_itc2007_exam.py'
       - 'scripts/check_exact_installation.py'
       - 'scripts/check_exam_repair_installation.py'
       - 'scripts/check_current_installation.py'
       - 'docs/EXACT_API.md'
+      - 'docs/EXACT_REPLICATION.md'
+      - 'experiments/compiled_query/exact.py'
+      - 'experiments/compiled_query/exact_native.cpp'
+      - 'experiments/compiled_query/test_exact.py'
+      - 'experiments/compiled_query/test_transfer_hardening.py'
+      - 'experiments/compiled_query/test_proof_replay.py'
+      - 'experiments/compiled_query/test_linear_construction.py'
+      - 'experiments/compiled_query/direct_twosat*'
+      - 'experiments/compiled_query/DIRECT_2SAT_*'
+      - 'experiments/compiled_query/cadical_exact*'
+      - 'experiments/compiled_query/CADICAL_301_*'
+      - 'experiments/compiled_query/fresh_transfer*'
+      - 'experiments/compiled_query/FRESH_TRANSFER_*'
+      - 'experiments/compiled_query/STRUCTURAL_V11_REPLAY_20261020.md'
+      - 'experiments/compiled_query/test_direct_twosat.py'
+      - 'experiments/compiled_query/test_direct_twosat_holdout.py'
+      - 'experiments/compiled_query/test_cadical_exact.py'
+      - 'experiments/compiled_query/test_fresh_transfer.py'
       - '.github/workflows/exact-public-api.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
   group: exact-public-api-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
+
 jobs:
   linux-installed:
     name: Installed API (${{ matrix.runner }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
+          - {runner: ubuntu-24.04, python: '3.10'}
           - {runner: ubuntu-24.04, python: '3.11'}
           - {runner: ubuntu-24.04, python: '3.13'}
           - {runner: ubuntu-24.04-arm, python: '3.13'}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install 'build==1.3.0' 'pytest==9.0.2' 'python-sat==1.9.dev15'
-      - name: Build packaged source and run public plus exhaustive exact contracts
+      - name: Build source and run exact contracts
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p exact-public-evidence
@@ -50,19 +86,55 @@ jobs:
           git rev-parse HEAD^{tree} > exact-public-evidence/source_tree.txt
           python -VV > exact-public-evidence/python.txt
           uname -a > exact-public-evidence/platform.txt
-          export SPECTRA_EXACT_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('exact-public-evidence/source-build'))")"
-          python -m pytest tests/public/test_exact_api.py tests/public/test_exam_repair.py tests/public/test_itc2007_exam.py --confcutdir=tests/public -q --junitxml=exact-public-evidence/public-tests.xml 2>&1 | tee exact-public-evidence/public-tests.log
-          python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-public-evidence/research-tests.xml 2>&1 | tee exact-public-evidence/research-tests.log
-      - name: Build the compiler-free wheel and test its installed native API
+          export SPECTRA_EXACT_LIBRARY="$(
+            python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('exact-public-evidence/source-build'))"
+          )"
+          python -m pytest \
+            tests/public/test_exact_api.py \
+            tests/public/test_exact_selftest.py \
+            tests/public/test_exact_compare.py \
+            tests/public/test_auto_selector_v11.py \
+            tests/public/test_exact_edgeless.py \
+            tests/public/test_exam_repair.py \
+            tests/public/test_itc2007_exam.py \
+            --confcutdir=tests/public -q \
+            --junitxml=exact-public-evidence/public-tests.xml \
+            2>&1 | tee exact-public-evidence/public-tests.log
+          python -m pytest \
+            experiments/compiled_query/test_exact.py \
+            experiments/compiled_query/test_transfer_hardening.py \
+            experiments/compiled_query/test_proof_replay.py \
+            experiments/compiled_query/test_linear_construction.py \
+            -q --junitxml=exact-public-evidence/research-tests.xml \
+            2>&1 | tee exact-public-evidence/research-tests.log
+      - name: Build the wheel and test its installed native API
+        shell: bash
         run: |
           set -euo pipefail
-          python -m build --wheel --outdir exact-public-evidence/dist 2>&1 | tee exact-public-evidence/build.log
+          python -m build --wheel --outdir exact-public-evidence/dist \
+            2>&1 | tee exact-public-evidence/build.log
           python -m venv exact-public-evidence/install
-          exact-public-evidence/install/bin/python -m pip install --no-deps exact-public-evidence/dist/*.whl
-          exact-public-evidence/install/bin/python -I scripts/check_exact_installation.py --out exact-public-evidence/installed.json 2>&1 | tee exact-public-evidence/installed.log
-          exact-public-evidence/install/bin/python -I scripts/check_exam_repair_installation.py --out exact-public-evidence/installed-exam.json 2>&1 | tee exact-public-evidence/installed-exam.log
-          python scripts/check_release_readiness.py --out exact-public-evidence/release-readiness.json
-      - uses: actions/upload-artifact@v4
+          exact-public-evidence/install/bin/python -m pip install --no-deps \
+            exact-public-evidence/dist/*.whl
+          exact-public-evidence/install/bin/python -I \
+            scripts/check_exact_installation.py \
+            --out exact-public-evidence/installed.json \
+            --evidence-dir exact-public-evidence/installed-selftest \
+            2>&1 | tee exact-public-evidence/installed.log
+          exact-public-evidence/install/bin/python -I \
+            scripts/check_exam_repair_installation.py \
+            --out exact-public-evidence/installed-exam.json \
+            2>&1 | tee exact-public-evidence/installed-exam.log
+          python scripts/check_release_readiness.py \
+            --out exact-public-evidence/release-readiness.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: exact-selftest-${{ matrix.runner }}-py${{ matrix.python }}-${{ github.run_id }}
+          path: exact-public-evidence/installed-selftest/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: exact-public-${{ matrix.runner }}-py${{ matrix.python }}-${{ github.run_id }}
@@ -70,18 +142,20 @@ jobs:
           include-hidden-files: true
           retention-days: 90
           if-no-files-found: error
+
   windows-installed:
+    name: Installed API (windows-2022, Python 3.13)
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       PYTHONUTF8: '1'
     steps:
       - run: git config --global core.autocrlf false
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.13'
       - name: Load MSVC x64
@@ -109,7 +183,7 @@ jobs:
           $library = python -c "from spectra.exact import build_exact_runtime; print(build_exact_runtime('exact-public-evidence/source-build'))"
           "SPECTRA_EXACT_LIBRARY=$library" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $env:SPECTRA_EXACT_LIBRARY = $library
-          python -m pytest tests/public/test_exact_api.py tests/public/test_exam_repair.py tests/public/test_itc2007_exam.py --confcutdir=tests/public -q --junitxml=exact-public-evidence/public-tests.xml 2>&1 | Tee-Object exact-public-evidence/public-tests.log
+          python -m pytest tests/public/test_exact_api.py tests/public/test_exact_selftest.py tests/public/test_exact_compare.py tests/public/test_auto_selector_v11.py tests/public/test_exact_edgeless.py tests/public/test_exam_repair.py tests/public/test_itc2007_exam.py --confcutdir=tests/public -q --junitxml=exact-public-evidence/public-tests.xml 2>&1 | Tee-Object exact-public-evidence/public-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-public-evidence/research-tests.xml 2>&1 | Tee-Object exact-public-evidence/research-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -119,11 +193,18 @@ jobs:
           $python = 'exact-public-evidence/install/Scripts/python.exe'
           & $python -m pip install --no-deps (Get-ChildItem exact-public-evidence/dist/*.whl).FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $python -I scripts/check_exact_installation.py --out exact-public-evidence/installed.json 2>&1 | Tee-Object exact-public-evidence/installed.log
+          & $python -I scripts/check_exact_installation.py --out exact-public-evidence/installed.json --evidence-dir exact-public-evidence/installed-selftest 2>&1 | Tee-Object exact-public-evidence/installed.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $python -I scripts/check_exam_repair_installation.py --out exact-public-evidence/installed-exam.json 2>&1 | Tee-Object exact-public-evidence/installed-exam.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: exact-selftest-windows-py3.13-${{ github.run_id }}
+          path: exact-public-evidence/installed-selftest/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: exact-public-windows-py3.13-${{ github.run_id }}
@@ -131,36 +212,244 @@ jobs:
           include-hidden-files: true
           retention-days: 90
           if-no-files-found: error
-  sanitizers:
+
+  compare-bundles:
+    name: Compare installed self-test bundles
+    needs: [linux-installed, windows-installed]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: exact-selftest-ubuntu-24.04-py3.10-${{ github.run_id }}
+          path: exact-bundles/linux-py310
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: exact-selftest-ubuntu-24.04-py3.11-${{ github.run_id }}
+          path: exact-bundles/linux-py311
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: exact-selftest-ubuntu-24.04-py3.13-${{ github.run_id }}
+          path: exact-bundles/linux-py313
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: exact-selftest-ubuntu-24.04-arm-py3.13-${{ github.run_id }}
+          path: exact-bundles/arm-py313
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: exact-selftest-windows-py3.13-${{ github.run_id }}
+          path: exact-bundles/windows-py313
+      - name: Compare the retained results
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m spectra exact compare \
+            exact-bundles/linux-py310 \
+            exact-bundles/linux-py311 \
+            exact-bundles/linux-py313 \
+            exact-bundles/arm-py313 \
+            exact-bundles/windows-py313 \
+            > cross-platform.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('cross-platform.json').read_text())
+          assert result['verified'] is True
+          assert result['bundles'] == 5
+          assert (result['cases'], result['queries'], result['sat'], result['unsat']) == (3, 13, 10, 3)
+          assert result['proof_kinds'] == [1, 2, 3]
+          assert result['selected_modes'] == {
+              'base-static-contradiction': 'raw',
+              'mixed-current-query': 'raw',
+              'strong-compression': 'scc',
+          }
+          assert result['selector_reasons'] == {
+              'base-static-contradiction': 'base_infeasible',
+              'mixed-current-query': 'short_weak_compression',
+              'strong-compression': 'scc_strong_compression',
+          }
+          assert len(result['environments']) == 5
+          assert result['native_execution'] is False
+          assert result['native_module_loaded'] is False
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: exact-selftest-comparison-${{ github.run_id }}
+          path: cross-platform.json
+          retention-days: 90
+          if-no-files-found: error
+
+  direct-twosat-contracts:
+    name: Direct 2-SAT contracts (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: ['undefined', 'address,undefined']
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==9.0.2'
+      - name: Compile and test the restored direct challenger
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p competition-evidence
+          git rev-parse HEAD > competition-evidence/source_commit.txt
+          python -VV > competition-evidence/python.txt
+          uname -a > competition-evidence/platform.txt
+          python -m py_compile \
+            experiments/compiled_query/direct_twosat.py \
+            experiments/compiled_query/direct_twosat_benchmark.py \
+            experiments/compiled_query/direct_twosat_holdout.py \
+            experiments/compiled_query/direct_twosat_holdout_run.py \
+            experiments/compiled_query/direct_twosat_wap_benchmark.py \
+            experiments/compiled_query/fresh_transfer.py \
+            experiments/compiled_query/fresh_transfer_benchmark.py
+          python -m pytest \
+            experiments/compiled_query/test_direct_twosat.py \
+            experiments/compiled_query/test_direct_twosat_holdout.py \
+            experiments/compiled_query/test_fresh_transfer.py \
+            -q --junitxml=competition-evidence/tests.xml \
+            2>&1 | tee competition-evidence/tests.log
+          git diff --check
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: direct-2sat-contracts-${{ matrix.runner }}-${{ github.run_id }}
+          path: competition-evidence/
+          retention-days: 90
+          if-no-files-found: error
+
+  cadical-contracts:
+    name: Official CaDiCaL contracts (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check out official CaDiCaL 3.0.1
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: arminbiere/cadical
+          ref: c60730422e758ef1cebe7aeddf2dda31c996bf04
+          path: cadical-source
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==9.0.2'
+      - name: Compile and run the matched contracts
+        env:
+          CADICAL_SOURCE: ${{ github.workspace }}/cadical-source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p cadical-contract-evidence
+          git rev-parse HEAD > cadical-contract-evidence/spectra-commit.txt
+          git -C "$CADICAL_SOURCE" rev-parse HEAD > cadical-contract-evidence/cadical-commit.txt
+          python -VV > cadical-contract-evidence/python.txt
+          uname -a > cadical-contract-evidence/platform.txt
+          python -m py_compile \
+            experiments/compiled_query/cadical_exact.py \
+            experiments/compiled_query/cadical_exact_benchmark.py \
+            experiments/compiled_query/test_cadical_exact.py
+          python -m pytest \
+            experiments/compiled_query/test_cadical_exact.py -q \
+            --junitxml=cadical-contract-evidence/tests.xml \
+            2>&1 | tee cadical-contract-evidence/tests.log
+          git diff --check
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: cadical-contracts-${{ matrix.runner }}-${{ github.run_id }}
+          path: cadical-contract-evidence/
+          retention-days: 90
+          if-no-files-found: error
+
+  sanitizers:
+    name: Exact competitors (${{ matrix.sanitizer }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [undefined, 'address,undefined']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check out official CaDiCaL 3.0.1
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: arminbiere/cadical
+          ref: c60730422e758ef1cebe7aeddf2dda31c996bf04
+          path: cadical-source
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.13'
       - run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
-      - name: Build packaged source and run exact API contracts under sanitizer
+      - name: Run the exact service and both challenger adapters under sanitizers
         env:
           SANITIZER: ${{ matrix.sanitizer }}
+          DIRECT_2SAT_SANITIZER: ${{ matrix.sanitizer }}
+          CADICAL_ADAPTER_SANITIZER: ${{ matrix.sanitizer }}
+          CADICAL_SOURCE: ${{ github.workspace }}/cadical-source
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p exact-sanitizer-evidence
-          export SPECTRA_EXACT_LIBRARY="$(python -c "from spectra.exact import build_exact_runtime; import os; print(build_exact_runtime('exact-sanitizer-evidence/build', sanitizer=os.environ['SANITIZER']))")"
+          export SPECTRA_EXACT_LIBRARY="$(
+            python -c "from spectra.exact import build_exact_runtime; import os; print(build_exact_runtime('exact-sanitizer-evidence/build', sanitizer=os.environ['SANITIZER']))"
+          )"
           export UBSAN_OPTIONS=halt_on_error=1
           if [ "$SANITIZER" = 'address,undefined' ]; then
             export LD_PRELOAD="$(g++ -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so)"
             export ASAN_OPTIONS=detect_leaks=0:abort_on_error=1
           fi
-          python -m pytest tests/public/test_exact_api.py --confcutdir=tests/public -q --junitxml=exact-sanitizer-evidence/public-tests.xml 2>&1 | tee exact-sanitizer-evidence/public-tests.log
-          python -m pytest experiments/compiled_query/test_exact.py experiments/compiled_query/test_transfer_hardening.py experiments/compiled_query/test_proof_replay.py experiments/compiled_query/test_linear_construction.py -q --junitxml=exact-sanitizer-evidence/research-tests.xml 2>&1 | tee exact-sanitizer-evidence/research-tests.log
-      - uses: actions/upload-artifact@v4
+          python -m pytest \
+            tests/public/test_exact_api.py \
+            tests/public/test_auto_selector_v11.py \
+            tests/public/test_exact_edgeless.py \
+            --confcutdir=tests/public -q \
+            --junitxml=exact-sanitizer-evidence/public-tests.xml \
+            2>&1 | tee exact-sanitizer-evidence/public-tests.log
+          python -m pytest \
+            experiments/compiled_query/test_exact.py \
+            experiments/compiled_query/test_transfer_hardening.py \
+            experiments/compiled_query/test_proof_replay.py \
+            experiments/compiled_query/test_linear_construction.py \
+            -q --junitxml=exact-sanitizer-evidence/research-tests.xml \
+            2>&1 | tee exact-sanitizer-evidence/research-tests.log
+          python -m pytest \
+            experiments/compiled_query/test_direct_twosat.py \
+            -k 'not exhaustive' -q \
+            --junitxml=exact-sanitizer-evidence/direct-tests.xml \
+            2>&1 | tee exact-sanitizer-evidence/direct-tests.log
+          python -m pytest \
+            experiments/compiled_query/test_cadical_exact.py \
+            -k 'not every_three_vertex_formula' -q \
+            --junitxml=exact-sanitizer-evidence/cadical-tests.xml \
+            2>&1 | tee exact-sanitizer-evidence/cadical-tests.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: exact-public-sanitizer-${{ matrix.sanitizer }}-${{ github.run_id }}

@@ -1,0 +1,230 @@
+{
+  "build": {
+    "compiler": "g++",
+    "rebuild_both_arms": true,
+    "recipe": "native_cdcl.build_native_cdcl defaults from pinned source",
+    "same_compiler_and_flags_both_arms": true,
+    "sanitizer": "none"
+  },
+  "candidate_change": {
+    "after": "    } else if (values[static_cast<std::size_t>(var)] == 0) {\n      push_heap(var);\n    }",
+    "before": "    } else {\n      push_heap(var);\n    }",
+    "file": "experiments/general_competition/native_cdcl.cpp",
+    "function": "Solver::bump_variable",
+    "hypothesis": "Assigned-variable activity bumps enqueue entries that choose_variable discards; backtrack already reinserts newly unassigned variables using current activity. No search-order or proof change is intended.",
+    "scope": "Exactly this guard on repaired cb14031; occurrence-bit correctness repair and ABI bound remain intact. No heuristic, restart, tie-break, proof, wrapper packing, or budget change."
+  },
+  "comparison": {
+    "correctness_checks": "Every solved result independently checked against admitted original CNF by existing runner; stats/output equality is additional to model/proof verification.",
+    "endpoint_summary": [
+      "All-cell PAR-2 by arm and repeat",
+      "SAT/UNSAT/family PAR-2",
+      "Verified solved counts",
+      "Every failure and invalidity",
+      "Paired runtime differences for all cells, timeout penalty retained",
+      "Both-solved timing ratios explicitly conditional"
+    ],
+    "fixed_budget_cells": 64,
+    "fixed_budget_exact_fields": [
+      "raw status_code",
+      "all NativeStats counters",
+      "raw stdout logical SHA-256",
+      "proof logical SHA-256 when present",
+      "independently checked completed-model logical SHA-256 when present"
+    ],
+    "merge_consideration": {
+      "all_256_declared_cells_required": true,
+      "all_32_budget_pairs_exact": true,
+      "all_campaign_receipts_accepted": true,
+      "all_repeats_overall_par2_nonworse": true,
+      "automatic_merge": false,
+      "common_completed_population": "Cases that return accepted SAT/UNSAT/UNKNOWN with native statistics in both arms in all three endpoint repeats; defined prospectively and always reported as conditional.",
+      "endpoint_completed_trace_mismatch": "Any difference between two completed results in native status, NativeStats, model, proof or stdout blocks consideration.",
+      "endpoint_completion_differences": "A TIMEOUT versus a completed checked solve or returned UNKNOWN is a timing outcome, not a contradictory answer; retain as candidate gain/loss or completion difference, exclude from exact completed-pair comparison, and include in every PAR-2 score.",
+      "endpoint_conflicting_completed_verdicts": "Conflicting completed native verdicts or statuses block consideration; a timeout has no completed verdict to compare.",
+      "minimum_common_completed_instances": 8,
+      "minimum_original_budget_native_abi_cpu_seconds": 0.25,
+      "minimum_original_native_solve_seconds_per_repeat": 1.0,
+      "minimum_reduction_in_budget_native_abi_cpu_total": 0.05,
+      "minimum_reduction_in_common_native_solve_total_each_repeat": 0.05,
+      "native_solve_scope": "Python packing, native ABI and Python decoding; the separate budget ABI CPU measurement includes native setup, normalization, search and result encoding.",
+      "no_invalid_admission_artifact_checker_or_metadata_failure": true,
+      "outcome_if_any_condition_missing": "NOT_ESTABLISHED; preserve every negative, mismatch and inconclusive cell. Do not change subset, limits or thresholds after outcomes.",
+      "two_endpoint_timeouts": "Retained as censored and inconclusive for trace equivalence; not counted as exact."
+    },
+    "missing_or_failed_cells_discarded": false,
+    "scope": "Prospective optimization experiment on repaired source cb14031 and the original unchanged exposed32-case subset. No rank or leadership claim.",
+    "speed_claim": "Only a local exposed improvement may be considered after every prospectively fixed criterion passes. No automatic merge, full-field ranking, hidden-set, leadership, or 100/100 claim.",
+    "total_expected_cells": 256,
+    "two_timeouts_are_equivalent": false
+  },
+  "endpoint": {
+    "cell_count": 192,
+    "field_order_by_repeat": [
+      [
+        "original",
+        "candidate"
+      ],
+      [
+        "candidate",
+        "original"
+      ],
+      [
+        "original",
+        "candidate"
+      ]
+    ],
+    "max_conflicts": 18446744073709551615,
+    "max_learned_literals": 100000000,
+    "profile": false,
+    "repeats": 3,
+    "timeout_seconds": 2.0,
+    "within_inventory_order": "campaign runner rotates field by instance index"
+  },
+  "execution_gate": {
+    "external_manifest_hashes": "Caller must supply separately retained SHA-256 anchors for both final evidence manifests.",
+    "no_heap_candidate_source_modification_or_build_before_both_gates": true,
+    "original_baseline": {
+      "default_path": "/dev/shm/spectra-6f0d5187396f-baseline-96x8",
+      "invalid_original_solver_cells_retained_and_permitted": true,
+      "inventory_sha256": "b2b7c072b538e6e70645cd0b9974cdc873c061b01ffcdb3315bdfae157737501",
+      "require_actual_inventory_bytes_match_frozen_hash": true,
+      "require_exact_original_field_source_and_runner": true,
+      "require_final_complete_file_inventory": true,
+      "require_no_original_input_or_artifact_mutation": true,
+      "required_cells": 768,
+      "required_complete_instances": 96,
+      "required_complete_solvers": 8,
+      "runner_sha256": "089f98799dbf0d7bd1143c131b5a76d94bf8f6c276198a66c04c0a435d7d7dad",
+      "scoring_policy": "legacy-v1",
+      "solver_field_path": "/workspace/scratch/6f0d5187396f/SPECTRA/experiments/general_competition/exposed_field_20261021.json",
+      "solver_field_sha256": "bcbc07712517a0f953bab0312c6522f9991085efe4f0d4386bb396c1ade482ce",
+      "source_commit": "1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5"
+    },
+    "repaired_validation": {
+      "allowed_cell_statuses": [
+        "SAT_VERIFIED",
+        "UNSAT_VERIFIED",
+        "UNKNOWN",
+        "TIMEOUT"
+      ],
+      "build_receipt_path": "/workspace/scratch/6f0d5187396f/spectra-campaign/native-repaired/build.json",
+      "build_receipt_sha256": "500386d3412a9d4e6827ec4cf61679dde3220bec46b8dd4129343733263a3584",
+      "default_path": "/dev/shm/spectra-6f0d5187396f-native-repaired-96",
+      "inventory_sha256": "b2b7c072b538e6e70645cd0b9974cdc873c061b01ffcdb3315bdfae157737501",
+      "library_path": "/workspace/scratch/6f0d5187396f/spectra-campaign/native-repaired/spectra_g_cdcl.so",
+      "library_sha256": "89ad45c8af2c4aaa7416eadbdd9b9c1f63e11547d465f0774ead97eaec28572f",
+      "replay_scope": "Read-only retained archive validation and original-source identity checks; no stored commands executed. Existing independent model/proof checks are replayed as retained records; no new timing or independent replication claim.",
+      "require_all_admitted": true,
+      "require_independent_archive_replay": true,
+      "require_no_invalid_checker_resource_artifact_admission_or_metadata_failure": true,
+      "required_cells": 96,
+      "required_complete_instances": 96,
+      "required_complete_solvers": 1,
+      "required_limits": {
+        "checker_timeout_seconds": 30,
+        "maximum_dimacs_mib": 64,
+        "maximum_output_file_mib": 64,
+        "memory_mib": 4096,
+        "timeout_seconds": 5
+      },
+      "scoring_policy": "declared-inventory-v2",
+      "solver_field_path": "/workspace/scratch/6f0d5187396f/spectra-campaign/repaired-solvers.json",
+      "solver_field_sha256": "b0fe81b38d1d3f7e23eab5c9c29ff9ecaf1f8c687437303cd1648596a9ec1a0a",
+      "solver_id": "SPECTRA-G-repaired",
+      "source_commit": "cb14031d4187c4cba5cccb37984ecf59d59bfdae",
+      "unresolved_timeouts_and_unknowns": "Permitted but retained as unresolved; passing this gate does not establish general native correctness.",
+      "validation_plan_path": "/workspace/scratch/6f0d5187396f/SPECTRA/experiments/general_competition/native_validation_plan_20261021.json",
+      "validation_plan_sha256": "3aa1a4c03597a71c0b2168bf06d86cbd8701bceedec48bc54cf92388988fa3c9"
+    },
+    "source_snapshot": "git archive of pinned repaired source_commit; exact heap guard applied only after both gates pass."
+  },
+  "fixed_budget": {
+    "field_order": [
+      "original",
+      "candidate"
+    ],
+    "max_conflicts": 256,
+    "max_learned_literals": 100000000,
+    "native_abi_scope": "C ABI call including native construction, normalization, search and native result encoding. It is not isolated CDCL search time.",
+    "profile_both_arms": true,
+    "profile_metrics": [
+      "python_pack_wall_seconds",
+      "python_pack_cpu_seconds",
+      "native_abi_wall_seconds",
+      "native_abi_cpu_seconds",
+      "python_decode_wall_seconds",
+      "python_decode_cpu_seconds"
+    ],
+    "repeats": 1,
+    "timeout_seconds": 2.0,
+    "timeouts": "Retained as inconclusive for exact search equivalence; not counted as matches.",
+    "within_inventory_order": "campaign runner rotates field by instance index"
+  },
+  "frozen_utc": "2026-10-21T18:11:48.129774+00:00",
+  "full_inventory_sha256": "b2b7c072b538e6e70645cd0b9974cdc873c061b01ffcdb3315bdfae157737501",
+  "inventory_path": "/workspace/scratch/6f0d5187396f/spectra-campaign/heap-ablation-plan-v2/inventory-32.json",
+  "inventory_sha256": "a4538b7497c865dc71604bf2ec4cd4696f353e388a33a87f894d0b14d9831db1",
+  "original_selection_sha256": "dad14ec29395eab1f67ceddfc8bbc023ee9341e6c33ec01ea3daf44be96b9f5e",
+  "pre_execution_integrity_amendment": {
+    "candidate_build_or_execution_started": false,
+    "previous_plan_file": "pre-integrity-amendment-plan.json",
+    "previous_plan_sha256": "5ee4990f893996d164f7558b6360a5aecf94f0d24a1c30e692eea7bc97e9d0bf",
+    "reason": "Independent controller review required the original-baseline completion gate to bind actual retained inventory bytes, the original solver field, source commit, runner hash and legacy scoring identity, rather than relying on a declared inventory hash and rectangular dimensions alone.",
+    "repaired_validation_or_ablation_outcomes_read": false,
+    "selection_budgets_256_cells_and_merge_thresholds_unchanged": true,
+    "utc": "2026-10-21T18:23:25.241617+00:00"
+  },
+  "pre_freeze_clarification": {
+    "draft_sha256": "cf4a397de663491e893d035934d5abd9eba6461b5d43050348ba901767642160",
+    "reason": "Parent clarified prospectively that timeout-versus-completion is a timing gain/regression, not a contradictory completed answer. This clarification predates any repaired-validation or A/B outcome inspection.",
+    "selection_limits_and_256_cells_unchanged": true
+  },
+  "predecessor": {
+    "directory": "/workspace/scratch/6f0d5187396f/spectra-campaign/heap-ablation-plan",
+    "selection_reused_byte_for_byte": true,
+    "sha256": {
+      "inventory-32.json": "a4538b7497c865dc71604bf2ec4cd4696f353e388a33a87f894d0b14d9831db1",
+      "plan.json": "fffafc76a192f9805be480d0d17a6de249e46b933684b372f36f15bc115d8eb7",
+      "run_heap_ablation.py": "c1934bc857d3ed24fbb9d100d26921662d523765f14991200d6649fea74f89ab",
+      "suspension.json": "b227c21de6398dd38bc4f29ff23f1fd12f849d1a117af6b88fae8d61924cd3d1",
+      "test_heap_ablation.py": "9ccf109bc991bd187f60c870a62accfcde923156d1f5979da761ab789f12cc59"
+    },
+    "status": "suspended and unchanged"
+  },
+  "preflight_only_now": true,
+  "preservation": {
+    "all_failures": true,
+    "all_raw_cells": true,
+    "negative_results": true,
+    "selection_never_adapts_to_baseline_or_ablation_outcomes": true,
+    "source_snapshots_build_receipts_and_expected_artifact_hashes": true
+  },
+  "resources": {
+    "checker": "/workspace/scratch/6f0d5187396f/spectra-campaign/drat-trim/drat-trim",
+    "checker_sha256": "f8d971dc5956a73fa37e655a44ba8f6d128976acfedff7129f2ed251b234af1a",
+    "checker_timeout_seconds": 30,
+    "compress_evidence": true,
+    "cpu": "one explicitly selected allowed CPU other than 0",
+    "dimacs_mib": 2048,
+    "memory_mib": 4096,
+    "output_mib": 64,
+    "sequential": true,
+    "shared_host": true
+  },
+  "runner_root": "/workspace/scratch/6f0d5187396f/spectra-campaign/source-repaired",
+  "schema": "spectra.heap_insertion_ablation_plan.v2",
+  "source_commit": "cb14031d4187c4cba5cccb37984ecf59d59bfdae",
+  "source_repository": "/workspace/scratch/6f0d5187396f/SPECTRA",
+  "source_sha256": {
+    "experiments/general_competition/binary_core.py": "a072c1a0e7c22cca00bba4222f9e4462db4601c4ba096f2fdd42f1901e177f2a",
+    "experiments/general_competition/campaign.py": "38788eac7177c2961a4bb25a83caac6cd16cb1c81a3d0b5fb35a4dadbfa82ad8",
+    "experiments/general_competition/campaign_verify.py": "ea374a0628f9ee446d21ebfe35a05b61b71629086e3ca73f7ad3b2dc93a355b2",
+    "experiments/general_competition/cnf_admission.py": "f07fc8ff5fe795b37608ff211c91e4f56125df76cb2a69b12598377695f306e3",
+    "experiments/general_competition/competition_input.py": "0b9ee8100983350ccfdf7da922ddb2ef67b4788837f0921312c8777298a4978e",
+    "experiments/general_competition/native_cdcl.cpp": "93f02179cf879ae486ddb406fd08802aea816a1ee9155a2b1c112eca4a2c08cf",
+    "experiments/general_competition/native_cdcl.py": "6ff78e255d77ddc8cc0e2ddae35a3558717336252c8b12843fb2aeb75f7171b6",
+    "experiments/general_competition/official_score.py": "788a422e6e353bbf702471ad5d75a93651abc1adce4375669a917bdc64bcf444",
+    "experiments/general_competition/proof_backend.py": "e72587aabe84719c8d7527a7c14fed68529c64f88117c98c12f9142b414cb6a7"
+  }
+}

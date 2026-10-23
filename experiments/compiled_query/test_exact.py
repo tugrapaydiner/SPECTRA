@@ -450,7 +450,7 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
                           if index % 3 and rng.random() < .3))
     rows = tuple(rows)
     expected = []
-    # This small compressed bank is proof-heavy, so structural-v10 keeps raw.
+    # This small compressed bank is proof-heavy, so structural-v11 keeps raw.
     expected_mode = 'raw' if mode == 'auto' else mode
     with exact_runtime.prepare(p, mode=expected_mode) as session:
         for query in rows:
@@ -463,7 +463,7 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
         assert answer.sat_count == count and answer.proof_bytes == 0
         if mode == 'auto':
             assert answer.info['selected_mode'] == 'raw'
-            assert answer.info['auto_policy'] == 'structural-v10'
+            assert answer.info['auto_policy'] == 'structural-v11'
             assert answer.info['auto_policy_reason'] == 'dense_small_compressed'
         assert decode_certified_output(answer.output, n, count) == tuple(expected[:count])
 
@@ -483,7 +483,7 @@ def test_auto_distinguishes_small_compressed_and_uncompressed_dense_banks(exact_
     assert uncompressed.info['auto_policy_reason'] == 'scc_long_bank'
     assert compressed.info['components'] < 2 * path.n
     assert compressed.info['selected_mode'] == 'raw'
-    assert compressed.info['auto_policy'] == 'structural-v10'
+    assert compressed.info['auto_policy'] == 'structural-v11'
     assert compressed.info['auto_policy_reason'] == 'dense_small_compressed'
 
 @pytest.mark.parametrize('count', (0, 1, 63, 64, 65, 129))
@@ -514,17 +514,17 @@ def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, coun
             selected, reason = 'raw', 'dense_pin_short'
         elif high_pin and n < 96 and components < 2 * n:
             selected, reason = 'raw', 'dense_small_compressed'
-        elif count == 64 and components == 2 * n and len(edges) >= 4 * n:
-            selected, reason = 'raw', 'dense_uncompressed_tile64'
+        elif n and count >= 64 and components == 2 * n and len(edges) >= 4 * n:
+            selected, reason = 'raw', 'dense_uncompressed_bank'
         elif count >= 64:
             selected, reason = 'scc', 'scc_long_bank'
-        elif count >= 8 and 2 * components <= n:
+        elif n and count >= 8 and 2 * components <= n:
             selected, reason = 'scc', 'scc_strong_compression'
         else:
             selected, reason = 'raw', 'short_weak_compression'
 
     assert answer.info['mode'] == 'auto'
-    assert answer.info['auto_policy'] == 'structural-v10'
+    assert answer.info['auto_policy'] == 'structural-v11'
     assert answer.info['auto_policy_reason'] == reason
     assert answer.info['bank_query_count'] == count
     assert answer.info['selected_mode'] == selected
@@ -627,3 +627,15 @@ def test_old_abi_capsules_are_rejected_before_native_dereference(exact_runtime):
     with pytest.raises(ValueError, match='handle'):
         exact_runtime._module.verify(old_observer, (), 1, b'', b'')
     assert exact_runtime._module.abi() == 3
+
+
+def test_selector_policy_identity_matches_the_public_api():
+    from spectra.exact import ExactRuntime as PublicExactRuntime
+
+    for runtime in (PublicExactRuntime, ExactRuntime):
+        doc = runtime.solve_session_packet.__doc__ or ""
+        assert "structural policy v11" in doc
+        assert "structural policy v10" not in doc
+        assert "Long banks of at least" in doc
+        assert "64 requests" in doc
+        assert "bank_kernel" in doc

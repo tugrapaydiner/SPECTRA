@@ -1,0 +1,1944 @@
+{
+  "artifacts": [
+    {
+      "bytes": 1181,
+      "expected_sha256_in_field": "5b4723f7c54411930a24451e2f2f63dc0bdb1d99697443809dfe5a62bdef14f4",
+      "matches_field": true,
+      "path": "spectra-campaign/native-before/build.json",
+      "root": "workspace",
+      "sha256": "5b4723f7c54411930a24451e2f2f63dc0bdb1d99697443809dfe5a62bdef14f4"
+    },
+    {
+      "bytes": 62000,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libstdc++.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "expected_sha256_in_field": "5d0ba93527696d5518fe632405c81c6652dd0c8cfec9af5d8f4d5eb78d810800",
+      "matches_field": true,
+      "path": "spectra-campaign/native-before/spectra_g_cdcl.so",
+      "root": "workspace",
+      "sha256": "5d0ba93527696d5518fe632405c81c6652dd0c8cfec9af5d8f4d5eb78d810800"
+    },
+    {
+      "bytes": 1732064,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "d3ffd6c0a13ee8081f7d4be4e9e4f919503b1740ec1010472132fbb7080c00b9",
+      "matches_field": true,
+      "path": "spectra-campaign/cadical/build/cadical",
+      "root": "workspace",
+      "sha256": "d3ffd6c0a13ee8081f7d4be4e9e4f919503b1740ec1010472132fbb7080c00b9"
+    },
+    {
+      "bytes": 566856,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "334334c2ee917c7a0e5b48d3430c7d3fb25f8b2237577a3ad2f4c826cb9d9033",
+      "matches_field": true,
+      "path": "spectra-campaign/kissat/build/kissat",
+      "root": "workspace",
+      "sha256": "334334c2ee917c7a0e5b48d3430c7d3fb25f8b2237577a3ad2f4c826cb9d9033"
+    },
+    {
+      "bytes": 1169328,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libz.so.1",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "e53b4789608825dedc502208ea05b98cf584771eed089283658d19fd2eeebecf",
+      "matches_field": true,
+      "path": "spectra-campaign/glucose/simp/glucose",
+      "root": "workspace",
+      "sha256": "e53b4789608825dedc502208ea05b98cf584771eed089283658d19fd2eeebecf"
+    },
+    {
+      "bytes": 77,
+      "expected_sha256_in_field": "ac03ad70a876966023d0e740c7be9c799df6869d8c60c76f16c2792511787ada",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build.sh",
+      "root": "workspace",
+      "sha256": "ac03ad70a876966023d0e740c7be9c799df6869d8c60c76f16c2792511787ada"
+    },
+    {
+      "bytes": 396256,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "0dd0a1494a03f40b4a787bd5af03c517ca90dbd54591400c03ddc6c28c791780",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build/kissat",
+      "root": "workspace",
+      "sha256": "0dd0a1494a03f40b4a787bd5af03c517ca90dbd54591400c03ddc6c28c791780"
+    },
+    {
+      "bytes": 38,
+      "expected_sha256_in_field": "a50f2a2fb33dd185181513d198d23bff0d0a80fa4951caa5db5dd418379251fe",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/run.sh",
+      "root": "workspace",
+      "sha256": "a50f2a2fb33dd185181513d198d23bff0d0a80fa4951caa5db5dd418379251fe"
+    },
+    {
+      "bytes": 1310,
+      "expected_sha256_in_field": "0d8e3f4a70cab7538e1bd9dac9d66215009f31cda87303743778309a8842ba7c",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build.sh",
+      "root": "workspace",
+      "sha256": "0d8e3f4a70cab7538e1bd9dac9d66215009f31cda87303743778309a8842ba7c"
+    },
+    {
+      "bytes": 551112,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "59d6a03c7068f702fa6e3c94be0d8976be20a188a332e8a9258d953bf6a1190c",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build/kissat",
+      "root": "workspace",
+      "sha256": "59d6a03c7068f702fa6e3c94be0d8976be20a188a332e8a9258d953bf6a1190c"
+    },
+    {
+      "bytes": 205,
+      "expected_sha256_in_field": "9294a0ba423a8af821a0033f0b5b5c7e790bafb89be29b91b5d0c9424d12ccb0",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/run-parsl.sh",
+      "root": "workspace",
+      "sha256": "9294a0ba423a8af821a0033f0b5b5c7e790bafb89be29b91b5d0c9424d12ccb0"
+    },
+    {
+      "bytes": 400408,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "9d238636efeb53de3159bf876891bd0d18f55a9723ad712e7ea9cc4153d453b8",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/ae_kissat_mab",
+      "root": "workspace",
+      "sha256": "9d238636efeb53de3159bf876891bd0d18f55a9723ad712e7ea9cc4153d453b8"
+    },
+    {
+      "bytes": 756,
+      "expected_sha256_in_field": "eedbadab70094101c1b82996c56a184b31e968561a0e1c4bb784dfad641a1521",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/build.sh",
+      "root": "workspace",
+      "sha256": "eedbadab70094101c1b82996c56a184b31e968561a0e1c4bb784dfad641a1521"
+    },
+    {
+      "bytes": 1066,
+      "expected_sha256_in_field": "9aae984d6f54fb90479faaa5266dbdac34141b53a2952089e42d254eae70c91e",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/check_sat.sh",
+      "root": "workspace",
+      "sha256": "9aae984d6f54fb90479faaa5266dbdac34141b53a2952089e42d254eae70c91e"
+    },
+    {
+      "bytes": 181,
+      "expected_sha256_in_field": "038fa0cec4d9956d50200dac97285df1f952a980bbbee470aa7c31c548359eb1",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/docker.sh",
+      "root": "workspace",
+      "sha256": "038fa0cec4d9956d50200dac97285df1f952a980bbbee470aa7c31c548359eb1"
+    },
+    {
+      "bytes": 71184,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "ce4fdb7cc05a492016eabda053cd37796449dd3c3b14dd1881c3d80708f3d501",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/compress",
+      "root": "workspace",
+      "sha256": "ce4fdb7cc05a492016eabda053cd37796449dd3c3b14dd1881c3d80708f3d501"
+    },
+    {
+      "bytes": 103040,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "195b23f991a1d282804ceda0fb74685017f15f74d113cfb6ce5914a28660f56d",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/dsr-trim",
+      "root": "workspace",
+      "sha256": "195b23f991a1d282804ceda0fb74685017f15f74d113cfb6ce5914a28660f56d"
+    },
+    {
+      "bytes": 75336,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "41ed75e03de54a3bf7f716075c9da25d00aec18a7b85b4bae6871bfce9f0ab31",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/lsr-check",
+      "root": "workspace",
+      "sha256": "41ed75e03de54a3bf7f716075c9da25d00aec18a7b85b4bae6871bfce9f0ab31"
+    },
+    {
+      "bytes": 399584,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "0dbb90026e34aa787692f12d41d8fe358f1e21056d95f093b92b6d6fa6883b14",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/kissat",
+      "root": "workspace",
+      "sha256": "0dbb90026e34aa787692f12d41d8fe358f1e21056d95f093b92b6d6fa6883b14"
+    },
+    {
+      "bytes": 400,
+      "expected_sha256_in_field": "a90f66bc27f4f2b8ab08d4d0c06768bf79991b7b4ee4ddd56c1482507149d30e",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/original-run.sh",
+      "root": "workspace",
+      "sha256": "a90f66bc27f4f2b8ab08d4d0c06768bf79991b7b4ee4ddd56c1482507149d30e"
+    },
+    {
+      "bytes": 369,
+      "expected_sha256_in_field": "0ed15b3bc2347843fb985da170b47d3bb4caad9d412acda1fa955942af29ea5f",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh",
+      "root": "workspace",
+      "sha256": "0ed15b3bc2347843fb985da170b47d3bb4caad9d412acda1fa955942af29ea5f"
+    },
+    {
+      "bytes": 481,
+      "expected_sha256_in_field": "7f1f22f4d7cf395a7a2a4511e99c7d09e9d8c83a3a011ed713f47c2d9891388e",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run.sh",
+      "root": "workspace",
+      "sha256": "7f1f22f4d7cf395a7a2a4511e99c7d09e9d8c83a3a011ed713f47c2d9891388e"
+    },
+    {
+      "bytes": 2728,
+      "expected_sha256_in_field": "53faad9fbdf653df88ba58d36625553fe042936bc9eabcd1b62a99f90712d4da",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_base.sh",
+      "root": "workspace",
+      "sha256": "53faad9fbdf653df88ba58d36625553fe042936bc9eabcd1b62a99f90712d4da"
+    },
+    {
+      "bytes": 414,
+      "expected_sha256_in_field": "c4915ee163f1a1304f819659b161b649ab8111d3b3a091ca8770702062514302",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_satsuma_ae_kissat.sh",
+      "root": "workspace",
+      "sha256": "c4915ee163f1a1304f819659b161b649ab8111d3b3a091ca8770702062514302"
+    },
+    {
+      "bytes": 400,
+      "expected_sha256_in_field": "a90f66bc27f4f2b8ab08d4d0c06768bf79991b7b4ee4ddd56c1482507149d30e",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_satsuma_kissat.sh",
+      "root": "workspace",
+      "sha256": "a90f66bc27f4f2b8ab08d4d0c06768bf79991b7b4ee4ddd56c1482507149d30e"
+    },
+    {
+      "bytes": 830648,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "2588c934cc7acbe92ad2ab13976263b90207b8a1dd7100785f33da38045e937b",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/satsuma",
+      "root": "workspace",
+      "sha256": "2588c934cc7acbe92ad2ab13976263b90207b8a1dd7100785f33da38045e937b"
+    },
+    {
+      "bytes": 400408,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "9d238636efeb53de3159bf876891bd0d18f55a9723ad712e7ea9cc4153d453b8",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/AE_kissat2025_MAB/build/kissat",
+      "root": "workspace",
+      "sha256": "9d238636efeb53de3159bf876891bd0d18f55a9723ad712e7ea9cc4153d453b8"
+    },
+    {
+      "bytes": 399584,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "0dbb90026e34aa787692f12d41d8fe358f1e21056d95f093b92b6d6fa6883b14",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/kissat/build/kissat",
+      "root": "workspace",
+      "sha256": "0dbb90026e34aa787692f12d41d8fe358f1e21056d95f093b92b6d6fa6883b14"
+    },
+    {
+      "bytes": 830648,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "2588c934cc7acbe92ad2ab13976263b90207b8a1dd7100785f33da38045e937b",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/satsuma",
+      "root": "workspace",
+      "sha256": "2588c934cc7acbe92ad2ab13976263b90207b8a1dd7100785f33da38045e937b"
+    },
+    {
+      "bytes": 3786,
+      "expected_sha256_in_field": "b1770f26eaaf2339794b16c0a3f7a0c6ba9f1fd93e6138cdd88805380e03245f",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/test.sh",
+      "root": "workspace",
+      "sha256": "b1770f26eaaf2339794b16c0a3f7a0c6ba9f1fd93e6138cdd88805380e03245f"
+    },
+    {
+      "bytes": 660448,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "04441e149630e72b19336d1b4bd88eb075f10bc26b22eb6e5672bb3fa55c9840",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/satsuma",
+      "root": "workspace",
+      "sha256": "04441e149630e72b19336d1b4bd88eb075f10bc26b22eb6e5672bb3fa55c9840"
+    },
+    {
+      "bytes": 48,
+      "expected_sha256_in_field": "17d53817214de008f197be8ea2a7b310c216da18f1ee4e4d30e914c2fa7788ea",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build.sh",
+      "root": "workspace",
+      "sha256": "17d53817214de008f197be8ea2a7b310c216da18f1ee4e4d30e914c2fa7788ea"
+    },
+    {
+      "bytes": 572736,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "expected_sha256_in_field": "59307acd660779eaa8ae6ca5a22cadf00e9b1b92df7773de563c142fdee35223",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build/kissat",
+      "root": "workspace",
+      "sha256": "59307acd660779eaa8ae6ca5a22cadf00e9b1b92df7773de563c142fdee35223"
+    },
+    {
+      "bytes": 1420,
+      "expected_sha256_in_field": "c197ff3da506f0ce5b9ad9510feafb029abb79cc9e394b92c1e5a9dd71015e2a",
+      "matches_field": true,
+      "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/run-parsl.sh",
+      "root": "workspace",
+      "sha256": "c197ff3da506f0ce5b9ad9510feafb029abb79cc9e394b92c1e5a9dd71015e2a"
+    },
+    {
+      "bytes": 3170424,
+      "dynamic_inspection_method": "readelf -d; no executable launched",
+      "elf_dynamic_needed": [],
+      "expected_sha256_in_field": "2e5fa5ef07c655640e6fff0d3f41561eab1502ec2e48766cca60287625935674",
+      "matches_field": true,
+      "path": "spectra-campaign/veripb-bundled/veripb",
+      "root": "workspace",
+      "sha256": "2e5fa5ef07c655640e6fff0d3f41561eab1502ec2e48766cca60287625935674"
+    },
+    {
+      "bytes": 51216,
+      "path": "spectra-campaign/drat-trim/drat-trim",
+      "root": "workspace",
+      "sha256": "f8d971dc5956a73fa37e655a44ba8f6d128976acfedff7129f2ed251b234af1a"
+    }
+  ],
+  "claim_boundary": {
+    "complete_roadmap_field_verified": false,
+    "evidence_class": "EXPOSED_DEVELOPMENT",
+    "missing_roadmap_entries": [
+      "Lymphosat",
+      "kissat-sc2024",
+      "full official 2026 Main field including Satsuma-iter+AE-Kissat-MAB"
+    ],
+    "scientific_100_gate_passed": false
+  },
+  "components": [
+    {
+      "build": {
+        "command": [
+          "/usr/bin/g++",
+          "-std=c++17",
+          "-shared",
+          "-fPIC",
+          "-fvisibility=hidden",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-fno-fast-math",
+          "-ffp-contract=off",
+          "-O3",
+          "-DNDEBUG",
+          "/workspace/scratch/6f0d5187396f/SPECTRA/experiments/general_competition/native_cdcl.cpp",
+          "-o",
+          "/workspace/scratch/6f0d5187396f/spectra-campaign/native-before/spectra_g_cdcl.so"
+        ],
+        "compiler_version": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+        "receipt": {
+          "bytes": 1181,
+          "path": "spectra-campaign/native-before/build.json",
+          "root": "workspace",
+          "sha256": "5b4723f7c54411930a24451e2f2f63dc0bdb1d99697443809dfe5a62bdef14f4"
+        },
+        "status": "locally source-built before field freeze"
+      },
+      "evidence": [
+        {
+          "bytes": 1181,
+          "path": "spectra-campaign/native-before/build.json",
+          "root": "workspace",
+          "sha256": "5b4723f7c54411930a24451e2f2f63dc0bdb1d99697443809dfe5a62bdef14f4"
+        }
+      ],
+      "id": "spectra-g",
+      "kind": "solver",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1076,
+            "path": "SPECTRA/LICENSE",
+            "root": "workspace",
+            "sha256": "615438b2e6e0d6ae2182d663ec7ad81f5b3e590e07cabb68102dc51a06c2ad9d"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Project root license; no upstream engine is declared by this field entry."
+        }
+      ],
+      "name": "SPECTRA-G native CDCL",
+      "source": {
+        "field_source_commit": "904629a1acfbdca964f8355a7e74b182007eb6e5",
+        "kind": "project_source",
+        "native_source": {
+          "bytes": 24306,
+          "path": "SPECTRA/experiments/general_competition/native_cdcl.cpp",
+          "root": "workspace",
+          "sha256": "89b6fc42281c856310e79770cc551e4db57038534adfbf10bd1de4504949167f"
+        },
+        "native_source_matches_build": true,
+        "url": "https://github.com/tugrapaydiner/SPECTRA"
+      }
+    },
+    {
+      "build": {
+        "commands": [
+          "./configure",
+          "make -j3"
+        ],
+        "compiler_flags_observed": "g++ -Wall -Wextra -O3 -DNDEBUG; gcc -Wall -Wextra -O3 -DNDEBUG",
+        "log_status": "No standalone build log located; commands are retained in the frozen field and generated makefile is hashed."
+      },
+      "evidence": [
+        {
+          "bytes": 18525,
+          "path": "spectra-campaign/cadical/configure",
+          "root": "workspace",
+          "sha256": "cc739cbdd19ed29ec7314aa81c412b925c1fe6a5c158d22f75b29190cbcc741a"
+        },
+        {
+          "bytes": 3814,
+          "path": "spectra-campaign/cadical/build/makefile",
+          "root": "workspace",
+          "sha256": "d7bceef78b897908fd49c7d195fe0c5c82df7850ad3e62032532e675d2020285"
+        }
+      ],
+      "id": "cadical",
+      "kind": "solver",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1643,
+            "path": "spectra-campaign/cadical/LICENSE",
+            "root": "workspace",
+            "sha256": "9caaed67d8cd9d1c0744ad533b3ed95af756aa54c0402e38746be1f85a4e176c"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Upstream repository license."
+        }
+      ],
+      "name": "CaDiCaL",
+      "source": {
+        "commit": "c60730422e758ef1cebe7aeddf2dda31c996bf04",
+        "kind": "upstream_git",
+        "tracked_diff_paths_at_observation": [],
+        "url": "https://github.com/arminbiere/cadical"
+      }
+    },
+    {
+      "build": {
+        "commands": [
+          "./configure",
+          "make -j3"
+        ],
+        "compiler_flags_observed": "gcc -W -Wall -O3 -DNDEBUG",
+        "log_status": "No standalone build log located; commands are retained in the frozen field and generated makefile is hashed."
+      },
+      "evidence": [
+        {
+          "bytes": 19807,
+          "path": "spectra-campaign/kissat/configure",
+          "root": "workspace",
+          "sha256": "9fbadffb14c9bf61cbf01fc5ca5b0dae2c8501da8d891a7616af330fb9031bf4"
+        },
+        {
+          "bytes": 1759,
+          "path": "spectra-campaign/kissat/build/makefile",
+          "root": "workspace",
+          "sha256": "a37b96b9173841ba9dcd0dcf292152c1fb4bf295c7e1553b58b3fe9f57f9da6e"
+        }
+      ],
+      "id": "kissat",
+      "kind": "solver",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1316,
+            "path": "spectra-campaign/kissat/LICENSE",
+            "root": "workspace",
+            "sha256": "0dbd8c6478aa03f62d720ed2256cf585cb93eba657201be1df217c4e920f162d"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Upstream repository license."
+        }
+      ],
+      "name": "Kissat",
+      "source": {
+        "commit": "8af8e56f174b778aef3aa45af9f739b2a5f492c2",
+        "kind": "upstream_git",
+        "tracked_diff_paths_at_observation": [],
+        "url": "https://github.com/arminbiere/kissat"
+      }
+    },
+    {
+      "build": {
+        "commands": [
+          "make -C simp -j2"
+        ],
+        "flags_status": "Makefile defaults inspected; build log suppresses full compiler invocations, so these are not a captured full command line.",
+        "log": {
+          "bytes": 22430,
+          "path": "spectra-campaign/build-glucose.log",
+          "root": "workspace",
+          "sha256": "b280f385f6a6b9b7a1a4fdc8ea9979a2693f996b1d4fd108112e226d8fe25a05"
+        },
+        "makefile_declared_default_flags": "-Wall -Wno-parentheses -std=c++11 -O3 -g -D DEBUG; include and format macro flags; link -Wall -lpthread -lz -g",
+        "target": "simp/glucose"
+      },
+      "evidence": [
+        {
+          "bytes": 6295,
+          "path": "spectra-campaign/glucose/README.md",
+          "root": "workspace",
+          "sha256": "b3bf840cc1c395615a35109ef0d45fbe7155fc788c42def7f071811e053ce2dc"
+        },
+        {
+          "bytes": 94,
+          "path": "spectra-campaign/glucose/simp/Makefile",
+          "root": "workspace",
+          "sha256": "6134d14f62d8a02fc3df262e6666c089491b234125ba436db8b09d8ceae26383"
+        },
+        {
+          "bytes": 3239,
+          "path": "spectra-campaign/glucose/mtl/template.mk",
+          "root": "workspace",
+          "sha256": "e843b7b1d83155ebba9bbc1d7751b61cc5b6fd632ac9a30a4721f3f5ce59770c"
+        },
+        {
+          "bytes": 22430,
+          "path": "spectra-campaign/build-glucose.log",
+          "root": "workspace",
+          "sha256": "b280f385f6a6b9b7a1a4fdc8ea9979a2693f996b1d4fd108112e226d8fe25a05"
+        }
+      ],
+      "id": "glucose",
+      "kind": "solver",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1072,
+            "path": "spectra-campaign/glucose/LICENSE",
+            "root": "workspace",
+            "sha256": "2ed7b6410b7b79ce1fb80160693bff299320acd8fa484f4d6e711821f429d347"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Root LICENSE declaration."
+        },
+        {
+          "evidence": {
+            "bytes": 68515,
+            "path": "spectra-campaign/glucose/core/Solver.cc",
+            "root": "workspace",
+            "sha256": "a3c9b716610a90a231a4620a29fea612a9b9edc68c009e2352a8265017f5ca51"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "note": "The restriction refers to the parallel version and embedded use. This field runs the sequential simp target. Applicability is not resolved here; the root MIT file does not erase the retained source header.",
+          "observed_spdx_expression": "NOASSERTION",
+          "scope": "Compiled source header combines MiniSat permission text and a Glucose-Syrup competitive-use restriction."
+        },
+        {
+          "evidence": {
+            "bytes": 20402,
+            "path": "spectra-campaign/glucose/core/SolverTypes.h",
+            "root": "workspace",
+            "sha256": "5aae162b2cbba448d622e6b77ecfeaed0b190f42c37ca193a1d7d7f8bbb036aa"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "NOASSERTION",
+          "scope": "Additional source header with the same Glucose-Syrup restriction."
+        }
+      ],
+      "license_scope_status": "Unresolved difference between root license and source-file notices; no package-wide SPDX conclusion.",
+      "name": "Glucose 4.2.1 sequential simp target",
+      "source": {
+        "commit": "fbf47723e7f2f03847bef3418e9a3df90dacc34b",
+        "kind": "upstream_git",
+        "tracked_diff_paths_at_observation": [],
+        "url": "https://github.com/audemard/glucose"
+      }
+    },
+    {
+      "evidence": [
+        {
+          "bytes": 6295,
+          "path": "spectra-campaign/glucose/README.md",
+          "root": "workspace",
+          "sha256": "b3bf840cc1c395615a35109ef0d45fbe7155fc788c42def7f071811e053ce2dc"
+        }
+      ],
+      "id": "glucose-minisat",
+      "kind": "embedded_source",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 5997,
+            "path": "spectra-campaign/glucose/mtl/Vec.h",
+            "root": "workspace",
+            "sha256": "359fba7c7d65dcf526b406123b1758c621af1c95673c59e2710c0682c9b7e046"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "MiniSat-origin source-file permission header."
+        },
+        {
+          "evidence": {
+            "bytes": 3141,
+            "path": "spectra-campaign/glucose/utils/System.cc",
+            "root": "workspace",
+            "sha256": "a9b6cb63c24967c2d7c97d30817bada47b51629b219fcab59a421b1af83e079b"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "MiniSat-origin source-file permission header."
+        }
+      ],
+      "name": "MiniSat-derived code in Glucose",
+      "source": {
+        "parent_component": "glucose",
+        "version_basis": "Glucose README identifies MiniSat 2.2; no separately pinned MiniSat checkout."
+      }
+    },
+    {
+      "build": {
+        "commands": [
+          "bash build.sh"
+        ],
+        "compiler_flags_observed": "gcc -W -Wall -O3 -DNDEBUG -DNOPTIONS -DQUIET",
+        "configure_options": [
+          "--competition",
+          "--test"
+        ],
+        "log": {
+          "bytes": 11512,
+          "path": "spectra-campaign/build-ae2025.log",
+          "root": "workspace",
+          "sha256": "2ec965acd2cbb4b7823176d703658efb5f7fc7bec89de08735925d2117d0d32a"
+        }
+      },
+      "evidence": [
+        {
+          "bytes": 77,
+          "path": "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build.sh",
+          "root": "workspace",
+          "sha256": "ac03ad70a876966023d0e740c7be9c799df6869d8c60c76f16c2792511787ada"
+        },
+        {
+          "bytes": 38,
+          "path": "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/run.sh",
+          "root": "workspace",
+          "sha256": "a50f2a2fb33dd185181513d198d23bff0d0a80fa4951caa5db5dd418379251fe"
+        },
+        {
+          "bytes": 1785,
+          "path": "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build/makefile",
+          "root": "workspace",
+          "sha256": "6999d05593b37aacbd51a24db68821a97ebd66bc9b757ee5316365f60a970d62"
+        },
+        {
+          "bytes": 11512,
+          "path": "spectra-campaign/build-ae2025.log",
+          "root": "workspace",
+          "sha256": "2ec965acd2cbb4b7823176d703658efb5f7fc7bec89de08735925d2117d0d32a"
+        }
+      ],
+      "id": "ae2025",
+      "kind": "solver",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1171,
+            "path": "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/LICENSE",
+            "root": "workspace",
+            "sha256": "a792a1aaeac78521493ccec1bad4fe379a79b101f479c943883d8934c9b06fc0"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Submission root license; no complete file-by-file license audit."
+        }
+      ],
+      "name": "AE_kissat2025_MAB",
+      "source": {
+        "archive": {
+          "bytes": 1642148,
+          "path": "spectra-campaign/sources/ae-kissat-2025.tar.xz",
+          "root": "workspace",
+          "sha256": "069cc73be6ca20e2d1f22cf63dec858026deab041bf3b98bfa20c6676697013c"
+        },
+        "kind": "official_submission_archive",
+        "member_prefix": "AE_kissat2025_MAB",
+        "upstream_component_commit": "not established from archive",
+        "url": "https://satcompetition.github.io/2025/downloads/solvers/main/AE_kissat2025_MAB.tar.xz"
+      }
+    },
+    {
+      "build": {
+        "commands": [
+          "bash build.sh"
+        ],
+        "compiler_flags_observed": "gcc -W -Wall -O3 -DNDEBUG",
+        "configure_options": [],
+        "log": {
+          "bytes": 6829,
+          "path": "spectra-campaign/build-eda.log",
+          "root": "workspace",
+          "sha256": "e99c6e1dfa2f63ec181a8254d801a885afd28ea3439e5cfd9a66c49ff607231f"
+        }
+      },
+      "evidence": [
+        {
+          "bytes": 1310,
+          "path": "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build.sh",
+          "root": "workspace",
+          "sha256": "0d8e3f4a70cab7538e1bd9dac9d66215009f31cda87303743778309a8842ba7c"
+        },
+        {
+          "bytes": 205,
+          "path": "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/run-parsl.sh",
+          "root": "workspace",
+          "sha256": "9294a0ba423a8af821a0033f0b5b5c7e790bafb89be29b91b5d0c9424d12ccb0"
+        },
+        {
+          "bytes": 1759,
+          "path": "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build/makefile",
+          "root": "workspace",
+          "sha256": "a37b96b9173841ba9dcd0dcf292152c1fb4bf295c7e1553b58b3fe9f57f9da6e"
+        },
+        {
+          "bytes": 6829,
+          "path": "spectra-campaign/build-eda.log",
+          "root": "workspace",
+          "sha256": "e99c6e1dfa2f63ec181a8254d801a885afd28ea3439e5cfd9a66c49ff607231f"
+        }
+      ],
+      "id": "eda2",
+      "kind": "solver",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1171,
+            "path": "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/LICENSE",
+            "root": "workspace",
+            "sha256": "a792a1aaeac78521493ccec1bad4fe379a79b101f479c943883d8934c9b06fc0"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Submission root license; no complete file-by-file license audit."
+        }
+      ],
+      "name": "EDA-Kissat-v2",
+      "source": {
+        "archive": {
+          "bytes": 791180,
+          "path": "spectra-campaign/sources/yalun.tar.xz",
+          "root": "workspace",
+          "sha256": "53a73890c4094bb9da680e7d6676effd9058cbbd212c32d60cd0d91458645c7c"
+        },
+        "kind": "official_submission_archive",
+        "member_prefix": "yalun/kissat-eda-2/src",
+        "upstream_component_commit": "not established from archive",
+        "url": "https://satcompetition.github.io/2026/downloads/solvers/yalun.tar.xz"
+      }
+    },
+    {
+      "build": {
+        "commands_in_original_script": [
+          "CC=gcc ./configure --competition; make kissat (in solver/kissat)",
+          "CC=gcc ./configure --competition; make kissat (in solver/AE_kissat2025_MAB)",
+          "make (in solver/satsuma-dev), then copy satsuma to submission root",
+          "make (in dsr-trim)"
+        ],
+        "fresh_rebuild_log_gap": "The saved build-satsuma.log is the original script run. Separate forced-rebuild console transcripts were not located as standalone files; this manifest does not invent them.",
+        "fresh_rebuild_status": "Satsuma and dsr-trim were forced to rebuild after the original script left archived build products current; subsequent hashes and source comparison are recorded in satsuma-smoke/setup.json.",
+        "log": {
+          "bytes": 18316,
+          "path": "spectra-campaign/build-satsuma.log",
+          "root": "workspace",
+          "sha256": "f10549084d022bf349fd927abfbfbf240291984a2ef94c37edcb0732b344d733"
+        },
+        "original_invocation": "bash build.sh",
+        "source_comparison_receipt": {
+          "bytes": 4191,
+          "path": "spectra-campaign/satsuma-smoke/setup.json",
+          "root": "workspace",
+          "sha256": "13dea486c0d679138ae6648341f528ec28d175324d8ebdad88610e039616bb4c"
+        }
+      },
+      "evidence": [
+        {
+          "bytes": 756,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/build.sh",
+          "root": "workspace",
+          "sha256": "eedbadab70094101c1b82996c56a184b31e968561a0e1c4bb784dfad641a1521"
+        },
+        {
+          "bytes": 369,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh",
+          "root": "workspace",
+          "sha256": "0ed15b3bc2347843fb985da170b47d3bb4caad9d412acda1fa955942af29ea5f"
+        },
+        {
+          "bytes": 18316,
+          "path": "spectra-campaign/build-satsuma.log",
+          "root": "workspace",
+          "sha256": "f10549084d022bf349fd927abfbfbf240291984a2ef94c37edcb0732b344d733"
+        },
+        {
+          "bytes": 4191,
+          "path": "spectra-campaign/satsuma-smoke/setup.json",
+          "root": "workspace",
+          "sha256": "13dea486c0d679138ae6648341f528ec28d175324d8ebdad88610e039616bb4c"
+        }
+      ],
+      "id": "satsuma-package",
+      "kind": "solver_bundle",
+      "license_observations": [
+        {
+          "declared_license_name": "GPLv3",
+          "evidence": {
+            "bytes": 35148,
+            "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/LICENSE",
+            "root": "workspace",
+            "sha256": "8b1ba204bb69a0ade2bfcf65ef294a920f6bb361b317dba43c7ef29d96332b9b"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "note": "LICENSE_NOTES explicitly says the project is GPLv3. No or-later election for the combined project was established.",
+          "observed_spdx_expression": "NOASSERTION",
+          "scope": "GNU GPL version 3 text accompanying the combined submission.",
+          "version_election": "GPL version 3 is explicit; no package-wide only-versus-or-later conclusion is made."
+        },
+        {
+          "declared_license_name": "GPLv3",
+          "evidence": {
+            "bytes": 720,
+            "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/LICENSE_NOTES.md",
+            "root": "workspace",
+            "sha256": "1072293b7dffb8f072d38cabe893cbd47e3e238d356acef0c017f0baa6709cb9"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "NOASSERTION",
+          "scope": "Authors explain package license and distinguish MIT Satsuma/Kissat, GPL Cliquer, and Apache dsr-trim.",
+          "version_election": "GPL version 3 is explicit; no package-wide only-versus-or-later conclusion is made."
+        }
+      ],
+      "name": "Satsuma-iter+Kissat official submission",
+      "source": {
+        "archive": {
+          "bytes": 2253192,
+          "path": "spectra-campaign/sources/anders.tar.xz",
+          "root": "workspace",
+          "sha256": "1951097402831eaaa9cdd6b670a09b9e9cbe1714e16d48b17d420e3b40816623"
+        },
+        "kind": "official_submission_archive",
+        "member_prefix": "anders/satsuma-iter-kissat/src",
+        "upstream_component_commit": "not established from archive",
+        "url": "https://satcompetition.github.io/2026/downloads/solvers/anders.tar.xz"
+      }
+    },
+    {
+      "build": {
+        "compiler_flags_observed": "g++ -std=c++20 -O3 -Wall -march=native -DNDEBUG; gcc -O3 -Wall -march=native -DNDEBUG",
+        "makefile_definitions": "-Isrc/cliquer -DCLIQUES=1",
+        "makefile_link_input": "libcliquer.a",
+        "portability_note": "-march=native makes this build host-specific."
+      },
+      "evidence": [
+        {
+          "bytes": 760,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/Makefile",
+          "root": "workspace",
+          "sha256": "0e23c0163e51522b5d0f00b120e209cfc90c9717aea2ad992b99e7cf36e93a09"
+        },
+        {
+          "bytes": 23652,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/src/satsuma.cpp",
+          "root": "workspace",
+          "sha256": "8493848134266a23207cb0e7abac8f58f0531ac4ac22169927cd9bd44eed724f"
+        }
+      ],
+      "id": "satsuma-iter",
+      "kind": "preprocessor",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1070,
+            "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/LICENSE",
+            "root": "workspace",
+            "sha256": "db45a9d3975e12d4482601a53c2b43342d6ef1bd2e10a888b294b8599b997ec3"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Satsuma code license; Cliquer is separately licensed and linked by its Makefile."
+        }
+      ],
+      "name": "Satsuma preprocessor in 2026 winner",
+      "source": {
+        "directory": "solver/satsuma-dev",
+        "parent_archive": {
+          "archive": {
+            "bytes": 2253192,
+            "path": "spectra-campaign/sources/anders.tar.xz",
+            "root": "workspace",
+            "sha256": "1951097402831eaaa9cdd6b670a09b9e9cbe1714e16d48b17d420e3b40816623"
+          },
+          "kind": "official_submission_archive",
+          "member_prefix": "anders/satsuma-iter-kissat/src",
+          "upstream_component_commit": "not established from archive",
+          "url": "https://satcompetition.github.io/2026/downloads/solvers/anders.tar.xz"
+        }
+      }
+    },
+    {
+      "evidence": [
+        {
+          "bytes": 23652,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/src/satsuma.cpp",
+          "root": "workspace",
+          "sha256": "8493848134266a23207cb0e7abac8f58f0531ac4ac22169927cd9bd44eed724f"
+        }
+      ],
+      "id": "satsuma-dejavu",
+      "kind": "embedded_source",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1070,
+            "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/src/dejavu/LICENSE",
+            "root": "workspace",
+            "sha256": "46943ff10eb29930e7c9b7bd1f1ed882adf78a33ea06108dde3826c77d6f6d94"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Nested dejavu license."
+        }
+      ],
+      "name": "dejavu in 2026 winner Satsuma",
+      "source": {
+        "directory": "src/dejavu",
+        "parent_component": "satsuma-iter"
+      }
+    },
+    {
+      "evidence": [
+        {
+          "bytes": 760,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/Makefile",
+          "root": "workspace",
+          "sha256": "0e23c0163e51522b5d0f00b120e209cfc90c9717aea2ad992b99e7cf36e93a09"
+        }
+      ],
+      "id": "satsuma-cliquer",
+      "kind": "static_library",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 17992,
+            "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/src/cliquer/LICENSE",
+            "root": "workspace",
+            "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "GPL-2.0-or-later",
+          "scope": "GPLv2 text, with or-later permission explicitly stated in adjacent README."
+        },
+        {
+          "evidence": {
+            "bytes": 2046,
+            "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/src/cliquer/README",
+            "root": "workspace",
+            "sha256": "18e4e2e0fefa677770059e699873a0195d8e09d28382160dd41490a3f151564a"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "GPL-2.0-or-later",
+          "scope": "Cliquer README explicitly grants version 2 or any later version."
+        }
+      ],
+      "name": "Cliquer in 2026 winner Satsuma",
+      "source": {
+        "directory": "src/cliquer",
+        "parent_component": "satsuma-iter"
+      }
+    },
+    {
+      "build": {
+        "compiler_flags_observed": "gcc -W -Wall -O3 -DNDEBUG -DNOPTIONS -DQUIET",
+        "configure_options": [
+          "--competition"
+        ]
+      },
+      "evidence": [
+        {
+          "bytes": 1778,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/kissat/build/makefile",
+          "root": "workspace",
+          "sha256": "c1d1e571143d20e1d88cc0e42f874e062bcbe8df3f0b4cab59a4a408bd238b79"
+        }
+      ],
+      "id": "satsuma-kissat",
+      "kind": "solver",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1316,
+            "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/kissat/LICENSE",
+            "root": "workspace",
+            "sha256": "0dbd8c6478aa03f62d720ed2256cf585cb93eba657201be1df217c4e920f162d"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Nested Kissat license."
+        }
+      ],
+      "name": "Kissat bundled with 2026 winner",
+      "source": {
+        "directory": "solver/kissat",
+        "parent_archive": {
+          "archive": {
+            "bytes": 2253192,
+            "path": "spectra-campaign/sources/anders.tar.xz",
+            "root": "workspace",
+            "sha256": "1951097402831eaaa9cdd6b670a09b9e9cbe1714e16d48b17d420e3b40816623"
+          },
+          "kind": "official_submission_archive",
+          "member_prefix": "anders/satsuma-iter-kissat/src",
+          "upstream_component_commit": "not established from archive",
+          "url": "https://satcompetition.github.io/2026/downloads/solvers/anders.tar.xz"
+        }
+      }
+    },
+    {
+      "evidence": [
+        {
+          "bytes": 369,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh",
+          "root": "workspace",
+          "sha256": "0ed15b3bc2347843fb985da170b47d3bb4caad9d412acda1fa955942af29ea5f"
+        },
+        {
+          "bytes": 756,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/build.sh",
+          "root": "workspace",
+          "sha256": "eedbadab70094101c1b82996c56a184b31e968561a0e1c4bb784dfad641a1521"
+        }
+      ],
+      "execution_note": "Built and hash-bound in the field but the selected run-parsl.sh invokes bundled Kissat, not this alternative.",
+      "id": "satsuma-ae-unused",
+      "kind": "bundled_solver_not_selected",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1171,
+            "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/AE_kissat2025_MAB/LICENSE",
+            "root": "workspace",
+            "sha256": "a792a1aaeac78521493ccec1bad4fe379a79b101f479c943883d8934c9b06fc0"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Nested AE/Kissat license."
+        }
+      ],
+      "name": "AE_kissat2025_MAB bundled with 2026 winner",
+      "source": {
+        "directory": "solver/AE_kissat2025_MAB",
+        "parent_archive": {
+          "archive": {
+            "bytes": 2253192,
+            "path": "spectra-campaign/sources/anders.tar.xz",
+            "root": "workspace",
+            "sha256": "1951097402831eaaa9cdd6b670a09b9e9cbe1714e16d48b17d420e3b40816623"
+          },
+          "kind": "official_submission_archive",
+          "member_prefix": "anders/satsuma-iter-kissat/src",
+          "upstream_component_commit": "not established from archive",
+          "url": "https://satcompetition.github.io/2026/downloads/solvers/anders.tar.xz"
+        }
+      }
+    },
+    {
+      "build": {
+        "compiler_flags_observed": "gcc -O3",
+        "recipe": "Bundled Makefile builds bin/dsr-trim, bin/lsr-check and bin/compress.",
+        "status": "locally source-built before field freeze"
+      },
+      "checker_contract": {
+        "accepted_exit_codes": [
+          0
+        ],
+        "command": [
+          "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/dsr-trim",
+          "{cnf}",
+          "{proof}",
+          "{proof}.lsr"
+        ],
+        "success_line": "s VERIFIED UNSAT"
+      },
+      "checker_limit": "The selected checker is dsr-trim. This does not assert formally verified correctness or an independent second checker run on derived LSR.",
+      "evidence": [
+        {
+          "bytes": 1576,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/Makefile",
+          "root": "workspace",
+          "sha256": "db1d3a5336f9720062a619bc92aaa10de7f75e91ca945eb7802199809dc42c52"
+        },
+        {
+          "bytes": 6134,
+          "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/README.md",
+          "root": "workspace",
+          "sha256": "a686d511defff1b22743c76fb17ac24c82b801fc054e66e3301b64b9130b506a"
+        },
+        {
+          "bytes": 4191,
+          "path": "spectra-campaign/satsuma-smoke/setup.json",
+          "root": "workspace",
+          "sha256": "13dea486c0d679138ae6648341f528ec28d175324d8ebdad88610e039616bb4c"
+        }
+      ],
+      "id": "dsr-trim",
+      "kind": "proof_checker",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 11358,
+            "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/LICENSE",
+            "root": "workspace",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "Apache-2.0",
+          "scope": "Checker project license."
+        }
+      ],
+      "name": "dsr-trim with lsr-check and compress helpers",
+      "source": {
+        "directory": "dsr-trim",
+        "parent_archive": {
+          "archive": {
+            "bytes": 2253192,
+            "path": "spectra-campaign/sources/anders.tar.xz",
+            "root": "workspace",
+            "sha256": "1951097402831eaaa9cdd6b670a09b9e9cbe1714e16d48b17d420e3b40816623"
+          },
+          "kind": "official_submission_archive",
+          "member_prefix": "anders/satsuma-iter-kissat/src",
+          "upstream_component_commit": "not established from archive",
+          "url": "https://satcompetition.github.io/2026/downloads/solvers/anders.tar.xz"
+        }
+      }
+    },
+    {
+      "build": {
+        "commands": [
+          "bash build.sh",
+          "MAKEFLAGS=-B bash build.sh"
+        ],
+        "compiler_flags_observed": "gcc -W -Wall -O3 -DNDEBUG for Kissat; see nested Satsuma component.",
+        "forced_rebuild_reason": "Initial make retained archived Satsuma executable; -B rebuilt sources with original flags.",
+        "logs": [
+          {
+            "bytes": 6630,
+            "path": "spectra-campaign/hypre-build.log",
+            "root": "workspace",
+            "sha256": "9256d90de5de35e6fb802ee9e4de9f02c5f3e6cf1583b5f052cb56020d324bcf"
+          },
+          {
+            "bytes": 7511,
+            "path": "spectra-campaign/hypre-forced-build.log",
+            "root": "workspace",
+            "sha256": "a4f2b2bc9396e4774a146ab6dcc2c42b089ff060da773ca6a9e819ccd9557ce0"
+          }
+        ],
+        "source_comparison_receipt": {
+          "bytes": 3456,
+          "path": "spectra-campaign/hypre-smoke/setup.json",
+          "root": "workspace",
+          "sha256": "6fbc18c77c150bb09ed8bb83c7e1b01c0d877a9a348ba11354d251d18d70db78"
+        }
+      },
+      "evidence": [
+        {
+          "bytes": 48,
+          "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build.sh",
+          "root": "workspace",
+          "sha256": "17d53817214de008f197be8ea2a7b310c216da18f1ee4e4d30e914c2fa7788ea"
+        },
+        {
+          "bytes": 1420,
+          "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/run-parsl.sh",
+          "root": "workspace",
+          "sha256": "c197ff3da506f0ce5b9ad9510feafb029abb79cc9e394b92c1e5a9dd71015e2a"
+        },
+        {
+          "bytes": 1759,
+          "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build/makefile",
+          "root": "workspace",
+          "sha256": "a37b96b9173841ba9dcd0dcf292152c1fb4bf295c7e1553b58b3fe9f57f9da6e"
+        },
+        {
+          "bytes": 6630,
+          "path": "spectra-campaign/hypre-build.log",
+          "root": "workspace",
+          "sha256": "9256d90de5de35e6fb802ee9e4de9f02c5f3e6cf1583b5f052cb56020d324bcf"
+        },
+        {
+          "bytes": 7511,
+          "path": "spectra-campaign/hypre-forced-build.log",
+          "root": "workspace",
+          "sha256": "a4f2b2bc9396e4774a146ab6dcc2c42b089ff060da773ca6a9e819ccd9557ce0"
+        },
+        {
+          "bytes": 3456,
+          "path": "spectra-campaign/hypre-smoke/setup.json",
+          "root": "workspace",
+          "sha256": "6fbc18c77c150bb09ed8bb83c7e1b01c0d877a9a348ba11354d251d18d70db78"
+        }
+      ],
+      "id": "hypre",
+      "kind": "solver_bundle",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1171,
+            "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/LICENSE",
+            "root": "workspace",
+            "sha256": "a792a1aaeac78521493ccec1bad4fe379a79b101f479c943883d8934c9b06fc0"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Submission root license; nested Satsuma/dejavu recorded separately."
+        }
+      ],
+      "name": "Kissat-MAB-HyPre official submission",
+      "retained_failure": {
+        "case": "contradictory-unit UNSAT smoke",
+        "detail": "Original PB proof was rejected by VeriPB 3.0.2; no competitor source/proof patch.",
+        "evidence_directory": "spectra-campaign/hypre-smoke",
+        "outcome": "INVALID_PROOF"
+      },
+      "source": {
+        "archive": {
+          "bytes": 2210572,
+          "path": "spectra-campaign/sources/zheng.tar.xz",
+          "root": "workspace",
+          "sha256": "398d9eb8dce74b4d5d185384b41ffb39580639b068c9ac23eec48cf8f15f42ec"
+        },
+        "kind": "official_submission_archive",
+        "member_prefix": "zheng/kissat-mab-hypre/src",
+        "upstream_component_commit": "not established from archive",
+        "url": "https://satcompetition.github.io/2026/downloads/solvers/zheng.tar.xz"
+      }
+    },
+    {
+      "build": {
+        "compiler_flags_observed": "g++ -std=c++17 -O3 -Wall -march=native -DNDEBUG",
+        "portability_note": "-march=native makes this build host-specific."
+      },
+      "evidence": [
+        {
+          "bytes": 1116,
+          "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/Makefile",
+          "root": "workspace",
+          "sha256": "20efb802170aca5908a0afc130fd68bc0d897d782a678fb922757b0643b23f2f"
+        },
+        {
+          "bytes": 19544,
+          "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/satsuma.cpp",
+          "root": "workspace",
+          "sha256": "5deef2328492a77a8595bf89aa24690b7e3fbe3aaa2ba60d4eff22eb9cd50e86"
+        }
+      ],
+      "id": "hypre-satsuma",
+      "kind": "preprocessor",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1070,
+            "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/LICENSE",
+            "root": "workspace",
+            "sha256": "2b632ae4a72843f3e70cfd07738b2d0fbdf1c949089004c3b1232ff9be29f54a"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Nested Satsuma license."
+        }
+      ],
+      "name": "Satsuma preprocessor bundled with HyPre",
+      "source": {
+        "directory": "Satsuma",
+        "parent_archive": {
+          "archive": {
+            "bytes": 2210572,
+            "path": "spectra-campaign/sources/zheng.tar.xz",
+            "root": "workspace",
+            "sha256": "398d9eb8dce74b4d5d185384b41ffb39580639b068c9ac23eec48cf8f15f42ec"
+          },
+          "kind": "official_submission_archive",
+          "member_prefix": "zheng/kissat-mab-hypre/src",
+          "upstream_component_commit": "not established from archive",
+          "url": "https://satcompetition.github.io/2026/downloads/solvers/zheng.tar.xz"
+        }
+      }
+    },
+    {
+      "evidence": [
+        {
+          "bytes": 19544,
+          "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/satsuma.cpp",
+          "root": "workspace",
+          "sha256": "5deef2328492a77a8595bf89aa24690b7e3fbe3aaa2ba60d4eff22eb9cd50e86"
+        }
+      ],
+      "id": "hypre-dejavu",
+      "kind": "embedded_source",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1070,
+            "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/dejavu/LICENSE",
+            "root": "workspace",
+            "sha256": "46943ff10eb29930e7c9b7bd1f1ed882adf78a33ea06108dde3826c77d6f6d94"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Nested dejavu license."
+        }
+      ],
+      "name": "dejavu bundled with HyPre Satsuma",
+      "source": {
+        "directory": "dejavu",
+        "parent_component": "hypre-satsuma"
+      }
+    },
+    {
+      "build": {
+        "compiler_flags": "unknown",
+        "status": "official submission bundled prebuilt; not rebuilt from source",
+        "transitive_rust_dependencies": "not inventoried"
+      },
+      "checker_contract": {
+        "accepted_exit_codes": [
+          0
+        ],
+        "command": [
+          "/workspace/scratch/6f0d5187396f/spectra-campaign/veripb-bundled/veripb",
+          "--cnf",
+          "{cnf}",
+          "{proof}"
+        ],
+        "success_line": "s VERIFIED UNSATISFIABLE"
+      },
+      "evidence": [
+        {
+          "bytes": 42,
+          "path": "spectra-campaign/veripb-bundled/version.stdout",
+          "root": "workspace",
+          "sha256": "179a3be6a120ee0f76ec97355197e605b3a7217584d3c344af9949d0248a4e86"
+        },
+        {
+          "bytes": 1585,
+          "path": "spectra-campaign/veripb-bundled/help.stdout",
+          "root": "workspace",
+          "sha256": "dcec3fbd41e8ed1f7bec2376142eac83097af0b10d8d1b7a4edbbe8af6426757"
+        },
+        {
+          "bytes": 3456,
+          "path": "spectra-campaign/hypre-smoke/setup.json",
+          "root": "workspace",
+          "sha256": "6fbc18c77c150bb09ed8bb83c7e1b01c0d877a9a348ba11354d251d18d70db78"
+        }
+      ],
+      "id": "veripb",
+      "kind": "proof_checker",
+      "license_observations": [
+        {
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "NOASSERTION",
+          "scope": "Retained prebuilt bundle has no local license text.",
+          "upstream_metadata_locator": "https://docs.rs/crate/veripb/3.0.2",
+          "verification_gap": "No complete bundled dependency/license manifest or source-to-binary reproducibility was established."
+        }
+      ],
+      "name": "VeriPB 3.0.2 bundled prebuilt checker",
+      "source": {
+        "binary_member": "veripb-3.0.2-linux-x86_64/bin/veripb",
+        "distribution": {
+          "archive": {
+            "bytes": 24596892,
+            "path": "spectra-campaign/sources/green.tar.xz",
+            "root": "workspace",
+            "sha256": "7bc2ad3278197261cee221fd8c2dd583069821213f31d63e6873495000713c70"
+          },
+          "kind": "official_submission_archive",
+          "member_prefix": "green/lymphosat-verified/src/third-party",
+          "upstream_component_commit": "not established from archive",
+          "url": "https://satcompetition.github.io/2026/downloads/solvers/green.tar.xz"
+        },
+        "matching_direct_archive_member": "green/lymphosat-verified/src/third-party/bin/veripb",
+        "nested_archive_member": "green/lymphosat-verified/src/third-party/veripb-3.0.2-linux-x86_64.tar.gz",
+        "nested_bundle": {
+          "bytes": 1338420,
+          "path": "spectra-campaign/veripb-bundled/veripb-3.0.2-linux-x86_64.tar.gz",
+          "root": "workspace",
+          "sha256": "8703e9782b1040b224219ce6be71539ca9b6dae64ca1d1bb4defbfd24ada183e"
+        },
+        "source_rebuilt_locally": false,
+        "upstream_project_url": "https://gitlab.com/MIAOresearch/software/VeriPB"
+      }
+    },
+    {
+      "build": {
+        "commands": [
+          "make -j2"
+        ],
+        "compiler_recipe_observed": "gcc drat-trim.c -std=c99 -O2 -o drat-trim",
+        "log_status": "Build command is retained in frozen field; no standalone build log located."
+      },
+      "evidence": [
+        {
+          "bytes": 493,
+          "path": "spectra-campaign/drat-trim/Makefile",
+          "root": "workspace",
+          "sha256": "1f3c7128b1dd739723257edd95cc28a2ee747779ca01ae80ed9252f02ec5149d"
+        }
+      ],
+      "id": "drat-trim",
+      "kind": "proof_checker",
+      "license_observations": [
+        {
+          "evidence": {
+            "bytes": 1184,
+            "path": "spectra-campaign/drat-trim/LICENSE",
+            "root": "workspace",
+            "sha256": "71ab2a9dc5a294ad8fba4ccb8c45aaa8a439596d314a2a046ac9b62266872a18"
+          },
+          "legal_conclusion": "NOASSERTION",
+          "observed_spdx_expression": "MIT",
+          "scope": "Upstream checker license."
+        }
+      ],
+      "name": "drat-trim",
+      "source": {
+        "commit": "2e3b2dc0ecf938addbd779d42877b6ed69d9a985",
+        "kind": "upstream_git",
+        "tracked_diff_paths_at_observation": [],
+        "url": "https://github.com/marijnheule/drat-trim"
+      }
+    }
+  ],
+  "created_utc": "2026-10-21T17:25:48.727909+00:00",
+  "extraction_notes": {
+    "hypre_setup": {
+      "bytes": 3456,
+      "path": "spectra-campaign/hypre-smoke/setup.json",
+      "root": "workspace",
+      "sha256": "6fbc18c77c150bb09ed8bb83c7e1b01c0d877a9a348ba11354d251d18d70db78"
+    },
+    "manifest": {
+      "bytes": 2576,
+      "path": "spectra-campaign/sources/extraction-exclusions.json",
+      "root": "workspace",
+      "sha256": "e0fa009078f5feb93d1c443c2e78031ab978c5ae9f62af1adcc9e039168de9d6"
+    },
+    "policy": "Unsafe absolute generated makefile symlinks were skipped; original configure scripts regenerated local links. No competitor source edits are claimed by those setup receipts.",
+    "satsuma_setup": {
+      "bytes": 4191,
+      "path": "spectra-campaign/satsuma-smoke/setup.json",
+      "root": "workspace",
+      "sha256": "13dea486c0d679138ae6648341f528ec28d175324d8ebdad88610e039616bb4c"
+    }
+  },
+  "field_entries": [
+    {
+      "accepted_solver_exit_codes": {
+        "SAT": [
+          10
+        ],
+        "UNKNOWN": [
+          0
+        ],
+        "UNSAT": [
+          20
+        ]
+      },
+      "artifact_references": [
+        "spectra-campaign/native-before/build.json",
+        "spectra-campaign/native-before/spectra_g_cdcl.so"
+      ],
+      "checker_component": "drat-trim",
+      "command": [
+        "/workspace/scratch/6f0d5187396f/.spectra-venv/bin/python",
+        "-m",
+        "experiments.general_competition.campaign",
+        "native",
+        "--library",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/native-before/spectra_g_cdcl.so",
+        "--cnf",
+        "{cnf}",
+        "--proof",
+        "{proof}",
+        "--stats",
+        "{stats}"
+      ],
+      "components": [
+        "spectra-g"
+      ],
+      "id": "SPECTRA-G",
+      "proof_format": "DRUP",
+      "scope": "Exact frozen field entry; no inferred competitive eligibility or correctness guarantee.",
+      "track": "standalone-native"
+    },
+    {
+      "accepted_solver_exit_codes": {
+        "SAT": [
+          10
+        ],
+        "UNKNOWN": [
+          0
+        ],
+        "UNSAT": [
+          20
+        ]
+      },
+      "artifact_references": [
+        "spectra-campaign/cadical/build/cadical"
+      ],
+      "checker_component": "drat-trim",
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/cadical/build/cadical",
+        "{cnf}",
+        "{proof}"
+      ],
+      "components": [
+        "cadical"
+      ],
+      "id": "CaDiCaL",
+      "proof_format": "DRAT",
+      "scope": "Exact frozen field entry; no inferred competitive eligibility or correctness guarantee.",
+      "track": "upstream-baseline"
+    },
+    {
+      "accepted_solver_exit_codes": {
+        "SAT": [
+          10
+        ],
+        "UNKNOWN": [
+          0
+        ],
+        "UNSAT": [
+          20
+        ]
+      },
+      "artifact_references": [
+        "spectra-campaign/kissat/build/kissat"
+      ],
+      "checker_component": "drat-trim",
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/kissat/build/kissat",
+        "{cnf}",
+        "{proof}"
+      ],
+      "components": [
+        "kissat"
+      ],
+      "id": "Kissat",
+      "proof_format": "DRAT",
+      "scope": "Exact frozen field entry; no inferred competitive eligibility or correctness guarantee.",
+      "track": "upstream-baseline"
+    },
+    {
+      "accepted_solver_exit_codes": {
+        "SAT": [
+          10
+        ],
+        "UNKNOWN": [
+          0
+        ],
+        "UNSAT": [
+          20
+        ]
+      },
+      "artifact_references": [
+        "spectra-campaign/glucose/simp/glucose"
+      ],
+      "checker_component": "drat-trim",
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/glucose/simp/glucose",
+        "-certified",
+        "-certified-output={proof}",
+        "-model",
+        "{cnf}"
+      ],
+      "components": [
+        "glucose",
+        "glucose-minisat"
+      ],
+      "id": "Glucose-4.2.1",
+      "proof_format": "DRAT",
+      "scope": "Exact frozen field entry; no inferred competitive eligibility or correctness guarantee.",
+      "track": "upstream-baseline"
+    },
+    {
+      "accepted_solver_exit_codes": {
+        "SAT": [
+          10
+        ],
+        "UNKNOWN": [
+          0
+        ],
+        "UNSAT": [
+          20
+        ]
+      },
+      "artifact_references": [
+        "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build.sh",
+        "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build/kissat",
+        "spectra-campaign/sources/unpacked/AE_kissat2025_MAB/run.sh"
+      ],
+      "checker_component": "drat-trim",
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/AE_kissat2025_MAB/build/kissat",
+        "{cnf}",
+        "{proof}"
+      ],
+      "components": [
+        "ae2025"
+      ],
+      "id": "AE_kissat2025_MAB",
+      "proof_format": "DRAT",
+      "scope": "Exact frozen field entry; no inferred competitive eligibility or correctness guarantee.",
+      "track": "upstream-baseline"
+    },
+    {
+      "accepted_solver_exit_codes": {
+        "SAT": [
+          10
+        ],
+        "UNKNOWN": [
+          0
+        ],
+        "UNSAT": [
+          20
+        ]
+      },
+      "artifact_references": [
+        "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build.sh",
+        "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build/kissat",
+        "spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/run-parsl.sh"
+      ],
+      "checker_component": "drat-trim",
+      "command": [
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/yalun/kissat-eda-2/src/build/kissat",
+        "--quiet",
+        "{cnf}",
+        "{proof}"
+      ],
+      "components": [
+        "eda2"
+      ],
+      "id": "EDA-Kissat-v2",
+      "proof_format": "DRAT",
+      "scope": "Exact frozen field entry; no inferred competitive eligibility or correctness guarantee.",
+      "track": "upstream-baseline"
+    },
+    {
+      "accepted_solver_exit_codes": {
+        "SAT": [
+          10
+        ],
+        "UNKNOWN": [
+          0
+        ],
+        "UNSAT": [
+          20
+        ]
+      },
+      "artifact_references": [
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/ae_kissat_mab",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/build.sh",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/check_sat.sh",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/docker.sh",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/compress",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/dsr-trim",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/dsr-trim/bin/lsr-check",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/kissat",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/original-run.sh",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run.sh",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_base.sh",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_satsuma_ae_kissat.sh",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run_satsuma_kissat.sh",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/satsuma",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/AE_kissat2025_MAB/build/kissat",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/kissat/build/kissat",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/satsuma",
+        "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/test.sh"
+      ],
+      "checker_component": "dsr-trim",
+      "command": [
+        "/usr/bin/bash",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh",
+        "{cnf}",
+        "{proof}"
+      ],
+      "components": [
+        "satsuma-package",
+        "satsuma-iter",
+        "satsuma-dejavu",
+        "satsuma-cliquer",
+        "satsuma-kissat",
+        "satsuma-ae-unused"
+      ],
+      "id": "satsuma-iter+kissat",
+      "proof_format": "DSR",
+      "scope": "Exact frozen field entry; no inferred competitive eligibility or correctness guarantee.",
+      "track": "upstream-baseline"
+    },
+    {
+      "accepted_solver_exit_codes": {
+        "SAT": [
+          0,
+          10
+        ],
+        "UNSAT": [
+          0,
+          20
+        ]
+      },
+      "artifact_references": [
+        "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/satsuma",
+        "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build.sh",
+        "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/build/kissat",
+        "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/run-parsl.sh",
+        "spectra-campaign/veripb-bundled/veripb"
+      ],
+      "checker_component": "veripb",
+      "command": [
+        "/usr/bin/bash",
+        "/workspace/scratch/6f0d5187396f/spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/run-parsl.sh",
+        "{cnf}",
+        "{proof}"
+      ],
+      "components": [
+        "hypre",
+        "hypre-satsuma",
+        "hypre-dejavu"
+      ],
+      "id": "Kissat-MAB-HyPre",
+      "proof_format": "VeriPB 3.0",
+      "scope": "Exact frozen field entry; no inferred competitive eligibility or correctness guarantee.",
+      "track": "upstream-baseline"
+    }
+  ],
+  "field_receipt": {
+    "bytes": 20768,
+    "frozen_before_execution": true,
+    "path": "SPECTRA/experiments/general_competition/exposed_field_20261021.json",
+    "root": "workspace",
+    "sha256": "bcbc07712517a0f953bab0312c6522f9991085efe4f0d4386bb396c1ade482ce"
+  },
+  "known_gaps": [
+    "The field is incomplete relative to the roadmap and official competition field.",
+    "Glucose root MIT declaration and compiled-source Glucose-Syrup restriction are both retained; applicability is unresolved.",
+    "VeriPB is a bundled prebuilt with no local license text, no local source rebuild and no complete transitive dependency manifest.",
+    "Separate forced-rebuild transcript files for winner Satsuma and dsr-trim were not located; their final artifacts and setup receipt are retained.",
+    "Build commands and generated makefiles are retained for CaDiCaL, Kissat and drat-trim, but no separate build logs were located.",
+    "Full source-file license audit, compiler dependency audit and resolved system-library identity audit have not been performed.",
+    "Short shared-host runs, smoke tests and source/binary hashes do not establish independent replication or a perfect score."
+  ],
+  "method": [
+    "Read retained sources, license texts, generated Makefiles, build logs and setup receipts. No build, solver or checker process was launched while preparing this manifest.",
+    "All field-declared artifact hashes were recomputed and required to match. Archive SHA-256 identities were recomputed and matched to the field.",
+    "ELF dynamic dependencies are observations from readelf, not resolved-library hashes or a complete static-link analysis.",
+    "Per-component license observations preserve nested and conflicting notices; no package-wide legal permission is inferred."
+  ],
+  "relationships": [
+    {
+      "evidence": {
+        "bytes": 369,
+        "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh",
+        "root": "workspace",
+        "sha256": "0ed15b3bc2347843fb985da170b47d3bb4caad9d412acda1fa955942af29ea5f"
+      },
+      "from": "satsuma-package",
+      "relation": "wrapper invokes executable",
+      "to": "satsuma-iter"
+    },
+    {
+      "evidence": {
+        "bytes": 369,
+        "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/run-parsl.sh",
+        "root": "workspace",
+        "sha256": "0ed15b3bc2347843fb985da170b47d3bb4caad9d412acda1fa955942af29ea5f"
+      },
+      "from": "satsuma-package",
+      "relation": "wrapper invokes executable",
+      "to": "satsuma-kissat"
+    },
+    {
+      "evidence": {
+        "bytes": 760,
+        "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/Makefile",
+        "root": "workspace",
+        "sha256": "0e23c0163e51522b5d0f00b120e209cfc90c9717aea2ad992b99e7cf36e93a09"
+      },
+      "from": "satsuma-iter",
+      "relation": "Makefile declares static library link via libcliquer.a",
+      "to": "satsuma-cliquer"
+    },
+    {
+      "evidence": {
+        "bytes": 23652,
+        "path": "spectra-campaign/sources/unpacked/anders/satsuma-iter-kissat/src/solver/satsuma-dev/src/satsuma.cpp",
+        "root": "workspace",
+        "sha256": "8493848134266a23207cb0e7abac8f58f0531ac4ac22169927cd9bd44eed724f"
+      },
+      "from": "satsuma-iter",
+      "relation": "source uses dejavu namespace and graph routines",
+      "to": "satsuma-dejavu"
+    },
+    {
+      "evidence": {
+        "bytes": 1420,
+        "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/run-parsl.sh",
+        "root": "workspace",
+        "sha256": "c197ff3da506f0ce5b9ad9510feafb029abb79cc9e394b92c1e5a9dd71015e2a"
+      },
+      "from": "hypre",
+      "relation": "wrapper invokes executable",
+      "to": "hypre-satsuma"
+    },
+    {
+      "evidence": {
+        "bytes": 19544,
+        "path": "spectra-campaign/sources/unpacked/zheng/kissat-mab-hypre/src/Satsuma/satsuma.cpp",
+        "root": "workspace",
+        "sha256": "5deef2328492a77a8595bf89aa24690b7e3fbe3aaa2ba60d4eff22eb9cd50e86"
+      },
+      "from": "hypre-satsuma",
+      "relation": "source uses dejavu namespace and graph routines",
+      "to": "hypre-dejavu"
+    },
+    {
+      "evidence": {
+        "bytes": 6295,
+        "path": "spectra-campaign/glucose/README.md",
+        "root": "workspace",
+        "sha256": "b3bf840cc1c395615a35109ef0d45fbe7155fc788c42def7f071811e053ce2dc"
+      },
+      "from": "glucose",
+      "relation": "source-derived code; README identifies MiniSat 2.2",
+      "to": "glucose-minisat"
+    }
+  ],
+  "runtime_dependency_observations": {
+    "compiler_identity_evidence": [
+      {
+        "bytes": 1181,
+        "path": "spectra-campaign/native-before/build.json",
+        "root": "workspace",
+        "sha256": "5b4723f7c54411930a24451e2f2f63dc0bdb1d99697443809dfe5a62bdef14f4"
+      },
+      {
+        "bytes": 3456,
+        "path": "spectra-campaign/hypre-smoke/setup.json",
+        "root": "workspace",
+        "sha256": "6fbc18c77c150bb09ed8bb83c7e1b01c0d877a9a348ba11354d251d18d70db78"
+      }
+    ],
+    "elf_needed_names": [
+      "ld-linux-x86-64.so.2",
+      "libc.so.6",
+      "libgcc_s.so.1",
+      "libm.so.6",
+      "libstdc++.so.6",
+      "libz.so.1"
+    ],
+    "python_and_shell": "Field uses the recorded Python environment and /usr/bin/bash. Their complete runtime/transitive package manifests are not supplied here.",
+    "resolution_status": "DT_NEEDED names only. Resolved system-library paths, hashes, versions and license details not audited."
+  },
+  "schema": "spectra.general_component_manifest.v1",
+  "scope": "Observed components, license notices, source pins, build evidence and executable bindings for eight entries in an exposed development campaign. Not a complete SPDX/CycloneDX SBOM or a legal conclusion.",
+  "selection_sha256": "dad14ec29395eab1f67ceddfc8bbc023ee9341e6c33ec01ea3daf44be96b9f5e",
+  "workspace_root": "/workspace/scratch/6f0d5187396f"
+}

@@ -28,6 +28,34 @@ def module(name):
 
 wheel_check = module('check_current_installation')
 readiness = module('check_release_readiness')
+active_tree = module('check_active_tree')
+
+
+@pytest.mark.parametrize('reference', [
+    'actions/checkout@v4', 'actions/setup-python@main',
+    'actions/upload-artifact@ea165f8', 'docker://ubuntu:latest',
+    '${{ inputs.action }}', './tools/../../outside',
+])
+def test_mutable_or_escaping_workflow_action_is_rejected(reference):
+    with pytest.raises(ValueError):
+        active_tree._action_references(f'      - uses: {reference}\n', 'workflow.yml')
+
+
+@pytest.mark.parametrize('reference', [
+    'actions/checkout@' + 'a' * 40,
+    'owner/repo/.github/workflows/reuse.yml@' + 'b' * 40,
+    'docker://example/image@sha256:' + 'c' * 64,
+    './.github/actions/local',
+])
+def test_immutable_and_source_local_actions_are_accepted(reference):
+    text = f'      - uses: "{reference}" # pinned source\n'
+    assert active_tree._action_references(text, 'workflow.yml') == [reference]
+
+
+def test_current_workflow_actions_are_immutable():
+    report = active_tree.check(ROOT)
+    assert report['action_steps_checked'] > 0
+    assert len(report['active_workflows']) == 8
 
 
 @pytest.mark.parametrize('raw', [
@@ -103,6 +131,23 @@ def test_strict_reader_stays_dependency_free():
     subprocess.run([sys.executable, '-S', '-c',
                     'import spectra.cli, spectra._json, sys; '
                     'assert not ({"torch", "numpy"} & sys.modules.keys())'], check=True, cwd=ROOT)
+
+
+def test_exact_verify_large_cap_does_not_allocate_the_limit(tmp_path, capsys):
+    import struct
+    from spectra.exact import ExactProblem, pack_session_packet
+
+    problem = ExactProblem.create(1, 1, (), (1,))
+    packet = tmp_path / "request.sbc1"
+    packet.write_bytes(pack_session_packet(problem, ((),)))
+    output = tmp_path / "answer.scq2"
+    # One SAT row, colour zero, with no contradiction proof.
+    output.write_bytes(struct.pack("<4sIQBBI", b"SCQ2", 1, 1, 1, 0, 0))
+    assert main([
+        "exact", "verify", str(packet), str(output),
+        "--max-bytes", str(sys.maxsize - 1),
+    ]) == 0
+    assert json.loads(capsys.readouterr().out)["verified"] is True
 
 
 def make_wheel(directory, *, metadata=None, missing=None, extra=None):

@@ -9,8 +9,271 @@ permissions:
   contents: read
 concurrency:
   group: cpu-contracts-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
+  general-cnf-contracts:
+    name: General CNF contracts (Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install the dependency-light contract runner
+        run: python -m pip install 'pytest==9.0.2'
+      - name: Compile and run arbitrary-CNF contracts
+        run: |
+          python -m py_compile \
+            experiments/general_competition/cnf_admission.py \
+            experiments/general_competition/competition_input.py \
+            experiments/general_competition/campaign.py \
+            experiments/general_competition/campaign_verify.py \
+            experiments/general_competition/exposed_inventory.py \
+            experiments/general_competition/binary_core.py \
+            experiments/general_competition/residual_solver.py \
+            experiments/general_competition/matched_backend.py \
+            experiments/general_competition/proof_backend.py \
+            experiments/general_competition/exposed_panel.py \
+            experiments/general_competition/official_score.py \
+            experiments/general_competition/test_cnf_admission.py \
+            experiments/general_competition/test_competition_input.py \
+            experiments/general_competition/test_campaign.py \
+            experiments/general_competition/test_campaign_verify.py \
+            experiments/general_competition/test_exposed_inventory.py \
+            experiments/general_competition/test_binary_core.py \
+            experiments/general_competition/test_residual_solver.py \
+            experiments/general_competition/test_matched_backend.py \
+            experiments/general_competition/test_proof_backend.py \
+            experiments/general_competition/test_official_score.py
+          python -m pytest \
+            experiments/general_competition/test_cnf_admission.py \
+            experiments/general_competition/test_competition_input.py \
+            experiments/general_competition/test_campaign.py \
+            experiments/general_competition/test_campaign_verify.py \
+            experiments/general_competition/test_exposed_inventory.py \
+            experiments/general_competition/test_binary_core.py \
+            experiments/general_competition/test_residual_solver.py \
+            experiments/general_competition/test_matched_backend.py \
+            experiments/general_competition/test_proof_backend.py \
+            experiments/general_competition/test_official_score.py \
+            -q
+      - name: Check out the pinned SAT Competition 2026 results
+        if: matrix.python == '3.13'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: satcompetition/2026
+          ref: 8ca5451c8993e7b1099ce08a80d3ee81e5d4b07c
+          path: .official/satcompetition-2026
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Reproduce the official 2026 Main PAR-2 field
+        if: matrix.python == '3.13'
+        run: |
+          set -euo pipefail
+          mkdir -p general-cnf-receipts
+          test "$(git -C .official/satcompetition-2026 rev-parse HEAD)" = \
+            "8ca5451c8993e7b1099ce08a80d3ee81e5d4b07c"
+          git -C .official/satcompetition-2026 rev-parse HEAD \
+            > general-cnf-receipts/satcompetition-2026-commit.txt
+          git -C .official/satcompetition-2026 rev-parse HEAD:downloads/scores.csv \
+            > general-cnf-receipts/satcompetition-2026-scores-blob.txt
+          python -m experiments.general_competition.official_score \
+            .official/satcompetition-2026/downloads/scores.csv \
+            --out general-cnf-receipts/satcompetition-2026-main.json \
+            > general-cnf-receipts/satcompetition-2026-main.stdout.json
+          cmp \
+            general-cnf-receipts/satcompetition-2026-main.json \
+            general-cnf-receipts/satcompetition-2026-main.stdout.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = json.loads(Path(
+              'general-cnf-receipts/satcompetition-2026-main.json'
+          ).read_text(encoding='utf-8'))
+          assert receipt['source_sha256'] == (
+              'c00d4137bc602b0cc431e52cca02e989ef4abf4c6197cd70b42abedf6c7a4d4e'
+          )
+          assert receipt['source_rows'] == 13200
+          assert (
+              receipt['solver_count'],
+              receipt['instance_count'],
+              receipt['sat_instances'],
+              receipt['unsat_instances'],
+              receipt['unknown_instances'],
+          ) == (19, 400, 191, 166, 43)
+          expected = (
+              ('anders_satsuma-iter-kissat[main]', '3647.019675', 276),
+              ('anders_satsuma-iter-ae-kissat-mab[main]', '3696.843', 269),
+              ('zheng_kissat-mab-hypre[main]', '3996.293425', 255),
+          )
+          observed = tuple(
+              (row['solver_id'], row['overall_par2'], row['solved'])
+              for row in receipt['standings'][:3]
+          )
+          assert observed == expected
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: matrix.python == '3.13'
+        with:
+          name: satcompetition-2026-main-${{ github.run_id }}
+          path: general-cnf-receipts/
+          if-no-files-found: error
+          retention-days: 90
+
+  standard-proof-contracts:
+    name: Standard UNSAT proof contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: marijnheule/drat-trim
+          ref: 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          path: .official/drat-trim
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Build the pinned standard checker
+        run: |
+          set -euo pipefail
+          test "$(git -C .official/drat-trim rev-parse HEAD)" = \
+            "2e3b2dc0ecf938addbd779d42877b6ed69d9a985"
+          make -C .official/drat-trim
+      - name: Install the proof-producing backend
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Check original-formula DRAT generation and replay
+        env:
+          DRAT_TRIM: ${{ github.workspace }}/.official/drat-trim/drat-trim
+        run: python -m pytest experiments/general_competition/test_proof_backend.py -q
+      - name: Retain one externally checked proof receipt
+        env:
+          DRAT_TRIM: ${{ github.workspace }}/.official/drat-trim/drat-trim
+        run: |
+          set -euo pipefail
+          mkdir -p standard-proof-receipt
+          python - <<'PY'
+          from dataclasses import asdict
+          from hashlib import sha256
+          from itertools import product
+          import json
+          import os
+          from pathlib import Path
+
+          from experiments.general_competition.proof_backend import (
+              check_drat,
+              solve_safe_hybrid,
+              write_dimacs,
+              write_drat,
+          )
+
+          rows = tuple(
+              tuple(
+                  variable if signs[variable - 1] else -variable
+                  for variable in range(1, 4)
+              )
+              for signs in product((False, True), repeat=3)
+          )
+          root = Path('standard-proof-receipt')
+          result = solve_safe_hybrid(3, rows)
+          formula = write_dimacs(root / 'formula.cnf', 3, rows)
+          proof = write_drat(root / 'proof.drat', result.proof)
+          checked = check_drat(os.environ['DRAT_TRIM'], formula, proof)
+          assert checked.verified
+          record = {
+              'schema': 'spectra.general_standard_proof_receipt.v1',
+              'status': result.status,
+              'residual_status': result.residual_status,
+              'proof_scope': result.proof_scope,
+              'proof_lines': len(result.proof),
+              'checker_commit': '2e3b2dc0ecf938addbd779d42877b6ed69d9a985',
+              'checker_verified': checked.verified,
+              'formula_sha256': sha256(formula.read_bytes()).hexdigest(),
+              'proof_sha256': sha256(proof.read_bytes()).hexdigest(),
+              'timing_ns': {
+                  'core': result.core_elapsed_ns,
+                  'residual': result.residual_elapsed_ns,
+                  'original_confirmation': result.original_confirmation_ns,
+                  'total': result.total_elapsed_ns,
+              },
+              'claim_boundary': (
+                  'tiny deterministic UNSAT proof contract; not a performance result'
+              ),
+          }
+          (root / 'receipt.json').write_text(
+              json.dumps(record, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: spectra-standard-proof-${{ github.run_id }}
+          path: standard-proof-receipt/
+          retention-days: 90
+          if-no-files-found: error
+
+  exposed-general-panel:
+    name: Matched exposed 2026 SAT panel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install the pinned matched backend
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Check the matched-backend contracts
+        run: |
+          python -m pytest \
+            experiments/general_competition/test_competition_input.py \
+            experiments/general_competition/test_matched_backend.py \
+            -q
+      - name: Run the fixed exposed SAT-only panel
+        run: |
+          set -euo pipefail
+          mkdir -p exposed-panel
+          python -m experiments.general_competition.exposed_panel \
+            exposed-panel \
+            --repeats 3 \
+            --out exposed-panel/results.json \
+            > exposed-panel/stdout.json
+          cmp exposed-panel/results.json exposed-panel/stdout.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: spectra-exposed-general-panel-${{ github.run_id }}
+          path: exposed-panel/results.json
+          retention-days: 90
+          if-no-files-found: warn
+
   cpu-contracts:
     name: CPU contracts (Python ${{ matrix.python }})
     strategy:
@@ -27,11 +290,11 @@ jobs:
       MAX_JOBS: '1'
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 1
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -54,6 +317,8 @@ jobs:
           assert sklearn.__version__ == '1.8.0'
           assert pysat.__version__ == '1.9.dev15'
           PY
+      - name: Cross-check general CNF against CaDiCaL and Glucose
+        run: python -m pytest experiments/general_competition/test_residual_differential.py -q
       - name: Full fast regression including native builds
         run: |
           set -o pipefail
@@ -98,7 +363,7 @@ jobs:
                   if p.is_file() and p.name!='sha256.txt':
                       out.write(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(root))+'\n')
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: spectra-cpu-contracts-${{ matrix.python }}-${{ github.run_id }}

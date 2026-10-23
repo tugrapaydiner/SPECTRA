@@ -115,6 +115,181 @@
     }
   ],
   "purpose": "Exact identities of bulky historical evidence removed from the active main checkout; recover only in an isolated historical worktree.",
+  "retired_development_scaffolding": {
+    "archive_commit": "0b68898f3e64063ac3dc8904ae42f0b33590e7af",
+    "archive_ref": "archive/research-history-20261016",
+    "archived_on": "2026-10-21",
+    "file_count": 27,
+    "files": [
+      {
+        "bytes": 71390,
+        "git_blob_sha": "42c7fca2a0947327c7e8ac26be48c05928f8c829",
+        "path": "results/cpu_progress/upstream_review/311_pytest_fast.xml",
+        "sha256": "bb683ae439b083d20e022b5ae7db3a66d57d49172a1c7dbce87cc236ec34629c"
+      },
+      {
+        "bytes": 71390,
+        "git_blob_sha": "1cbb9a59b8184aec0d5645932347fe8a6fbf14c2",
+        "path": "results/cpu_progress/upstream_review/313_pytest_fast.xml",
+        "sha256": "bea93207e63c3e6d2da04d0c77f3a1a413955b09e26be186573c910b1332ab9b"
+      },
+      {
+        "bytes": 71688,
+        "git_blob_sha": "00671262b256bcccaccef4df5161c56d10e82bc1",
+        "path": "results/cpu_progress/upstream_review/a55_311_pytest_fast.xml",
+        "sha256": "347e8b89f3f0fb5e027145d6da0cc8d0612cdf6024633a83098336c9edc4cbbb"
+      },
+      {
+        "bytes": 41,
+        "git_blob_sha": "85cdbc776f48b4fdc765648101543e250b5958af",
+        "path": "results/cpu_progress/upstream_review/a55_311_source_commit.txt",
+        "sha256": "f3f107905aaad07c753789106bc6db9cc0d53f72573c08c087854346d6b84809"
+      },
+      {
+        "bytes": 3371,
+        "git_blob_sha": "d49002612be1d5bc4460b57ddf113eab96ef9de3",
+        "path": "results/cpu_progress/upstream_review/legacy_pytest_fast.txt.gz",
+        "sha256": "ba91ff81295c853c7feaf1e5a41b840bad41654c2e15d5b5737231db4879fdeb"
+      },
+      {
+        "bytes": 238,
+        "git_blob_sha": "c4f6fba1db37dc4f796f9cf3ecfe7abc31fabcdb",
+        "path": "results/cpu_progress/upstream_review/legacy_python_environment.txt",
+        "sha256": "2d563a42f6ac4e4bebec0ca88a520dc17405d2112250f322b8a688d6123f84a4"
+      },
+      {
+        "bytes": 309,
+        "git_blob_sha": "ee35adae1272d40ba9fe2019ace2b282ddf029e9",
+        "path": "results/cpu_progress/upstream_review/legacy_status.tsv",
+        "sha256": "ccc812f95ea7383a4211868ae16c723616b45ebe64c81b81e58440197455da53"
+      },
+      {
+        "bytes": 648,
+        "git_blob_sha": "e30b251885614231dbc38f138247b835771b28d9",
+        "path": "results/cpu_progress/validation/checkpoint_new.log",
+        "sha256": "fcf15feccf02317f4d64bbe14289e9be281d508372d4845575412bb1d2a67b7a"
+      },
+      {
+        "bytes": 18621,
+        "git_blob_sha": "cec56c7a9df3b96e006959b92cc28761a66cd0bb",
+        "path": "results/cpu_progress/validation/checkpoint_new/comparisons.jsonl.gz",
+        "sha256": "d7f9afa7b47c8cfde9237e222083a022a8bd1ce97a0c2608190cf407ae62408f"
+      },
+      {
+        "bytes": 3246,
+        "git_blob_sha": "c899d119d2ada6d089d6487fa8d1e4ced3a40c5f",
+        "path": "results/cpu_progress/validation/checkpoint_original.log",
+        "sha256": "be6bd19cd605c763448d3cb3582599205f7d4e43f19b45cfd5265280e669442f"
+      },
+      {
+        "bytes": 22704,
+        "git_blob_sha": "c76364a567748d544c2daa144837ecab03b9cbf5",
+        "path": "results/cpu_progress/validation/checkpoint_original/rows.jsonl.gz",
+        "sha256": "5447c14bd5bbc36b42158fcfd6c07e653c71b707d29674164b54bc262ab59121"
+      },
+      {
+        "bytes": 10143,
+        "git_blob_sha": "e619681dea605e9cc84ef055244acdcbf54fd746",
+        "path": "results/cpu_progress/validation/environment.lock.txt",
+        "sha256": "5fcb9bd7202040ae5239e0f9439d586c44db9082e45c5b9921f1715361c33b80"
+      },
+      {
+        "bytes": 222,
+        "git_blob_sha": "5d603d897bfb7991bf6ac42b1dd93c0460ea37dd",
+        "path": "results/cpu_progress/validation/initial_preload_rejection/ordered_fixed_pool.log",
+        "sha256": "e3d518276df64b1c831091e076b23f5a924e8d1eae26cd73220f445ad694f502"
+      },
+      {
+        "bytes": 1185,
+        "git_blob_sha": "f783badba52df9d05951bfd6c055c2254b44858a",
+        "path": "results/cpu_progress/validation/initial_preload_rejection/progress.json",
+        "sha256": "78c66c41b321f648e0c1769982f9d122b863afd0c2546b18b40dcfd0cc22439b"
+      },
+      {
+        "bytes": 582,
+        "git_blob_sha": "36771d0e856c4b5a84995f5ae1b5c59be4774122",
+        "path": "results/cpu_progress/validation/local_clean_interpreter_bootstrap.py",
+        "sha256": "6143777dc9c2e478de51a9b26332413e5e73c2c3d71d1f4dc99bb9ff52c452a3"
+      },
+      {
+        "bytes": 2530,
+        "git_blob_sha": "76a8770767bd865f7b789c445cfd37785e9cb4c0",
+        "path": "results/cpu_progress/validation/local_validation_driver.py",
+        "sha256": "8df404ddb7c7b83b18e220b499316587d9edf54da0c24087cdef50b37cf1a02f"
+      },
+      {
+        "bytes": 3576,
+        "git_blob_sha": "902d481cb3f6178d00a05aa612c50cdfb39e22c0",
+        "path": "results/cpu_progress/validation/ordered_fixed_pool.log",
+        "sha256": "1b81e681582ff7a39f582b849780ae1dee14d89477f7c4b5a52586e8fbf12da5"
+      },
+      {
+        "bytes": 126337,
+        "git_blob_sha": "6b76132463e74493893c43ac3092c05177c1cc4f",
+        "path": "results/cpu_progress/validation/ordered_fixed_pool/maze_development_rows.jsonl.gz",
+        "sha256": "d067cac309978be0811a20ab5490f0137a59923b226eeec464de1219def2df68"
+      },
+      {
+        "bytes": 256650,
+        "git_blob_sha": "3bde5b6c9c9f1e18ba8d73c386e72a8e0bdb338c",
+        "path": "results/cpu_progress/validation/ordered_fixed_pool/sudoku_shift_confirmation_rows.jsonl.gz",
+        "sha256": "9303078063dbced926565d9b076c1b40f41137ea165d68eb8d6cebd4a3d1a44e"
+      },
+      {
+        "bytes": 128576,
+        "git_blob_sha": "a1c90e45346f366ae6c778cd2c5e88553ad6c6cc",
+        "path": "results/cpu_progress/validation/ordered_fixed_pool/sudoku_shift_development_rows.jsonl.gz",
+        "sha256": "cb9e95d90637a784c7f8e77cb424a737c4d6dad1d791f8c12b731889a88f6a5d"
+      },
+      {
+        "bytes": 2531,
+        "git_blob_sha": "56a89e31621d72204896f51735f053689453f3d9",
+        "path": "results/cpu_progress/validation/progress.json",
+        "sha256": "5e644146fc2c945ab54948f21a0fd47b1390097f9cf1329f318033724ad544bc"
+      },
+      {
+        "bytes": 7604,
+        "git_blob_sha": "2c17c562254aa3940e4268faa5acd02de5e17fd1",
+        "path": "results/cpu_progress/validation/pytest_fast.log",
+        "sha256": "3eeebdc64d1347e1ce23c45764c8326068f40987fce4c53abd6a7d00cf9bb4a5"
+      },
+      {
+        "bytes": 81739,
+        "git_blob_sha": "fa1fa291005a874c28d69094f9b41d9de545d885",
+        "path": "results/cpu_progress/validation/pytest_fast.xml",
+        "sha256": "97b59fc9e21736e2fe2aba84d68b6c3b09bda276a244e2222ad2d1326cb8d04e"
+      },
+      {
+        "bytes": 1448,
+        "git_blob_sha": "f1ee2a9099648167edce64e9fff5ec8811aa2d1a",
+        "path": "results/cpu_progress/validation/stored_new.log",
+        "sha256": "bd7a5a639e6d826d7e58a9b0a9c8509353052d6ef21a7da09e7df417eccbdc92"
+      },
+      {
+        "bytes": 2720,
+        "git_blob_sha": "943bf763a9772a7a30c13463b412a0add808f976",
+        "path": "results/cpu_progress/validation/stored_original.log",
+        "sha256": "c00b1058304780b2b063a5bb25ee54e0a8f6149f7be20c9f651892bc4fc8b7e2"
+      },
+      {
+        "bytes": 872,
+        "git_blob_sha": "4a54842006547853bce4345b323d6c98a1091b04",
+        "path": "results/cpu_progress/validation/symmetry_audit.log",
+        "sha256": "5f4a1b9b86318cae7f25511fb177e063f9a0dd80736899f55968e13e666e3137"
+      },
+      {
+        "bytes": 383815,
+        "git_blob_sha": "9c13ba827fce45d97717c658853ec01f9eab3cc4",
+        "path": "results/cpu_progress/validation/symmetry_audit/witness_rows.jsonl.gz",
+        "sha256": "8ba5a33459c9ebc2b83bbdec33d67a6de3b1bdc6ab34245f4ba6f61f6d58f49e"
+      }
+    ],
+    "purpose": "Retire duplicated CPU-development replay logs, XML, raw rows and local drivers from the active checkout. All compact outcomes, source inventories, failures and substantive research reports stay active. Exact original bytes already exist in the named immutable archive commit.",
+    "recovery_command": "git show <archive_commit>:<path> > <destination>",
+    "source_commit": "904629a1acfbdca964f8355a7e74b182007eb6e5",
+    "total_bytes": 1274176,
+    "verification": "Each local Git blob SHA was matched against the archive tree before removal; SHA-256 and byte count below identify the full original file."
+  },
   "schema": "spectra.historical_archives.v1",
   "source_main_commit": "41bf1b1c82a28e3dee93603edaf2a4e1783e1ac0",
   "total_bytes": 48624915

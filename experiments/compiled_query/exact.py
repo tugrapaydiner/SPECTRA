@@ -8,8 +8,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import importlib.util
-import json
-import os
 from pathlib import Path
 import platform
 import shutil
@@ -23,6 +21,7 @@ import time
 from typing import Iterable, Sequence
 
 from .binary_list import BinaryListProblem
+from spectra._native_build import native_load_guard, publish_build, snapshot_source
 
 SOURCE = Path(__file__).with_name('exact_native.cpp')
 DEFAULT_BYTES = 512 << 20
@@ -67,6 +66,7 @@ def build_exact_runtime(directory: Path, *, compiler: str | None = None,
     start = time.perf_counter_ns()
     with tempfile.TemporaryDirectory(dir=dest) as tmp:
         target = Path(tmp) / library.name
+        source, source_sha256 = snapshot_source(SOURCE, Path(tmp))
         if windows:
             from spectra.svm_build import command_for
             if sysconfig.get_config_var('Py_DEBUG'):
@@ -75,10 +75,10 @@ def build_exact_runtime(directory: Path, *, compiler: str | None = None,
             import_library = Path(sys.base_prefix) / 'libs' / name
             if not import_library.is_file():
                 raise ValueError('CPython import library missing: ' + str(import_library))
-            command = command_for(SOURCE.resolve(), target, target='portable', compiler=cc,
+            command = command_for(source, target, target='portable', compiler=cc,
                 include=Path(sysconfig.get_path('include')), import_library=import_library)
         else:
-            command = [cc, *flags, '-I' + sysconfig.get_path('include'), str(SOURCE), '-o', str(target)]
+            command = [cc, *flags, '-I' + sysconfig.get_path('include'), str(source), '-o', str(target)]
         result = subprocess.run(command, cwd=tmp, capture_output=True, text=True,
                                 encoding='utf-8', errors='replace', timeout=120)
         if result.returncode:
@@ -88,22 +88,13 @@ def build_exact_runtime(directory: Path, *, compiler: str | None = None,
         record = dict(python_executable=sys.executable, python_version=sys.version,
                       python_implementation=platform.python_implementation(),
                       soabi=sysconfig.get_config_var('SOABI'), platform=platform.platform(),
-                      source_sha256=hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
+                      source_sha256=source_sha256,
                       library_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
                       command=command, sanitizer=sanitizer,
                       elapsed_ns=time.perf_counter_ns()-start,
                       compiler=version.stdout + version.stderr,
                       stdout=result.stdout, stderr=result.stderr)
-        os.link(target, library)
-        try:
-            with receipt.open('x') as stream:
-                json.dump(record, stream, sort_keys=True, indent=2)
-                stream.write('\n')
-        except BaseException:
-            # Never leave a newly published library with a missing/partial receipt.
-            library.unlink(missing_ok=True)
-            receipt.unlink(missing_ok=True)
-            raise
+        publish_build(target, library, record)
     return library
 
 
@@ -347,13 +338,14 @@ def unpack_query_bank(payload: bytes, n: int) -> tuple[tuple[tuple[int, int], ..
 
 class ExactRuntime:
     def __init__(self, library: Path):
-        spec = importlib.util.spec_from_file_location('_spectra_exact_binary', Path(library).resolve())
-        if spec is None or spec.loader is None:
-            raise ValueError('invalid trusted native extension path')
-        self._module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self._module)
-        if self._module.abi() != 3:
-            raise ValueError('unsupported exact binary ABI')
+        with native_load_guard(Path(library)) as path:
+            spec = importlib.util.spec_from_file_location('_spectra_exact_binary', path)
+            if spec is None or spec.loader is None:
+                raise ValueError('invalid trusted native extension path')
+            self._module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(self._module)
+            if self._module.abi() != 3:
+                raise ValueError('unsupported exact binary ABI')
 
     def prepare(self, problem: BinaryListProblem, *, mode: str = 'scc',
                 max_bytes: int = DEFAULT_BYTES) -> 'ExactSession':
@@ -363,19 +355,21 @@ class ExactRuntime:
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
         """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
 
-        The default ``auto`` mode uses frozen structural policy v10. Banks of
+        The default ``auto`` mode uses frozen structural policy v11. Banks of
         at most eight requests on graphs above 512 vertices take the exact raw
         path directly, and fixed contradictions stay raw. Dense high-pin banks
         shorter than 64 requests stay raw. Below 96 vertices, dense high-pin
-        banks stay raw only when SCC compression is present; uncompressed long
-        banks may use SCC. At exactly 64 requests, dense uncompressed graphs
-        whose edge count is at least four times the vertex count stay raw.
-        Other feasible banks of at least 64 requests use SCC; banks from eight
-        requests use SCC earlier when SCCs compress the literal graph by at least
-        fourfold. Selection uses immutable graph/request geometry only, never
-        answers or measured timings. ``info['selected_mode']`` and
-        ``info['auto_policy_reason']`` expose the decision. Explicit modes keep
-        their meaning; the automatic policy is a frozen structural dispatcher.
+        banks stay raw when SCC compression is present. Long banks of at least
+        64 requests also stay raw when SCC construction leaves all ``2*n``
+        literals separate and the original graph has at least four edges per
+        vertex. Other feasible long banks use SCC; banks from eight requests use
+        SCC earlier when SCCs compress the literal graph by at least fourfold.
+        Selection uses immutable graph/request geometry, bank length, and pin
+        counts only—never answers or measured timings. For edgeless problems,
+        ``auto`` may then use the separately replayed direct-domain bank kernel.
+        ``info['selected_mode']``, ``info['auto_policy_reason']``, and
+        ``info['bank_kernel']`` expose the decision. Explicit modes keep their
+        meaning; the automatic policy is a frozen structural dispatcher.
         """
         if type(packet) is not bytes:
             raise ValueError('session packet must be immutable exact bytes')

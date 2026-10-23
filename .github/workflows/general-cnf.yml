@@ -1,0 +1,235 @@
+name: general-cnf
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: general-cnf-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-platform:
+    name: Native solver (${{ matrix.runner }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, python: '3.11'}
+          - {runner: ubuntu-24.04, python: '3.13'}
+          - {runner: ubuntu-24.04-arm, python: '3.13'}
+          - {runner: windows-2022, python: '3.13'}
+    env:
+      PYTHONUTF8: '1'
+      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Configure MSVC x64
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'MSVC x64 build tools not found' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $lines = & cmd /c "`"$vcvars`" >nul && set"
+          if ($LASTEXITCODE -ne 0) { throw 'MSVC environment setup failed' }
+          foreach ($line in $lines) {
+            $pair = $line -split '=', 2
+            if ($pair.Count -eq 2 -and $pair[0] -in @('PATH','INCLUDE','LIB','LIBPATH','VCToolsInstallDir','VCINSTALLDIR','WindowsSdkDir','WindowsSDKVersion')) {
+              $line | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            }
+          }
+      - name: Install pinned differential tools
+        run: python -m pip install 'pytest==9.0.2' 'python-sat==1.9.dev15'
+      - name: Run exhaustive, randomized, budget and receipt contracts
+        run: python -m pytest experiments/general_competition/test_native_cdcl.py -q -k "not native_sanitizer_builds_execute_checked_unsat and not direct_native_proof_passes_drat_trim"
+      - name: Retain one checked SAT and UNSAT receipt
+        shell: python
+        run: |
+          from hashlib import sha256
+          from itertools import product
+          import json
+          import os
+          from pathlib import Path
+          import platform
+          import subprocess
+          import sys
+
+          sys.path.insert(0, str(Path.cwd()))
+
+          from experiments.general_competition.native_cdcl import (
+              SOURCE,
+              NativeCDCLRuntime,
+              build_native_cdcl,
+              solve_cnf_native,
+              verify_direct_native_result,
+          )
+
+          assert subprocess.check_output(
+              ['git', 'rev-parse', 'HEAD'], text=True
+          ).strip() == os.environ['SOURCE_COMMIT']
+          root = Path('.general-cnf-evidence')
+          root.mkdir()
+          library = build_native_cdcl(root / 'build')
+          runtime = NativeCDCLRuntime(library)
+          sat_formula = ((1, 2, 3), (-1, 2), (-2, 3))
+          unsat_formula = tuple(
+              tuple(variable if bit else -variable for variable, bit in enumerate(bits, 1))
+              for bits in product((False, True), repeat=5)
+          )
+          sat = solve_cnf_native(runtime, 3, sat_formula)
+          unsat = solve_cnf_native(runtime, 5, unsat_formula)
+          assert sat.status == 'SAT_VERIFIED'
+          assert unsat.status == 'UNSAT_VERIFIED'
+          assert verify_direct_native_result(3, sat_formula, sat)
+          assert verify_direct_native_result(5, unsat_formula, unsat)
+          record = {
+              'schema': 'spectra.general_native_platform_receipt.v1',
+              'source_commit': os.environ['SOURCE_COMMIT'],
+              'source_sha256': sha256(SOURCE.read_bytes()).hexdigest(),
+              'python': sys.version,
+              'platform': platform.platform(),
+              'machine': platform.machine(),
+              'signature': runtime.signature,
+              'build': runtime.receipt,
+              'sat': {
+                  'status': sat.status,
+                  'variables': sat.variables,
+                  'clauses': sat.clauses,
+                  'decisions': sat.stats.decisions,
+                  'conflicts': sat.stats.conflicts,
+              },
+              'unsat': {
+                  'status': unsat.status,
+                  'variables': unsat.variables,
+                  'clauses': unsat.clauses,
+                  'proof_clauses': unsat.proof_clauses,
+                  'proof_literals': unsat.proof_literals,
+                  'conflicts': unsat.stats.conflicts,
+              },
+          }
+          (root / 'receipt.json').write_text(
+              json.dumps(record, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: general-cnf-${{ matrix.runner }}-py${{ matrix.python }}-${{ github.run_id }}
+          path: .general-cnf-evidence/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+
+  compiler-contracts:
+    name: Warning-clean build (${{ matrix.compiler }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Build and solve with the selected compiler
+        env:
+          CXX: ${{ matrix.compiler }}
+        run: |
+          python - <<'PY'
+          from itertools import product
+          import os
+          from experiments.general_competition.native_cdcl import (
+              NativeCDCLRuntime,
+              build_native_cdcl,
+              solve_cnf_native,
+              verify_direct_native_result,
+          )
+
+          library = build_native_cdcl('compiler-build', compiler=os.environ['CXX'])
+          runtime = NativeCDCLRuntime(library)
+          sat_formula = ((1, 2, 3), (-1, 2), (-2, 3))
+          unsat_formula = tuple(
+              tuple(variable if bit else -variable for variable, bit in enumerate(bits, 1))
+              for bits in product((False, True), repeat=5)
+          )
+          for nvars, formula in ((3, sat_formula), (5, unsat_formula)):
+              result = solve_cnf_native(runtime, nvars, formula)
+              assert result.status != 'UNKNOWN'
+              assert verify_direct_native_result(nvars, formula, result)
+          PY
+
+  sanitizers:
+    name: Native sanitizers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest==9.0.2'
+      - name: Run UBSan and ASan+UBSan
+        run: python -m pytest experiments/general_competition/test_native_cdcl.py -q -k native_sanitizer_builds_execute_checked_unsat
+
+  standard-proof:
+    name: External DRAT replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: marijnheule/drat-trim
+          ref: 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          path: .official/drat-trim
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Build the pinned checker
+        run: |
+          test "$(git -C .official/drat-trim rev-parse HEAD)" = "2e3b2dc0ecf938addbd779d42877b6ed69d9a985"
+          make -C .official/drat-trim
+      - run: python -m pip install 'pytest==9.0.2'
+      - name: Check native and composed original-CNF proofs outside SPECTRA
+        env:
+          DRAT_TRIM: ${{ github.workspace }}/.official/drat-trim/drat-trim
+        run: |
+          python -m pytest experiments/general_competition/test_native_cdcl.py -q \
+            -k "direct_native_proof_passes_drat_trim or original_rup"
+      - name: Verify the campaign worker and external checker together
+        env:
+          DRAT_TRIM: ${{ github.workspace }}/.official/drat-trim/drat-trim
+        run: |
+          python -m pytest -q \
+            experiments/general_competition/test_campaign.py::test_complete_campaign_native_unsat_passes_real_external_drat_trim \
+            experiments/general_competition/test_campaign.py::test_preprocessed_native_campaign_checks_original_models_and_proofs

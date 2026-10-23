@@ -245,8 +245,14 @@ symmetry audit also reproduced its pinned report. The new integrated inference
 replay checked **all 2,560 distinct refinement model-example-arm comparisons**,
 with exact answers, validity, and every recorded work field.
 
-Logs, JUnit, source identities, summaries, and compressed comparison rows are in
+Source identities and compact summaries remain in
 [`results/cpu_progress/validation`](../results/cpu_progress/validation/).
+Raw logs, JUnit, compressed comparison rows and local replay drivers are preserved
+byte for byte at archive commit `0b68898f3e64063ac3dc8904ae42f0b33590e7af`;
+[the archive manifest](../results/HISTORICAL_ARCHIVES.json) lists exact paths and
+SHA-256 digests, and [the recovery guide](../results/README.md#retired-cpu-development-replay-files)
+gives the retrieval command. The initial rejected invocation and its summary are
+retained with the successful validation evidence.
 The local validation is on AMD EPYC 9V74 / Python 3.13.5 / PyTorch 2.10.0+cpu.
 The inspected newer upstream Python 3.11 artifact also passes its 563-test and
 historical-replay scope on AMD EPYC 9V74, but does not include this feature patch.

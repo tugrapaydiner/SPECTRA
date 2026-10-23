@@ -1,0 +1,40 @@
+{
+  "architectures": {
+    "aarch64": {
+      "error": "DSJC500.5.col: DSATUR colour count is outside [1, 63]",
+      "exit_code": 1,
+      "performance_cells": 0,
+      "status": "FAIL_ADMISSION"
+    },
+    "x86_64": {
+      "error": "DSJC500.5.col: DSATUR colour count is outside [1, 63]",
+      "exit_code": 1,
+      "performance_cells": 0,
+      "status": "FAIL_ADMISSION"
+    }
+  },
+  "artifacts": {
+    "aarch64": "sha256:b3f3f43b72c45a17b6a5b205d9690c8d745e40c64237bcd9b31b77b074336d63",
+    "freeze_validation": "sha256:a4ef372706f2577854253415469b0fff930e74229dd0bd80985348882b5f72a6",
+    "x86_64": "sha256:3ac01c47e292e8f57a5ceefc6207ba7462a6015f2a20322ab269c7a22b563b94"
+  },
+  "classification": "prospectively frozen opening; failed during workload admission before solver timing",
+  "date": "2026-10-20",
+  "exposed_graphs": [
+    "DSJC500.5.col",
+    "flat300_20_0.col",
+    "le450_25c.col",
+    "miles1500.col",
+    "queen16_16.col",
+    "school1.col"
+  ],
+  "freeze_validation_pass": true,
+  "frozen_source_commit": "9ff8a6130fc76c13171d62345e91532e03a817dc",
+  "gate_pass": false,
+  "opening_workflow_commit": "0736d5f3781a7f2bead63daf3395ad2629d96488",
+  "performance_verdict": "NOT_REACHED",
+  "reason": "The first frozen candidate exceeded the generator's predeclared 63-colour DSATUR witness admission limit. The protocol forbade replacement after opening.",
+  "schema": "spectra.fresh_transfer_result.v1",
+  "verdict": "FAIL_ADMISSION",
+  "workflow_run": 39365661972
+}

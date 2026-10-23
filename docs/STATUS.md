@@ -19,6 +19,36 @@ explicit local build from an installed wheel. This source availability is not a
 v0.8 release, and the exact-query development measurements remain separate from
 the confirmed WAP endpoint.
 
+## Part 3 draft branch
+
+Draft pull request #76 on `finish-part3` contains the unreleased exact-service
+competition and release-readiness work. It is not part of `main` or the published
+v0.7.1 package.
+
+The draft currently includes structural-v11, the edgeless direct-domain kernel,
+release-facing self-test/audit/compare commands, a separately implemented direct
+2-SAT challenger, and an adapter around the official CaDiCaL 3.0.1 core. Retained
+evidence includes:
+
+- a prospectively frozen mixed direct-2-SAT holdout that passed on x86-64 and
+  ARM64, with public `auto` winning all 32 cells and full-bank gains of about
+  2.19× and 2.50× over the fastest of three direct engines;
+- an opened structural-v11 replay with about 4.45× and 4.33× full-bank gains over
+  the same project-authored challenger; and
+- a disclosed official-CaDiCaL comparison with all 32 cells won and geometric
+  gains from roughly 9.26× to 25.82× depending on bank size and architecture.
+
+These are narrow repeated binary-list exact-service results. They do not establish
+general SAT or graph-colouring leadership, asymptotic novelty, outside-team
+replication, operator value, or production readiness.
+
+The newest six-family prospective transfer is a retained `FAIL_ADMISSION`, not a
+speed result: `DSJC500.5.col` exceeded the frozen deterministic-DSATUR 63-colour
+limit before any solver was timed. All six candidates are now exposed and cannot
+be reused as unopened confirmation. Part 3 remains in progress while the stronger
+generator, a genuinely new transfer inventory, external replication, and release
+gates remain open.
+
 ## Flagship research result
 
 SPECTRA's principal result is the certified original-address quotient for repeated
