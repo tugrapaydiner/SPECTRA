@@ -217,7 +217,7 @@ all negative cells are preserved in the recovery archive. Actions retention is
 ## Reproduce or use the exact companion
 
 Use Linux, a C++17 compiler and the pinned native dependencies in
-[the workflow](../../.github/workflows/exact-binary-development.yml). From the
+[the workflow](https://github.com/tugrapaydiner/SPECTRA/blob/1556309acf130b9091c5980d8d1aed48de6d32b8/.github/workflows/exact-binary-development.yml). From the
 repository root, a minimal proof example needs no SAT or CUDD backend:
 
 ```python

@@ -132,4 +132,4 @@ command failed because the old temporary virtual environment no longer existed;
 a new environment was created before any experiment. No evaluation row failed or
 was replaced. Historical models, original results, tolerances and sealed inputs
 are unchanged. Source and installed-wheel acceptance are recorded in the
-[maintenance checkpoint](../../maintenance/reviews/research-engineering-20261005.md).
+[maintenance checkpoint](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/maintenance/reviews/research-engineering-20261005.md).

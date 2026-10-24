@@ -49,7 +49,7 @@ disposal. Cold process cost is retained separately. All failures remain visible.
 ## Run the native contracts
 
 Use the dependency installation steps in
-[prepared-transfer-validation.yml](../../.github/workflows/prepared-transfer-validation.yml).
+[prepared-transfer-validation.yml](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/.github/workflows/prepared-transfer-validation.yml).
 That frozen workflow checks Python 3.11 and 3.13, builds native CUDD at upstream commit
 `4442d498ddea1bec0071315f538cb5ef37443985`, and uses `python-sat==1.9.dev15`.
 The workflow itself checks out its frozen source commit. To test the current
@@ -93,7 +93,7 @@ The exact extension supports GIL-enabled CPython on Linux and Windows x64.
 On Windows, run the build from an x64 MSVC developer prompt with matching x64
 Python; `build_exact_runtime` selects `cl` automatically. Windows debug builds
 and free-threaded Python builds are not supported. The
-[Windows workflow](../../.github/workflows/query-windows.yml) checks actual
+[Windows workflow](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/.github/workflows/query-windows.yml) checks actual
 MSVC builds on Python 3.11 and 3.13. The comparison harness below is Linux-only.
 
 Use `exact-packet-raw`, `exact-packet-scc`, `exact-packet-sparse`, or
@@ -116,7 +116,7 @@ lengths and nine paired repetitions. The harness retains each timed record,
 checks same-mode output identity and replays every distinct answer. A successful
 functional audit does not imply a speed-target pass: inspect both
 `functional_complete` and `development_target_pass`. The
-[Linux and ARM workflow](../../.github/workflows/query-latency.yml) also runs
+[Linux and ARM workflow](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/.github/workflows/query-latency.yml) also runs
 the native contracts and address/undefined sanitizers.
 
 ## Run an unfiltered development study

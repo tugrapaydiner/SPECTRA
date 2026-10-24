@@ -145,7 +145,7 @@ result or omitted evaluation case.
 ## Retention and reproduction
 
 [EVIDENCE.json](EVIDENCE.json) records member hashes and byte counts for
-[evidence-20261002.zip](evidence-20261002.zip). The archive contains all available
+[evidence-20261002.zip](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/experiments/deductive_search/evidence-20261002.zip). The archive contains all available
 raw formulas, observations, summaries, source snapshots and the original RSS
 records. Development source snapshots match their original locks, including the
 earlier amendment text. Full source is available at the frozen commit. No old
@@ -174,9 +174,9 @@ wheel passes all 11 existing installed checks, matches 147 packaged source files
 and passes 512 exhaustive binary cases plus CLI solve/check outside the checkout
 without Torch, NumPy, pytest or PySAT. The workspace audit preserves 449 historical
 files and the recovered helper. Details and exclusions are in the
-[checkpoint](../../maintenance/reviews/deductive-capability-20261002.md).
+[checkpoint](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/maintenance/reviews/deductive-capability-20261002.md).
 Small validation logs and installation receipts, including the first development
-stdout log, are retained in [validation-20261002.zip](validation-20261002.zip)
+stdout log, are retained in [validation-20261002.zip](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/experiments/deductive_search/validation-20261002.zip)
 with hashes in [VALIDATION.json](VALIDATION.json).
 
 Keep this an optional structured-CNF capability; do not promote it as a universal

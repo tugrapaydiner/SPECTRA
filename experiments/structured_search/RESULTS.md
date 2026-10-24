@@ -25,7 +25,7 @@ arbitrary clauses. This fixed classical heuristic exposes remaining one-hot
 domains; it is not a learned policy or a novel SAT algorithm. Profiling development
 cases motivated cheaper binary-clause normalization and direct positive-literal
 lookups. All ten development paths were preserved. Both attempts, initial source,
-profile and final source are in [development evidence](development-20261005.zip).
+profile and final source are in [development evidence](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/experiments/structured_search/development-20261005.zip).
 
 ## Frozen evaluation
 
@@ -115,7 +115,7 @@ python -I experiments/structured_search/run.py run --out new-structured-run --fr
 This reruns consumed inputs and is not a fresh confirmation experiment. A new
 solver/candidate requires another declared evaluation before selection.
 
-[Raw evaluation archive](evidence-20261005.zip), [archive hashes](EVIDENCE.json),
+[Raw evaluation archive](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/experiments/structured_search/evidence-20261005.zip), [archive hashes](EVIDENCE.json),
 [machine-readable summary](SUMMARY.json), [installed API guide](../../docs/DPLL_GUIDE.md).
 No failed evaluation attempt occurred; all 1,275 rows completed. Development
 timings before and after profiling remain distinguishable: attempt 01 was one

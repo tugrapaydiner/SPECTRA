@@ -54,4 +54,4 @@ changes were reapplied directly and the solver source copied unchanged. This is
 a recovery-context failure, not a failed solve or missing benchmark observation.
 
 Current checks, exclusions and source identities are recorded in the
-[maintenance checkpoint](../../maintenance/reviews/focused-recovery-20261003.md).
+[maintenance checkpoint](https://github.com/tugrapaydiner/SPECTRA/blob/abd10d3d0ef24300c3e43b8432886c8203fd465b/maintenance/reviews/focused-recovery-20261003.md).
