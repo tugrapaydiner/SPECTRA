@@ -1,58 +1,35 @@
 # SPECTRA — Roadmap to a Real 100/100
 
-> **Continuation checkpoint — 2026-10-22:** This document preserves the supplied
-> audit and its strict scientific gates. Development continues on `finish-part3`
-> in draft PR #76. The historic scores below have not been promoted. The latest
-> engineering and measured evidence is tracked in
-> [the exposed campaign report](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md).
-> The complete frozen native baseline retains ten invalid SAT models and fails
-> its correctness gate. The separate repaired 96-case run returned seven checked
-> SAT answers, two checked UNSAT proofs and 87 timeouts; nine originally invalid
-> cases remained unresolved under its five-second solve budget. A separate
-> longer-budget diagnostic and retained-proof check now give verified corrected
-> answers for two of the ten original failure cases; eight remain unresolved.
-> The original failed evidence and every recorded timeout are unchanged.
-> A separate fixed-conflict audit checked 473,640 learned additions and all ten
-> terminal states, including UNKNOWN cases. It adds no solved cases or G0 claim.
-> Neither a hidden win nor independent replication has been established.
-> A subsequent admission repair bounds the requested decoded line size, including
-> gzip inputs. It changes no frozen result, score, or scientific gate.
-> Competition replay now rechecks decoded bytes and the original source identity;
-> semantic equivalence alone is not accepted as the recorded input's identity.
-> Receipt hardening at `74c296d5b83ec5764594a98fdc538f1ac69c0c7f` passed all
-> 374 general-CNF tests locally and all seven automatic workflows. A subsequent
-> [recovery checkpoint](../experiments/general_competition/reproduction_recovery_20261022.json)
-> reacquired all 96 original exposed inputs without replacement and matched all
-> seven frozen identity fields for every input. The reconstructed packing harness
-> passed 67 synthetic checks. Its v2 execution remains blocked: original archive
-> manifests and supporting files, plus the exact checker/native build, are absent
-> from the continuation environment. Public summaries were reconstructed exactly;
-> they do not replace those prerequisites. No candidate or new campaign ran, and
-> no scientific gate or historic score changed.
-> The XZ staging cleanup now preserves an existing destination after exclusive
-> creation fails, including a destination equal to the source. Separate regression
-> checks retain the prior deletion failures and verify cleanup of newly created
-> outputs after decode, byte-limit and source-open failures: two preservation
-> checks failed before the fix; all 26 input-loader and 379 general-CNF checks pass
-> afterward. This engineering repair adds no solved formula or scientific gate
-> claim.
+> **Maintenance checkpoint — 2026-10-24:** Development remains on `finish-part3`
+> in draft PR #76. The native engine now supports optional proof-producing
+> preprocessing and receipt-bound builds. The original campaign remains
+> disqualified for ten invalid SAT models; complete-field leadership, hidden
+> confirmation and outside replication remain unproved. The
+> [campaign report](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
+> retains original failures and their later diagnostics. The
+> [previous checkpoint](https://github.com/tugrapaydiner/SPECTRA/blob/5546024c7ed5acd837eca0784d7cc6c6e7a26330/docs/SPECTRA_100_100_ROADMAP.md)
+> preserves the earlier engineering audit in full. Cleanup retired 22 additional
+> historical files with immutable recovery records and repaired 11 archived links;
+> no source or regression test was removed. The scientific gates below are unchanged.
 
 **Document type:** living research and engineering roadmap
-**Last reviewed:** 2026-10-22
+**Last reviewed:** 2026-10-24
 **Canonical working branch:** `finish-part3`
 **Original audit head:** `904629a1acfbdca964f8355a7e74b182007eb6e5`
 **Continuation checkpoint:** the measured source and later review head are recorded in the linked campaign report.
 **Current pull request:** draft PR #76
 **Current rule:** do not open another working branch and do not merge merely because CI is green.
 
-**Next resumption dependency:** retrieve the original `postrun-verification-96x8`,
-`repaired-verification-96`, and `completed-result-report` trees with their pinned
-manifests, and the exact frozen checker/native build. The
-[recovery record](../experiments/general_competition/reproduction_recovery_20261022.json)
-retains the missing paths and expected hashes, recovered receipts, both failed
-static preflights, and completed CI run/artifact identities. The v2 plan is
-unchanged. Outside hidden-set custody, replication, expert review and operator
-validation still require attributable external participation.
+**Frozen-study blocker:** the original `postrun-verification-96x8`,
+`repaired-verification-96`, and `completed-result-report` archives, their pinned
+manifests, and the exact checker/native build are unavailable in the current
+handoff. The [recovery record](../experiments/general_competition/reproduction_recovery_20261022.json)
+retains expected hashes and both failed static preflights. The packing-v2 freeze
+remains unchanged and blocked; newly compiled tools or reconstructed summaries
+cannot satisfy it. Continue independent engineering work and declare any fresh
+campaign separately, without replacing or rescoring original evidence. Outside
+hidden-set custody, replication, expert review and operator validation still
+require attributable external participation.
 
 ---
 
@@ -337,7 +314,7 @@ A win in one row does not transfer to another row.
 - [x] Correct the README workflow count.
 - [ ] Replace the obsolete GitHub repository description.
 - [ ] Update replication issues to the current frozen source when a new freeze exists.
-- [x] Recover active-tree file headroom (27 archived raw/scaffolding files; hashes and immutable retrieval retained).
+- [x] Recover active-tree file headroom (27 earlier raw/scaffolding files plus 22 retired logs and neural documents; hashes and immutable retrieval retained in [the archive manifest](../results/HISTORICAL_ARCHIVES.json)).
 - [ ] Consolidate the final review history while preserving the raw branch in the archive.
 - [x] Pin all permanent Actions dependencies to immutable SHAs; enforce in the active-tree audit.
 - [ ] Configure required checks before final merge.

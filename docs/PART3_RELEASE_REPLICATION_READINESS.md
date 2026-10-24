@@ -110,10 +110,26 @@ exposed suite, but a future prospective transfer must use a genuinely new
 inventory frozen only after the replacement generator passes its complete
 graph-free tests.
 
+## General-CNF evidence boundary
+
+The standalone native CDCL engine and its optional proof-producing preprocessing
+remain separate from the installed binary-list service. Their original exposed
+campaign is still disqualified for ten invalid models. Repairs and later local
+panels do not establish complete-field leadership or close the scientific gates
+in [the roadmap](SPECTRA_100_100_ROADMAP.md).
+
+The frozen packing-v2 study is blocked by unavailable original prerequisite
+archives and pinned binaries. Its
+[recovery record](../experiments/general_competition/reproduction_recovery_20261022.json)
+retains expected identities and failed preflights. Reconstructed public summaries
+or freshly built tools cannot substitute for those original bytes. Any new
+campaign requires a separate declaration and must preserve the failed baseline.
+
 ## Merge and release gates
 
-Part 3 may be considered merge-ready only when one exact final source identity
-passes all of the following:
+Engineering readiness requires one exact final source identity to pass all of
+the following. These checks do not close the separate general-CNF scientific
+gates or authorize merging the draft PR:
 
 1. active-tree, release, packaging, and workspace audits;
 2. public structural-v11, edgeless, packet, proof, self-test, audit, compare,

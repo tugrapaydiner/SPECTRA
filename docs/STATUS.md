@@ -49,6 +49,26 @@ be reused as unopened confirmation. Part 3 remains in progress while the stronge
 generator, a genuinely new transfer inventory, external replication, and release
 gates remain open.
 
+## General-CNF development
+
+Part 3 also contains a standalone native CDCL engine, optional proof-producing
+preprocessing, strict DIMACS admission, and independent original-CNF answer
+checks. The general-CNF engine is a research tool, separate from the installed
+binary-list exact service.
+
+The original exposed campaign remains disqualified for ten invalid SAT models.
+Later repairs and checked development runs do not rescore that campaign. The
+current implementation has not passed the complete-field leadership, large-gap,
+hidden-inventory, outside-replication or expert-review gates. See the
+[competition report](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
+and [unchanged scientific roadmap](SPECTRA_100_100_ROADMAP.md).
+
+The frozen packing-v2 study cannot resume from the available handoff: its original
+prerequisite archives and exact pinned checker/native build are unavailable.
+Recovered inputs and reconstructed summaries do not replace those receipts. A
+fresh campaign must declare its own source, tools, complete field and limits;
+it cannot be counted as completion of the blocked frozen study.
+
 ## Flagship research result
 
 SPECTRA's principal result is the certified original-address quotient for repeated
@@ -127,9 +147,10 @@ research records.
 
 ## Active-tree boundary
 
-The normal checkout is capped by `scripts/check_active_tree.py`. It contains seven
-permanent workflows and excludes nested evidence archives, generated historical
-PNGs, transport directories, and stale branch-trigger automation. Compact summaries
+The normal checkout is capped by `scripts/check_active_tree.py`. It contains eight
+permanent workflows (seven automatic and one manual ITC suite). It excludes nested
+evidence archives, generated historical PNGs, transport directories, and stale
+branch-trigger automation. Compact summaries
 and the small independently checked SAT negative-result fixture remain under
 `results/`; full bytes are recoverable from archive history and cited workflow
 artifacts.

@@ -82,12 +82,14 @@ answer = runtime.solve_session_packet(packet, mode='raw')
 scq2_bytes = answer.output
 ```
 
-For the new, opt-in engine policy, use
-`runtime.solve_session_packet(packet, mode='auto')` and inspect
-`answer.info['selected_mode']`. It chooses raw for fewer than 64 requests or an
-impossible fixed graph, then route or SCC according to graph compression.
-Existing defaults are unchanged. This policy is specific to the one-call packet
-endpoint; it is not a mode for persistent `prepare` sessions.
+The one-call packet endpoint defaults to `mode='auto'`, using the frozen
+`structural-v11` policy. It chooses raw or SCC from immutable graph geometry,
+bank length and pin counts; edgeless problems may use the separately replayed
+direct-domain kernel. Inspect `answer.info['selected_mode']`, `auto_policy_reason`
+and `bank_kernel` for the actual decision. The full rules are documented by
+`ExactRuntime.solve_session_packet` and the [current exact API](../../docs/EXACT_API.md).
+Explicit modes remain available; `auto` is not a mode for persistent `prepare`
+sessions.
 
 The exact extension supports GIL-enabled CPython on Linux and Windows x64.
 On Windows, run the build from an x64 MSVC developer prompt with matching x64
