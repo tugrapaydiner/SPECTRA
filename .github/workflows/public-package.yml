@@ -42,10 +42,30 @@ jobs:
       - name: Install public contract and build dependencies
         run: python -m pip install 'build==1.3.0' 'pytest==9.0.2' 'numpy==${{ matrix.numpy }}' 'python-sat==1.9.dev15'
       - name: Dependency-light public contracts
+        id: public_contract
         run: |
           set -o pipefail
+          set +e
           python -m pytest tests/public --confcutdir=tests/public -ra \
             --junitxml=.public-package/pytest.xml | tee .public-package/pytest.txt
+          statuses=("${PIPESTATUS[@]}")
+          echo "exit_code=${statuses[0]}" >> "$GITHUB_OUTPUT"
+          if [ "${statuses[0]}" -ne 0 ]; then exit "${statuses[0]}"; fi
+          exit "${statuses[1]}"
+      - name: Capture a native backtrace after a contract process crash
+        if: failure() && (steps.public_contract.outputs.exit_code == '134' || steps.public_contract.outputs.exit_code == '139')
+        timeout-minutes: 4
+        run: |
+          if ! command -v gdb >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends gdb
+          fi
+          set -o pipefail
+          timeout 180s gdb --batch --return-child-result \
+            -ex 'set pagination off' -ex 'set debuginfod enabled off' \
+            -ex run -ex 'thread apply all bt' --args \
+            python -m pytest tests/public --confcutdir=tests/public -ra \
+            2>&1 | tee .public-package/native-crash.txt
       - name: Check release metadata, navigation and active-tree budget
         run: |
           python scripts/check_release_readiness.py --out .public-package/release-readiness.json
