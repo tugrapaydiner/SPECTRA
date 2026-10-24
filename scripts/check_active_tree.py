@@ -31,7 +31,7 @@ ACTIVE_WORKFLOWS = {
     "svm-portability.yml",
     "wap-support-regression.yml",
 }
-ALLOWED_ARCHIVES = {"results/sat_workload/pilot.zip"}
+ALLOWED_ARCHIVES: set[str] = set()
 FORBIDDEN_PREFIXES = ("delivery/", "maintenance/")
 FORBIDDEN_BRANCH_FRAGMENTS = (
     "research/100-blitz-20261016",

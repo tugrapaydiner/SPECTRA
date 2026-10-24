@@ -13,8 +13,8 @@ now give verified corrected answers for two of the ten original failure cases;
 eight remain unresolved. Later evidence cannot erase the original result.
 **Claim boundary:** exposed development evidence only. This is not an official
 competition run, a complete modern field, a hidden confirmation, or independent
-replication. The supplied [100/100 roadmap](../../docs/SPECTRA_100_100_ROADMAP.md)
-remains the acceptance standard; its historical audit scores have not been raised.
+replication. The [protocol](PROTOCOL.md) defines the public comparison contract.
+Historical failures and claim limits remain in force.
 
 ## Why this campaign exists
 

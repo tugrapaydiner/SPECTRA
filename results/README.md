@@ -1,30 +1,15 @@
-# Active results and archived evidence
+# Research evidence
 
-Keep compact result summaries, required evidence and small regression fixtures in
-the active tree. The retained [SAT pilot](sat_workload/pilot.zip) is a negative-result
-fixture whose witnesses and corruption paths are checked by current tests.
+Historical run outputs are kept outside the active source tree. Their original
+bytes, failures and manifests remain in the
+[pre-cleanup evidence tree](https://github.com/tugrapaydiner/SPECTRA/tree/38c13990a1ba92229cf5cf2a57b1a600b218889e/results).
+This includes the failed SAT admission pilot and the CPU replay diagnostics.
+Use the complete pinned source tree when reproducing a historical run.
 
-[HISTORICAL_ARCHIVES.json](HISTORICAL_ARCHIVES.json) records the exact original
-paths, byte counts and hashes of material retired from the active checkout:
+Keep new experiment outputs, logs, machine details and internal reviews in
+ignored local storage. Publish only evidence deliberately selected to support a
+public result, with a durable archive and exact identities. Existing public
+history remains public after active copies are removed.
 
-| Manifest section | Material | Immutable recovery source |
-|---|---|---|
-| `files` | 22 bulky source/evidence archives | `archive_commit` at the manifest root |
-| `retired_development_scaffolding` | 27 CPU replay logs, raw rows and local drivers | The section's `archive_commit` |
-| `retired_validation_logs` | Nine execution logs, JUnit reports and environment snapshots | The section's `archive_commit` |
-| `retired_research_documents` | 13 historical neural reports, registers and run requests | The section's `archive_commit` |
-| `retired_completed_study_plans` | Six completed general-CNF study declarations and preparation receipts | The section's `archive_commit` |
-
-Recover each file with `git show <archive_commit>:<path> > <destination>` in a
-separate historical workspace and verify its recorded SHA-256. The
-[history guide](../docs/history/README.md) explains the archive branch and links
-to the complete historical documentation.
-
-Frozen inventories describe their original source trees. Reproduce those runs
-from the pinned tree; an old inventory is not an inventory of the current checkout.
-Archival preserves negative results, original gates and claim limits. It changes
-neither the measured outcomes nor the retained source and regression coverage.
-
-Keep new temporary logs, test output and benchmark dumps in ignored local storage.
-Deliberately published research evidence needs a durable archive with exact hashes;
-workflow artifacts alone expire. Do not commit bulk evidence under this directory.
+See [current status](../docs/STATUS.md) for supported claims and
+[historical recovery](../docs/history/README.md) for earlier archives.

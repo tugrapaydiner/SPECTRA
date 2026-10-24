@@ -231,7 +231,7 @@ have not been established. Development remains on `finish-part3` in
 [draft PR #76](https://github.com/tugrapaydiner/SPECTRA/pull/76). The specialized
 results above do not establish general SAT leadership.
 
-The [100/100 roadmap](docs/SPECTRA_100_100_ROADMAP.md) defines the remaining gates.
+The [current status](docs/STATUS.md) summarizes the remaining validation gaps.
 The [96-formula exposed campaign](experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
 records the native comparison protocol, corrected frontend accounting, retained
 failures, source identities and current evidence limits.

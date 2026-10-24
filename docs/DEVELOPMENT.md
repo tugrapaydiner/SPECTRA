@@ -192,7 +192,7 @@ Bulky evidence archives and one-shot workflows are stored in Git history and on
 `archive/research-history-20261016`, not in the active checkout. See the
 [history index](history/README.md). Do not restore them merely to make routine CI
 replay old results; use an isolated historical worktree instead. Exact archived
-paths and hashes are recorded in [`results/HISTORICAL_ARCHIVES.json`](../results/HISTORICAL_ARCHIVES.json).
+paths and hashes are recorded in [`results/HISTORICAL_ARCHIVES.json`](https://github.com/tugrapaydiner/SPECTRA/blob/38c13990a1ba92229cf5cf2a57b1a600b218889e/results/HISTORICAL_ARCHIVES.json).
 
 ## README figures
 

@@ -61,7 +61,7 @@ Later repairs and checked development runs do not rescore that campaign. The
 current implementation has not passed the complete-field leadership, large-gap,
 hidden-inventory, outside-replication or expert-review gates. See the
 [competition report](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
-and [unchanged scientific roadmap](SPECTRA_100_100_ROADMAP.md).
+for the retained measurements and failures.
 
 The frozen packing-v2 study cannot resume from the available handoff: its original
 prerequisite archives and exact pinned checker/native build are unavailable.

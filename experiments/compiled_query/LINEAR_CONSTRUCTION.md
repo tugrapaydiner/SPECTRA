@@ -1,5 +1,9 @@
 # Linear implication construction from canonical original edges
 
+This historical recipe uses commit
+`38c13990a1ba92229cf5cf2a57b1a600b218889e`, which retains its complete
+query-latency harness.
+
 Continuation base: `098a8477f6cc8bb696423e78c4d6b6a26a95a0e1` (`faster-queries`).
 The user's automatic policy, prepared-root proof reconstruction, direct witness
 serialization, proof scratch reuse and Windows support are preserved.

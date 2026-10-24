@@ -97,7 +97,7 @@ handoff problem; the corrected helper explicitly exposes the declared parent
 research dependency site while requiring SPECTRA imports inside the new venv.
 The original failed attempt is preserved alongside the corrected success.
 
-See the [machine-readable local receipt](../results/integrated_runtime/local_receipt.json)
+See the [machine-readable local receipt](https://github.com/tugrapaydiner/SPECTRA/blob/38c13990a1ba92229cf5cf2a57b1a600b218889e/results/integrated_runtime/local_receipt.json)
 for exact digests and environment. The complete final measurement manifest has
 SHA256 `070d3e180bf59707b8cf94027e6f00946837457ec573f37ec969bd796fe8319e`.
 An earlier development run is preserved separately, not replaced. These are local
