@@ -41,3 +41,17 @@ git show 0b68898f3e64063ac3dc8904ae42f0b33590e7af:results/cpu_progress/validatio
 Use the same `git show <archive_commit>:<path>` form for every entry in the
 manifest and verify its SHA-256 before replay. This is archival of prior
 development evidence, including negative runs; it changes no research result.
+
+## Historical validation logs
+
+The `retired_validation_logs` section of the same manifest identifies nine
+execution logs, JUnit reports and environment snapshots removed from the active
+tree on 2026-10-24. Their exact bytes were matched to archive commit
+`0b68898f3e64063ac3dc8904ae42f0b33590e7af` before removal. Use the recovery command
+above and check the recorded SHA-256 when inspecting an original run.
+
+The corresponding outcome summaries and failure records remain available.
+Historical inventories still describe their original complete source trees;
+reproduce those runs from the pinned tree rather than mixing an old inventory
+with the current checkout. Current source, regression tests and benchmark inputs
+are unaffected by this archival step.

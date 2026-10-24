@@ -290,6 +290,73 @@
     "total_bytes": 1274176,
     "verification": "Each local Git blob SHA was matched against the archive tree before removal; SHA-256 and byte count below identify the full original file."
   },
+  "retired_validation_logs": {
+    "archive_commit": "0b68898f3e64063ac3dc8904ae42f0b33590e7af",
+    "archive_ref": "archive/research-history-20261016",
+    "archived_on": "2026-10-24",
+    "file_count": 9,
+    "files": [
+      {
+        "bytes": 471,
+        "git_blob_sha1": "254f6160cb4b9d3bce17c52e04831048521d0079",
+        "path": "results/failure_information/benchmark/execution.log",
+        "sha256": "991f2f304e57476f907f5d689f1c5e9de04a91f030fa83e5e74f89cc408fa70f"
+      },
+      {
+        "bytes": 1552,
+        "git_blob_sha1": "34f5f292824710c6699bda9534f99b74baf0f017",
+        "path": "results/failure_information/benchmark_attempt1/execution.log",
+        "sha256": "5b403f268376a513cbc766477703b935617f89810a2a5d1942358bf3d9edbbb6"
+      },
+      {
+        "bytes": 2053,
+        "git_blob_sha1": "1087e52d8f9858b17c0f6caeba9f83b790d1e3ad",
+        "path": "results/failure_information/collection/execution.log",
+        "sha256": "af916995f3af35904bcafd0cc86b3bf76f881a75f385a41e948daeea159507bf"
+      },
+      {
+        "bytes": 646,
+        "git_blob_sha1": "385690afab068e71b84483665c3f8c1c48a14855",
+        "path": "results/failure_information/continuation/execution.log",
+        "sha256": "40ded42ae48904c245f5927d25475ea606edb4c1c6a95c296624dc35cb0c59bb"
+      },
+      {
+        "bytes": 3467,
+        "git_blob_sha1": "93b9715807f7727a299573e0bddebe785bfa5fbf",
+        "path": "results/failure_information/fit/execution.log",
+        "sha256": "b78fc438d991ee8defb12fb1d98576c2786b12893fd15461f64b2d33688f2b2c"
+      },
+      {
+        "bytes": 90992,
+        "git_blob_sha1": "302bb338d43a1af63e3c1028fbf183c32e9fe96b",
+        "path": "results/failure_information/validation/fast_tests.xml",
+        "sha256": "57fe4626c5104c47e87b23091eebcdaabd3e52f06d0e693fc2bf78ea3e0c4e1b"
+      },
+      {
+        "bytes": 389,
+        "git_blob_sha1": "82dab98e2a04ef95a1123b48314abcdd1f1b6f20",
+        "path": "results/m16/accepted/environment.lock.txt",
+        "sha256": "4006384a85601ee6894c19e3aa1a0f53c6ffda1851c1428185de9e4831695a18"
+      },
+      {
+        "bytes": 5804,
+        "git_blob_sha1": "f9f09deb2329672b4879d65a1e5bec508fa67b0e",
+        "path": "results/m16/accepted/pytest_fast.txt",
+        "sha256": "b259e200438ecc266c4f7f81c18bc2e635d8df814571f63b7ccde26094562bb1"
+      },
+      {
+        "bytes": 86484,
+        "git_blob_sha1": "6c6e7626434a0bdac117c83a5709deadf25e4c97",
+        "path": "results/review_20260911/fast_tests.xml",
+        "sha256": "c47275935975c854e22ecf800db19255339b1040d1a182705e02fbddd4bb5eee"
+      }
+    ],
+    "purpose": "Remove obsolete execution logs, JUnit output and environment snapshots from the active tree. Historical outcome summaries, failure records and immutable source inventories remain unchanged.",
+    "recovery_command": "git show <archive_commit>:<path> > <destination>",
+    "source_commit": "45b7fba65d0eb702616b1f617b3e4f0017fb4438",
+    "total_bytes": 191858,
+    "verification": "Every current raw file matches its SHA-256 and the Git blob at the immutable archive commit. These logs are not inputs to current code or tests; frozen inventories refer to their original source trees."
+  },
   "schema": "spectra.historical_archives.v1",
   "source_main_commit": "41bf1b1c82a28e3dee93603edaf2a4e1783e1ac0",
   "total_bytes": 48624915
