@@ -4,7 +4,8 @@ Run ``python -m experiments.general_competition.campaign --help``.  The runner
 never certifies a hidden win or a complete modern field.  Every declared cell is
 retained; only independently checked answers earn runtime instead of PAR-2.
 Linux/POSIX RLIMIT_AS is a per-process address-space bound, not a cgroup aggregate
-memory bound.  This development harness does not claim official isolation.
+memory bound. Windows uses an aggregate committed-memory job limit.
+This development harness does not claim official isolation.
 """
 from __future__ import annotations
 
@@ -88,7 +89,7 @@ def compress_evidence_file(path: Path, root: Path, journal: Path) -> dict:
     if path.is_symlink() or not path.is_file():
         raise ValueError("compression source must be a regular non-symlink file")
     path = path.resolve(strict=True)
-    logical = str(path.relative_to(root))
+    logical = path.relative_to(root).as_posix()
     journal.resolve().relative_to(root)
     if journal.is_symlink():
         raise ValueError("compression journal must not be a symlink")
@@ -106,14 +107,14 @@ def compress_evidence_file(path: Path, root: Path, journal: Path) -> dict:
                 expected_hash.update(chunk)
                 expected_bytes += len(chunk)
                 outgoing.write(chunk)
-        with temporary.open("rb") as stream:
+        with temporary.open("r+b") as stream:  # Windows flushing requires write access.
             os.fsync(stream.fileno())
         if _decoded_identity(temporary) != (expected_bytes, expected_hash.hexdigest()):
             raise ValueError("compressed evidence failed its round-trip identity check")
         if path.stat().st_size != expected_bytes or digest(path) != expected_hash.hexdigest():
             raise ValueError("evidence source changed during compression")
         entry = {"logical_path": logical, "uncompressed_sha256": expected_hash.hexdigest(),
-                 "uncompressed_bytes": expected_bytes, "stored_path": str(stored.relative_to(root)),
+                 "uncompressed_bytes": expected_bytes, "stored_path": stored.relative_to(root).as_posix(),
                  "stored_sha256": digest(temporary), "stored_bytes": temporary.stat().st_size,
                  "compression": "xz", "preset": 1, "roundtrip_verified": True}
         # Atomic create-if-absent: unlike replace(), an existing archive cannot
@@ -160,9 +161,9 @@ def _storage_abort(root: Path, cells: list[dict], scope: Path, error: Exception)
     """Keep completed cells but refuse a ranking after a storage failure."""
     summary = {"status": "ABORTED_STORAGE_FAILURE", "cells_retained": len(cells),
                "declared_field_complete": False, "claim": "No ranking accepted",
-               "scope": str(scope.relative_to(root)), "error": f"{type(error).__name__}: {error}"}
+               "scope": scope.relative_to(root).as_posix(), "error": f"{type(error).__name__}: {error}"}
     write_json(root / "summary.json", summary)
-    files = {str(path.relative_to(root)): digest(path) for path in sorted(root.rglob("*")) if path.is_file()}
+    files = {path.relative_to(root).as_posix(): digest(path) for path in sorted(root.rglob("*")) if path.is_file()}
     write_json(root / "evidence-sha256.json", files)
     return summary
 
@@ -276,27 +277,8 @@ def load_solvers(path: Path) -> dict:
     return data
 
 
-def run_process(command: list[str], destination: Path, *, timeout: float,
-                memory_mib: int, output_mib: int, workdir: Path | None = None) -> dict:
-    """Run one process group, retaining streams even on timeout or spawn failure."""
-    if os.name != "posix" or not hasattr(os, "wait4"):
-        raise RuntimeError("campaign execution requires POSIX wait4 and resource limits")
+def _run_posix(command, destination, workdir, environment, timeout, memory_mib, output_mib, record):
     import resource
-    _positive(timeout, "timeout")
-    if type(memory_mib) is not int or memory_mib <= 0 or type(output_mib) is not int or output_mib <= 0:
-        raise ValueError("memory_mib and output_mib must be positive integers")
-    destination.mkdir(parents=True, exist_ok=False)
-    workdir = ROOT if workdir is None else workdir.resolve()
-    temporary = destination / "tmp"
-    temporary.mkdir()
-    environment = os.environ.copy()
-    environment["TMPDIR"] = str(temporary.resolve())
-    environment["TMP"] = str(temporary.resolve())
-    environment["TEMP"] = str(temporary.resolve())
-    environment["PYTHONPATH"] = str(ROOT) + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else "")
-    record = {"command": command, "working_directory": str(workdir), "returncode": None, "timed_out": False,
-              "elapsed_seconds": 0.0, "user_seconds": None, "system_seconds": None,
-              "peak_rss_kib": None, "spawn_error": None}
 
     def limits() -> None:
         resource.setrlimit(resource.RLIMIT_AS, (memory_mib << 20, memory_mib << 20))
@@ -340,6 +322,38 @@ def run_process(command: list[str], destination: Path, *, timeout: float,
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+
+
+def run_process(command: list[str], destination: Path, *, timeout: float,
+                memory_mib: int, output_mib: int, workdir: Path | None = None,
+                output_directory: Path | None = None) -> dict:
+    """Run one process group, retaining streams even on timeout or spawn failure."""
+    if os.name != "nt" and (os.name != "posix" or not hasattr(os, "wait4")):
+        raise RuntimeError("campaign execution requires Windows jobs or POSIX wait4")
+    _positive(timeout, "timeout")
+    if type(memory_mib) is not int or memory_mib <= 0 or type(output_mib) is not int or output_mib <= 0:
+        raise ValueError("memory_mib and output_mib must be positive integers")
+    destination.mkdir(parents=True, exist_ok=False)
+    workdir = ROOT if workdir is None else workdir.resolve()
+    temporary = destination / "tmp"
+    temporary.mkdir()
+    environment = os.environ.copy()
+    environment["TMPDIR"] = str(temporary.resolve())
+    environment["TMP"] = str(temporary.resolve())
+    environment["TEMP"] = str(temporary.resolve())
+    environment["PYTHONPATH"] = str(ROOT) + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else "")
+    record = {"command": command, "working_directory": str(workdir), "returncode": None, "timed_out": False,
+              "elapsed_seconds": 0.0, "user_seconds": None, "system_seconds": None,
+              "peak_rss_kib": None, "spawn_error": None}
+
+    started = time.perf_counter()
+    if os.name == "nt":
+        from .windows_process import run_windows
+        record.update(run_windows(command, destination, workdir, environment,
+                                  timeout, memory_mib, output_mib, output_directory))
+    else:
+        _run_posix(command, destination, workdir, environment,
+                   timeout, memory_mib, output_mib, record)
     record["elapsed_seconds"] = time.perf_counter() - started
     record["stdout_sha256"] = digest(destination / "stdout.txt")
     record["stderr_sha256"] = digest(destination / "stderr.txt")
@@ -427,7 +441,7 @@ def check_model(cnf: Path, stdout: Path, output: Path) -> None:
                     satisfied |= value if literal > 0 else not value
     if clauses != receipt.declared_clauses:
         raise ValueError("model checker clause count differs")
-    with output.open("x", encoding="ascii") as stream:
+    with output.open("x", encoding="ascii", newline="\n") as stream:
         stream.write("s SATISFIABLE\n")
         for begin in range(1, receipt.declared_variables + 1, 100):
             stream.write("v " + " ".join(str(v if values[v] == 1 else -v)
@@ -596,7 +610,7 @@ def _status(process: dict, answer: str, timeout: float, accepted_exit_codes: dic
     codes.update(accepted_exit_codes or {})
     if process["timed_out"] or process["elapsed_seconds"] > timeout:
         return "TIMEOUT"
-    if process["spawn_error"] or process["returncode"] not in {code for values in codes.values() for code in values}:
+    if process["spawn_error"] or process.get("output_limit_exceeded", False) or process["returncode"] not in {code for values in codes.values() for code in values}:
         return "RESOURCE_FAILURE"
     if answer == "INVALID_OUTPUT":
         return answer
@@ -757,8 +771,11 @@ def run_campaign(args: argparse.Namespace) -> dict:
                      "timeout_seconds": args.timeout, "checker_timeout_seconds": args.checker_timeout,
                      "memory_mib": args.memory_mib, "maximum_output_file_mib": args.output_mib,
                      "maximum_dimacs_mib": args.dimacs_mib,
-                     "memory_limit_scope": "RLIMIT_AS per process; not aggregate cgroup memory",
-                     "execution": "sequential fresh process groups with private solver working/temp directories; shared host/filesystem, not a security sandbox",
+                     "memory_limit_scope": ("Windows job committed memory, including descendants" if os.name == "nt" else
+                                            "RLIMIT_AS per process; not aggregate cgroup memory"),
+                     "output_limit_scope": ("stdout/stderr hard caps; new or growing output-directory files polled every 10 ms, transient overshoot possible"
+                                            if os.name == "nt" else "RLIMIT_FSIZE per file"),
+                     "execution": "sequential fresh process trees with private solver working/temp directories; shared host/filesystem, not a security sandbox",
                      "timing_boundary": "process spawn through exit, includes parse and proof output; independent checking separately bounded",
                      "input_preparation": "common byte-preserving decompression and admission excluded for every solver",
                      "evidence_compression": {"enabled": compression_enabled, "schema": STORAGE_SCHEMA,
@@ -833,8 +850,9 @@ def run_campaign(args: argparse.Namespace) -> dict:
         admission = run_process(_worker_command("stage", "--source", str(source.resolve()),
                                 "--sha256", instance["sha256"], "--out", str(cnf),
                                 "--max-bytes", str(args.dimacs_mib << 20)),
-                                instance_dir / "admission-process", timeout=args.checker_timeout, **limits)
-        admitted = admission["returncode"] == 0 and not admission["timed_out"] and admission["elapsed_seconds"] <= args.checker_timeout and (instance_dir / "admission.json").is_file()
+                                instance_dir / "admission-process", timeout=args.checker_timeout,
+                                output_directory=instance_dir, **limits)
+        admitted = admission["returncode"] == 0 and not admission["spawn_error"] and not admission.get("output_limit_exceeded", False) and not admission["timed_out"] and admission["elapsed_seconds"] <= args.checker_timeout and (instance_dir / "admission.json").is_file()
         admissions.append({"instance_id": instance["id"], "admitted": admitted, "process": admission})
         if admitted:
             receipt = json.loads((instance_dir / "admission.json").read_text())
@@ -855,7 +873,7 @@ def run_campaign(args: argparse.Namespace) -> dict:
             cell = {"instance_id": instance["id"], "solver_id": solver["id"],
                     "track": solver["track"], "family": instance["family"], "expected": instance["expected"],
                     "status": "ADMISSION_FAILURE", "elapsed_seconds": 0.0, "peak_rss_kib": None,
-                    "checking_seconds": 0.0, "proof_bytes": 0, "directory": str(cell_dir.relative_to(destination))}
+                    "checking_seconds": 0.0, "proof_bytes": 0, "directory": cell_dir.relative_to(destination).as_posix()}
             if solver["id"] in artifact_identity_failures:
                 cell["status"] = "SOURCE_IDENTITY_FAILURE"
                 cell["identity_failures"] = artifact_identity_failures[solver["id"]]
@@ -912,7 +930,7 @@ def run_campaign(args: argparse.Namespace) -> dict:
                     else:
                         check_command = [str(checker), str(cnf), str(proof)]
                     checked = run_process(check_command, cell_dir / "check", timeout=args.checker_timeout,
-                                          workdir=cell_dir / "check", **limits)
+                                          workdir=cell_dir / "check", output_directory=cell_dir, **limits)
                     cell["checking_seconds"] = checked["elapsed_seconds"]
                     resource_diagnostic = (checker_resource_diagnostic(
                         solver.get("proof_format", "DRAT"), checked,
@@ -921,7 +939,7 @@ def run_campaign(args: argparse.Namespace) -> dict:
                         if status == "UNSAT" and configuration["scoring_policy"] == "declared-inventory-v2" else None)
                     if checked["timed_out"] or checked["elapsed_seconds"] > args.checker_timeout:
                         cell["status"] = "CHECKER_TIMEOUT"
-                    elif checked["spawn_error"] or checked["returncode"] is None or checked["returncode"] < 0:
+                    elif checked["spawn_error"] or checked.get("output_limit_exceeded", False) or checked["returncode"] is None or checked["returncode"] < 0:
                         cell["status"] = "CHECKER_RESOURCE_FAILURE"
                     elif resource_diagnostic is not None:
                         cell["status"] = "CHECKER_RESOURCE_FAILURE"
@@ -956,7 +974,7 @@ def run_campaign(args: argparse.Namespace) -> dict:
                     # Identical bytes are already retained once as input.cnf.
                     # Keep altered copies, but avoid N-fold duplicate artifacts.
                     solver_cnf.unlink()
-                    cell["identical_input_retained_at"] = str(cnf.relative_to(destination))
+                    cell["identical_input_retained_at"] = cnf.relative_to(destination).as_posix()
                 if proof.is_file():
                     cell.update(proof_bytes=proof.stat().st_size, proof_sha256=digest(proof))
                 if stats.is_file():
@@ -1015,7 +1033,7 @@ def run_campaign(args: argparse.Namespace) -> dict:
     except ValueError as error:
         summary = {"status": "INVALID_CAMPAIGN", "error": str(error), "cells_retained": len(cells), "claim": "No ranking accepted"}
     write_json(destination / "summary.json", summary)
-    files = {str(path.relative_to(destination)): digest(path) for path in sorted(destination.rglob("*")) if path.is_file()}
+    files = {path.relative_to(destination).as_posix(): digest(path) for path in sorted(destination.rglob("*")) if path.is_file()}
     write_json(destination / "evidence-sha256.json", files)
     return summary
 
@@ -1026,11 +1044,11 @@ def main(argv: list[str] | None = None) -> int:
     run = sub.add_parser("run", help="run every cell of an exposed declared field")
     for flag in ("inventory", "solvers", "out", "checker"):
         run.add_argument("--" + flag, type=Path, required=True)
-    run.add_argument("--timeout", type=float, default=60)
-    run.add_argument("--checker-timeout", type=float, default=120)
-    run.add_argument("--memory-mib", type=int, default=4096)
-    run.add_argument("--output-mib", type=int, default=1024)
-    run.add_argument("--dimacs-mib", type=int, default=2048)
+    run.add_argument("--timeout", type=float, default=5, help="solver deadline in seconds (default: 5)")
+    run.add_argument("--checker-timeout", type=float, default=10, help="checker deadline in seconds (default: 10)")
+    run.add_argument("--memory-mib", type=int, default=128, help="process memory limit in MiB (default: 128)")
+    run.add_argument("--output-mib", type=int, default=8, help="per-output-file limit in MiB (default: 8)")
+    run.add_argument("--dimacs-mib", type=int, default=8, help="decoded input limit in MiB (default: 8)")
     run.add_argument("--scoring-policy", choices=("legacy-v1", "declared-inventory-v2"),
                      default="declared-inventory-v2",
                      help="new runs preserve declared strata; legacy-v1 explicitly reproduces historical policy")

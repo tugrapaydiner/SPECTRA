@@ -16,7 +16,7 @@ from .campaign import digest, run_campaign, score_campaign
 from .campaign_verify import TrustedProofChecker, VerificationError, verify_campaign
 
 
-pytestmark = pytest.mark.skipif(os.name != "posix", reason="retained campaign process receipts require POSIX")
+pytestmark = pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 
 
 def write_json(path: Path, value: object) -> None:
@@ -54,7 +54,7 @@ def make_campaign(base: Path, formulas: list[tuple[str, str, str]], solvers: lis
     instances = []
     for index, (ident, cnf, expected) in enumerate(formulas):
         source = base / (ident + ".cnf")
-        source.write_text(cnf, encoding="ascii")
+        source.write_text(cnf, encoding="ascii", newline="\n")
         entry = {"id": ident, "family": "family-" + str(index), "path": str(source), "sha256": digest(source),
                  "expected": expected, "source_url": "https://example.invalid/synthetic-test-only"}
         if ident == "missing":
@@ -97,7 +97,7 @@ def compressed_base(tmp_path_factory):
 def proof_base(tmp_path_factory):
     base = tmp_path_factory.mktemp("replay-proof")
     marker = base / "archived-command-must-not-run"
-    code = "from pathlib import Path; import sys; Path(sys.argv[2]).write_text('0\\n'); print('s UNSATISFIABLE'); raise SystemExit(20)"
+    code = "from pathlib import Path; import sys; Path(sys.argv[2]).write_bytes(b'0\\n'); print('s UNSATISFIABLE'); raise SystemExit(20)"
     checker_code = f"from pathlib import Path; Path({str(marker)!r}).write_text('ran'); print('s VERIFIED')"
     output = make_campaign(base / "proof", [("empty", "p cnf 0 1\n0\n", "UNSAT")],
                            [fake_solver("proof", code, proof_checker={"command": [sys.executable, "-c", checker_code, "{cnf}", "{proof}"],
@@ -152,13 +152,18 @@ def test_symlinks_are_never_followed(archive, tmp_path, kind):
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "secret").write_text("not evidence")
-    if kind == "root":
-        link = tmp_path / "linked-archive"
-        link.symlink_to(archive, target_is_directory=True)
-        target = link
-    else:
-        (archive / "link").symlink_to(outside if kind == "directory" else outside / "secret", target_is_directory=kind == "directory")
-        target = archive
+    try:
+        if kind == "root":
+            link = tmp_path / "linked-archive"
+            link.symlink_to(archive, target_is_directory=True)
+            target = link
+        else:
+            (archive / "link").symlink_to(outside if kind == "directory" else outside / "secret", target_is_directory=kind == "directory")
+            target = archive
+    except OSError as error:
+        if os.name == "nt" and getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows symlink privilege is unavailable")
+        raise
     with pytest.raises(VerificationError, match="symlink"):
         verify_campaign(target)
 
@@ -207,7 +212,7 @@ def test_scores_and_disqualifications_are_recomputed_after_resealing(archive, ch
         verify_campaign(archive)
 
 
-@pytest.mark.parametrize("change", ["runtime", "answer", "checker_timeout", "admission_timeout", "model_missing"])
+@pytest.mark.parametrize("change", ["runtime", "answer", "checker_timeout", "admission_timeout", "model_missing", "output_limit"])
 def test_resealed_process_and_outcome_contradictions_are_rejected(archive, change):
     cells = cell_records(archive)
     cell = next(item for item in cells if item["status"] == "SAT_VERIFIED")
@@ -221,6 +226,11 @@ def test_resealed_process_and_outcome_contradictions_are_rejected(archive, chang
         process["elapsed_seconds"] = 6.0
         cell["checking_seconds"] = 6.0
         write_json(directory / "check/process.json", process)
+    elif change == "output_limit":
+        path = directory / "solve/process.json"
+        process = read_json(path)
+        process["output_limit_exceeded"] = True
+        write_json(path, process)
     elif change == "admission_timeout":
         path = archive / "instances/00000/admission-process/process.json"
         process = read_json(path)
@@ -235,6 +245,14 @@ def test_resealed_process_and_outcome_contradictions_are_rejected(archive, chang
     seal(archive)
     with pytest.raises(VerificationError, match="differs|lacks complete model"):
         verify_campaign(archive)
+
+
+def test_fresh_checks_reject_temporary_storage_inside_evidence(archive, monkeypatch):
+    monkeypatch.setattr(verifier.tempfile, "gettempdir", lambda: str(archive))
+    before = sorted(path.relative_to(archive).as_posix() for path in archive.rglob("*"))
+    with pytest.raises(VerificationError, match="temporary directory is inside evidence"):
+        verify_campaign(archive, recheck_models=True)
+    assert sorted(path.relative_to(archive).as_posix() for path in archive.rglob("*")) == before
 
 
 def test_copied_manifest_hash_binding_survives_resealing(archive):
@@ -436,15 +454,14 @@ def test_checker_resource_reclassification_is_explicitly_policy_scoped(tmp_path,
                                           ("Path(sys.argv[2]).write_text('mutated proof'); print('s VERIFIED')", False)])
 def test_fresh_proofs_require_explicit_checker_exit_and_success_token(tmp_path, proof_base, code, passes):
     archive, marker = proof_base
-    checker = tmp_path / "checker"
-    # The synthetic checker verifies only its two tiny fixture inputs. Mutating
-    # either private input must reject the check and leave the archive intact.
-    checker.write_text(f"#!{sys.executable}\nfrom pathlib import Path\nimport sys\n"
-                       "assert Path(sys.argv[1]).read_bytes() == b'p cnf 0 1\\n0\\n'\n"
-                       "assert Path(sys.argv[2]).read_bytes() == b'0\\n'\n" + code + "\n")
-    checker.chmod(0o755)
+    # The caller explicitly supplies the Python executable and checker program.
+    code = ("from pathlib import Path; import sys; "
+            "assert Path(sys.argv[1]).read_bytes() == b'p cnf 0 1\\n0\\n'; "
+            "assert Path(sys.argv[2]).read_bytes() == b'0\\n'; " + code)
+    checker = Path(sys.executable)
     pin = digest(archive / "evidence-sha256.json")
-    kwargs = {"proof_checkers": {"proof": TrustedProofChecker(checker, expected_sha256=digest(checker))},
+    kwargs = {"proof_checkers": {"proof": TrustedProofChecker(
+                  checker, arguments=("-c", code, "{cnf}", "{proof}"), expected_sha256=digest(checker))},
               "require_all_proofs": True, "checker_timeout": 5, "checker_memory_mib": 256, "checker_output_mib": 16}
     if passes:
         result = verify_campaign(archive, **kwargs)

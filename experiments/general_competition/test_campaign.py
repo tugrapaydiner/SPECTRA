@@ -148,10 +148,9 @@ def test_score_penalizes_invalid_answers_and_retains_subtrack_and_family_losses(
     assert result["resource_summary"]["a"]["statuses"]["INVALID_PROOF"] == 1
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX process limits")
 def test_timeout_and_spawn_failure_keep_raw_streams_and_process_receipts(tmp_path):
-    result = run_process([sys.executable, "-c", "import time; print('started', flush=True); time.sleep(5)"],
-                         tmp_path / "timeout", timeout=0.2, memory_mib=128, output_mib=1)
+    result = run_process([sys.executable, "-c", "import time; print('started', flush=True); time.sleep(30)"],
+                         tmp_path / "timeout", timeout=2, memory_mib=128, output_mib=1)
     assert result["timed_out"] and result["returncode"] < 0
     assert "started" in (tmp_path / "timeout" / "stdout.txt").read_text()
     assert (tmp_path / "timeout" / "process.json").is_file()
@@ -167,9 +166,76 @@ def test_answer_cannot_outrun_timeout_or_wrong_exit_code():
     assert _status(process, "SAT", 1) == "SAT"
     process["returncode"] = 20
     assert _status(process, "SAT", 1) == "INVALID_OUTPUT"
+    process.update(returncode=10, output_limit_exceeded=True)
+    assert _status(process, "SAT", 1) == "RESOURCE_FAILURE"
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name != "nt", reason="Windows job limits")
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_windows_log_overflow_cannot_earn_a_solve(tmp_path, stream):
+    code = f"import sys; sys.{stream}.buffer.write(b'x' * (2 << 20)); raise SystemExit(10)"
+    result = run_process([sys.executable, "-c", code], tmp_path / "run",
+                         timeout=5, memory_mib=64, output_mib=1)
+    assert result["spawn_error"] is None
+    assert result["output_limit_exceeded"]
+    assert (tmp_path / "run" / (stream + ".txt")).stat().st_size == 1 << 20
+    assert _status(result, "SAT", 5) == "RESOURCE_FAILURE"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows job limits")
+@pytest.mark.parametrize("memory_mib,code_expected", [(64, 73), (128, 0)])
+def test_windows_memory_limit_bounds_descendant_allocations(tmp_path, memory_mib, code_expected):
+    child = ("try:\n bytearray(48 << 20)\n"
+            "except MemoryError:\n print('allocation blocked'); raise SystemExit(73)\n")
+    code = ("import subprocess,sys; retained=bytearray(16 << 20); "
+            f"raise SystemExit(subprocess.call([sys.executable, '-c', {child!r}]))")
+    result = run_process([sys.executable, "-c", code], tmp_path / "run",
+                         timeout=5, memory_mib=memory_mib, output_mib=1)
+    assert result["spawn_error"] is None and result["returncode"] == code_expected
+    assert ("allocation blocked" in (tmp_path / "run/stdout.txt").read_text()) == (code_expected == 73)
+    assert result["peak_job_memory_kib"] > 0 and result["peak_rss_kib"] > 0
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows job cleanup")
+@pytest.mark.parametrize("wait_for_timeout", [False, True])
+def test_windows_descendants_stop_with_their_parent(tmp_path, wait_for_timeout):
+    import ctypes
+    from ctypes import wintypes
+
+    ready = tmp_path / "child.pid"
+    child = f"import os,time; from pathlib import Path; Path({str(ready)!r}).write_text(str(os.getpid())); time.sleep(60)"
+    parent = (f"import subprocess,sys,time; from pathlib import Path; subprocess.Popen([sys.executable, '-c', {child!r}]); "
+              f"ready=Path({str(ready)!r})\nwhile not ready.exists(): time.sleep(0.01)\n" +
+              ("time.sleep(60)" if wait_for_timeout else ""))
+    result = run_process([sys.executable, "-c", parent], tmp_path / "run",
+                         timeout=1, memory_mib=64, output_mib=1, workdir=tmp_path)
+    assert result["spawn_error"] is None and ready.exists()
+    assert result["timed_out"] is wait_for_timeout
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    handle = kernel.OpenProcess(0x100000, False, int(ready.read_text()))
+    if handle:
+        try:
+            assert kernel.WaitForSingleObject(handle, 5000) == 0
+        finally:
+            kernel.CloseHandle(handle)
+    else:
+        assert ctypes.get_last_error() == 87  # The process has already been reaped.
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows output monitoring")
+def test_windows_large_proof_file_is_a_resource_failure(tmp_path):
+    code = "from pathlib import Path; Path('proof.drat').write_bytes(b'0\\n' * (1 << 20)); raise SystemExit(20)"
+    result = run_process([sys.executable, "-c", code], tmp_path / "run",
+                         timeout=5, memory_mib=64, output_mib=1, workdir=tmp_path)
+    assert result["spawn_error"] is None and result["output_limit_exceeded"]
+    assert _status(result, "UNSAT", 5) == "RESOURCE_FAILURE"
+
+
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_campaign_retains_checked_sat_invalid_model_unknown_and_admission_failure(tmp_path):
     cnf, missing = tmp_path / "input.cnf", tmp_path / "missing.cnf"
     cnf.write_text("p cnf 1 1\n1 0\n")
@@ -197,7 +263,7 @@ def CounterFor(cells):
     return dict(Counter(row["status"] for row in cells))
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 @pytest.mark.parametrize("kind,expected", [("unsupported", "UNAVAILABLE_CHECKER"),
     ("reject", "INVALID_PROOF"), ("wrong-exit", "INVALID_PROOF"),
     ("misleading-token", "INVALID_PROOF"), ("accepted", "UNSAT_VERIFIED")])
@@ -218,7 +284,7 @@ def test_proof_status_requires_supported_checker_exact_token_and_exit_code(tmp_p
     assert result["standings"][0]["disqualified"] == (expected == "INVALID_PROOF")
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_missing_checker_does_not_falsely_disqualify_valid_proof(tmp_path):
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 1 2\n1 0\n-1 0\n")
@@ -229,7 +295,7 @@ def test_missing_checker_does_not_falsely_disqualify_valid_proof(tmp_path):
     assert not result["standings"][0]["disqualified"]
 
 
-@pytest.mark.skipif(os.name != "posix" or shutil.which("g++") is None, reason="native build")
+@pytest.mark.skipif(shutil.which("cl" if os.name == "nt" else "g++") is None, reason="native build")
 def test_native_worker_emits_independently_checkable_complete_model_and_budget_unknown(tmp_path):
     from .native_cdcl import build_native_cdcl
     library = build_native_cdcl(tmp_path / "build")
@@ -300,7 +366,7 @@ def test_model_checker_handles_admitted_comment_syntax(tmp_path):
     assert (tmp_path / "complete.model").is_file()
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 @pytest.mark.parametrize("late_phase,expected", [("check", "CHECKER_TIMEOUT"), ("admission-process", "ADMISSION_FAILURE")])
 def test_late_successful_checker_or_admission_cannot_escape_deadline(tmp_path, monkeypatch, late_phase, expected):
     from . import campaign
@@ -323,7 +389,7 @@ def test_late_successful_checker_or_admission_cannot_escape_deadline(tmp_path, m
     assert result["standings"][0]["solved"] == 0
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_solver_cannot_change_original_cnf_or_contaminate_next_solver(tmp_path):
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 1 1\n-1 0\n")
@@ -341,7 +407,7 @@ def test_solver_cannot_change_original_cnf_or_contaminate_next_solver(tmp_path):
     assert not (root / "solver-000" / "complete.model").exists()
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_declared_artifact_hash_mismatch_cannot_run_solver(tmp_path):
     cnf, artifact = tmp_path / "input.cnf", tmp_path / "artifact"
     cnf.write_text("p cnf 1 1\n1 0\n")
@@ -353,7 +419,7 @@ def test_declared_artifact_hash_mismatch_cannot_run_solver(tmp_path):
     assert not (tmp_path / "evidence" / "instances" / "00000" / "solver-000" / "solve").exists()
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_artifact_change_during_campaign_invalidates_ranking_and_keeps_raw_cells(tmp_path):
     cnf, artifact = tmp_path / "input.cnf", tmp_path / "artifact"
     cnf.write_text("p cnf 1 1\n1 0\n")
@@ -368,7 +434,7 @@ def test_artifact_change_during_campaign_invalidates_ranking_and_keeps_raw_cells
     assert (tmp_path / "evidence" / "evidence-sha256.json").is_file()
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_solver_cells_have_private_working_directories(tmp_path):
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 1 1\n1 0\n")
@@ -386,7 +452,7 @@ def test_score_rejects_relabeling_assisted_entry_as_standalone():
         score_campaign([entry], inventory, field, 10)
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_corrupting_shared_original_invalidates_whole_ranking(tmp_path):
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 1 1\n-1 0\n")
@@ -469,7 +535,7 @@ def test_compression_journal_failure_keeps_original_and_verified_archive(tmp_pat
     assert lzma.decompress((tmp_path / "proof.drat.xz").read_bytes()) == data
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_campaign_compression_retains_checked_result_and_hashes_all_stored_files(tmp_path):
     cnf = tmp_path / "input.cnf"
     cnf.write_text("c " + "large retained comment " * 5000 + "\np cnf 1 1\n1 0\n")
@@ -495,11 +561,11 @@ def test_campaign_compression_retains_checked_result_and_hashes_all_stored_files
         assert len(data) == entry["uncompressed_bytes"]
         assert hashlib.sha256(data).hexdigest() == entry["uncompressed_sha256"]
     hashes = json.loads((root / "evidence-sha256.json").read_text())
-    assert set(hashes) == {str(path.relative_to(root)) for path in root.rglob("*") if path.is_file()} - {"evidence-sha256.json"}
+    assert set(hashes) == {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()} - {"evidence-sha256.json"}
     assert all(digest(root / path) == expected for path, expected in hashes.items())
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_campaign_storage_failure_retains_cell_and_refuses_partial_ranking(tmp_path, monkeypatch):
     from . import campaign
     cnf = tmp_path / "input.cnf"
@@ -577,7 +643,7 @@ def test_campaign_scoring_policy_cannot_be_silently_misspelled():
         score_campaign([], {"instances": []}, {"solvers": []}, 5, scoring_policy="declared-v2")
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 @pytest.mark.parametrize("answer", ["SAT", "UNSAT"])
 def test_new_campaign_retains_verified_metadata_conflict_and_refuses_ranking(tmp_path, answer):
     cnf = tmp_path / "input.cnf"
@@ -610,7 +676,7 @@ def test_new_campaign_retains_verified_metadata_conflict_and_refuses_ranking(tmp
     ("DRAT", 0, "warning: c MEMOUT: reallocation of proof list failed", "", "INVALID_PROOF"),
     ("PB3", 1, "", "There is no contradicting constraint in the database.", "INVALID_PROOF"),
 ])
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_checker_resource_diagnostics_do_not_become_invalid_proofs(tmp_path, proof_format, code, stdout, stderr, expected):
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 1 2\n1 0\n-1 0\n")
@@ -661,7 +727,7 @@ def test_scoring_policy_cli_default_and_explicit_choices(tmp_path, monkeypatch, 
     assert error.value.code == 2
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX campaign execution")
+@pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_explicit_legacy_run_preserves_historical_metadata_conflict_status(tmp_path):
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 1 1\n1 0\n")

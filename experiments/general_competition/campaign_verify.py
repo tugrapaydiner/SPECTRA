@@ -23,7 +23,7 @@ import json
 import lzma
 import math
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import shutil
 import stat
@@ -266,7 +266,7 @@ class _Archive:
         if self.name(path) in self.storage:
             # The strict admission reader accepts plain/gzip files. Materialize
             # one original CNF at a time, never the whole archive or its proofs.
-            with tempfile.TemporaryDirectory(prefix="spectra-admission-", dir="/tmp") as temporary:
+            with _temporary_outside(self.root, "spectra-admission-") as temporary:
                 target = Path(temporary) / path.name
                 _require(not target.is_relative_to(self.root), "admission workspace is inside evidence")
                 self.copy(path, target)
@@ -297,16 +297,23 @@ def _answer(path: Path, archive: _Archive) -> str:
     return {"s SATISFIABLE": "SAT", "s UNSATISFIABLE": "UNSAT", "s UNKNOWN": "UNKNOWN"}.get(statuses[0], "INVALID_OUTPUT")
 
 
+def _temporary_outside(root: Path, prefix: str):
+    directory = Path(tempfile.gettempdir()).resolve()
+    _require(not directory.is_relative_to(root.resolve()), "temporary directory is inside evidence")
+    return tempfile.TemporaryDirectory(prefix=prefix, dir=directory)
+
+
 def _process(path: Path, archive: _Archive) -> dict:
     record = _read_json(path / "process.json")
     _require(type(record.get("timed_out")) is bool, "process timed_out must be Boolean")
+    _require(type(record.get("output_limit_exceeded", False)) is bool, "invalid process output limit flag")
     _require(record.get("returncode") is None or type(record["returncode"]) is int, "invalid process returncode")
     _require(record.get("spawn_error") is None or isinstance(record["spawn_error"], str), "invalid process spawn_error")
     _require(isinstance(record.get("command"), list) and bool(record["command"]) and
              all(isinstance(arg, str) and bool(arg) for arg in record["command"]), "invalid recorded argv")
     _require(isinstance(record.get("working_directory"), str), "missing process working directory")
     _finite(record.get("elapsed_seconds"), "process runtime")
-    for key in ("user_seconds", "system_seconds", "peak_rss_kib"):
+    for key in ("user_seconds", "system_seconds", "peak_rss_kib", "peak_job_memory_kib"):
         if record.get(key) is not None:
             _finite(record[key], f"process {key}")
     for stream in ("stdout", "stderr"):
@@ -321,19 +328,23 @@ def _solver_status(process: dict, answer: str, timeout: float, solver: dict) -> 
     codes.update(solver.get("accepted_exit_codes", {}))
     if process["timed_out"] or process["elapsed_seconds"] > timeout:
         return "TIMEOUT"
-    if process["spawn_error"] or process["returncode"] not in {c for group in codes.values() for c in group}:
+    if process["spawn_error"] or process.get("output_limit_exceeded", False) or process["returncode"] not in {c for group in codes.values() for c in group}:
         return "RESOURCE_FAILURE"
     if answer == "INVALID_OUTPUT" or process["returncode"] not in codes.get(answer, []):
         return "INVALID_OUTPUT"
     return answer
 
 
+def _historical_path(value: str):
+    return PureWindowsPath(value) if PureWindowsPath(value).drive else PurePosixPath(value)
+
+
 def _recorded_paths(process: dict, directory: str) -> dict:
     """Resolve historical paths lexically; the archive may have been relocated."""
     working = process["working_directory"]
-    path = PurePosixPath(working)
-    _require(path.is_absolute() and path.as_posix() == working and ".." not in path.parts and
-             working.endswith("/" + directory), "recorded solver working directory differs")
+    path = _historical_path(working)
+    _require(path.is_absolute() and str(path) == working and ".." not in path.parts and
+             path.as_posix().endswith("/" + directory), "recorded solver working directory differs")
     return {"{cnf}": str(path / "input.cnf"), "{proof}": str(path / "proof.drat"),
             "{stats}": str(path / "stats.json"), "original": str(path.parent / "input.cnf"),
             "working": working}
@@ -351,7 +362,7 @@ def _substitute(command: list[str], replacements: dict) -> list[str]:
 def _solver_argv(process: dict, solver: dict, directory: str, config: dict) -> dict:
     replacements = _recorded_paths(process, directory)
     expected = _substitute(solver["command"], replacements)
-    if "/" in expected[0] and not PurePosixPath(expected[0]).is_absolute():
+    if "/" in expected[0] and not _historical_path(expected[0]).is_absolute():
         # The historical checkout root is not recorded as a separate field.
         # Require the resolved argv to be one of that solver's observed artifacts
         # and preserve the entire normalized relative suffix, not just basename.
@@ -366,11 +377,12 @@ def _solver_argv(process: dict, solver: dict, directory: str, config: dict) -> d
 
 
 def _checker_argv(process: dict, answer: str, solver: dict, paths: dict, config: dict) -> None:
-    _same(process["working_directory"], paths["working"] + "/check", "recorded checker working directory")
+    working = _historical_path(paths["working"])
+    _same(process["working_directory"], str(working / "check"), "recorded checker working directory")
     if answer == "SAT":
         expected = [process["command"][0], "-m", "experiments.general_competition.campaign", "check-model",
-                    "--cnf", paths["original"], "--stdout", paths["working"] + "/solve/stdout.txt",
-                    "--out", paths["working"] + "/complete.model"]
+                    "--cnf", paths["original"], "--stdout", str(working / "solve" / "stdout.txt"),
+                    "--out", str(working / "complete.model")]
     elif solver.get("proof_checker"):
         expected = _substitute(solver["proof_checker"]["command"], {**paths, "{cnf}": paths["original"]})
     else:
@@ -432,7 +444,8 @@ def _admissions(root: Path, config: dict, inventory: dict, archive: _Archive,
         process = _process(directory / "admission-process", archive)
         _same(admission.get("process"), process, "admission process record")
         _same(admission.get("instance_id"), instance["id"], "admission instance id")
-        accepted = (process["returncode"] == 0 and not process["timed_out"] and
+        accepted = (process["returncode"] == 0 and not process["spawn_error"] and
+                    not process.get("output_limit_exceeded", False) and not process["timed_out"] and
                     process["elapsed_seconds"] <= config["checker_timeout_seconds"] and
                     (directory / "admission.json").is_file())
         _same(admission.get("admitted"), accepted, "admission outcome")
@@ -524,7 +537,7 @@ def _cell(root: Path, cell: dict, solver: dict, instance: dict, directory: str,
         applied_diagnostic = None
         if checked["timed_out"] or checked["elapsed_seconds"] > config["checker_timeout_seconds"]:
             status = "CHECKER_TIMEOUT"
-        elif checked["spawn_error"] or checked["returncode"] is None or checked["returncode"] < 0:
+        elif checked["spawn_error"] or checked.get("output_limit_exceeded", False) or checked["returncode"] is None or checked["returncode"] < 0:
             status = "CHECKER_RESOURCE_FAILURE"
         elif resource_diagnostic is not None:
             status = "CHECKER_RESOURCE_FAILURE"
@@ -613,9 +626,8 @@ def _fresh_checks(root: Path, cells: list[dict], archive: _Archive, *, recheck_m
             result["verified_models_not_rechecked" if sat else "verified_proofs_not_rechecked"] += 1
             _require(sat or not require_all_proofs, f"no explicitly trusted proof checker for {cell['solver_id']}")
             continue
-        # An explicit directory outside the archive avoids inheriting TMPDIR that
-        # could itself point inside the evidence tree. All checker inputs are copies.
-        with tempfile.TemporaryDirectory(prefix="spectra-recheck-", dir="/tmp") as temporary:
+        # Reject a temporary directory inside evidence before writing any copies.
+        with _temporary_outside(root, "spectra-recheck-") as temporary:
             work = Path(temporary)
             _require(not work.is_relative_to(root), "fresh checker workspace is inside evidence")
             cell_dir = root / cell["directory"]
@@ -640,7 +652,8 @@ def _fresh_checks(root: Path, cells: list[dict], archive: _Archive, *, recheck_m
                 path = work / filename
                 _require(path.is_file() and not path.is_symlink() and digest(path) == expected,
                          f"fresh checker mutated its input: {filename}")
-            _require(not process["timed_out"] and process["elapsed_seconds"] <= timeout and not process["spawn_error"],
+            _require(not process["timed_out"] and process["elapsed_seconds"] <= timeout and
+                     not process["spawn_error"] and not process.get("output_limit_exceeded", False),
                      f"fresh checker did not complete: {cell['solver_id']} / {cell['instance_id']}")
             if sat:
                 _require(process["returncode"] == 0 and (work / "complete.model").is_file(),

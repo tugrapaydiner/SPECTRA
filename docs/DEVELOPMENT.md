@@ -82,6 +82,19 @@ inputs and performs a long cross-platform evaluation. Trigger
 
 ## General-CNF reproduction
 
+The direct native campaign runs from a source checkout on Windows and POSIX with
+no mandatory Python dependencies. New development runs default to 128 MiB memory, 8 MiB decoded
+inputs and output files, a five-second solver deadline and ten-second checking.
+Start with a small declared inventory; increase limits explicitly when needed.
+These are resource limits, not performance claims or official competition budgets.
+
+Windows assigns each process to a memory-limited Job Object before it starts and
+terminates descendants on exit or timeout. Logs are hard capped; other output
+files are polled and may transiently exceed the cap. Job committed-memory usage
+and root-process peak working set are reported separately. POSIX uses per-process
+address-space and per-file limits. Neither path is a security sandbox or a total
+disk quota. The optional binary preprocessing builder still requires Linux.
+
 Follow the frozen inventory, solver field and limits in the
 [2026-10-21 exposed campaign](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md).
 Use its recorded source commit, acquire the original inputs with matching hashes,
