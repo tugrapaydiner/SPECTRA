@@ -115,6 +115,54 @@
     }
   ],
   "purpose": "Exact identities of bulky historical evidence removed from the active main checkout; recover only in an isolated historical worktree.",
+  "retired_completed_study_plans": {
+    "archive_commit": "45b7fba65d0eb702616b1f617b3e4f0017fb4438",
+    "archived_on": "2026-10-24",
+    "file_count": 6,
+    "files": [
+      {
+        "bytes": 13482,
+        "git_blob_sha1": "134aabdbf2e53f63b5598c161811c7f06e4e1ad7",
+        "path": "experiments/general_competition/heap_ablation_plan_20261021.json",
+        "sha256": "ae2915bb84026dfc28fecb5c688e21a400e1efb046dfd21e25e5d58be1aafa32"
+      },
+      {
+        "bytes": 2523,
+        "git_blob_sha1": "6120261c357ed202deb28674167f4464af7ec77e",
+        "path": "experiments/general_competition/heap_ablation_freeze_20261021.json",
+        "sha256": "d0246287b516e1ba0ed59eda523d761bb7b81a175b77382061cff78933ebf7b6"
+      },
+      {
+        "bytes": 2141,
+        "git_blob_sha1": "0833b20ec63856207cd6500f87fae0563639bfa5",
+        "path": "experiments/general_competition/native_validation_plan_20261021.json",
+        "sha256": "3aa1a4c03597a71c0b2168bf06d86cbd8701bceedec48bc54cf92388988fa3c9"
+      },
+      {
+        "bytes": 15137,
+        "git_blob_sha1": "40601e27560be7dfd9a35bfbd09553e90b22dbb9",
+        "path": "experiments/general_competition/native_long_search_plan_20261021.json",
+        "sha256": "9ae7973485b3f8aac74f1866e9b049ee7669a1e49e91c5264f78ecf55276fc29"
+      },
+      {
+        "bytes": 3132,
+        "git_blob_sha1": "7601ed6a34a91bff51e1793f27f2cec8a329f233",
+        "path": "experiments/general_competition/native_long_proof_plan_20261022.json",
+        "sha256": "a243c9f7aa4668d53368952eae10904624457aec95506211670de8ef7846df87"
+      },
+      {
+        "bytes": 67645,
+        "git_blob_sha1": "d985145b5a4ed7119c876c187672555ee3f309fa",
+        "path": "experiments/general_competition/packing_study_freeze_20261021.json",
+        "sha256": "b41de4391dd74046d421305224a0ae34ade30a78c371cb6fd85e2b170354b29f"
+      }
+    ],
+    "purpose": "Retire declarations and preparation receipts for completed native-correctness, heap and packing-v1 experiments. Their outcome summaries, failed gates, evidence identities and immutable original plans remain available; the pending packing-v2 plan and shared input inventory remain active.",
+    "recovery_command": "git show <archive_commit>:<path> > <destination>",
+    "source_commit": "13293a3e014adc29a0c8d5f0ccb13c75030ac7f7",
+    "total_bytes": 104060,
+    "verification": "Every removed file matches the raw Git blob and SHA-256 in the immutable ancestor. Current code and tests do not read these declarations; report links now point to that original tree."
+  },
   "retired_development_scaffolding": {
     "archive_commit": "0b68898f3e64063ac3dc8904ae42f0b33590e7af",
     "archive_ref": "archive/research-history-20261016",

@@ -13,6 +13,7 @@ paths, byte counts and hashes of material retired from the active checkout:
 | `retired_development_scaffolding` | 27 CPU replay logs, raw rows and local drivers | The section's `archive_commit` |
 | `retired_validation_logs` | Nine execution logs, JUnit reports and environment snapshots | The section's `archive_commit` |
 | `retired_research_documents` | 13 historical neural reports, registers and run requests | The section's `archive_commit` |
+| `retired_completed_study_plans` | Six completed general-CNF study declarations and preparation receipts | The section's `archive_commit` |
 
 Recover each file with `git show <archive_commit>:<path> > <destination>` in a
 separate historical workspace and verify its recorded SHA-256. The

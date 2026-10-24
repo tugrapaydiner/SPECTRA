@@ -51,3 +51,8 @@ Their relative links resolve within that complete historical tree. Recorded
 output paths in old protocols also refer to that tree. No milestone decision,
 failed result or numerical gate was changed by retiring these active copies.
 Use [current status](../STATUS.md) for the present project scope.
+
+Completed native-correctness, heap and packing-v1 study declarations are preserved
+at the same Part 3 ancestor. The manifest's `retired_completed_study_plans` section
+records all six exact identities. The active campaign report links to each original
+plan; outcomes and failed gates remain in the active result summaries.

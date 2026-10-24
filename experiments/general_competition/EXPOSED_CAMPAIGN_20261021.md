@@ -258,7 +258,7 @@ separate instrumented root-cause reproduction for each of the remaining eight.
 The repair at source `cb14031d4187c4cba5cccb37984ecf59d59bfdae` records variable
 occurrence independently of floating-point priority. The regression fails on the
 original engine and passes with the repair; all 21 native tests pass locally with
-external DRAT checking. The [separate validation plan](native_validation_plan_20261021.json)
+external DRAT checking. The [separate validation plan](https://github.com/tugrapaydiner/SPECTRA/blob/45b7fba65d0eb702616b1f617b3e4f0017fb4438/experiments/general_competition/native_validation_plan_20261021.json)
 froze a native-only rerun of all 96 formulas after the original 768-cell baseline.
 It started at 18:45:37 UTC and finished at 18:54:07 UTC with exit code zero.
 The result is **7 SAT_VERIFIED, 2 UNSAT_VERIFIED and 87 TIMEOUT**. There are no
@@ -283,7 +283,7 @@ ablation cells; its replacement v2 plan and outcome are separate below.
 
 ### Longer-search correctness diagnostic and retained-proof check
 
-The [separate diagnostic plan](native_long_search_plan_20261021.json) was locally
+The [separate diagnostic plan](https://github.com/tugrapaydiner/SPECTRA/blob/45b7fba65d0eb702616b1f617b3e4f0017fb4438/experiments/general_competition/native_long_search_plan_20261021.json) was locally
 frozen and its SHA-256 recorded before solving on 2026-10-21 at 23:54 UTC. It was
 not an externally registered hidden experiment. All ten original invalid-model
 cases were reacquired from the recorded public URLs, with both compressed and
@@ -303,7 +303,7 @@ archive check also rechecked all ten compressed sources and the SAT model.
 
 The sgen case `26114429758a203d651f4df87c94de4c` returned UNSAT after approximately
 41 seconds and retained a 15,087,704-byte DRUP proof. Its original checker was
-killed at the unchanged 30-second limit. A [separately frozen proof-check plan](native_long_proof_plan_20261022.json)
+killed at the unchanged 30-second limit. A [separately frozen proof-check plan](https://github.com/tugrapaydiner/SPECTRA/blob/45b7fba65d0eb702616b1f617b3e4f0017fb4438/experiments/general_competition/native_long_proof_plan_20261022.json)
 then allowed one 300-second verification of those exact proof/CNF bytes with the
 same pinned checker and flags, without rerunning the solver. That check exited
 zero with `s VERIFIED` after **37.19 seconds**. The proof, original CNF and checker
@@ -361,9 +361,9 @@ bundle is not a signed permanent public archive.
 
 ### Completed repaired-source heap experiment
 
-The [v2 plan](heap_ablation_plan_20261021.json),
+The [v2 plan](https://github.com/tugrapaydiner/SPECTRA/blob/45b7fba65d0eb702616b1f617b3e4f0017fb4438/experiments/general_competition/heap_ablation_plan_20261021.json),
 [unchanged 32-formula subset](heap_ablation_inventory_20261021.json), and
-[preparation receipt](heap_ablation_freeze_20261021.json) were published before any
+[preparation receipt](https://github.com/tugrapaydiner/SPECTRA/blob/45b7fba65d0eb702616b1f617b3e4f0017fb4438/experiments/general_competition/heap_ablation_freeze_20261021.json) were published before any
 candidate build or A/B execution. The subset was selected from structural
 metadata before observing outcomes; it is not chosen from successful solves.
 The plan SHA-256 is
@@ -422,7 +422,7 @@ establish a permanent public release or independent replication.
 
 ### Packing study v1: retained admission failure
 
-The separate [packing-study freeze](packing_study_freeze_20261021.json) has
+The separate [packing-study freeze](https://github.com/tugrapaydiner/SPECTRA/blob/45b7fba65d0eb702616b1f617b3e4f0017fb4438/experiments/general_competition/packing_study_freeze_20261021.json) has
 SHA-256 `b41de4391dd74046d421305224a0ae34ade30a78c371cb6fd85e2b170354b29f`.
 It publishes the complete exact controller, unchanged helper and tested test
 source as losslessly encoded payloads, with their individual byte counts and

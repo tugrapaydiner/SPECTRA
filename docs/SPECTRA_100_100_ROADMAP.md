@@ -8,7 +8,7 @@
 > [campaign report](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
 > retains original failures and their later diagnostics. The
 > [previous checkpoint](https://github.com/tugrapaydiner/SPECTRA/blob/5546024c7ed5acd837eca0784d7cc6c6e7a26330/docs/SPECTRA_100_100_ROADMAP.md)
-> preserves the earlier engineering audit in full. Cleanup retired 22 additional
+> preserves the earlier engineering audit in full. Cleanup retired 28 additional
 > historical files with immutable recovery records and repaired 11 archived links;
 > no source or regression test was removed. The scientific gates below are unchanged.
 
@@ -314,7 +314,7 @@ A win in one row does not transfer to another row.
 - [x] Correct the README workflow count.
 - [ ] Replace the obsolete GitHub repository description.
 - [ ] Update replication issues to the current frozen source when a new freeze exists.
-- [x] Recover active-tree file headroom (27 earlier raw/scaffolding files plus 22 retired logs and neural documents; hashes and immutable retrieval retained in [the archive manifest](../results/HISTORICAL_ARCHIVES.json)).
+- [x] Recover active-tree file headroom (27 earlier raw/scaffolding files plus 28 retired logs, neural documents and completed study plans; hashes and immutable retrieval retained in [the archive manifest](../results/HISTORICAL_ARCHIVES.json)).
 - [ ] Consolidate the final review history while preserving the raw branch in the archive.
 - [x] Pin all permanent Actions dependencies to immutable SHAs; enforce in the active-tree audit.
 - [ ] Configure required checks before final merge.
