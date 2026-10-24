@@ -378,15 +378,20 @@ SPECTRA-G has a complete official-style score table and can be ranked like every
 Pin exact source snapshots and configurations for at least:
 
 - 2026 Main winner `satsuma-iter+kissat`;
-- 2026 runner-up `Kissat-MAB-HyPre`;
-- 2026 third-place `EDA-Kissat-v2`;
+- 2026 Main author-award runner-up `Kissat-MAB-HyPre`;
+- 2026 Main third-place author-award entry `EDA-Kissat-v2`;
 - `Lymphosat`, reported separately where appropriate;
-- 2025 Main winner `kissat-sc2024`;
+- 2025 Main winner `AE_kissat2025_MAB`;
+- 2024 Main winner `kissat-sc2024`;
 - current upstream Kissat;
 - current upstream CaDiCaL;
 - a strong independent proof-producing baseline;
 - standalone native SPECTRA-G;
 - the disclosed SPECTRA-assisted portfolio as a separate entry.
+
+The [protocol's source notes](../experiments/general_competition/PROTOCOL.md#sequential-general-sat)
+distinguish author awards from raw solver ranks and correct the winner years.
+Both historic winners remain required; earlier frozen fields stay unchanged.
 
 ### Fairness rules
 

@@ -93,7 +93,8 @@ At minimum retain exact source snapshots for:
 - 2026 Main third-place author-award entry `EDA-Kissat-v2`;
 - the 2026 SAT-subtrack AI winner `Lymphosat`, reported separately because of its
   family-specialized generated portfolio;
-- 2025 Main winner `kissat-sc2024`;
+- 2025 Main winner `AE_kissat2025_MAB`;
+- 2024 Main winner `kissat-sc2024`;
 - current upstream Kissat;
 - current upstream CaDiCaL; and
 - the strongest independently maintained proof-producing baseline that remains
@@ -103,6 +104,12 @@ Author-award positions are distinct from raw solver ranks. The retained
 [2026 score accounting](EXPOSED_CAMPAIGN_20261021.md#declared-solver-field) places
 HyPre third and EDA-Kissat-v2 seventh in the raw Main solver ordering. This
 clarification does not change the required competitor entries.
+
+The official [2025 slides](https://satcompetition.github.io/2025/satcomp25slides.pdf#page=19)
+name AE-Kissat-MAB as Main winner. The 2025 HTML results page repeats the
+[2024 table](https://satcompetition.github.io/2024/downloads/satcomp24slides.pdf#page=18),
+whose winner is kissat-sc2024. Both entries remain required; this attribution
+correction leaves earlier frozen fields and results unchanged.
 
 The virtual best solver is retained as a diagnostic upper bound. It is never
 reported as an executable competitor and cannot be “beaten” by changing its
