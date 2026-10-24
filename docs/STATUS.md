@@ -60,7 +60,7 @@ The original exposed campaign remains disqualified for ten invalid SAT models.
 Later repairs and checked development runs do not rescore that campaign. The
 current implementation has not passed the complete-field leadership, large-gap,
 hidden-inventory, outside-replication or expert-review gates. See the
-[competition report](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
+[competition report](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
 for the retained measurements and failures.
 
 The frozen packing-v2 study cannot resume from the available handoff: its original
@@ -150,7 +150,6 @@ research records.
 The normal checkout is capped by `scripts/check_active_tree.py`. It contains eight
 permanent workflows (seven automatic and one manual ITC suite). It excludes nested
 evidence archives, generated historical PNGs, transport directories, and stale
-branch-trigger automation. Compact summaries
-and the small independently checked SAT negative-result fixture remain under
-`results/`; full bytes are recoverable from archive history and cited workflow
-artifacts.
+branch-trigger automation. Historical run dumps, internal plans and one-off
+diagnostics are outside the active tree. Public result summaries link to their immutable evidence trees;
+regression tests exercise maintained behavior using small, focused fixtures.

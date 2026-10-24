@@ -83,7 +83,7 @@ inputs and performs a long cross-platform evaluation. Trigger
 ## General-CNF reproduction
 
 Follow the frozen inventory, solver field and limits in the
-[2026-10-21 exposed campaign](../experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md).
+[2026-10-21 exposed campaign](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md).
 Use its recorded source commit, acquire the original inputs with matching hashes,
 and build source components with the recorded commands. Where the field uses a
 bundled prebuilt checker, retrieve that exact artifact and verify its hash; do not

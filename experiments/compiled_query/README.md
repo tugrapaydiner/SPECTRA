@@ -19,7 +19,7 @@ Historical query-cost experiments, their internal plans and diagnostic harness
 are retained in the [original source tree](https://github.com/tugrapaydiner/SPECTRA/tree/38c13990a1ba92229cf5cf2a57b1a600b218889e/experiments/compiled_query).
 Reproduce an old result from its complete pinned tree. The 48-graph exposed
 comparison missed its 10% speed target against improved raw execution. Its
-failed cells and the separate [failed transfer gate](TRANSFER_CI_RESULTS_20261015.json)
+failed cells and the separate [failed transfer gate](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/compiled_query/TRANSFER_CI_RESULTS_20261015.json)
 remain evidence; cleanup does not change those outcomes.
 
 Current specialized results and limitations are summarized in

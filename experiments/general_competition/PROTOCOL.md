@@ -1,13 +1,13 @@
 # Phase 4 — general-competition protocol
 
-**Status:** development protocol, not frozen confirmation evidence  
+**Status:** development protocol, not frozen confirmation evidence
 **Starting source:** `832302a30d8d4d04a48afb418610ad49b94c3ad1`
 
 **Current correctness status (2026-10-22):** the frozen campaign at source
 [1f6a913](https://github.com/tugrapaydiner/SPECTRA/commit/1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5)
 completed all 768 cells and produced ten invalid SAT models from standalone
 SPECTRA-G. That source remains disqualified and fails G0. The
-[retained failure record](EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
+[retained failure record](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
 identifies the cases and evidence. The occurrence-tracking repair at
 `cb14031d4187c4cba5cccb37984ecf59d59bfdae` completed its separate 96-case
 validation with seven checked SAT answers, two checked UNSAT proofs and 87
@@ -101,7 +101,7 @@ At minimum retain exact source snapshots for:
   buildable in the official execution environment.
 
 Author-award positions are distinct from raw solver ranks. The retained
-[2026 score accounting](EXPOSED_CAMPAIGN_20261021.md#declared-solver-field) places
+[2026 score accounting](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md#declared-solver-field) places
 HyPre third and EDA-Kissat-v2 seventh in the raw Main solver ordering. This
 clarification does not change the required competitor entries.
 

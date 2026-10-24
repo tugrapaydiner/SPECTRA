@@ -209,7 +209,7 @@ general SAT or colouring-superiority claim.
 **Correctness gate failed for the frozen native baseline.** The campaign at
 source [1f6a913](https://github.com/tugrapaydiner/SPECTRA/commit/1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5)
 completed all 768 measurements and recorded
-[ten invalid SAT models](experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
+[ten invalid SAT models](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
 from standalone SPECTRA-G. That source remains disqualified. The separately
 identified occurrence-tracking repair completed the same 96 formulas with seven
 checked SAT answers, two checked UNSAT proofs and 87 timeouts. Nine of the ten
@@ -232,7 +232,7 @@ have not been established. Development remains on `finish-part3` in
 results above do not establish general SAT leadership.
 
 The [current status](docs/STATUS.md) summarizes the remaining validation gaps.
-The [96-formula exposed campaign](experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
+The [96-formula exposed campaign](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
 records the native comparison protocol, corrected frontend accounting, retained
 failures, source identities and current evidence limits.
 
