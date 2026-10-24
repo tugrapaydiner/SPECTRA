@@ -1,6 +1,10 @@
-# SPECTRA Architecture — Current Evidence Boundary
+# Historical neural architecture
 
-The original long implementation blueprint is preserved as [the archived legacy architecture](https://github.com/tugrapaydiner/SPECTRA/blob/181e236528b5b58263c98b09925f0d7612c919d3/docs/ARCHITECTURE_LEGACY.md). It is design history, not a current evidence ledger. Current claims are governed by milestone protocols/acceptance gates and `CLAIMS.md`.
+This guide describes the retained neural components. See [current status](STATUS.md)
+for the active exact-service and general-CNF scope. The original
+[implementation blueprint](https://github.com/tugrapaydiner/SPECTRA/blob/181e236528b5b58263c98b09925f0d7612c919d3/docs/ARCHITECTURE_LEGACY.md)
+and [neural claims ledger](https://github.com/tugrapaydiner/SPECTRA/blob/45b7fba65d0eb702616b1f617b3e4f0017fb4438/docs/CLAIMS.md)
+remain available as historical records with their original limitations.
 
 ## Recurrent core and control
 SPECTRA uses explicit recurrent state `(x,y,z)` with shared computation. M11 established physical early exit and faithful active-query sparsity with full K/V context. M12 established a real router/halter actor-critic training path, but its learned-control pilot collapsed; no learned-control superiority is claimed.

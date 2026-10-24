@@ -290,6 +290,96 @@
     "total_bytes": 1274176,
     "verification": "Each local Git blob SHA was matched against the archive tree before removal; SHA-256 and byte count below identify the full original file."
   },
+  "retired_research_documents": {
+    "archive_commit": "45b7fba65d0eb702616b1f617b3e4f0017fb4438",
+    "archived_on": "2026-10-24",
+    "file_count": 13,
+    "files": [
+      {
+        "bytes": 24121,
+        "git_blob_sha1": "4558963b9fa53eda427eb9b07b48b3d62b84be08",
+        "path": "docs/CLAIMS.md",
+        "sha256": "720ab5717c882ae66e8dca633d2ed942eec27bd6db0ecf16fe5d49ed6ef40780"
+      },
+      {
+        "bytes": 16833,
+        "git_blob_sha1": "2eb1eba97cfd910c624279babcced4401f9b06bb",
+        "path": "docs/CPU_PROGRESS.md",
+        "sha256": "19a86757466e06d3107641d0da0a2074c4016e44ff5815301e92ff47ab1b7843"
+      },
+      {
+        "bytes": 10578,
+        "git_blob_sha1": "3b60e2c990a6be4c80e01e2fa8fe24ea5a25d7e7",
+        "path": "docs/CPU_RESEARCH_GATES.md",
+        "sha256": "dcc85bff95e0942da9c097f8b207d7ff711f2b37d4436489eb8073c117a3b92a"
+      },
+      {
+        "bytes": 5546,
+        "git_blob_sha1": "fdd8135c9c8d8ccd57db6e5b8e36a00822ceb3be",
+        "path": "docs/INTEGRATION_REVIEW.md",
+        "sha256": "2c60b7738436f9efb7ab616913b1c4dd6dab52e502452f1de59d4ad2de0344e5"
+      },
+      {
+        "bytes": 9449,
+        "git_blob_sha1": "2cbf1cefc9611622037f31ec44c1f97c0b046bcb",
+        "path": "docs/M07_PROTOCOL.md",
+        "sha256": "fe535c60ca7950752d3214002996dc9afb07f11450bdb704ba06bade363159f6"
+      },
+      {
+        "bytes": 7288,
+        "git_blob_sha1": "bc000f6731363882a766793445992b83cf3d7551",
+        "path": "docs/M14_ACCEPTANCE_GATE.md",
+        "sha256": "6ebd280a54394030305d2c0bba8d861338279aaf9135b8c2fe4ea63a20fa422f"
+      },
+      {
+        "bytes": 12472,
+        "git_blob_sha1": "db952c6aac628ca72ad5b0612392bdc441e56d79",
+        "path": "docs/M15_ACCEPTANCE_GATE.md",
+        "sha256": "b34ae8647e4626e25ee02569cedb0ae4e1e16dc5dd5294fd85fe6fb701e8147a"
+      },
+      {
+        "bytes": 3272,
+        "git_blob_sha1": "152af8393e67a912f945bf5582cfb9d34acd532d",
+        "path": "docs/M15_PRIOR_WORK.md",
+        "sha256": "7a6469e8f368fd7954fdd148ce41ed39bf79def66f366454ebf2d7a518223740"
+      },
+      {
+        "bytes": 194,
+        "git_blob_sha1": "44e005af515716de9b8046fd89b489ac9027fb50",
+        "path": "docs/M17_RUN_REQUEST.json",
+        "sha256": "f6078b5a84f5d859ef36b396b08578de1d1f30d9e2a452c9385851e48c539850"
+      },
+      {
+        "bytes": 6805,
+        "git_blob_sha1": "1085222fac25c063e81cbd4fcc3cb8a29d69a50f",
+        "path": "docs/RESEARCH_ENGINEERING.md",
+        "sha256": "1860feb29d5f5d5c72f27012f1434b4061073e237a2854e320a522ade5da23f1"
+      },
+      {
+        "bytes": 13750,
+        "git_blob_sha1": "a5cc15173d465161ffd2c1c05729a9148219b48b",
+        "path": "docs/RESEARCH_REVIEW_20260911.md",
+        "sha256": "992b58c2b26014e35010e69df22b7cdca4508140f36d5e52a0e973c85998ae64"
+      },
+      {
+        "bytes": 11000,
+        "git_blob_sha1": "e06a90e934cdfdb1fbb437c2f86bf05deebfc241",
+        "path": "docs/RESEARCH_STATE.md",
+        "sha256": "f53567d9d4d23b34d93e913f7dae7d5c40969c898c94f812f45c9569e80043a3"
+      },
+      {
+        "bytes": 41049,
+        "git_blob_sha1": "0a3a815e040d12aa9686dfe164111a686c64d08b",
+        "path": "docs/RESEARCH_STATE_M01_M04.md",
+        "sha256": "b8d80c53875ffa9b112222a995307682740805d77f0709e488dc11dfac7ab4cf"
+      }
+    ],
+    "purpose": "Retire superseded neural milestone registers, reviews, acceptance reports, proposals and a completed run request from the active documentation. Preserve all original decisions, failures, numeric gates and evidence in the immutable Part 3 ancestor.",
+    "recovery_command": "git show <archive_commit>:<path> > <destination>",
+    "source_commit": "3cc96a4fd7559cf0cd146a5fd6d52c475d2c0f6b",
+    "total_bytes": 162357,
+    "verification": "Every removed raw file matches its recorded SHA-256 and Git blob in the named immutable ancestor. No current code or tests read these documents; retained navigation links point to the archived copies."
+  },
   "retired_validation_logs": {
     "archive_commit": "0b68898f3e64063ac3dc8904ae42f0b33590e7af",
     "archive_ref": "archive/research-history-20261016",

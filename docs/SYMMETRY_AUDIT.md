@@ -78,4 +78,4 @@ A group-disjoint split changes the sampling distribution. Publish both the legac
 
 ## Next scientific gate
 
-See [CPU research gates](CPU_RESEARCH_GATES.md). This change supplies a stronger evaluation instrument and a necessary cheap comparator. It does not itself improve neural capability, establish cross-task search, demonstrate a latency advantage, or prove frontier-lab hiring equivalence.
+See [CPU research gates](https://github.com/tugrapaydiner/SPECTRA/blob/45b7fba65d0eb702616b1f617b3e4f0017fb4438/docs/CPU_RESEARCH_GATES.md). This change supplies a stronger evaluation instrument and a necessary cheap comparator. It does not itself improve neural capability, establish cross-task search, demonstrate a latency advantage, or prove frontier-lab hiring equivalence.
