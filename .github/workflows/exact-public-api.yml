@@ -29,7 +29,6 @@ on:
       - 'docs/EXACT_API.md'
       - 'docs/EXACT_REPLICATION.md'
       - 'experiments/compiled_query/exact.py'
-      - 'experiments/compiled_query/exact_native.cpp'
       - 'experiments/compiled_query/test_exact.py'
       - 'experiments/compiled_query/test_transfer_hardening.py'
       - 'experiments/compiled_query/test_proof_replay.py'

@@ -23,7 +23,7 @@ import traceback
 
 from .binary_list import BinaryListProblem
 from .cases import Case, canonical, digest
-from .exact import ExactRuntime, pack_session_packet
+from .exact import SOURCE, ExactRuntime, pack_session_packet
 from .proof_replay import OriginalReplay
 from .sessions import decode_certified_output
 
@@ -270,7 +270,7 @@ def run(root: Path, current: Path, prior: Path):
     if current is None or prior is None or not current.is_file() or not prior.is_file():
         raise ValueError('two explicit native libraries required')
     builds = [json.loads(p.with_name('build.json').read_bytes()) for p in (current, prior)]
-    expected_sources = [digest(Path(__file__).with_name('exact_native.cpp').read_bytes()), PRIOR_SOURCE_SHA256]
+    expected_sources = [digest(SOURCE.read_bytes()), PRIOR_SOURCE_SHA256]
     for library, build, source_hash in zip((current, prior), builds, expected_sources):
         if build['source_sha256'] != source_hash or build['library_sha256'] != digest(library.read_bytes()):
             raise ValueError('explicit native baseline/source receipt differs')

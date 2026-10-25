@@ -41,13 +41,14 @@ def tiny_problem() -> ExactProblem:
 
 
 def test_public_contract_versions_and_packaged_source_identity():
+    from experiments.compiled_query.exact import SOURCE as research_source
+    from experiments.compiled_query.study import sources
+
     assert EXACT_API_VERSION == 1
     assert EXACT_NATIVE_ABI == 3
     packaged = ROOT / 'spectra/_native/exact_binary.cpp'
-    research = ROOT / 'experiments/compiled_query/exact_native.cpp'
-    assert packaged.read_bytes() == research.read_bytes()
-    assert hashlib.sha256(packaged.read_bytes()).hexdigest() == hashlib.sha256(
-        research.read_bytes()).hexdigest()
+    assert research_source.resolve() == packaged.resolve()
+    assert sources()[str(packaged.relative_to(ROOT))] == hashlib.sha256(packaged.read_bytes()).hexdigest()
 
 
 def test_problem_canonicalizes_inputs_but_packets_require_canonical_bytes():

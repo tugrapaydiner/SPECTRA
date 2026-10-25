@@ -23,7 +23,7 @@ from typing import Iterable, Sequence
 from .binary_list import BinaryListProblem
 from spectra._native_build import native_load_guard, publish_build, snapshot_source
 
-SOURCE = Path(__file__).with_name('exact_native.cpp')
+SOURCE = Path(__file__).resolve().parents[2] / 'spectra/_native/exact_binary.cpp'
 DEFAULT_BYTES = 512 << 20
 MAX_BYTES = (1 << 64) - 1
 QUERY_BANK_HEADER = struct.Struct('<4sIII')
