@@ -667,12 +667,12 @@ class _CertifiedBankReplay:
     def __init__(self, problem: ExactProblem):
         self.problem = problem
         self.n = problem.n
-        self.k = problem.palette
         self.masks = problem.masks
         self.edges = problem.edges
         self.edge_set = frozenset(problem.edges)
         self.choices = tuple(
-            tuple(color for color in range(self.k) if mask >> color & 1)
+            (mask.bit_length() - 1,) if mask.bit_count() == 1 else
+            ((mask & -mask).bit_length() - 1, mask.bit_length() - 1)
             for mask in self.masks
         )
 
