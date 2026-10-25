@@ -55,7 +55,7 @@ def test_immutable_and_source_local_actions_are_accepted(reference):
 def test_current_workflow_actions_are_immutable():
     report = active_tree.check(ROOT)
     assert report['action_steps_checked'] > 0
-    assert len(report['active_workflows']) == 8
+    assert len(report['active_workflows']) == 7
 
 
 @pytest.mark.parametrize('raw', [
