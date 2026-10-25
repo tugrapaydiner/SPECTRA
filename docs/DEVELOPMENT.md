@@ -13,6 +13,10 @@ python scripts/check_release_readiness.py
 python scripts/audit_workspace.py --out workspace-audit.json
 ```
 
+Run these development commands from a Git checkout. The full tests and research
+harnesses stay in the repository; distribution archives contain the package,
+native build sources, selected public guides and example inputs.
+
 The base package has no mandatory third-party dependencies; the `test` extra adds
 pytest and the pinned SAT wrapper required by public exact-query contracts. Native
 builds are explicit and never occur during import.
@@ -25,7 +29,7 @@ Use fresh output directories; the wheel checker rejects stale or ambiguous build
 python -m pip install build
 python -m build --outdir .release-check/dist
 python scripts/check_current_installation.py \
-  --dist .release-check/dist --out .release-check/install
+  --dist .release-check/dist --check-sdist --out .release-check/install
 .release-check/install/venv/bin/python -I scripts/check_exact_installation.py \
   --out .release-check/install/exact.json
 .release-check/install/venv/bin/python -I scripts/check_exam_repair_installation.py \
@@ -37,6 +41,11 @@ The concise current-build form is:
 ```bash
 python scripts/check_current_installation.py --dist dist/current --out install-check
 ```
+
+Add `--check-sdist` to require the source archive too. The checker rejects extra,
+missing, changed, duplicate or linked archive files before installation. CI keeps
+built packages outside the upload directory until package and installed API checks
+pass. The wheel-only form remains available for existing wheel distributions.
 
 The canonical fast CPU matrix runs on Python 3.11 and 3.13. It executes the active
 test suite, native builds, the optimizer/energy smoke test, release checks, and the

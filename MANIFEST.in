@@ -13,3 +13,5 @@ include docs/SVM_RECEIPTS.md docs/SVM_SHARED.md docs/SVM_STREAM.md
 include docs/history/README.md
 recursive-include spectra/_native *.cpp *.h *.hpp
 include assets/readme/*.svg assets/readme/chart-data.json
+prune tests
+prune test

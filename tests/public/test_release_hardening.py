@@ -162,7 +162,9 @@ def make_wheel(directory, *, metadata=None, missing=None, extra=None):
         if extra:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', UserWarning)
-                archive.writestr(*extra)
+                entry = zipfile.ZipInfo(extra[0])
+                entry.filename = extra[0]  # Preserve adversarial separators on Windows.
+                archive.writestr(entry, extra[1])
     return wheel
 
 
@@ -288,9 +290,14 @@ def test_real_checkout_release_metadata():
     assert readiness.check(ROOT)['version'] == __version__
 
 
-@pytest.mark.parametrize('name', ['../escape', '/absolute', 'dir\\escape'])
+@pytest.mark.parametrize('name', [
+    '../escape', '/absolute', 'dir\\escape', 'dir\0hidden.py', 'C:/escape',
+    'C:relative', 'dir//alias', 'dir/./alias',
+])
 def test_unsafe_wheel_paths_rejected(tmp_path, name):
-    make_wheel(tmp_path, extra=(name, b'x'))
+    path = make_wheel(tmp_path, extra=(name, b'x'))
+    with zipfile.ZipFile(path) as archive:
+        assert name in [entry.orig_filename for entry in archive.infolist()]
     with pytest.raises(ValueError, match='unsafe'):
         wheel_check.select_wheel(tmp_path)
 

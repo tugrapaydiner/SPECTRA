@@ -74,8 +74,8 @@ jobs:
       - name: Build wheel from sdist and verify outside-checkout installation
         run: |
           set -o pipefail
-          python -m build --outdir .public-package/dist | tee .public-package/build.txt
-          python scripts/check_current_installation.py --dist .public-package/dist \
+          python -m build --outdir dist/current | tee .public-package/build.txt
+          python scripts/check_current_installation.py --dist dist/current --check-sdist \
             --out .public-package/install | tee .public-package/install.txt
           .public-package/install/venv/bin/python -I scripts/check_focused_installation.py \
             | tee .public-package/focused-install.txt
@@ -85,6 +85,7 @@ jobs:
             --out .public-package/exact-install.json | tee .public-package/exact-install.txt
           .public-package/install/venv/bin/python -I scripts/check_exam_repair_installation.py \
             --out .public-package/exam-repair-install.json | tee .public-package/exam-repair-install.txt
+          cp -r dist/current .public-package/dist
       - name: Run and replay the current compact-state contract
         run: |
           set -o pipefail
