@@ -45,9 +45,8 @@ as peak memory, and do not infer energy from latency. Profiling is a separate
 instrumented pass, never substituted for uninstrumented timing.
 
 Report every case, regressions, medians and tails. Repeated timings are not
-independent artifacts. No universal speedup, novelty, quality improvement or
-hiring-level conclusion follows from a passing implementation check. Until the
-final frozen matrix runs, this document specifies evaluation safeguards rather
+independent artifacts. No universal speedup, novelty or quality improvement
+follows from a passing implementation check. Until the final frozen matrix runs, this document specifies evaluation safeguards rather
 than a preregistered numerical success threshold. A later benchmark configuration
 freeze must be distinguished from this protocol's publication.
 

@@ -131,9 +131,9 @@ pseudo-Boolean checkers where required; `drat-trim` does not check those formats
 Keep standalone SPECTRA-G results separate from upstream solvers and frontend or
 portfolio results. This 96-formula, eight-entry, shared-host development campaign
 has short limits and an incomplete roadmap field. It does not establish hidden
-confirmation, independent replication, official competition rank, or the 100/100
-gate. Preserve evidence beyond expiring CI artifacts as described in
-[the release guide](RELEASING.md#repository-boundary).
+confirmation, independent replication, official competition rank, or completion
+of the declared research program. Preserve evidence beyond expiring CI artifacts
+as described in [the release guide](RELEASING.md#repository-boundary).
 
 Admission bounds each decoded physical-line read by the remaining DIMACS byte
 budget plus one overflow-probe byte. This prevents unbounded physical-line reads;
