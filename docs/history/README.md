@@ -3,6 +3,9 @@
 The active tree contains maintained source, regression tests and user-facing
 instructions. Reproduce historical experiments from their complete pinned trees:
 
+- [Retired milestone runners](https://github.com/tugrapaydiner/SPECTRA/tree/21ef4511ed586c7509c55657dfbbccfb396a1bab)
+  retains one-shot M02-M15 runners, report generators and superseded protocol
+  notes. Numerical replay helpers and current runtime tests stay active.
 - [Completed study source and tests](https://github.com/tugrapaydiner/SPECTRA/tree/757babb05bd631c89075f374ba765a197a1fb77b)
   retains the WAP confirmation harness, earlier CNF/SVM studies, their reports,
   and the README chart generator. Active copies of those completed runners
