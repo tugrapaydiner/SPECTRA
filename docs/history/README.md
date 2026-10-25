@@ -3,6 +3,10 @@
 The active tree contains maintained source, regression tests and user-facing
 instructions. Reproduce historical experiments from their complete pinned trees:
 
+- [Failure-information development study](https://github.com/tugrapaydiner/SPECTRA/tree/e2cc522fe7f435c7aca02080475e05e24b718aeb)
+  retains the exact frozen runners, protocols, failed feedback gate, initial
+  aggregation failure and complete replay evidence. Maintained selector and
+  symmetry components keep their current regression tests.
 - [Legacy figure and report tools](https://github.com/tugrapaydiner/SPECTRA/tree/6c47ff9c870a7ac209b1d40ad83249a59743b192/scripts)
   retains the archived PNG chart generators and blueprint-era report formatter.
   Current SVG figures, measurement tools and their inputs are separate.
