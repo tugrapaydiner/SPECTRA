@@ -741,16 +741,12 @@ class _CertifiedBankReplay:
         return True
 
 
-def verify_certified_output(problem: ExactProblem,
-                            queries: Iterable[Iterable[Sequence[int]]],
+def _verify_admitted_output(problem: ExactProblem,
+                            rows: tuple[tuple[tuple[int, int], ...], ...],
                             output: bytes) -> bool:
-    """Replay every SCQ2 row from original Python inputs only."""
     try:
-        checked = ExactProblem.create(problem.n, problem.palette,
-                                      problem.edges, problem.masks)
-        rows = tuple(checked.freeze_query(query) for query in queries)
-        answers = decode_certified_output(output, checked.n, len(rows))
-        replay = _CertifiedBankReplay(checked)
+        answers = decode_certified_output(output, problem.n, len(rows))
+        replay = _CertifiedBankReplay(problem)
         return all(
             replay.verify(query, code, labels, proof)
             for query, (code, labels, proof) in zip(rows, answers)
@@ -759,13 +755,26 @@ def verify_certified_output(problem: ExactProblem,
         return False
 
 
+def verify_certified_output(problem: ExactProblem,
+                            queries: Iterable[Iterable[Sequence[int]]],
+                            output: bytes) -> bool:
+    """Replay every SCQ2 row from original Python inputs only."""
+    try:
+        checked = ExactProblem.create(problem.n, problem.palette,
+                                      problem.edges, problem.masks)
+        rows = tuple(checked.freeze_query(query) for query in queries)
+    except (ValueError, TypeError, AttributeError, IndexError, OverflowError, struct.error):
+        return False
+    return _verify_admitted_output(checked, rows, output)
+
+
 def verify_session_output(packet: bytes, output: bytes) -> bool:
     """Replay an SBC1 -> SCQ2 result without loading native code."""
     try:
         problem, rows = unpack_session_packet(packet)
     except (ValueError, TypeError, struct.error):
         return False
-    return verify_certified_output(problem, rows, output)
+    return _verify_admitted_output(problem, rows, output)
 
 
 __all__ = [

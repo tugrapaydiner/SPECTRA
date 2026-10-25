@@ -87,6 +87,42 @@ def test_standard_library_verifier_accepts_sat_and_empty_domain_unsat():
     assert not verify_answer(problem, (), 'SAT_VERIFIED', b'\x00\x00', b'')
 
 
+def test_bank_replay_revalidates_caller_supplied_inputs():
+    problem = tiny_problem()
+    output = struct.pack('<4sIQ', b'SCQ2', 2, 1) + b'\x01\x00\x01' + struct.pack('<I', 0)
+    assert verify_certified_output(problem, ((),), output)
+    for query in (((True, 2),), ((0, True),), ((-1, 2),)):
+        assert not verify_certified_output(problem, (query,), output)
+
+    object.__setattr__(problem, 'masks', (True, 0b11))
+    assert not verify_certified_output(problem, ((),), output)
+
+
+def test_session_replay_rejects_malformed_packet_inputs():
+    problem = ExactProblem.create(3, 2, ((0, 1), (1, 2)), (0b11,) * 3)
+    packet = pack_session_packet(problem, (((0, 1),),))
+    output = struct.pack('<4sIQ', b'SCQ2', 3, 1) + b'\x01\x00\x01\x00' + struct.pack('<I', 0)
+    assert verify_session_output(packet, output)
+    masks_at = struct.calcsize('<4s7I')
+    edges_at = masks_at + 8 * problem.n
+    offsets_at = edges_at + 8 * len(problem.edges)
+    vertices_at = offsets_at + 8
+    for offset, data in (
+        (24, struct.pack('<I', 1)),
+        (masks_at, struct.pack('<Q', 0)),
+        (masks_at, struct.pack('<Q', 7)),
+        (edges_at, struct.pack('<II', 1, 0)),
+        (edges_at + 8, struct.pack('<II', 0, 1)),
+        (offsets_at + 4, struct.pack('<I', 0)),
+        (vertices_at, struct.pack('<I', problem.n)),
+    ):
+        damaged = bytearray(packet)
+        damaged[offset:offset + len(data)] = data
+        assert not verify_session_output(bytes(damaged), output), (offset, data)
+    for damaged in (packet[:-1], packet + b'\x00', bytearray(packet)):
+        assert not verify_session_output(damaged, output)
+
+
 @pytest.mark.parametrize('palette,mask', [
     (1, 1), (2, 1), (2, 3), (8, (1 << 2) | (1 << 7)),
     (64, 1 << 63), (64, 1 | (1 << 63)),
