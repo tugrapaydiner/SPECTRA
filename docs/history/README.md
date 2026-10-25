@@ -3,6 +3,9 @@
 The active tree contains maintained source, regression tests and user-facing
 instructions. Reproduce historical experiments from their complete pinned trees:
 
+- [Historical efficiency release assembly](https://github.com/tugrapaydiner/SPECTRA/tree/ad09a843d938f1e773e953c771520047975bbc05)
+  retains the original three-job publication workflow, its evidence packager and
+  dedicated tests. Current release validation uses the maintained package checks.
 - [Failure-information development study](https://github.com/tugrapaydiner/SPECTRA/tree/e2cc522fe7f435c7aca02080475e05e24b718aeb)
   retains the exact frozen runners, protocols, failed feedback gate, initial
   aggregation failure and complete replay evidence. Maintained selector and
@@ -12,7 +15,8 @@ instructions. Reproduce historical experiments from their complete pinned trees:
   Current SVG figures, measurement tools and their inputs are separate.
 - [Frozen ITC selector-v10 study](https://github.com/tugrapaydiner/SPECTRA/tree/9e1037f2b46780dc943804f8726cee042108d15a)
   retains the matching native selector, transfer runners, dedicated tests,
-  protocols, timing amendments and manual workflow. The current selector is v11;
+  protocols, timing amendments, selector-v10 WAP guard and manual workflow.
+  The current selector is v11;
   old holdout runs must use their original source and declared gates.
 - [Retired milestone runners](https://github.com/tugrapaydiner/SPECTRA/tree/21ef4511ed586c7509c55657dfbbccfb396a1bab)
   retains one-shot M02-M15 runners, report generators and superseded protocol
