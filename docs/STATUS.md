@@ -89,8 +89,8 @@ Under the exact published Python 3.13 contract:
 - SPECTRA won on all five prospectively unopened graphs.
 
 The exact result and immutable identities are in
-[the holdout report](../experiments/wap_support/HOLDOUT_RESULTS_20261009.md).
-The [gate ledger](../experiments/wap_support/FLAGSHIP_GATE_LEDGER.md) records a
+[the holdout report](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/HOLDOUT_RESULTS_20261009.md).
+The [gate ledger](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/FLAGSHIP_GATE_LEDGER.md) records a
 **result-level flagship PASS within this narrow contract**. It explicitly does not
 establish that SPECTRA is a generally superior reasoning, SAT, or colouring system.
 
@@ -103,9 +103,9 @@ research-evidence front end added a large common cost. Those failures remain par
 the result and the threshold was not relaxed.
 
 See the
-[cross-environment report](../experiments/wap_support/CROSS_ENVIRONMENT_REPRODUCTION_20261009.md),
-[certificate reproduction](../experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md),
-and [replication guide](../experiments/wap_support/REPLICATION.md).
+[cross-environment report](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/CROSS_ENVIRONMENT_REPRODUCTION_20261009.md),
+[certificate reproduction](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md),
+and [replication guide](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/REPLICATION.md).
 Independent outside-team replication remains open in issue #55.
 
 ## Claim boundary
@@ -131,8 +131,8 @@ Not established:
 - validation of historical neural, MCTS, low-bit, or general-reasoner claims.
 
 The precise wording boundary and closest-work review are retained in
-[NOVELTY_AND_CLAIM_BOUNDARY.md](../experiments/wap_support/NOVELTY_AND_CLAIM_BOUNDARY.md)
-and [PRIOR_ART_AUDIT_20261009.md](../experiments/wap_support/PRIOR_ART_AUDIT_20261009.md).
+[NOVELTY_AND_CLAIM_BOUNDARY.md](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/NOVELTY_AND_CLAIM_BOUNDARY.md)
+and [PRIOR_ART_AUDIT_20261009.md](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/PRIOR_ART_AUDIT_20261009.md).
 
 ## Other retained tracks
 

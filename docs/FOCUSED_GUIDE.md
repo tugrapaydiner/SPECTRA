@@ -3,12 +3,12 @@
 `solve_focused` is an opt-in classical local-search candidate. It uses a dense
 swap-delete pool of unsatisfied clauses and a break-count/last-flip-age move
 policy. It does not train a model, prove UNSAT, or replace the historical default.
-A [fresh frozen evaluation](../experiments/focused_evaluation/RESULTS.md) verifies
+A [fresh frozen evaluation](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/focused_evaluation/RESULTS.md) verifies
 102/192 synthetic formula/seed cases versus indexed search's 60/192, with 29.6%
 lower mean complete solve time and no meaningful measured memory saving. The
 predeclared optional-backend gate passes; large uniform cases remain mostly
 unresolved. This is a single-host synthetic result, with unequal native budgets.
-The earlier [recovery record](../experiments/focused_search/RECOVERY.md) retains
+The earlier [recovery record](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/focused_search/RECOVERY.md) retains
 the separate lost-run limitations; the new study does not recover those raw rows.
 
 ```python

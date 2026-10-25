@@ -3,6 +3,10 @@
 The active tree contains maintained source, regression tests and user-facing
 instructions. Reproduce historical experiments from their complete pinned trees:
 
+- [Completed study source and tests](https://github.com/tugrapaydiner/SPECTRA/tree/757babb05bd631c89075f374ba765a197a1fb77b)
+  retains the WAP confirmation harness, earlier CNF/SVM studies, their reports,
+  and the README chart generator. Active copies of those completed runners
+  and their exclusive tests are retired; shipped APIs and their tests remain.
 - [Part 3 evidence before cleanup](https://github.com/tugrapaydiner/SPECTRA/tree/38c13990a1ba92229cf5cf2a57b1a600b218889e)
   retains the run artifacts and diagnostic harnesses removed from this checkout.
 - [Earlier research archive](https://github.com/tugrapaydiner/SPECTRA/tree/0b68898f3e64063ac3dc8904ae42f0b33590e7af)

@@ -26,15 +26,15 @@ This is a narrow result—not a claim that SPECTRA beats SAT solvers or graph-co
 systems generally, not an ordinary chromatic-number result, and not evidence for
 historical “general reasoner,” MCTS, low-bit, or neural claims.
 
-[Confirmed result](experiments/wap_support/HOLDOUT_RESULTS_20261009.md) ·
-[Paper draft](experiments/wap_support/PAPER_DRAFT.md) ·
-[Exact protocol](experiments/wap_support/PROTOCOL.md) ·
-[Gate ledger](experiments/wap_support/FLAGSHIP_GATE_LEDGER.md) ·
-[Novelty boundary](experiments/wap_support/NOVELTY_AND_CLAIM_BOUNDARY.md) ·
-[Prior-art audit](experiments/wap_support/PRIOR_ART_AUDIT_20261009.md) ·
-[Cross-environment results](experiments/wap_support/CROSS_ENVIRONMENT_REPRODUCTION_20261009.md) ·
-[Certificate reproduction](experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md) ·
-[Replication guide](experiments/wap_support/REPLICATION.md)
+[Confirmed result](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/HOLDOUT_RESULTS_20261009.md) ·
+[Paper draft](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/PAPER_DRAFT.md) ·
+[Exact protocol](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/PROTOCOL.md) ·
+[Gate ledger](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/FLAGSHIP_GATE_LEDGER.md) ·
+[Novelty boundary](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/NOVELTY_AND_CLAIM_BOUNDARY.md) ·
+[Prior-art audit](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/PRIOR_ART_AUDIT_20261009.md) ·
+[Cross-environment results](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/CROSS_ENVIRONMENT_REPRODUCTION_20261009.md) ·
+[Certificate reproduction](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md) ·
+[Replication guide](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/REPLICATION.md)
 
 The current unreleased tree also contains a
 [versioned proof-carrying exact-query API](docs/EXACT_API.md) with explicit native
@@ -169,7 +169,7 @@ Acquire the five graph blobs listed in
 marijnheule/clicolcom@4932048642da2144f387961b595112277afff82f
 ```
 
-Then follow [REPLICATION.md](experiments/wap_support/REPLICATION.md). The results
+Then follow [REPLICATION.md](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/REPLICATION.md). The results
 branch retains the full Ubuntu 22/24 × Python 3.11/3.13 matrix. Project-owned CI is
 cross-environment reproduction, not independent-team replication.
 

@@ -47,8 +47,8 @@ lifetime, input-schema and per-input SVM-cache isolation rules remain unchanged.
 
 ## Measured scope and reproduction
 
-See `experiments/native_preprocessing/PROTOCOL.md` and
-`RAW_CONTAINER_AMENDMENT.md` there. The first locally frozen matrix failed its
+See the [historical preprocessing study](https://github.com/tugrapaydiner/SPECTRA/tree/757babb05bd631c89075f374ba765a197a1fb77b/experiments/native_preprocessing)
+for its protocol and raw-container amendment. The first locally frozen matrix failed its
 1.20x-on-every-task point gate narrowly on Titanic; it is retained. The separately
 frozen second matrix includes both compiled paths and the specialized NumPy/native
 control. This is adaptive engineering on eighteen already-consumed models from six
@@ -65,7 +65,9 @@ snapshots. `bench.py` requires explicitly trusted frozen sklearn receipts for it
 reference arm; deployment never loads those pickles. `audit.py` uses only the
 standard library and does not import benchmark aggregation or the native runtime.
 It checks every feature byte, bound input/source file, timing row/order and summary;
-it does not authenticate a maliciously replaced entire evidence packet.
+it does not authenticate a maliciously replaced entire evidence packet. The
+benchmark and audit commands below require that historical checkout; the current
+SVM regression suite remains in this tree.
 
 ```bash
 python -m pytest tests/svm --confcutdir=tests/svm

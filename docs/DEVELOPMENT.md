@@ -195,7 +195,7 @@ file inventory remains unchanged.
 ## Flagship reproduction
 
 The WAP confirmation result is immutable. Follow
-[the replication guide](../experiments/wap_support/REPLICATION.md) from the named
+[the replication guide](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/REPLICATION.md) from the named
 frozen source commit. A later run is reproduction, not a second confirmation and
 not permission to retune the protocol.
 
@@ -210,5 +210,6 @@ paths and hashes are recorded in [`results/HISTORICAL_ARCHIVES.json`](https://gi
 ## README figures
 
 The active README uses compact SVG assets. Historical PNG figures are archived.
-`python scripts/render_readme_charts.py --check` validates the current SVG/chart
-sources without running benchmarks.
+The [historical generator](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/scripts/render_readme_charts.py)
+checks the source hashes and regenerates the figures from its complete pinned
+tree. Chart values and SVG assets are unchanged by archiving that tool.
