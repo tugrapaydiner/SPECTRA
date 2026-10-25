@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 
@@ -48,3 +49,49 @@ def test_corrupt_result(tmp_path,damage):
     else:raw=raw.replace(b'"rows": 2',b'"rows": 3')
     path.write_bytes(raw)
     with pytest.raises(ValueError):check(path)
+
+
+def padded_record(index, length, newline=True):
+    lines = fixture_bytes().splitlines(keepends=True)
+    body = lines[index].rstrip(b"\n")
+    suffix = b"\n" if newline else b""
+    lines[index] = body + b" " * (length - len(body) - len(suffix)) + suffix
+    if index < 3:
+        footer = json.loads(lines[3])
+        footer["output_prefix_sha256"] = hashlib.sha256(b"".join(lines[:3])).hexdigest()
+        lines[3] = (json.dumps(footer) + "\n").encode()
+    return b"".join(lines)
+
+
+@pytest.mark.parametrize("index,limit,newline", [
+    (0, 4*1024*1024, True), (1, 1024*1024, True),
+    (3, 1024*1024, True), (3, 1024*1024, False),
+])
+def test_record_exactly_at_limit_is_valid(tmp_path, index, limit, newline):
+    raw = padded_record(index, limit, newline)
+    path = tmp_path / "boundary.jsonl"
+    path.write_bytes(raw)
+    assert check(path)["output_sha256"] == hashlib.sha256(raw).hexdigest()
+
+
+@pytest.mark.parametrize("index,limit", [(0, 4*1024*1024), (1, 1024*1024), (3, 1024*1024)])
+def test_oversized_records_are_rejected_before_unbounded_read(monkeypatch, index, limit):
+    reads = []
+    class MeasuredStream(io.BytesIO):
+        def readline(self, size=-1):
+            value = super().readline(size)
+            reads.append(len(value))
+            return value
+
+        def __next__(self):
+            value = self.readline()
+            if not value:
+                raise StopIteration
+            return value
+
+    stream = MeasuredStream(padded_record(index, limit + 4096))
+    monkeypatch.setattr(audit.Path, "open", lambda *args, **kwargs: stream)
+    with pytest.raises(ValueError, match="oversized"):
+        check("oversized.jsonl")
+    assert reads[0] <= 4*1024*1024 + 1
+    assert all(size <= 1024*1024 + 1 for size in reads[1:])
