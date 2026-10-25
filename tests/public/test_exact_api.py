@@ -86,6 +86,23 @@ def test_standard_library_verifier_accepts_sat_and_empty_domain_unsat():
     assert not verify_answer(problem, (), 'SAT_VERIFIED', b'\x00\x00', b'')
 
 
+@pytest.mark.parametrize('palette,mask', [
+    (1, 1), (2, 1), (2, 3), (8, (1 << 2) | (1 << 7)),
+    (64, 1 << 63), (64, 1 | (1 << 63)),
+])
+def test_bank_domain_checks_match_scalar_verifier_for_every_byte(palette, mask):
+    problem = ExactProblem.create(1, palette, (), (mask,))
+    queries = ((), ((0, 0),), ((0, mask),), ((0, 1),),
+               ((0, (1 << 64) - 1),), ((0, 1), (0, 1 << 63)))
+    header = struct.pack('<4sIQ', b'SCQ2', 1, 1)
+    for color in range(256):
+        labels = bytes((color,))
+        output = header + b'\x01' + labels + struct.pack('<I', 0)
+        for query in queries:
+            expected = verify_answer(problem, query, 'SAT_VERIFIED', labels, b'')
+            assert verify_certified_output(problem, (query,), output) == expected
+
+
 def _compiler_available() -> bool:
     return bool(shutil.which('cl' if sys.platform == 'win32' else 'g++'))
 

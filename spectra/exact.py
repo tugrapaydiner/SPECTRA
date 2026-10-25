@@ -709,8 +709,8 @@ class _CertifiedBankReplay:
                 not certificate
                 and len(labels) == self.n
                 and all(
-                    color < self.k and (self.masks[vertex] >> color) & 1
-                    for vertex, color in enumerate(labels)
+                    color in choices
+                    for color, choices in zip(labels, self.choices)
                 )
                 and all(labels[left] != labels[right] for left, right in self.edges)
                 and all((allowed >> labels[vertex]) & 1 for vertex, allowed in query)
