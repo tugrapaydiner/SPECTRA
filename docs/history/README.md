@@ -3,6 +3,10 @@
 The active tree contains maintained source, regression tests and user-facing
 instructions. Reproduce historical experiments from their complete pinned trees:
 
+- [Frozen ITC selector-v10 study](https://github.com/tugrapaydiner/SPECTRA/tree/9e1037f2b46780dc943804f8726cee042108d15a)
+  retains the matching native selector, transfer runners, dedicated tests,
+  protocols, timing amendments and manual workflow. The current selector is v11;
+  old holdout runs must use their original source and declared gates.
 - [Retired milestone runners](https://github.com/tugrapaydiner/SPECTRA/tree/21ef4511ed586c7509c55657dfbbccfb396a1bab)
   retains one-shot M02-M15 runners, report generators and superseded protocol
   notes. Numerical replay helpers and current runtime tests stay active.

@@ -54,7 +54,7 @@ pull request.
 
 ### Permanent workflow dependencies
 
-All eight permanent workflows pin external Actions to full immutable commit SHAs.
+All seven permanent workflows pin external Actions to full immutable commit SHAs.
 The official major-version refs were verified through GitHub's `git/ref/tags`
 API on 2026-10-21:
 
@@ -85,9 +85,10 @@ Explicit `raw`, `scc`, `sparse`, and `route` modes remain available for controll
 comparisons. Selection uses admitted structure only, never cached answers or timing
 feedback.
 
-The full ITC suite is intentionally manual because it downloads pinned upstream
-inputs and performs a long cross-platform evaluation. Trigger
-`itc-exam-suite.yml` only when changing the exam adapter, exact engine, or protocol.
+The completed ITC selector-v10 study and its manual workflow live in the
+[historical source tree](https://github.com/tugrapaydiner/SPECTRA/tree/9e1037f2b46780dc943804f8726cee042108d15a).
+Use that complete revision for its frozen protocol; current adapter checks above
+exercise the maintained API without downloading the old holdouts.
 
 ## General-CNF reproduction
 

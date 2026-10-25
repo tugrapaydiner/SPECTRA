@@ -21,7 +21,6 @@ EXPECTED_WORKFLOWS = {
     "cpu-regression.yml",
     "exact-public-api.yml",
     "general-cnf.yml",
-    "itc-exam-suite.yml",
     "public-package.yml",
     "repository-audit.yml",
     "svm-portability.yml",

@@ -45,7 +45,7 @@ synthetic development graphs and do not replace the frozen WAP result above.
 **Package: Python 3.10+ · Flagship complete-call result: Python 3.13 · MIT-licensed project code · CPU-first · explicit verification boundaries**
 
 The active checkout is intentionally lean: current source, tests, compact summaries,
-and eight permanent workflows. Bulky historical evidence and retired experiment
+and seven permanent workflows. Bulky historical evidence and retired experiment
 branch histories remain available from `archive/research-history-20261016` and the
 original immutable commits rather than being duplicated in every clone.
 
