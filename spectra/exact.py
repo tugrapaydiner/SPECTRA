@@ -705,16 +705,18 @@ class _CertifiedBankReplay:
     def verify(self, query: tuple[tuple[int, int], ...], code: int,
                labels: bytes, certificate: bytes) -> bool:
         if code == 1:
-            return (
-                not certificate
-                and len(labels) == self.n
-                and all(
-                    color in choices
-                    for color, choices in zip(labels, self.choices)
-                )
-                and all(labels[left] != labels[right] for left, right in self.edges)
-                and all((allowed >> labels[vertex]) & 1 for vertex, allowed in query)
-            )
+            if certificate or len(labels) != self.n:
+                return False
+            for color, choices in zip(labels, self.choices):
+                if color not in choices:
+                    return False
+            for left, right in self.edges:
+                if labels[left] == labels[right]:
+                    return False
+            for vertex, allowed in query:
+                if not ((allowed >> labels[vertex]) & 1):
+                    return False
+            return True
         if code != 0 or any(labels):
             return False
         kind, left, right = decode_proof(certificate, self.n)
