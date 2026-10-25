@@ -63,7 +63,7 @@ def set_seed(seed: int, deterministic: bool = False) -> None:
     if not isinstance(seed, int) or isinstance(seed, bool):
         raise TypeError("seed must be an integer")
     seed64 = int(seed) % (2**63 - 1)
-    os.environ["PYTHONHASHSEED"] = str(seed64)
+    os.environ["PYTHONHASHSEED"] = str(seed64 % (2**32))  # Applies to future Python processes.
     random.seed(seed64)
     np.random.seed(seed64 % (2**32))
     torch.manual_seed(seed64)
