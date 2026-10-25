@@ -1,4 +1,4 @@
-"""Position-balanced, calibrated benchmark for structural auto policy v10."""
+"""Position-balanced, calibrated benchmark for structural auto policy v11."""
 from __future__ import annotations
 
 import argparse

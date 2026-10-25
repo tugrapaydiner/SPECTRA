@@ -3,6 +3,9 @@
 The active tree contains maintained source, regression tests and user-facing
 instructions. Reproduce historical experiments from their complete pinned trees:
 
+- [Original structural transfer harness](https://github.com/tugrapaydiner/SPECTRA/tree/39e9ee0b89f1261106231ee94546758c510291ba)
+  retains the matching native source, comparator patch, frozen protocol and
+  process runner. Current benchmarks keep the unchanged shared generators.
 - [Historical efficiency release assembly](https://github.com/tugrapaydiner/SPECTRA/tree/ad09a843d938f1e773e953c771520047975bbc05)
   retains the original three-job publication workflow, its evidence packager and
   dedicated tests. Current release validation uses the maintained package checks.

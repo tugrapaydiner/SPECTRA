@@ -22,6 +22,11 @@ comparison missed its 10% speed target against improved raw execution. Its
 failed cells and the separate [failed transfer gate](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/compiled_query/TRANSFER_CI_RESULTS_20261015.json)
 remain evidence; cleanup does not change those outcomes.
 
+The [original structural transfer harness](https://github.com/tugrapaydiner/SPECTRA/tree/39e9ee0b89f1261106231ee94546758c510291ba)
+retains its matching native source, comparator patch and frozen protocol. The
+patch does not apply to the current engine. Its shared graph generators remain
+in `transfer_panel.py` for current development benchmarks.
+
 Current specialized results and limitations are summarized in
 [Status](../../docs/STATUS.md). Opened development workloads cannot become a new
 holdout, and expiring CI artifacts are not permanent research archives.
