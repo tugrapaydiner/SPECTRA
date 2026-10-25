@@ -3,6 +3,9 @@
 The active tree contains maintained source, regression tests and user-facing
 instructions. Reproduce historical experiments from their complete pinned trees:
 
+- [Legacy figure and report tools](https://github.com/tugrapaydiner/SPECTRA/tree/6c47ff9c870a7ac209b1d40ad83249a59743b192/scripts)
+  retains the archived PNG chart generators and blueprint-era report formatter.
+  Current SVG figures, measurement tools and their inputs are separate.
 - [Frozen ITC selector-v10 study](https://github.com/tugrapaydiner/SPECTRA/tree/9e1037f2b46780dc943804f8726cee042108d15a)
   retains the matching native selector, transfer runners, dedicated tests,
   protocols, timing amendments and manual workflow. The current selector is v11;
