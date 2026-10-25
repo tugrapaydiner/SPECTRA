@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import os
+import subprocess
+import sys
+import textwrap
 
 import pytest
 
@@ -87,6 +90,63 @@ def test_residual_arc_certificate_passes_independent_relation_audit(runtime):
         audit = verify_quotient(2, 3, edges, masks, certificate)
         assert audit["valid"] and audit["mapping_verified"]
         assert audit["quotient_arcs"] == len(certificate["arcs"])
+
+
+def test_certificate_releases_containers_after_allocation_failure(runtime):
+    testcapi = pytest.importorskip("_testcapi")
+    if not all(hasattr(testcapi, name) for name in ("set_nomemory", "remove_mem_hooks")):
+        pytest.skip("CPython allocation failure hooks are unavailable")
+    probe = textwrap.dedent("""
+        import _testcapi
+        import gc
+        import importlib.util
+        import sys
+
+        spec = importlib.util.spec_from_file_location('_spectra_quotient_query', sys.argv[1])
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        handle = module.create(2, 3, ((0, 1),), (3, 6), 2, 8 * 1024 * 1024)
+        export = module.certificate
+        expected = export(handle)
+        arcs = expected['arcs']
+        assert arcs
+
+        def arc_ids():
+            return {
+                id(obj) for obj in gc.get_objects()
+                if type(obj) is list and len(obj) == len(arcs)
+                and all(type(row) is tuple and all(type(value) is int for value in row)
+                        and row == target for row, target in zip(obj, arcs))
+            }
+
+        failures = 0
+        for point in range(128):
+            gc.collect()
+            before = arc_ids()
+            result = None
+            failed = False
+            _testcapi.set_nomemory(point, point + 1)
+            try:
+                result = export(handle)
+            except MemoryError:
+                failed = True
+            finally:
+                _testcapi.remove_mem_hooks()
+            failures += failed
+            if result is not None:
+                assert result == expected
+            result = None
+            gc.collect()
+            assert not (arc_ids() - before), f'certificate leaked at allocation {point}'
+            assert export(handle) == expected
+        assert failures > 0
+    """)
+    # Allocation hooks stay inside a child so failures cannot affect pytest.
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", probe, runtime._module.__file__],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_observer_owns_original_inputs_and_checks_every_constraint(runtime):

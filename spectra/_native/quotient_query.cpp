@@ -259,9 +259,10 @@ PyObject* certificate(PyObject*,PyObject* cap){auto* x=static_cast<Index*>(PyCap
     !put(d,"impossible",PyBool_FromLong(x->impossible))||!put(d,"palettes",list_w(x->palette))||
     !put(d,"initial",list_w(x->initial))||!put(d,"node",list_u(x->node))||
     !put(d,"colour0",list_b(x->colour0))||!put(d,"colour1",list_b(x->colour1))||
-    !put(d,"wide",list_b(x->wide))||!put(d,"offsets",list_u(x->off))||!put(d,"arcs",arcs)){
-   Py_DECREF(d);return nullptr;
+    !put(d,"wide",list_b(x->wide))||!put(d,"offsets",list_u(x->off))){
+   Py_DECREF(arcs);Py_DECREF(d);return nullptr;
  }
+  if(!put(d,"arcs",arcs)){Py_DECREF(d);return nullptr;}
  return d;
 }
 PyObject* support_solve(PyObject*,PyObject* args){PyObject *cap,*query;if(!PyArg_ParseTuple(args,"OO",&cap,&query))return nullptr;auto* x=static_cast<Index*>(PyCapsule_GetPointer(cap,TAG));if(!x)return nullptr;
