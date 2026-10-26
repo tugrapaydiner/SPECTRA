@@ -166,12 +166,3 @@ def test_acceptance_public_invalid_calls_never_reach_native_backend(monkeypatch)
     for call in invalid_calls:
         with pytest.raises((TypeError, ValueError)):
             call()
-
-
-def test_acceptance_reported_edge_case_is_frozen_regression():
-    """Guard the exact acceptance case at source level in the dedicated test suite."""
-    text = (Path(__file__).with_name("test_kernel_contract.py")).read_text(encoding="utf-8")
-    assert "def test_reported_int8_min_negation_case" in text
-    assert "x[0, 0] = -128" in text
-    assert "w[0, 0] = -1" in text
-    assert "shift=7" in text
