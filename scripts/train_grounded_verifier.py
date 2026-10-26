@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
 import platform
 import subprocess
@@ -39,7 +38,7 @@ from model.grounded_verifier import (
     EnsembleGroundedStateVerifier,
     GroundedStateVerifier,
 )
-from scripts._common import build_data_splits, build_trm
+from scripts._common import _plain, build_data_splits, build_trm
 from train.distill import grounded_improvement_bce_loss
 from train.trainer import TrainConfig, Trainer
 
@@ -60,24 +59,6 @@ VERIFIER_LR = 2e-3
 VERIFIER_WD = 0.01
 PERTURB_SEED = 20260717
 PERTURB_RELATIVE_SCALE = 0.10
-
-
-def _plain(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(k): _plain(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_plain(v) for v in value]
-    if isinstance(value, np.generic):
-        return value.item()
-    if torch.is_tensor(value):
-        if value.ndim == 0:
-            return value.detach().cpu().item()
-        return value.detach().cpu().tolist()
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    return value
 
 
 def write_json(path: Path, payload: Any) -> None:

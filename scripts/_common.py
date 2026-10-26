@@ -1,8 +1,13 @@
 """Shared helpers for task construction and reproducible training entry points."""
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
+from typing import Any
+
+import numpy as np
+import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -13,6 +18,24 @@ from data.splits import build_reproducible_splits, write_manifest  # noqa: E402
 from data.task_contracts import TaskContract, contract_from_config  # noqa: E402
 from model.trm import TRM  # noqa: E402
 from train.trainer import TrainConfig  # noqa: E402
+
+
+def _plain(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    if torch.is_tensor(value):
+        if value.ndim == 0:
+            return value.detach().cpu().item()
+        return value.detach().cpu().tolist()
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
 
 
 def build_trm(cfg: DotDict, ternary: bool = False, act8: bool = False) -> TRM:

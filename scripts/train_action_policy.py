@@ -28,7 +28,7 @@ from eval.checkpoint_eval import load_research_trm_checkpoint, sha256_file
 from eval.grounded_targets import assert_frozen_reasoner, generate_trajectory_states, tensor_state_sha256
 from model.latent_action import LatentActionCodebook, StateConditionedLatentActionCodebook
 from model.verifier import sudoku_score
-from scripts._common import build_data_splits, build_trm
+from scripts._common import _plain, build_data_splits, build_trm
 from train.trainer import TrainConfig, Trainer
 
 DATA_SEED = 20260909
@@ -57,24 +57,6 @@ SEARCH_CPUCT = 1.5
 BENEFIT_DELTA = 0.005
 TARGET_EQUIVALENT_CAP = 25_000
 PARAMETER_CAP = 50_000
-
-
-def _plain(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(k): _plain(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_plain(v) for v in value]
-    if isinstance(value, np.generic):
-        return value.item()
-    if torch.is_tensor(value):
-        if value.ndim == 0:
-            return value.detach().cpu().item()
-        return value.detach().cpu().tolist()
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    return value
 
 
 def write_json(path: Path, payload: Any) -> None:
