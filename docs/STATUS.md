@@ -147,8 +147,8 @@ research records.
 
 ## Active-tree boundary
 
-The normal checkout is capped by `scripts/check_active_tree.py`. It contains eight
-permanent workflows (seven automatic and one manual ITC suite). It excludes nested
+The normal checkout is capped by `scripts/check_active_tree.py`. It contains seven
+permanent validation workflows. It excludes nested
 evidence archives, generated historical PNGs, transport directories, and stale
 branch-trigger automation. Historical run dumps, internal plans and one-off
 diagnostics are outside the active tree. Public result summaries link to their immutable evidence trees;
