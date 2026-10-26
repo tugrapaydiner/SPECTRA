@@ -1,6 +1,4 @@
-"""AGI death-trap fixes: bounded latent error, virtual-loss MCTS, visit-count
-distillation, and CPU-frequency fidelity.
-"""
+"""VQ projection, batched search, visit-count distillation and CPU-frequency fallback."""
 
 import torch
 
@@ -14,7 +12,7 @@ from train.distill import alphazero_distillation_loss
 
 
 # --------------------------------------------------------------------------- #
-# DT1 -- Latent VQ bounds compounding recursion/INT8 error
+# VQ projection bounds stored values, not error against an unquantized trajectory.
 # --------------------------------------------------------------------------- #
 def test_latent_vq_snap_on_codebook_and_idempotent():
     torch.manual_seed(0)
@@ -28,21 +26,29 @@ def test_latent_vq_snap_on_codebook_and_idempotent():
     assert torch.allclose(flat, nearest, atol=1e-5)
 
 
-def test_latent_vq_bounds_error_while_free_recursion_explodes():
+def test_projected_values_stay_within_codebook_extent():
     torch.manual_seed(0)
     vq = LatentVQ(dim=16, codebook_size=128, decay=0.0)
-    A = 1.25 * torch.eye(16) + 0.1 * torch.randn(16, 16)  # spectral radius > 1 (expansive)
+    A = 1.25 * torch.eye(16) + 0.1 * torch.randn(16, 16)
 
     z_free = torch.randn(1, 1, 16)
     z_snap = z_free.clone()
     for _ in range(30):
         noise = 0.05 * torch.randn(1, 1, 16)
-        z_free = z_free @ A.T + noise                     # O(L^d): unbounded
-        z_snap = vq.snap(z_snap @ A.T + noise)            # O(r): projected each step
+        z_free = z_free @ A.T + noise
+        z_snap = vq.snap(z_snap @ A.T + noise)
 
     cap = vq.codebook.abs().max().item()
-    assert z_snap.abs().max().item() <= cap + 1e-4        # bounded by codebook, any depth
-    assert z_free.abs().max().item() > 50 * (cap + 1e-4)  # free trajectory exploded
+    assert z_snap.abs().max().item() <= cap + 1e-4
+    assert z_free.abs().max().item() > 50 * (cap + 1e-4)
+
+
+def test_vq_covering_radius_is_only_local_projection_error():
+    torch.manual_seed(3)
+    vq = LatentVQ(dim=4, codebook_size=4, decay=0.0).eval()
+    point = vq.codebook[0].detach().reshape(1, 1, 4)
+    assert vq.covering_radius(point) == 0.0
+    assert torch.equal(vq.snap(point), point)
 
 
 # --------------------------------------------------------------------------- #
