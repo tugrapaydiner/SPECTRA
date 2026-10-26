@@ -1,6 +1,7 @@
 """Shared helpers for task construction and reproducible training entry points."""
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -8,7 +9,7 @@ import platform
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 import torch
@@ -40,6 +41,14 @@ def _plain(value: Any) -> Any:
     if isinstance(value, float) and not math.isfinite(value):
         return None
     return value
+
+
+def id_hash(ids: Iterable[str]) -> str:
+    h = hashlib.sha256()
+    for item in ids:
+        b = str(item).encode("utf-8")
+        h.update(len(b).to_bytes(8, "little")); h.update(b)
+    return h.hexdigest()
 
 
 def write_json(path: Path, payload: Any) -> None:

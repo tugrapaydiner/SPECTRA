@@ -9,7 +9,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 import torch
@@ -43,6 +43,7 @@ from scripts._common import (
     build_trm,
     environment_record,
     git_sha,
+    id_hash,
     write_json,
 )
 from train.distill import grounded_improvement_bce_loss
@@ -65,14 +66,6 @@ VERIFIER_LR = 2e-3
 VERIFIER_WD = 0.01
 PERTURB_SEED = 20260717
 PERTURB_RELATIVE_SCALE = 0.10
-
-
-def id_hash(ids: Iterable[str]) -> str:
-    h = hashlib.sha256()
-    for item in ids:
-        b = str(item).encode("utf-8")
-        h.update(len(b).to_bytes(8, "little")); h.update(b)
-    return h.hexdigest()
 
 
 def rows_to_tensors(rows: list[dict[str, Any]]) -> tuple[torch.Tensor, ...]:

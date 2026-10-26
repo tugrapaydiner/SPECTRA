@@ -10,7 +10,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 import torch
@@ -33,6 +33,7 @@ from scripts._common import (
     build_trm,
     environment_record,
     git_sha,
+    id_hash,
     write_json,
 )
 from train.trainer import TrainConfig, Trainer
@@ -63,14 +64,6 @@ SEARCH_CPUCT = 1.5
 BENEFIT_DELTA = 0.005
 TARGET_EQUIVALENT_CAP = 25_000
 PARAMETER_CAP = 50_000
-
-
-def id_hash(ids: Iterable[str]) -> str:
-    h = hashlib.sha256()
-    for item in ids:
-        b = str(item).encode("utf-8")
-        h.update(len(b).to_bytes(8, "little")); h.update(b)
-    return h.hexdigest()
 
 
 def tensor_sha256(*tensors: torch.Tensor) -> str:
