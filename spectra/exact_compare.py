@@ -9,20 +9,15 @@ import sys
 from . import __version__
 from ._json import load_file
 from .exact import DEFAULT_BYTES, EXACT_API_VERSION, EXACT_NATIVE_ABI
-from .exact_selftest import SCHEMA as SELFTEST_SCHEMA, verify_exact_selftest
+from .exact_selftest import (
+    SCHEMA as SELFTEST_SCHEMA,
+    _require,
+    _validate_max_bytes,
+    verify_exact_selftest,
+)
 
 COMPARE_SCHEMA = "spectra.exact_selftest_compare.v2"
 _JSON_MAX_BYTES = 16 << 20
-
-
-def _require(condition: bool, message: str) -> None:
-    if not condition:
-        raise RuntimeError(message)
-
-
-def _validate_max_bytes(max_bytes: int) -> None:
-    if type(max_bytes) is not int or not 1 <= max_bytes <= sys.maxsize - 1:
-        raise ValueError("max-bytes must be a positive bounded integer")
 
 
 def _load_report(root: Path, max_bytes: int) -> dict:
