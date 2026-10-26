@@ -7,8 +7,6 @@ import hashlib
 import json
 import math
 import os
-import platform
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -28,7 +26,15 @@ from eval.checkpoint_eval import load_research_trm_checkpoint, sha256_file
 from eval.grounded_targets import assert_frozen_reasoner, generate_trajectory_states, tensor_state_sha256
 from model.latent_action import LatentActionCodebook, StateConditionedLatentActionCodebook
 from model.verifier import sudoku_score
-from scripts._common import _plain, build_data_splits, build_trm
+from scripts._common import (
+    _plain,
+    append_jsonl,
+    build_data_splits,
+    build_trm,
+    environment_record,
+    git_sha,
+    write_json,
+)
 from train.trainer import TrainConfig, Trainer
 
 DATA_SEED = 20260909
@@ -57,41 +63,6 @@ SEARCH_CPUCT = 1.5
 BENEFIT_DELTA = 0.005
 TARGET_EQUIVALENT_CAP = 25_000
 PARAMETER_CAP = 50_000
-
-
-def write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(_plain(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def append_jsonl(path: Path, row: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(_plain(row), sort_keys=True) + "\n")
-
-
-def git_sha() -> str:
-    try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except Exception:
-        return "unknown"
-
-
-def environment_record() -> dict[str, Any]:
-    cpu_model = "unknown"
-    try:
-        for line in Path("/proc/cpuinfo").read_text(errors="ignore").splitlines():
-            if line.lower().startswith("model name"):
-                cpu_model = line.split(":", 1)[1].strip(); break
-    except Exception:
-        pass
-    return {
-        "git_sha": git_sha(), "python": sys.version, "platform": platform.platform(),
-        "machine": platform.machine(), "cpu_model": cpu_model, "logical_cpus": os.cpu_count(),
-        "torch": torch.__version__, "numpy": np.__version__,
-        "cuda_available": torch.cuda.is_available(), "torch_num_threads": torch.get_num_threads(),
-        "experiment_device": "cpu",
-    }
 
 
 def id_hash(ids: Iterable[str]) -> str:

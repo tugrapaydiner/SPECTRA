@@ -1,7 +1,11 @@
 """Shared helpers for task construction and reproducible training entry points."""
 from __future__ import annotations
 
+import json
 import math
+import os
+import platform
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,6 +40,47 @@ def _plain(value: Any) -> Any:
     if isinstance(value, float) and not math.isfinite(value):
         return None
     return value
+
+
+def write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_plain(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(_plain(row), sort_keys=True) + "\n")
+
+
+def git_sha() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except Exception:
+        return "unknown"
+
+
+def environment_record() -> dict[str, Any]:
+    cpu_model = "unknown"
+    try:
+        for line in Path("/proc/cpuinfo").read_text(errors="ignore").splitlines():
+            if line.lower().startswith("model name"):
+                cpu_model = line.split(":", 1)[1].strip(); break
+    except Exception:
+        pass
+    return {
+        "git_sha": git_sha(),
+        "python": sys.version,
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "cpu_model": cpu_model,
+        "logical_cpus": os.cpu_count(),
+        "torch": torch.__version__,
+        "numpy": np.__version__,
+        "cuda_available": torch.cuda.is_available(),
+        "torch_num_threads": torch.get_num_threads(),
+        "experiment_device": "cpu",
+    }
 
 
 def build_trm(cfg: DotDict, ternary: bool = False, act8: bool = False) -> TRM:
