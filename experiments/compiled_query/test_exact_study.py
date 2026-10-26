@@ -34,9 +34,10 @@ def example():
                 ((), ((0, 1), (3, 1)), ((1, 0),), ((0, 2),), ((0, 1), (0, 2))))
 
 
-def test_shared_proof_checker_change_rejects_frozen_study(tmp_path, monkeypatch):
+@pytest.mark.parametrize('shared_source', ('spectra/exact_proof.py', 'spectra/_exact_wire.py'))
+def test_shared_source_change_rejects_frozen_study(tmp_path, monkeypatch, shared_source):
     source = tmp_path / 'source'
-    checker = Path('spectra/exact_proof.py')
+    checker = Path(shared_source)
     paths = {Path(name) for name in study.sources()} | {checker}
     for path in paths:
         target = source / path
@@ -56,7 +57,7 @@ def test_shared_proof_checker_change_rejects_frozen_study(tmp_path, monkeypatch)
     assert read_manifest(root) == json.loads(payload)
 
     with (source / checker).open('ab') as stream:
-        stream.write(b'\n# changed verifier source\n')
+        stream.write(b'\n# changed shared source\n')
     with pytest.raises(ValueError, match='benchmark source changed'):
         read_manifest(root)
 

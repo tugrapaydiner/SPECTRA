@@ -99,7 +99,8 @@ def sources() -> dict:
     paths = sorted((ROOT / 'experiments/compiled_query').glob('*.py'))
     paths += sorted((ROOT / 'experiments/compiled_query').glob('*.cpp'))
     paths += [ROOT / 'spectra/cnf/quotient_query.py', ROOT / 'spectra/_native/quotient_query.cpp',
-              ROOT / 'spectra/_native/exact_binary.cpp', ROOT / 'spectra/exact_proof.py']
+              ROOT / 'spectra/_native/exact_binary.cpp', ROOT / 'spectra/exact_proof.py',
+              ROOT / 'spectra/_exact_wire.py']
     return {str(p.relative_to(ROOT)): digest(p.read_bytes()) for p in paths}
 
 
