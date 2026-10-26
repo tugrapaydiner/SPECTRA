@@ -44,6 +44,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 markers = [
     "slow: long-running gates (e.g. single-batch overfit). Deselect with -m 'not slow'.",
+    "exhaustive: full enumeration of comparator inputs; excluded from bounded sanitizer runs.",
 ]
 filterwarnings = [
     # Keep test output readable; surface our own warnings only.
