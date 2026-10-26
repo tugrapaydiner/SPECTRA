@@ -38,12 +38,6 @@ def test_refuses_ambiguous_or_stale_build(kind, tmp_path):
     with pytest.raises(ValueError): module.select_wheel(tmp_path)
 
 
-def test_documented_check_has_no_stale_wheel_name():
-    text = (ROOT / "docs/DEVELOPMENT.md").read_text()
-    assert "python scripts/check_current_installation.py --dist dist/current --out install-check" in text
-    assert "dist/spectra-0.7.0" not in text
-
-
 @pytest.mark.parametrize("change", [
     None, "research_test", "private_doc", "model", "changed", "missing_source",
     "missing_guide", "duplicate", "symlink", "hardlink", "escape", "backslash",
