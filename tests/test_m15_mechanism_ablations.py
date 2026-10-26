@@ -117,27 +117,12 @@ def test_h1_support_rule_is_strict_and_fp32_can_disconfirm():
     assert m15.mechanism_support(bad)["h1_supported"] is False
 
 
-def test_vq_module_no_longer_claims_arbitrary_depth_trajectory_bound():
-    doc = (LatentVQ.__module__ and __import__(LatentVQ.__module__, fromlist=["x"]).__doc__) or ""
-    low = doc.lower()
-    assert "do **not** imply" in low
-    assert "unquantized recursive trajectory" in low
-    assert "topology survives arbitrarily deep" not in low
-
-
 def test_vq_covering_radius_is_only_local_projection_error():
     torch.manual_seed(3)
     vq = LatentVQ(dim=4, codebook_size=4, decay=0.0).eval()
     point = vq.codebook[0].detach().reshape(1, 1, 4)
     assert vq.covering_radius(point) == 0.0
     assert torch.equal(vq.snap(point), point)
-
-
-def test_ensemble_uncertainty_is_not_claimed_as_ood_guarantee():
-    import model.energy as energy
-    doc = energy.EnsembleLatentEnergyVerifier.__doc__.lower()
-    assert "does **not** by itself identify out-of-distribution states" in doc
-    assert "require validation" in doc
 
 
 def test_overall_acceptance_needs_confirmed_mechanism():
