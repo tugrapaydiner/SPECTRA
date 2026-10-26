@@ -17,6 +17,7 @@ from eval.checkpoint_eval import (
     AUXILIARY_VERSION,
     EvaluationContractError,
     LoadedTRMCheckpoint,
+    _tensor_state_dict,
     sha256_file,
 )
 from model.grounded_verifier import (
@@ -37,14 +38,6 @@ class LoadedGroundedVerifier:
     sha256: str
     module: torch.nn.Module
     payload: dict[str, Any]
-
-
-def _tensor_state_dict(value: Any) -> bool:
-    return (
-        isinstance(value, Mapping)
-        and all(isinstance(k, str) for k in value)
-        and all(torch.is_tensor(v) for v in value.values())
-    )
 
 
 def grounded_verifier_payload(
