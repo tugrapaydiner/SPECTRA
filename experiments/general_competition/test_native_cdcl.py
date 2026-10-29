@@ -334,12 +334,14 @@ def test_direct_native_sat_and_unsat_are_checked_on_original_cnf(runtime, tmp_pa
     not os.environ.get("DRAT_TRIM"),
     reason="pinned external DRAT-trim checker is not configured",
 )
-def test_direct_native_proof_passes_drat_trim(runtime, tmp_path):
-    clauses = all_blocking_clauses(5)
-    result = solve_cnf_native(runtime, 5, clauses)
+@pytest.mark.parametrize("variables", ((1, 2, 3, 4, 5), (2, 13, 29, 47, 1009)))
+def test_direct_native_proof_passes_drat_trim(runtime, tmp_path, variables):
+    clauses = tuple(tuple(variables[abs(lit) - 1] * (1 if lit > 0 else -1) for lit in row)
+                    for row in all_blocking_clauses(5))
+    result = solve_cnf_native(runtime, variables[-1], clauses)
     assert result.status == "UNSAT_VERIFIED"
     assert result.proof is not None
-    formula = write_dimacs(tmp_path / "formula.cnf", 5, clauses)
+    formula = write_dimacs(tmp_path / "formula.cnf", variables[-1], clauses)
     proof = write_drup(tmp_path / "proof.drat", result.proof)
     checked = check_drat(os.environ["DRAT_TRIM"], formula, proof)
     assert checked.verified, checked.record()
@@ -781,6 +783,10 @@ from experiments.general_competition.native_cdcl import (
 from experiments.general_competition.test_native_cdcl import (
     test_native_drup_follows_connected_implication_chains,
     test_native_drup_rejects_invalid_addition_after_watch_table_growth,
+    test_direct_native_sparse_variables_preserve_original_evidence,
+    test_raw_native_empty_input_preserves_declared_variables,
+    test_raw_native_sparse_input_rejects_invalid_literals,
+    test_direct_native_variable_compaction_boundary,
 )
 runtime = NativeCDCLRuntime(sys.argv[1])
 clauses = tuple(tuple(v if b else -v for v, b in enumerate(bits, 1)) for bits in product((False, True), repeat=5))
@@ -797,6 +803,16 @@ assert runtime._verify_drup(1, invalid, 1, original_offsets, 1, None, 0, proof_o
 test_native_drup_follows_connected_implication_chains(runtime, 257, False)
 test_native_drup_follows_connected_implication_chains(runtime, 257, True)
 test_native_drup_rejects_invalid_addition_after_watch_table_growth(runtime)
+for case in ("sat", "unsat", "conflict-budget", "literal-budget"):
+    test_direct_native_sparse_variables_preserve_original_evidence(runtime, case)
+for nvars in (0, 1024):
+    for empty_clause in (False, True):
+        test_raw_native_empty_input_preserves_declared_variables(runtime, nvars, empty_clause)
+for nvars in (1, 1024):
+    for literal in (0, -2147483648, 1025, -1025):
+        test_raw_native_sparse_input_rejects_invalid_literals(runtime, nvars, literal)
+for nvars in (95, 96, 97):
+    test_direct_native_variable_compaction_boundary(runtime, nvars)
 """
     environment = os.environ.copy()
     environment["PYTHONPATH"] = os.getcwd()
@@ -865,7 +881,7 @@ SPECTRA_EXPORT int spectra_g_test_proof_ids() {
       solver.proof_clause_ids.size() != proof_index + 1 ||
       solver.proof_clause_ids.back() != -1) return 5;
 
-  const auto encoded = encode_result(solver, 20);
+  const auto encoded = encode_result(solver, 20, solver.nvars, {});
   // Construct the proof payload independently from the append-only clause
   // arena, including deleted rows, to catch dropped or reordered additions.
   if (encoded.size() < 76) return 6;
@@ -880,7 +896,7 @@ SPECTRA_EXPORT int spectra_g_test_proof_ids() {
   if (encoded != expected) return 7;
   // Force relocation explicitly instead of depending on vector growth policy.
   solver.clauses.reserve(solver.clauses.capacity() + 1);
-  if (encode_result(solver, 20) != encoded) return 8;
+  if (encode_result(solver, 20, solver.nvars, {}) != encoded) return 8;
 
   Solver root(1);
   root.add_clause({}, false);
@@ -891,7 +907,7 @@ SPECTRA_EXPORT int spectra_g_test_proof_ids() {
   root_expected[0] = 'S'; root_expected[1] = 'G';
   root_expected[2] = 'C'; root_expected[3] = '1';
   root_expected[4] = 20; root_expected[8] = 1; root_expected[76] = 1;
-  return encode_result(root, 20) == root_expected ? 0 : 10;
+  return encode_result(root, 20, root.nvars, {}) == root_expected ? 0 : 10;
 }
 """,
         encoding="utf-8",
@@ -1701,3 +1717,91 @@ def test_native_drup_rejects_invalid_addition_after_watch_table_growth(runtime):
     # Denying 1 and 2 moves watches onto 127 previously unindexed literals.
     for checker in (verify_drup_proof, runtime._verify_drup_proof):
         assert not checker(129, original, proof)
+
+
+@pytest.mark.parametrize("case", ("sat", "unsat", "conflict-budget", "literal-budget"))
+def test_direct_native_sparse_variables_preserve_original_evidence(runtime, case):
+    variables = (3, 113, 1009)
+    clauses = all_blocking_clauses(3)
+    if case == "sat":
+        clauses = clauses[:-1]
+    limits = {"max_conflicts": 0} if case == "conflict-budget" else (
+        {"max_learned_literals": 0} if case == "literal-budget" else {})
+    dense = solve_cnf_native(runtime, 3, clauses, **limits)
+
+    def lift(row):
+        return tuple(variables[abs(lit) - 1] * (1 if lit > 0 else -1) for lit in row)
+
+    original = tuple(lift(row) for row in clauses)
+    sparse = solve_cnf_native(runtime, 1024, original, **limits)
+    assert sparse.variables == 1024
+    assert sparse.status == dense.status
+    assert sparse.reason == dense.reason
+    assert sparse.stats == dense.stats
+    assert verify_direct_native_result(1024, original, sparse)
+    if case == "sat":
+        assert sparse.status == "SAT_VERIFIED"
+        expected = [False] * 1024
+        for variable, value in zip(variables, dense.model):
+            expected[variable - 1] = value
+        assert sparse.model == tuple(expected)
+    elif case == "unsat":
+        assert sparse.status == "UNSAT_VERIFIED"
+        assert sparse.proof is not None and dense.proof is not None
+        assert sparse.proof.additions == tuple(lift(row) for row in dense.proof.additions)
+    else:
+        assert sparse.status == "UNKNOWN"
+        assert sparse.model == () and sparse.proof is None
+
+
+@pytest.mark.parametrize("nvars", (0, 1024))
+@pytest.mark.parametrize("empty_clause", (False, True))
+def test_raw_native_empty_input_preserves_declared_variables(runtime, nvars, empty_clause):
+    from experiments.general_competition.native_cdcl import _decode
+
+    offsets = (ctypes.c_uint64 * 2)(0, 0)
+    output = ctypes.c_void_p()
+    size = ctypes.c_size_t()
+    code = runtime._library.spectra_g_native_solve(
+        nvars, None, 0, offsets, int(empty_clause), 100, 100,
+        ctypes.byref(output), ctypes.byref(size),
+    )
+    assert code == 0
+    try:
+        status, observed, stats, model, proof = _decode(ctypes.string_at(output, size.value))
+    finally:
+        runtime._library.spectra_g_native_free(output)
+    assert observed == nvars and stats.decisions == 0
+    if empty_clause:
+        assert status == 20 and proof is not None and proof.additions == ((),)
+    else:
+        assert status == 10 and model == (False,) * nvars and proof is None
+
+
+@pytest.mark.parametrize("nvars", (1, 1024))
+@pytest.mark.parametrize("literal", (0, -2147483648, 1025, -1025))
+def test_raw_native_sparse_input_rejects_invalid_literals(runtime, nvars, literal):
+    literals = (ctypes.c_int32 * 1)(literal)
+    offsets = (ctypes.c_uint64 * 2)(0, 1)
+    output = ctypes.c_void_p(1)
+    size = ctypes.c_size_t(123)
+    code = runtime._library.spectra_g_native_solve(
+        nvars, literals, 1, offsets, 1, 100, 100,
+        ctypes.byref(output), ctypes.byref(size),
+    )
+    assert code == 1
+    assert runtime._library.spectra_g_native_error() == b"literal outside declared variable range"
+    assert output.value is None and size.value == 0
+
+
+@pytest.mark.parametrize("nvars", (95, 96, 97))
+def test_direct_native_variable_compaction_boundary(runtime, nvars):
+    variables = (3, 13, nvars)
+    clauses = tuple(tuple(variables[abs(lit) - 1] * (1 if lit > 0 else -1) for lit in row)
+                    for row in all_blocking_clauses(3))
+    result = solve_cnf_native(runtime, nvars, clauses)
+    assert result.status == "UNSAT_VERIFIED"
+    assert result.variables == nvars
+    assert verify_direct_native_result(nvars, clauses, result)
+    assert result.proof is not None
+    assert {abs(lit) for row in result.proof.additions for lit in row} <= set(variables)

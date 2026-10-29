@@ -643,12 +643,14 @@ void append_u64(std::vector<std::uint8_t> &out, std::uint64_t value) {
   }
 }
 
-std::vector<std::uint8_t> encode_result(const Solver &solver, int status) {
+std::vector<std::uint8_t> encode_result(const Solver &solver, int status,
+                                      std::uint32_t original_nvars,
+                                      const std::vector<int> &original_variables) {
   std::vector<std::uint8_t> out;
-  out.reserve(static_cast<std::size_t>(64 + solver.nvars));
+  out.reserve(80 + (status == 10 ? static_cast<std::size_t>(original_nvars) : 0));
   out.insert(out.end(), {'S', 'G', 'C', '1'});
   append_u32(out, static_cast<std::uint32_t>(status));
-  append_u32(out, static_cast<std::uint32_t>(solver.nvars));
+  append_u32(out, original_nvars);
   append_u64(out, solver.stats.decisions);
   append_u64(out, solver.stats.propagations);
   append_u64(out, solver.stats.conflicts);
@@ -658,8 +660,13 @@ std::vector<std::uint8_t> encode_result(const Solver &solver, int status) {
   append_u64(out, solver.stats.reductions);
   append_u64(out, solver.stats.deleted_clauses);
   if (status == 10) {
+    const std::size_t model_start = out.size();
+    out.resize(model_start + original_nvars, 0);
     for (int var = 1; var <= solver.nvars; ++var) {
-      out.push_back(solver.values[static_cast<std::size_t>(var)] > 0 ? 1 : 0);
+      const int original = original_variables.empty() ? var
+          : original_variables[static_cast<std::size_t>(var - 1)];
+      out[model_start + static_cast<std::size_t>(original - 1)] =
+          solver.values[static_cast<std::size_t>(var)] > 0 ? 1 : 0;
     }
   } else if (status == 20) {
     append_u32(out, static_cast<std::uint32_t>(solver.proof_clause_ids.size()));
@@ -670,7 +677,11 @@ std::vector<std::uint8_t> encode_result(const Solver &solver, int status) {
       }
       const auto &clause = solver.clauses[static_cast<std::size_t>(clause_id)].lits;
       append_u32(out, static_cast<std::uint32_t>(clause.size()));
-      for (const int literal : clause) append_i32(out, literal);
+      for (const int literal : clause) {
+        const int original = original_variables.empty() ? Solver::variable(literal)
+            : original_variables[static_cast<std::size_t>(Solver::variable(literal) - 1)];
+        append_i32(out, literal > 0 ? original : -original);
+      }
     }
   }
   return out;
@@ -705,18 +716,46 @@ SPECTRA_EXPORT int spectra_g_native_solve(
     if (offsets[0] != 0 || offsets[clause_count] != literal_count) {
       throw std::invalid_argument("clause offsets differ from literal buffer");
     }
-    Solver solver(static_cast<int>(nvars));
+    std::vector<int> original_variables;
+    std::vector<int> compact_literals;
+    const bool compact = nvars && literal_count <= nvars / 4;  // At least 75% unused.
+    if (compact) {
+      original_variables.reserve(literal_count);
+      for (std::size_t index = 0; index < literal_count; ++index) {
+        const int literal = literals[index];
+        if (!literal || literal == std::numeric_limits<int>::min() ||
+            Solver::variable(literal) > static_cast<int>(nvars)) {
+          throw std::invalid_argument("literal outside declared variable range");
+        }
+        original_variables.push_back(Solver::variable(literal));
+      }
+      std::sort(original_variables.begin(), original_variables.end());
+      original_variables.erase(std::unique(original_variables.begin(), original_variables.end()),
+                               original_variables.end());
+      compact_literals.reserve(literal_count);
+      for (std::size_t index = 0; index < literal_count; ++index) {
+        const int literal = literals[index];
+        const int variable = static_cast<int>(std::lower_bound(
+            original_variables.begin(), original_variables.end(), Solver::variable(literal))
+            - original_variables.begin()) + 1;
+        compact_literals.push_back(literal > 0 ? variable : -variable);
+      }
+    }
+    const int empty_literal = 0;
+    const int *input = literal_count ? (compact ? compact_literals.data() : literals)
+                                    : &empty_literal;
+    Solver solver(compact ? static_cast<int>(original_variables.size()) : static_cast<int>(nvars));
     for (std::size_t clause = 0; clause < clause_count; ++clause) {
       const std::uint64_t begin = offsets[clause];
       const std::uint64_t end = offsets[clause + 1];
       if (begin > end || end > literal_count) {
         throw std::invalid_argument("clause offsets are not monotonic");
       }
-      solver.add_initial(literals + begin, literals + end);
+      solver.add_initial(input + begin, input + end);
     }
     solver.initialize_heap();
     const int status = solver.solve(max_conflicts, max_learned_literals);
-    std::vector<std::uint8_t> encoded = encode_result(solver, status);
+    std::vector<std::uint8_t> encoded = encode_result(solver, status, nvars, original_variables);
     void *buffer = std::malloc(encoded.size());
     if (!buffer) throw std::bad_alloc();
     std::memcpy(buffer, encoded.data(), encoded.size());
