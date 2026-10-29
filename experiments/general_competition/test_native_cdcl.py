@@ -1805,3 +1805,27 @@ def test_direct_native_variable_compaction_boundary(runtime, nvars):
     assert verify_direct_native_result(nvars, clauses, result)
     assert result.proof is not None
     assert {abs(lit) for row in result.proof.additions for lit in row} <= set(variables)
+
+
+def test_native_sat_decoder_keeps_strict_boolean_model_contract():
+    from experiments.general_competition.native_cdcl import _decode
+
+    def header(nvars):
+        return struct.pack("<4sII8Q", b"SGC1", 10, nvars, *range(8))
+
+    for nvars in (0, 1, 64, 4096):
+        raw = bytes(index % 2 for index in range(nvars))
+        status, observed, stats, model, proof = _decode(header(nvars) + raw)
+        assert (status, observed, proof) == (10, nvars, None)
+        assert model == tuple(value == 1 for value in raw)
+        assert all(type(value) is bool for value in model)
+        assert tuple(vars(stats).values()) == tuple(range(8))
+    for invalid in range(2, 256):
+        for position in (0, 2, 4):
+            raw = bytearray(b"\x00\x01\x00\x01\x00")
+            raw[position] = invalid
+            with pytest.raises(ValueError, match="non-Boolean byte"):
+                _decode(header(5) + bytes(raw))
+    for raw in (b"\x00" * 4, b"\x00" * 6):
+        with pytest.raises(ValueError, match="model length differs"):
+            _decode(header(5) + raw)

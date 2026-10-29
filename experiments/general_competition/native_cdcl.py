@@ -565,9 +565,9 @@ def _decode(data: bytes) -> tuple[int, int, NativeStats, tuple[bool, ...], DRUPP
         if offset + nvars != len(data):
             raise ValueError("native SAT model length differs")
         raw = data[offset:]
-        if any(value not in (0, 1) for value in raw):
+        if raw.count(0) + raw.count(1) != len(raw):
             raise ValueError("native SAT model contains a non-Boolean byte")
-        model = tuple(bool(value) for value in raw)
+        model = tuple(map(bool, raw))
         offset = len(data)
     elif status == 20:
         count, offset = _read_u32(data, offset)
