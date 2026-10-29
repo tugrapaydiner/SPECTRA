@@ -8,8 +8,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import importlib.util
-import json
-import os
 from pathlib import Path
 import platform
 import shutil
@@ -23,12 +21,15 @@ import time
 from typing import Iterable, Sequence
 
 from .binary_list import BinaryListProblem
+from spectra._exact_wire import (
+    QUERY_BANK_HEADER, QUERY_BANK_MAGIC, _checked_query_rows,
+    pack_frozen_query_bank, unpack_query_bank,
+)
+from spectra._native_build import native_load_guard, publish_build, snapshot_source
 
-SOURCE = Path(__file__).with_name('exact_native.cpp')
+SOURCE = Path(__file__).resolve().parents[2] / 'spectra/_native/exact_binary.cpp'
 DEFAULT_BYTES = 512 << 20
 MAX_BYTES = (1 << 64) - 1
-QUERY_BANK_HEADER = struct.Struct('<4sIII')
-QUERY_BANK_MAGIC = b'SBQ1'
 SESSION_PACKET_HEADER = struct.Struct('<4s7I')
 SESSION_PACKET_MAGIC = b'SBC1'
 
@@ -67,6 +68,7 @@ def build_exact_runtime(directory: Path, *, compiler: str | None = None,
     start = time.perf_counter_ns()
     with tempfile.TemporaryDirectory(dir=dest) as tmp:
         target = Path(tmp) / library.name
+        source, source_sha256 = snapshot_source(SOURCE, Path(tmp))
         if windows:
             from spectra.svm_build import command_for
             if sysconfig.get_config_var('Py_DEBUG'):
@@ -75,10 +77,10 @@ def build_exact_runtime(directory: Path, *, compiler: str | None = None,
             import_library = Path(sys.base_prefix) / 'libs' / name
             if not import_library.is_file():
                 raise ValueError('CPython import library missing: ' + str(import_library))
-            command = command_for(SOURCE.resolve(), target, target='portable', compiler=cc,
+            command = command_for(source, target, target='portable', compiler=cc,
                 include=Path(sysconfig.get_path('include')), import_library=import_library)
         else:
-            command = [cc, *flags, '-I' + sysconfig.get_path('include'), str(SOURCE), '-o', str(target)]
+            command = [cc, *flags, '-I' + sysconfig.get_path('include'), str(source), '-o', str(target)]
         result = subprocess.run(command, cwd=tmp, capture_output=True, text=True,
                                 encoding='utf-8', errors='replace', timeout=120)
         if result.returncode:
@@ -88,22 +90,13 @@ def build_exact_runtime(directory: Path, *, compiler: str | None = None,
         record = dict(python_executable=sys.executable, python_version=sys.version,
                       python_implementation=platform.python_implementation(),
                       soabi=sysconfig.get_config_var('SOABI'), platform=platform.platform(),
-                      source_sha256=hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
+                      source_sha256=source_sha256,
                       library_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
                       command=command, sanitizer=sanitizer,
                       elapsed_ns=time.perf_counter_ns()-start,
                       compiler=version.stdout + version.stderr,
                       stdout=result.stdout, stderr=result.stderr)
-        os.link(target, library)
-        try:
-            with receipt.open('x') as stream:
-                json.dump(record, stream, sort_keys=True, indent=2)
-                stream.write('\n')
-        except BaseException:
-            # Never leave a newly published library with a missing/partial receipt.
-            library.unlink(missing_ok=True)
-            receipt.unlink(missing_ok=True)
-            raise
+        publish_build(target, library, record)
     return library
 
 
@@ -136,27 +129,6 @@ class ExactSessionPacketAnswer(ExactBankAnswer):
     info: dict
 
 
-def _checked_query_rows(n: int, rows: Iterable[tuple[tuple[int, int], ...]]
-                        ) -> tuple[tuple[tuple[int, int], ...], ...]:
-    if type(n) is not int or not 0 <= n <= 1_000_000:
-        raise ValueError('n must be an exact bounded nonnegative integer')
-    checked = []
-    for row in rows:
-        if type(row) is not tuple:
-            raise ValueError('frozen query rows must be exact tuples')
-        copied = []
-        for pin in row:
-            if type(pin) is not tuple or len(pin) != 2:
-                raise ValueError('frozen query pins must be exact pairs')
-            vertex, allowed = pin
-            if (type(vertex) is not int or not 0 <= vertex < n or
-                    type(allowed) is not int or not 0 <= allowed < 1 << 64):
-                raise ValueError('invalid frozen query pin')
-            copied.append((vertex, allowed))
-        checked.append(tuple(copied))
-    return tuple(checked)
-
-
 def pack_query_bank(problem: BinaryListProblem,
                     queries: Iterable[Iterable[Sequence[int]]]) -> bytes:
     """Freeze and serialize current requests without consulting any solver.
@@ -170,39 +142,6 @@ def pack_query_bank(problem: BinaryListProblem,
                                  problem.edges, problem.masks)
     rows = tuple(p.freeze_query(query) for query in queries)
     return pack_frozen_query_bank(p.n, rows)
-
-
-def pack_frozen_query_bank(n: int,
-                           rows: Iterable[tuple[tuple[int, int], ...]]) -> bytes:
-    """Serialize already-frozen rows while independently rechecking pin syntax.
-
-    This avoids rebuilding and sorting the fixed graph after :class:`Case` has
-    already admitted it. It does not trust query contents: exact tuple geometry,
-    integer types, uint64 masks, and original-vertex bounds are checked again.
-    """
-    rows = _checked_query_rows(n, rows)
-    if len(rows) > 1_000_000:
-        raise ValueError('query bank exceeds one million rows')
-    pins = sum(map(len, rows))
-    if pins > 1_000_000:
-        raise ValueError('query bank exceeds one million pins')
-    size = QUERY_BANK_HEADER.size + 4 * (len(rows) + 1) + 12 * pins
-    payload = bytearray(size)
-    QUERY_BANK_HEADER.pack_into(payload, 0, QUERY_BANK_MAGIC, len(rows), pins, 0)
-    offset_at = QUERY_BANK_HEADER.size
-    vertex_at = offset_at + 4 * (len(rows) + 1)
-    mask_at = vertex_at + 4 * pins
-    cursor = 0
-    struct.pack_into('<I', payload, offset_at, 0)
-    for index, row in enumerate(rows):
-        for vertex, allowed in row:
-            struct.pack_into('<I', payload, vertex_at + 4 * cursor, vertex)
-            struct.pack_into('<Q', payload, mask_at + 8 * cursor, allowed)
-            cursor += 1
-        struct.pack_into('<I', payload, offset_at + 4 * (index + 1), cursor)
-    if cursor != pins:
-        raise AssertionError('query bank pin accounting differs')
-    return bytes(payload)
 
 
 def pack_session_packet(problem: BinaryListProblem,
@@ -314,46 +253,16 @@ def unpack_session_packet(payload: bytes) -> tuple[BinaryListProblem,
     return problem, tuple(rows)
 
 
-def unpack_query_bank(payload: bytes, n: int) -> tuple[tuple[tuple[int, int], ...], ...]:
-    """Strict Python reference decoder used by tests and artifact inspection."""
-    if type(payload) is not bytes or type(n) is not int or n < 0:
-        raise ValueError('query bank requires immutable bytes and nonnegative n')
-    if len(payload) < QUERY_BANK_HEADER.size + 4:
-        raise ValueError('truncated query bank')
-    magic, count, pins, reserved = QUERY_BANK_HEADER.unpack_from(payload)
-    expected = QUERY_BANK_HEADER.size + 4 * (count + 1) + 12 * pins
-    if magic != QUERY_BANK_MAGIC or reserved != 0 or expected != len(payload):
-        raise ValueError('query bank header or length differs')
-    if count > 1_000_000 or pins > 1_000_000:
-        raise ValueError('query bank count exceeds supported bound')
-    offset_at = QUERY_BANK_HEADER.size
-    vertex_at = offset_at + 4 * (count + 1)
-    mask_at = vertex_at + 4 * pins
-    offsets = struct.unpack_from('<' + 'I' * (count + 1), payload, offset_at)
-    if offsets[0] != 0 or offsets[-1] != pins or any(a > b for a, b in zip(offsets, offsets[1:])):
-        raise ValueError('query bank offsets differ')
-    rows = []
-    for begin, end in zip(offsets, offsets[1:]):
-        row = []
-        for index in range(begin, end):
-            vertex = struct.unpack_from('<I', payload, vertex_at + 4 * index)[0]
-            allowed = struct.unpack_from('<Q', payload, mask_at + 8 * index)[0]
-            if vertex >= n:
-                raise ValueError('query bank vertex outside graph')
-            row.append((vertex, allowed))
-        rows.append(tuple(row))
-    return tuple(rows)
-
-
 class ExactRuntime:
     def __init__(self, library: Path):
-        spec = importlib.util.spec_from_file_location('_spectra_exact_binary', Path(library).resolve())
-        if spec is None or spec.loader is None:
-            raise ValueError('invalid trusted native extension path')
-        self._module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self._module)
-        if self._module.abi() != 3:
-            raise ValueError('unsupported exact binary ABI')
+        with native_load_guard(Path(library)) as path:
+            spec = importlib.util.spec_from_file_location('_spectra_exact_binary', path)
+            if spec is None or spec.loader is None:
+                raise ValueError('invalid trusted native extension path')
+            self._module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(self._module)
+            if self._module.abi() != 3:
+                raise ValueError('unsupported exact binary ABI')
 
     def prepare(self, problem: BinaryListProblem, *, mode: str = 'scc',
                 max_bytes: int = DEFAULT_BYTES) -> 'ExactSession':
@@ -363,19 +272,21 @@ class ExactRuntime:
                              max_bytes: int = DEFAULT_BYTES) -> ExactSessionPacketAnswer:
         """Construct, solve, verify, serialize and dispose one prepared SBC1 session.
 
-        The default ``auto`` mode uses frozen structural policy v10. Banks of
+        The default ``auto`` mode uses frozen structural policy v11. Banks of
         at most eight requests on graphs above 512 vertices take the exact raw
         path directly, and fixed contradictions stay raw. Dense high-pin banks
         shorter than 64 requests stay raw. Below 96 vertices, dense high-pin
-        banks stay raw only when SCC compression is present; uncompressed long
-        banks may use SCC. At exactly 64 requests, dense uncompressed graphs
-        whose edge count is at least four times the vertex count stay raw.
-        Other feasible banks of at least 64 requests use SCC; banks from eight
-        requests use SCC earlier when SCCs compress the literal graph by at least
-        fourfold. Selection uses immutable graph/request geometry only, never
-        answers or measured timings. ``info['selected_mode']`` and
-        ``info['auto_policy_reason']`` expose the decision. Explicit modes keep
-        their meaning; the automatic policy is a frozen structural dispatcher.
+        banks stay raw when SCC compression is present. Long banks of at least
+        64 requests also stay raw when SCC construction leaves all ``2*n``
+        literals separate and the original graph has at least four edges per
+        vertex. Other feasible long banks use SCC; banks from eight requests use
+        SCC earlier when SCCs compress the literal graph by at least fourfold.
+        Selection uses immutable graph/request geometry, bank length, and pin
+        counts only—never answers or measured timings. For edgeless problems,
+        ``auto`` may then use the separately replayed direct-domain bank kernel.
+        ``info['selected_mode']``, ``info['auto_policy_reason']``, and
+        ``info['bank_kernel']`` expose the decision. Explicit modes keep their
+        meaning; the automatic policy is a frozen structural dispatcher.
         """
         if type(packet) is not bytes:
             raise ValueError('session packet must be immutable exact bytes')

@@ -100,3 +100,58 @@ def test_aggregate_labels_latency_not_budget_equivalence():
     assert a["semantic_validity"]==1.0
     assert a["latency_median_ms"]==5.0
     assert "iso" not in " ".join(a.keys()).lower()
+
+
+def test_practical_gate_tradeoff_quality_boundary():
+    path_b = practical_gate({
+        "quality_difference": -0.02,
+        "quality_ci95": [-0.03, 0.01],
+        "latency_ratio_candidate_over_baseline": 0.65,
+        "latency_ratio_ci95": [0.60, 0.75],
+    })
+    assert path_b["pass"] is True and path_b["path"] == "quality_cost_tradeoff"
+    miss = practical_gate({
+        "quality_difference": -0.0201,
+        "quality_ci95": [-0.03, 0.01],
+        "latency_ratio_candidate_over_baseline": 0.65,
+        "latency_ratio_ci95": [0.60, 0.75],
+    })
+    assert miss["pass"] is False
+
+
+def test_practical_gate_confidence_boundary():
+    passing_a = practical_gate({
+        "quality_difference": 0.03, "quality_ci95": [0.001, 0.05],
+        "latency_ratio_candidate_over_baseline": 1.15,
+        "latency_ratio_ci95": [1.0, 1.20],
+    })
+    assert passing_a["pass"] is True
+    passing_b = practical_gate({
+        "quality_difference": -0.02, "quality_ci95": [-0.03, 0.0],
+        "latency_ratio_candidate_over_baseline": 0.65,
+        "latency_ratio_ci95": [0.60, 0.75],
+    })
+    assert passing_b["pass"] is True
+    miss = practical_gate({
+        "quality_difference": -0.02, "quality_ci95": [-0.0301, 0.0],
+        "latency_ratio_candidate_over_baseline": 0.65,
+        "latency_ratio_ci95": [0.60, 0.75],
+    })
+    assert miss["pass"] is False
+
+
+def test_practical_gate_superiority_quality_boundary():
+    good = practical_gate({
+        "quality_difference": 0.03,
+        "quality_ci95": [0.001, 0.05],
+        "latency_ratio_candidate_over_baseline": 1.15,
+        "latency_ratio_ci95": [1.0, 1.20],
+    })
+    assert good["pass"] is True
+    bad = practical_gate({
+        "quality_difference": 0.0299,
+        "quality_ci95": [0.001, 0.05],
+        "latency_ratio_candidate_over_baseline": 1.15,
+        "latency_ratio_ci95": [1.0, 1.20],
+    })
+    assert bad["pass"] is False

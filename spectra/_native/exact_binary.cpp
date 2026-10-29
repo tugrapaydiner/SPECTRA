@@ -391,7 +391,7 @@ struct Index {
             base[v]=static_cast<uint8_t>(comp[2*v]<comp[2*v+1]);
         }
 if(mode==4) {
-    // Structural auto policy v10. Raw handles tiny, contradictory,
+    // Structural auto policy v11. Raw handles tiny, contradictory,
     // proof-heavy small-compressed, and one measured tile64 warmup
     // shape. Other feasible long banks use the SCC tile64 engine.
     const bool high_pin=bank_size
@@ -405,9 +405,9 @@ if(mode==4) {
         condensed=false;routed=false;auto_reason="dense_pin_short";
     } else if(high_pin && n<96 && W(nc)<2*W(n)) {
         condensed=false;routed=false;auto_reason="dense_small_compressed";
-    } else if(bank_size==64 && W(nc)==2*W(n)
+    } else if(bank_size>=64 && W(nc)==2*W(n)
             && W(p.edges.size())>=4*W(n)) {
-        condensed=false;routed=false;auto_reason="dense_uncompressed_tile64";
+        condensed=false;routed=false;auto_reason="dense_uncompressed_bank";
     } else if(bank_size>=64) {
         condensed=true;routed=false;auto_reason="scc_long_bank";
     } else if(bank_size>=8 && W(2)*W(nc)<=W(n)) {
@@ -565,6 +565,30 @@ if(mode==4) {
         if(conflict==NIL) return true;
         a.sat=false;a.certificate=proof(2,trace(parent,conflict),trace(parent,conflict^1U));return false;
     }
+    bool direct_seed_conflict(const std::vector<U>& seeds,Answer& answer) const {
+        // A pair of currently forced literals can already contradict on one
+        // original implication. Emit the shortest portable proof instead of
+        // rediscovering the same edge through a full closure traversal.
+        if(seeds.empty() || seeds.size()>64 || original.off.size()!=2*W(n)+1)
+            return false;
+        for(U source:seeds) {
+            U source_color=(source&1U)?hi[source/2]:lo[source/2];
+            if(source_color==255) continue;
+            auto begin=original.to.begin()+original.off[source];
+            auto end=original.to.begin()+original.off[source+1];
+            for(U forced:seeds) {
+                U forced_color=(forced&1U)?hi[forced/2]:lo[forced/2];
+                if(forced_color!=source_color) continue;
+                U target=forced^1U;++answer.arcs;
+                if(std::binary_search(begin,end,target)) {
+                    answer.sat=false;
+                    answer.certificate=proof(2,{source,target},{forced});
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     Answer solve(const std::vector<Pin>& pins,
                  const std::vector<uint8_t>* known_base_proof=nullptr) const {
         Answer answer;
@@ -594,6 +618,7 @@ if(mode==4) {
     // every restriction and ruled out empty domains and a fixed contradiction.
     Answer solve_roots(const std::vector<U>& seeds) const {
         Answer answer;
+        if(direct_seed_conflict(seeds,answer)) return answer;
         std::vector<U> parent;
         std::vector<uint8_t> reached;
         if(condensed) {
@@ -770,6 +795,154 @@ struct BankResult {
     U sat=0,unsat=0,tiles=0;
     bool tiled=false;
 };
+const char* edgeless_auto_reason(U n,U count,U pins) {
+    const bool high_pin=count && W(pins)>=8*W(count)
+            && W(24)*W(pins)>=W(n)*W(count);
+    if(count<=8 && n>512) return "large_tiny_bank";
+    if(high_pin && count<64) return "dense_pin_short";
+    if(count>=64) return "scc_long_bank";
+    return "short_weak_compression";
+}
+const char* edgeless_selected_mode(U n,U count,U pins) {
+    return std::strcmp(edgeless_auto_reason(n,count,pins),"scc_long_bank")
+        ? "raw" : "scc";
+}
+
+BankResult run_edgeless_rows(const SolverSessionPacket& solver_rows,
+                             const ObserverSessionPacket& observer_rows,
+                             size_t packet_size,W total_cap) {
+    if(solver_rows.edge_count || observer_rows.edges_count
+            || solver_rows.n!=observer_rows.vertices_count
+            || solver_rows.k!=observer_rows.palette_size
+            || solver_rows.count!=observer_rows.rows
+            || solver_rows.pins!=observer_rows.total)
+        throw std::logic_error("edgeless solver and observer geometry differs");
+    U n=solver_rows.n,count=solver_rows.count,pins=solver_rows.pins;
+              W per_row=25+17*W(n);
+    if(count && per_row>(UINT64_MAX-16)/W(count))
+        throw Resource("edgeless SCQ2 output bound overflows");
+    W output_bound=16+per_row*W(count);
+    W initial=16+(W(n)+25)*W(count);
+    if(output_bound>std::numeric_limits<size_t>::max()
+            || initial>std::numeric_limits<size_t>::max())
+        throw Resource("edgeless SCQ2 output exceeds platform size");
+    // Keep the same conservative admission envelope as the general
+    // exact service. The fast path may allocate less, but callers must
+    // not gain a larger accepted problem merely by selecting auto.
+    W retained=64*W(n+1)+32*W(pins+count+1);
+    W scratch=2048*W(n+1)+64*W(pins)+64*W(count)+8192;
+    if(retained>total_cap || W(packet_size)>total_cap-retained
+            || output_bound>(total_cap-retained-W(packet_size))/2
+            || scratch>total_cap-retained-W(packet_size)-2*output_bound)
+        throw Resource("edgeless bank solve/verify/output admission exceeds cap");
+
+    BankResult result;
+    result.output.reserve(static_cast<size_t>(initial));
+    result.output.insert(result.output.end(),{'S','C','Q','2'});
+    word(result.output,n);qword(result.output,count);
+    std::vector<uint8_t> base(n);
+    for(U v=0;v<n;++v)
+        base[v]=static_cast<uint8_t>(first(solver_rows.original_masks[v]));
+    std::vector<U> seen(n,0),touched;
+    std::vector<W> effective(n);
+    touched.reserve(static_cast<size_t>(std::min<W>(pins,n)));
+    U epoch=0;
+    for(U row=0;row<count;++row) {
+        if(++epoch==0) {std::fill(seen.begin(),seen.end(),0);epoch=1;}
+        touched.clear();
+        for(U pin=solver_rows.row_begin(row);pin<solver_rows.row_end(row);++pin) {
+            U v=solver_rows.pin_vertex(pin);
+            if(seen[v]!=epoch) {
+                seen[v]=epoch;effective[v]=solver_rows.original_masks[v];
+                touched.push_back(v);
+            }
+            effective[v]&=solver_rows.pin_allowed(pin);
+        }
+        std::sort(touched.begin(),touched.end());
+        U empty=NIL;
+        for(U v:touched) if(!effective[v]) {empty=v;break;}
+        if(empty!=NIL) {
+            auto certificate=proof(1,{empty},{});
+            result.output.push_back(0);
+            result.output.resize(result.output.size()+n,0);
+            word(result.output,static_cast<U>(certificate.size()));
+            result.output.insert(result.output.end(),certificate.begin(),certificate.end());
+            ++result.unsat;result.proof_bytes+=certificate.size();
+        } else {
+            result.output.push_back(1);
+            size_t labels_at=result.output.size();
+            result.output.insert(result.output.end(),base.begin(),base.end());
+            for(U v:touched)
+                result.output[labels_at+v]=static_cast<uint8_t>(first(effective[v]));
+            word(result.output,0);++result.sat;
+        }
+    }
+    if(W(result.output.size())>output_bound)
+        throw Resource("edgeless SCQ2 output exceeds admitted bound");
+
+    // Replay from the separately parsed observer packet. This path
+    // consumes neither solver masks nor generated decision state.
+    if(result.output.size()<16 || std::memcmp(result.output.data(),"SCQ2",4)
+            || load32(result.output.data(),4)!=n
+            || load64(result.output.data(),8)!=count)
+        throw std::logic_error("edgeless SCQ2 header failed observer");
+    size_t at=16;
+    for(U row=0;row<count;++row) {
+        if(at+W(n)+5>result.output.size())
+            throw std::logic_error("edgeless SCQ2 row is truncated");
+        U status=result.output[at];
+        const uint8_t* labels=result.output.data()+at+1;
+        U length=load32(result.output.data(),at+1+W(n));at+=W(n)+5;
+        if(W(length)>result.output.size()-at)
+            throw std::logic_error("edgeless SCQ2 proof length differs");
+        U begin=load32(observer_rows.payload,
+                       observer_rows.offset_table+4*W(row));
+        U end=load32(observer_rows.payload,
+                     observer_rows.offset_table+4*W(row+1));
+        if(status==1) {
+            if(length) throw std::logic_error("edgeless SAT row carries proof");
+            for(U v=0;v<n;++v) {
+                U label=labels[v];
+                if(label>=observer_rows.palette_size
+                        || !((observer_rows.domains[v]>>label)&1))
+                    throw std::logic_error(
+                        "edgeless SAT label violates original domain");
+            }
+            for(U pin=begin;pin<end;++pin) {
+                U v=load32(observer_rows.payload,
+                           observer_rows.vertex_table+4*W(pin));
+                W allowed=load64(observer_rows.payload,
+                                observer_rows.mask_table+8*W(pin));
+                if(!((allowed>>labels[v])&1))
+                    throw std::logic_error(
+                        "edgeless SAT label violates request");
+            }
+        } else if(status==0) {
+            for(U v=0;v<n;++v) if(labels[v])
+                throw std::logic_error("edgeless UNSAT row carries labels");
+            if(length!=20 || std::memcmp(result.output.data()+at,"SBP1",4)
+                    || load32(result.output.data()+at,4)!=1
+                    || load32(result.output.data()+at,8)!=1
+                    || load32(result.output.data()+at,12)!=0)
+                throw std::logic_error("edgeless UNSAT proof is not kind 1");
+            U v=load32(result.output.data()+at,16);
+            if(v>=n) throw std::logic_error("edgeless proof vertex differs");
+            W domain=observer_rows.domains[v];
+            for(U pin=begin;pin<end;++pin)
+                if(load32(observer_rows.payload,
+                          observer_rows.vertex_table+4*W(pin))==v)
+                    domain&=load64(observer_rows.payload,
+                                  observer_rows.mask_table+8*W(pin));
+            if(domain)
+                throw std::logic_error(
+                    "edgeless kind-1 proof is not contradictory");
+        } else throw std::logic_error("edgeless SCQ2 status differs");
+        at+=length;
+    }
+    if(at!=result.output.size())
+        throw std::logic_error("edgeless SCQ2 has trailing bytes");
+    return result;
+}
 template<class SolverRows,class ObserverRows>
 BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_rows,
                     const ObserverRows& observer_rows,size_t packet_size,W total_cap,
@@ -915,8 +1088,10 @@ BankResult run_rows(Index& solver,Observer& observer,const SolverRows& solver_ro
                     // prepared roots, without reparsing or sorting the request.
                     replay_roots.assign(roots.begin()+root_offsets[lane],
                                         roots.begin()+root_offsets[lane+1]);
-                    if(solver.routed) answer=solver.solve_roots(replay_roots);
-                    else solver.raw_closure(replay_roots,parent,answer);
+                    if(!solver.direct_seed_conflict(replay_roots,answer)) {
+                        if(solver.routed) answer=solver.solve_roots(replay_roots);
+                        else solver.raw_closure(replay_roots,parent,answer);
+                    }
                     if(answer.sat)
                         throw std::logic_error("bit-lane contradiction did not replay");
                 } else {
@@ -1032,40 +1207,80 @@ PyObject* solve_session_packet(PyObject*,PyObject* args) {
         const auto* data=reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(packet));
         size_t size=static_cast<size_t>(PyBytes_GET_SIZE(packet));
         std::unique_ptr<Index> solver;std::unique_ptr<Observer> observer;BankResult result;
-        U bank_queries=0,bank_pins=0;
+        U bank_queries=0,bank_pins=0,fast_vertices=0,fast_components=0;
+        W fast_arcs=0;bool edgeless_fast=false;
+        const char* fast_mode="raw";const char* fast_reason="explicit_mode";
         {
             Released guard;
             ObserverSessionPacket observer_rows(data,size,limit);
-            observer=std::make_unique<Observer>(observer_rows.take_input(limit));
-            W observer_bytes=observer->bytes();
-            if(observer_bytes>=limit) throw Resource("SBC1 observer consumes session cap");
-            SolverSessionPacket solver_rows(data,size,limit-observer_bytes);
-            bank_queries=solver_rows.query_count();bank_pins=solver_rows.pin_count();
-            solver=std::make_unique<Index>(solver_rows.take_input(limit-observer_bytes),
-                                           static_cast<U>(which),bank_queries,bank_pins);
-            result=run_rows(*solver,*observer,solver_rows,observer_rows,size,limit,"SBC1");
+            if(which==4 && observer_rows.edges_count==0) {
+                SolverSessionPacket solver_rows(data,size,limit);
+                bank_queries=solver_rows.query_count();
+                bank_pins=solver_rows.pin_count();
+                fast_vertices=solver_rows.n;fast_components=2*solver_rows.n;
+                for(W domain:solver_rows.original_masks)
+                    if(bits(domain)==1) ++fast_arcs;
+                fast_mode=edgeless_selected_mode(
+                    fast_vertices,bank_queries,bank_pins);
+                fast_reason=edgeless_auto_reason(
+                    fast_vertices,bank_queries,bank_pins);
+                result=run_edgeless_rows(
+                    solver_rows,observer_rows,size,limit);
+                edgeless_fast=true;
+            } else {
+                observer=std::make_unique<Observer>(
+                    observer_rows.take_input(limit));
+                W observer_bytes=observer->bytes();
+                if(observer_bytes>=limit)
+                    throw Resource("SBC1 observer consumes session cap");
+                SolverSessionPacket solver_rows(
+                    data,size,limit-observer_bytes);
+                bank_queries=solver_rows.query_count();
+                bank_pins=solver_rows.pin_count();
+                solver=std::make_unique<Index>(
+                    solver_rows.take_input(limit-observer_bytes),
+                    static_cast<U>(which),bank_queries,bank_pins);
+                result=run_rows(*solver,*observer,solver_rows,observer_rows,
+                                size,limit,"SBC1");
+            }
         }
         PyObject* output=PyBytes_FromStringAndSize(reinterpret_cast<const char*>(result.output.data()),
                                                    static_cast<Py_ssize_t>(result.output.size()));
         if(!output) return nullptr;
-        PyObject* metadata=Py_BuildValue("{sI,sI,sK,sK,sK,sK,sK,sK,sO,sO,ss}",
+        PyObject* metadata=edgeless_fast
+        ? Py_BuildValue("{sI,sI,sK,sK,sK,sK,sK,sK,sO,sO,ss}",
+            "vertices",fast_vertices,"components",fast_components,
+            "original_arcs",static_cast<unsigned long long>(fast_arcs),
+            "retained_proof_arcs",static_cast<unsigned long long>(fast_arcs),
+            "condensation_arcs",static_cast<unsigned long long>(fast_arcs),
+            "retained_array_bytes",static_cast<unsigned long long>(0),
+            "routing_array_bytes",static_cast<unsigned long long>(0),
+            "native_observer_array_bytes",static_cast<unsigned long long>(0),
+            "original_adjacency_retained",Py_False,
+            "base_satisfiable",Py_True,"selected_mode",fast_mode)
+        : Py_BuildValue("{sI,sI,sK,sK,sK,sK,sK,sK,sO,sO,ss}",
             "vertices",solver->n,"components",solver->nc,
             "original_arcs",static_cast<unsigned long long>(solver->full_arcs),
-            "retained_proof_arcs",static_cast<unsigned long long>(solver->original.to.size()),
-            "condensation_arcs",static_cast<unsigned long long>(solver->dag.to.size()),
+            "retained_proof_arcs",static_cast<unsigned long long>(
+                solver->original.to.size()),
+            "condensation_arcs",static_cast<unsigned long long>(
+                solver->dag.to.size()),
             "retained_array_bytes",static_cast<unsigned long long>(solver->bytes()),
-            "routing_array_bytes",static_cast<unsigned long long>(solver->routing_bytes()),
-            "native_observer_array_bytes",static_cast<unsigned long long>(observer->bytes()),
+            "routing_array_bytes",static_cast<unsigned long long>(
+                solver->routing_bytes()),
+            "native_observer_array_bytes",static_cast<unsigned long long>(
+                observer->bytes()),
             "original_adjacency_retained",solver->routed?Py_False:Py_True,
             "base_satisfiable",solver->bad==NIL?Py_True:Py_False,
-            "selected_mode",solver->routed?"route":(solver->sparse?"sparse":(solver->condensed?"scc":"raw")));
+            "selected_mode",solver->routed?"route":(
+                solver->sparse?"sparse":(solver->condensed?"scc":"raw")));
         if(!metadata){Py_DECREF(output);return nullptr;}
-        PyObject* kernel=PyUnicode_FromString(result.tiled?"tile64":"serial");
+        PyObject* kernel=PyUnicode_FromString(edgeless_fast?"edgeless":(result.tiled?"tile64":"serial"));
         PyObject* tiles=PyLong_FromUnsignedLong(result.tiles);
         PyObject* queries=PyLong_FromUnsignedLong(bank_queries);
         PyObject* pins=PyLong_FromUnsignedLong(bank_pins);
-        PyObject* policy=PyUnicode_FromString(which==4?"structural-v10":"explicit");
-        PyObject* reason=PyUnicode_FromString(solver->auto_reason);
+        PyObject* policy=PyUnicode_FromString(which==4?"structural-v11":"explicit");
+        PyObject* reason=PyUnicode_FromString(edgeless_fast?fast_reason:solver->auto_reason);
         if(!kernel || !tiles || !queries || !pins || !policy || !reason
                 || PyDict_SetItemString(metadata,"bank_kernel",kernel)<0
                 || PyDict_SetItemString(metadata,"bank_tiles",tiles)<0

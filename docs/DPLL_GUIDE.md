@@ -36,14 +36,17 @@ syntactic heuristic exposes remaining domains in one-hot encodings; no task type
 is inferred. Binary setup avoids dictionary/set allocations. Arbitrary-clause
 normalization preserves input literal order and original-clause validation.
 
-See the [public Sudoku comparison](../experiments/structured_search/RESULTS.md)
+See the [public Sudoku comparison](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/structured_search/RESULTS.md)
 for solve quality, complete CPU/wall cost, native and domain controls, and memory.
 The branch budget, flip budget and native conflict budget are different work
 units. A measured gain on this corpus does not establish broad SAT performance
 or improved neural reasoning. Native CDCL and a direct domain solver remain
 important alternatives. Historical search implementations and models are intact.
 
-From the full checkout, verify retained observations without optional packages:
+From the [historical study checkout](https://github.com/tugrapaydiner/SPECTRA/tree/757babb05bd631c89075f374ba765a197a1fb77b/experiments/structured_search),
+verify retained observations without optional packages. Retrieve the evidence
+archive using the study's recorded hash; these commands do not run in the
+current source tree:
 
 ```bash
 python -I -S experiments/structured_search/analyse.py experiments/structured_search/evidence-20261005.zip

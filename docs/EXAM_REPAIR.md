@@ -49,22 +49,17 @@ format.  Its `conflict_core` conversion preserves an immutable receipt of every
 constraint class outside the bounded model and refuses conversion unless the
 caller explicitly acknowledges those omissions.
 
-The research transfer protocol is documented in
-[`ITC_EXAM_TRANSFER_PROTOCOL.md`](../experiments/compiled_query/ITC_EXAM_TRANSFER_PROTOCOL.md).
+## Historical transfer studies
 
-## Prospective multi-instance evaluation
+The [frozen selector-v10 tree](https://github.com/tugrapaydiner/SPECTRA/tree/9e1037f2b46780dc943804f8726cee042108d15a)
+retains the transfer runners, native source, dedicated tests and manual workflow.
+Use that complete checkout with its
+[suite protocol](https://github.com/tugrapaydiner/SPECTRA/blob/9e1037f2b46780dc943804f8726cee042108d15a/experiments/compiled_query/ITC_EXAM_SUITE_PROTOCOL.md)
+and [timing amendment](https://github.com/tugrapaydiner/SPECTRA/blob/9e1037f2b46780dc943804f8726cee042108d15a/experiments/compiled_query/ITC_EXAM_TRANSFER_REVALIDATION_20261019.md).
+Its frozen `set10`/`set12` holdouts cannot be reused to tune the current v11
+selector or treated as a new confirmation.
 
-The selector-v2 policy and its `set10`/`set12` execution holdouts are fixed in
-[`ITC_EXAM_SUITE_PROTOCOL.md`](../experiments/compiled_query/ITC_EXAM_SUITE_PROTOCOL.md).
-The completed cross-platform measurements, retained negative repetitions and
-artifact digests are published in the
-[`2026-10-16 suite results`](../experiments/compiled_query/ITC_EXAM_SUITE_RESULTS_20261016.md).
-The suite rotates measured engine order, preserves every failed cell, and gates
-only the predeclared auto/raw overhead on holdout cases.  Passing that suite is
-application-transfer evidence, not an operator deployment or full ITC-2007
-optimization result.
-
-An outside runner can reproduce the source, installed-wheel, freeze, execution and
-offline-audit boundaries using the
-[independent replication guide](../experiments/compiled_query/ITC_EXAM_REPLICATION.md).
-Negative or conflicting replications are explicitly valid results.
+The earlier [2026-10-16 results](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/compiled_query/ITC_EXAM_SUITE_RESULTS_20261016.md)
+retain negative repetitions and artifact identities under their original policy.
+Keep every failed cell and use each study's declared gates. These studies concern
+bounded conflict-core repair, not full timetabling or operator deployment.

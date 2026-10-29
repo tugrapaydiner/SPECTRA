@@ -16,7 +16,7 @@ ratios, including preparation. The 4.21x callout uses the separately reported
 pooled primary ratio, not an unweighted average of the bars. All large cases
 return UNKNOWN; small-case regressions and cold-allocation increases remain.
 
-**Native comparison:** [matched native results](../../experiments/native_baselines/RESULTS.md),
+**Native comparison:** [matched native results](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/native_baselines/RESULTS.md),
 all seven models at batch 32. Each bar divides the published cost by that model's
 LIBSVM cost. SPECTRA uses the fixed default profile; no per-model best profile is
 selected. The JSON also retains the published binary-stream costs. Missing HAR
@@ -31,16 +31,9 @@ they are descriptive, not recomputed from inaccessible raw measurements.
 
 ## Regenerate
 
-From a full Git checkout, with Python 3.10+ and no plotting packages:
-
-```bash
-python scripts/render_readme_charts.py
-python scripts/render_readme_charts.py --check
-```
-
-The script verifies both historical source hashes before parsing the tables.
-The first command replaces only its three generated assets. The second checks
-byte-for-byte reproducibility without writing. Public tests exercise missing and
-modified assets, source drift, complete cell coverage, SVG metadata and the
-missing-comparator convention. SVGs contain accessible titles/descriptions and
-system-font references; no font files, scripts or external resources are bundled.
+Use the [complete historical source tree](https://github.com/tugrapaydiner/SPECTRA/tree/757babb05bd631c89075f374ba765a197a1fb77b)
+and its `scripts/render_readme_charts.py --check` command with Python 3.10+.
+That generator verifies both source hashes and every plotted cell before
+comparing its output byte for byte. Its tests cover source drift, accessibility,
+missing assets and the missing-comparator convention. The current SVG and JSON
+assets retain those bytes and provenance; no benchmarks were rerun.

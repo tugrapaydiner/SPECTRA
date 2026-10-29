@@ -1,8 +1,18 @@
 """Shared helpers for task construction and reproducible training entry points."""
 from __future__ import annotations
 
+import hashlib
+import json
+import math
+import os
+import platform
+import subprocess
 import sys
 from pathlib import Path
+from typing import Any, Iterable
+
+import numpy as np
+import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -13,6 +23,73 @@ from data.splits import build_reproducible_splits, write_manifest  # noqa: E402
 from data.task_contracts import TaskContract, contract_from_config  # noqa: E402
 from model.trm import TRM  # noqa: E402
 from train.trainer import TrainConfig  # noqa: E402
+
+
+def _plain(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    if torch.is_tensor(value):
+        if value.ndim == 0:
+            return value.detach().cpu().item()
+        return value.detach().cpu().tolist()
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
+def id_hash(ids: Iterable[str]) -> str:
+    h = hashlib.sha256()
+    for item in ids:
+        b = str(item).encode("utf-8")
+        h.update(len(b).to_bytes(8, "little")); h.update(b)
+    return h.hexdigest()
+
+
+def write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_plain(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(_plain(row), sort_keys=True) + "\n")
+
+
+def git_sha() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except Exception:
+        return "unknown"
+
+
+def environment_record() -> dict[str, Any]:
+    cpu_model = "unknown"
+    try:
+        for line in Path("/proc/cpuinfo").read_text(errors="ignore").splitlines():
+            if line.lower().startswith("model name"):
+                cpu_model = line.split(":", 1)[1].strip(); break
+    except Exception:
+        pass
+    return {
+        "git_sha": git_sha(),
+        "python": sys.version,
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "cpu_model": cpu_model,
+        "logical_cpus": os.cpu_count(),
+        "torch": torch.__version__,
+        "numpy": np.__version__,
+        "cuda_available": torch.cuda.is_available(),
+        "torch_num_threads": torch.get_num_threads(),
+        "experiment_device": "cpu",
+    }
 
 
 def build_trm(cfg: DotDict, ternary: bool = False, act8: bool = False) -> TRM:

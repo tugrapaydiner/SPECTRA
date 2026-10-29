@@ -1,5 +1,5 @@
 """Process-level evidence and accounting for the additive proof-carrying arms."""
-from dataclasses import replace
+from dataclasses import asdict, replace
 import json
 import os
 from pathlib import Path
@@ -15,6 +15,7 @@ from .proof import verify_answer
 from .sessions import (decode_certified_output, run_prepared_session,
                        run_session, query_order)
 from .study import Config, create_study, read_manifest, run_study
+from . import study
 from spectra.cnf.quotient_query import QuotientRuntime, build_quotient_runtime
 
 
@@ -31,6 +32,34 @@ def example():
     p = BinaryListProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,)*4)
     return Case('mixed', 'one-graph', 'synthetic without filtering', p,
                 ((), ((0, 1), (3, 1)), ((1, 0),), ((0, 2),), ((0, 1), (0, 2))))
+
+
+@pytest.mark.parametrize('shared_source', ('spectra/exact_proof.py', 'spectra/_exact_wire.py'))
+def test_shared_source_change_rejects_frozen_study(tmp_path, monkeypatch, shared_source):
+    source = tmp_path / 'source'
+    checker = Path(shared_source)
+    paths = {Path(name) for name in study.sources()} | {checker}
+    for path in paths:
+        target = source / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((study.ROOT / path).read_bytes())
+    monkeypatch.setattr(study, 'ROOT', source)
+    monkeypatch.setattr(study, 'execution_identity', lambda: {'fixture': 'unchanged'})
+    root = tmp_path / 'study'
+    root.mkdir()
+    native = b'identity-only fixture; never loaded'
+    (root / 'native.fixture').write_bytes(native)
+    payload = canonical(dict(sources=study.sources(),
+        execution_identity=study.execution_identity(), config=asdict(Config()),
+        library='native.fixture', library_sha256=digest(native), cases=[], jobs=[]))
+    (root / 'manifest.json').write_bytes(payload)
+    (root / 'manifest.sha256').write_text(digest(payload))
+    assert read_manifest(root) == json.loads(payload)
+
+    with (source / checker).open('ab') as stream:
+        stream.write(b'\n# changed shared source\n')
+    with pytest.raises(ValueError, match='benchmark source changed'):
+        read_manifest(root)
 
 
 @pytest.mark.parametrize('arm', ('exact-raw', 'exact-scc', 'exact-sparse', 'exact-route'))

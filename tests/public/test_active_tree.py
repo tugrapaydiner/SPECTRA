@@ -30,8 +30,6 @@ def fixture(tmp_path: Path) -> Path:
     (tmp_path / 'README.md').write_text('archive/research-history-20261016\n')
     (tmp_path / 'results').mkdir()
     (tmp_path / 'results/README.md').write_text('compact results\n')
-    (tmp_path / 'results/sat_workload').mkdir()
-    (tmp_path / 'results/sat_workload/pilot.zip').write_bytes(b'small fixture')
     return tmp_path
 
 

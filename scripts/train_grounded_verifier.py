@@ -5,14 +5,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
-import platform
-import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 import torch
@@ -39,7 +36,16 @@ from model.grounded_verifier import (
     EnsembleGroundedStateVerifier,
     GroundedStateVerifier,
 )
-from scripts._common import build_data_splits, build_trm
+from scripts._common import (
+    _plain,
+    append_jsonl,
+    build_data_splits,
+    build_trm,
+    environment_record,
+    git_sha,
+    id_hash,
+    write_json,
+)
 from train.distill import grounded_improvement_bce_loss
 from train.trainer import TrainConfig, Trainer
 
@@ -60,73 +66,6 @@ VERIFIER_LR = 2e-3
 VERIFIER_WD = 0.01
 PERTURB_SEED = 20260717
 PERTURB_RELATIVE_SCALE = 0.10
-
-
-def _plain(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(k): _plain(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_plain(v) for v in value]
-    if isinstance(value, np.generic):
-        return value.item()
-    if torch.is_tensor(value):
-        if value.ndim == 0:
-            return value.detach().cpu().item()
-        return value.detach().cpu().tolist()
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    return value
-
-
-def write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(_plain(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def append_jsonl(path: Path, row: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(_plain(row), sort_keys=True) + "\n")
-
-
-def git_sha() -> str:
-    try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except Exception:
-        return "unknown"
-
-
-def environment_record() -> dict[str, Any]:
-    cpu_model = "unknown"
-    try:
-        for line in Path("/proc/cpuinfo").read_text(errors="ignore").splitlines():
-            if line.lower().startswith("model name"):
-                cpu_model = line.split(":", 1)[1].strip(); break
-    except Exception:
-        pass
-    return {
-        "git_sha": git_sha(),
-        "python": sys.version,
-        "platform": platform.platform(),
-        "machine": platform.machine(),
-        "cpu_model": cpu_model,
-        "logical_cpus": os.cpu_count(),
-        "torch": torch.__version__,
-        "numpy": np.__version__,
-        "cuda_available": torch.cuda.is_available(),
-        "torch_num_threads": torch.get_num_threads(),
-        "experiment_device": "cpu",
-    }
-
-
-def id_hash(ids: Iterable[str]) -> str:
-    h = hashlib.sha256()
-    for item in ids:
-        b = str(item).encode("utf-8")
-        h.update(len(b).to_bytes(8, "little")); h.update(b)
-    return h.hexdigest()
 
 
 def rows_to_tensors(rows: list[dict[str, Any]]) -> tuple[torch.Tensor, ...]:

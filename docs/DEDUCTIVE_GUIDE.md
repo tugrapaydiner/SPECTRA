@@ -33,7 +33,7 @@ and `implication_edges`; path hashes for a reduced formula do not identify the
 historical full-formula trajectory. General formulas routed directly to indexed
 search retain its seeded trajectory. Output files must be new.
 
-The [fresh synthetic comparison](../experiments/deductive_search/RESULTS.md)
+The [fresh synthetic comparison](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/deductive_search/RESULTS.md)
 solves 124/160 formula/seed cases versus indexed search's 97/160, with 31.4% lower
 mean full solve time. Gains concentrate in forced/binary constraints; general
 3-SAT quality is unchanged, its mean overhead reaches 5.1%, and overall p95 is

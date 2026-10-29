@@ -98,7 +98,9 @@ def locked(root: Path):
 def sources() -> dict:
     paths = sorted((ROOT / 'experiments/compiled_query').glob('*.py'))
     paths += sorted((ROOT / 'experiments/compiled_query').glob('*.cpp'))
-    paths += [ROOT / 'spectra/cnf/quotient_query.py', ROOT / 'spectra/_native/quotient_query.cpp']
+    paths += [ROOT / 'spectra/cnf/quotient_query.py', ROOT / 'spectra/_native/quotient_query.cpp',
+              ROOT / 'spectra/_native/exact_binary.cpp', ROOT / 'spectra/exact_proof.py',
+              ROOT / 'spectra/_exact_wire.py']
     return {str(p.relative_to(ROOT)): digest(p.read_bytes()) for p in paths}
 
 
@@ -213,7 +215,7 @@ def create_study(case_paths: list[Path], library: Path, output: Path, config: Co
         exact_payload = exact_library.read_bytes()
         exact_build = json.loads(exact_library.with_name('build.json').read_bytes())
         if (exact_build['library_sha256'] != digest(exact_payload) or
-                exact_build['source_sha256'] != digest((ROOT / 'experiments/compiled_query/exact_native.cpp').read_bytes())):
+                exact_build['source_sha256'] != digest((ROOT / 'spectra/_native/exact_binary.cpp').read_bytes())):
             raise ValueError('exact runtime source/build digest differs')
         exact = dict(library='runtime/' + exact_library.name, library_sha256=digest(exact_payload),
                      build=exact_build)

@@ -3,12 +3,16 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+import random
+import subprocess
+import sys
 
 import numpy as np
 import pytest
 import torch
 
 from common import load_config
+from common.seed import capture_rng_state, derive_seed, restore_rng_state, set_seed
 from model.stability import quant_strength_state
 from scripts._common import build_seeded_training_components
 from train.checkpoint import (
@@ -240,3 +244,22 @@ def test_nonfinite_loss_fails_before_optimizer_step(monkeypatch):
     monkeypatch.setattr("train.trainer.deep_supervision_loss", nan_loss)
     with pytest.raises(FloatingPointError, match="non-finite training loss"):
         trainer.fit(stop_at_step=1)
+
+
+@pytest.mark.parametrize("seed", [0, 2**32 - 1, 2**32, derive_seed(42, "model"), -1])
+def test_seed_streams_allow_reproducible_python_subprocesses(seed, monkeypatch):
+    state = capture_rng_state()
+    monkeypatch.setenv("PYTHONHASHSEED", "0")
+    try:
+        set_seed(seed, deterministic=torch.are_deterministic_algorithms_enabled())
+        command = [sys.executable, "-S", "-c", "print(hash('spectra-child-seed'))"]
+        first = subprocess.run(command, check=True, capture_output=True, text=True)
+        second = subprocess.run(command, check=True, capture_output=True, text=True)
+        assert first.stdout == second.stdout
+        seed64 = seed % (2**63 - 1)
+        assert random.getstate() == random.Random(seed64).getstate()
+        np.testing.assert_array_equal(
+            np.random.get_state()[1], np.random.RandomState(seed64 % 2**32).get_state()[1])
+        assert torch.equal(torch.get_rng_state(), torch.Generator().manual_seed(seed64).get_state())
+    finally:
+        restore_rng_state(state)

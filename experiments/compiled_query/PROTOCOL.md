@@ -1,8 +1,8 @@
 # Compiled-query development protocol
 
 This is a **new development study**, not a modification, repeat confirmation or
-extension of the frozen WAP headline. The starting project assessment remains
-67/100; passing internal contracts does not automatically change that score.
+extension of the frozen WAP headline. Passing internal contracts does not
+establish independent replication or a broader scientific claim.
 
 ## Question and contract
 

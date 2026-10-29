@@ -24,7 +24,7 @@ def verify_result(path, *, expected, input_identity, model_sha256, plan_sha256):
             or header.get('input_dtype')!='float64'):
             raise ValueError('invalid output binding')
         prefix.update(first);full.update(first)
-        for line in stream:
+        while line := stream.readline(1_048_576+1):
             if len(line)>1_048_576:raise ValueError('oversized output row')
             obj=json.loads(line,object_pairs_hook=_unique);full.update(line)
             if obj.get('record')=='complete':

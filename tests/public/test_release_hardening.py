@@ -28,6 +28,34 @@ def module(name):
 
 wheel_check = module('check_current_installation')
 readiness = module('check_release_readiness')
+active_tree = module('check_active_tree')
+
+
+@pytest.mark.parametrize('reference', [
+    'actions/checkout@v4', 'actions/setup-python@main',
+    'actions/upload-artifact@ea165f8', 'docker://ubuntu:latest',
+    '${{ inputs.action }}', './tools/../../outside',
+])
+def test_mutable_or_escaping_workflow_action_is_rejected(reference):
+    with pytest.raises(ValueError):
+        active_tree._action_references(f'      - uses: {reference}\n', 'workflow.yml')
+
+
+@pytest.mark.parametrize('reference', [
+    'actions/checkout@' + 'a' * 40,
+    'owner/repo/.github/workflows/reuse.yml@' + 'b' * 40,
+    'docker://example/image@sha256:' + 'c' * 64,
+    './.github/actions/local',
+])
+def test_immutable_and_source_local_actions_are_accepted(reference):
+    text = f'      - uses: "{reference}" # pinned source\n'
+    assert active_tree._action_references(text, 'workflow.yml') == [reference]
+
+
+def test_current_workflow_actions_are_immutable():
+    report = active_tree.check(ROOT)
+    assert report['action_steps_checked'] > 0
+    assert len(report['active_workflows']) == 7
 
 
 @pytest.mark.parametrize('raw', [
@@ -105,6 +133,23 @@ def test_strict_reader_stays_dependency_free():
                     'assert not ({"torch", "numpy"} & sys.modules.keys())'], check=True, cwd=ROOT)
 
 
+def test_exact_verify_large_cap_does_not_allocate_the_limit(tmp_path, capsys):
+    import struct
+    from spectra.exact import ExactProblem, pack_session_packet
+
+    problem = ExactProblem.create(1, 1, (), (1,))
+    packet = tmp_path / "request.sbc1"
+    packet.write_bytes(pack_session_packet(problem, ((),)))
+    output = tmp_path / "answer.scq2"
+    # One SAT row, colour zero, with no contradiction proof.
+    output.write_bytes(struct.pack("<4sIQBBI", b"SCQ2", 1, 1, 1, 0, 0))
+    assert main([
+        "exact", "verify", str(packet), str(output),
+        "--max-bytes", str(sys.maxsize - 1),
+    ]) == 0
+    assert json.loads(capsys.readouterr().out)["verified"] is True
+
+
 def make_wheel(directory, *, metadata=None, missing=None, extra=None):
     directory.mkdir(exist_ok=True)
     wheel = directory / f'spectra-{__version__}-py3-none-any.whl'
@@ -117,7 +162,9 @@ def make_wheel(directory, *, metadata=None, missing=None, extra=None):
         if extra:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', UserWarning)
-                archive.writestr(*extra)
+                entry = zipfile.ZipInfo(extra[0])
+                entry.filename = extra[0]  # Preserve adversarial separators on Windows.
+                archive.writestr(entry, extra[1])
     return wheel
 
 
@@ -243,9 +290,14 @@ def test_real_checkout_release_metadata():
     assert readiness.check(ROOT)['version'] == __version__
 
 
-@pytest.mark.parametrize('name', ['../escape', '/absolute', 'dir\\escape'])
+@pytest.mark.parametrize('name', [
+    '../escape', '/absolute', 'dir\\escape', 'dir\0hidden.py', 'C:/escape',
+    'C:relative', 'dir//alias', 'dir/./alias',
+])
 def test_unsafe_wheel_paths_rejected(tmp_path, name):
-    make_wheel(tmp_path, extra=(name, b'x'))
+    path = make_wheel(tmp_path, extra=(name, b'x'))
+    with zipfile.ZipFile(path) as archive:
+        assert name in [entry.orig_filename for entry in archive.infolist()]
     with pytest.raises(ValueError, match='unsafe'):
         wheel_check.select_wheel(tmp_path)
 

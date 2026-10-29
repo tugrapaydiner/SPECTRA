@@ -13,22 +13,24 @@ import json
 from pathlib import Path
 import re
 import subprocess
-from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_TRACKED_BYTES = 14 * 1024 * 1024
-MAX_TRACKED_FILES = 950
+# Part 3 keeps the current competition adapters, contracts, and compact result
+# receipts in the active tree. The historical archive and per-file limits remain
+# unchanged; this is not permission to restore retired branches or large evidence.
+MAX_TRACKED_FILES = 1000
 MAX_SINGLE_FILE_BYTES = 2 * 1024 * 1024
 ACTIVE_WORKFLOWS = {
     "cpu-regression.yml",
     "exact-public-api.yml",
-    "itc-exam-suite.yml",
+    "general-cnf.yml",
     "public-package.yml",
     "repository-audit.yml",
     "svm-portability.yml",
     "wap-support-regression.yml",
 }
-ALLOWED_ARCHIVES = {"results/sat_workload/pilot.zip"}
+ALLOWED_ARCHIVES: set[str] = set()
 FORBIDDEN_PREFIXES = ("delivery/", "maintenance/")
 FORBIDDEN_BRANCH_FRAGMENTS = (
     "research/100-blitz-20261016",
@@ -40,6 +42,32 @@ FORBIDDEN_BRANCH_FRAGMENTS = (
 )
 HISTORICAL_PNG = re.compile(r"^assets/0[1-6]_[^/]+\.png$")
 ARCHIVE_SUFFIXES = (".zip", ".tar.gz", ".tgz")
+ACTION_USE = re.compile(r"^\s*(?:-\s*)?(?:uses|\"uses\"|'uses'):\s*(.*?)\s*$")
+REMOTE_ACTION = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}")
+CONTAINER_ACTION = re.compile(r"docker://[^\s@]+@sha256:[0-9a-f]{64}")
+
+
+def _action_references(text: str, name: str) -> list[str]:
+    """Require immutable refs for each workflow action declaration.
+
+    Local actions inherit the source commit. Remote actions and reusable workflows
+    need a complete commit identity; container actions need an image digest.
+    """
+    references: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), 1):
+        match = ACTION_USE.fullmatch(line)
+        if match is None:
+            continue
+        reference = match.group(1).split(" #", 1)[0].strip()
+        if len(reference) >= 2 and reference[0] in "\"'" and reference[-1] == reference[0]:
+            reference = reference[1:-1]
+        if reference.startswith("./"):
+            if ".." in Path(reference).parts or any(c.isspace() for c in reference):
+                raise ValueError(f"unsafe local action: {name}:{line_number}: {reference}")
+        elif not (REMOTE_ACTION.fullmatch(reference) or CONTAINER_ACTION.fullmatch(reference)):
+            raise ValueError(f"action is not immutably pinned: {name}:{line_number}: {reference}")
+        references.append(reference)
+    return references
 
 
 def _tracked(root: Path) -> list[Path]:
@@ -104,8 +132,10 @@ def check(root: Path = ROOT) -> dict:
             f"unexpected={sorted(workflows-ACTIVE_WORKFLOWS)}"
         )
     stale: list[str] = []
+    action_references: list[str] = []
     for name in sorted(workflows):
         text = (workflow_dir / name).read_text(encoding="utf-8")
+        action_references.extend(_action_references(text, name))
         for fragment in FORBIDDEN_BRANCH_FRAGMENTS:
             if fragment in text:
                 stale.append(f"{name}:{fragment}")
@@ -139,6 +169,8 @@ def check(root: Path = ROOT) -> dict:
             "single_file_bytes": MAX_SINGLE_FILE_BYTES,
         },
         "active_workflows": sorted(workflows),
+        "action_steps_checked": len(action_references),
+        "action_dependencies": sorted(set(action_references)),
         "allowed_archives": sorted(ALLOWED_ARCHIVES),
         "top_level": dict(sorted(by_top.items(), key=lambda item: (-item[1]["bytes"], item[0]))),
         "largest_files": largest,

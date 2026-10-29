@@ -26,15 +26,15 @@ This is a narrow result—not a claim that SPECTRA beats SAT solvers or graph-co
 systems generally, not an ordinary chromatic-number result, and not evidence for
 historical “general reasoner,” MCTS, low-bit, or neural claims.
 
-[Confirmed result](experiments/wap_support/HOLDOUT_RESULTS_20261009.md) ·
-[Paper draft](experiments/wap_support/PAPER_DRAFT.md) ·
-[Exact protocol](experiments/wap_support/PROTOCOL.md) ·
-[Gate ledger](experiments/wap_support/FLAGSHIP_GATE_LEDGER.md) ·
-[Novelty boundary](experiments/wap_support/NOVELTY_AND_CLAIM_BOUNDARY.md) ·
-[Prior-art audit](experiments/wap_support/PRIOR_ART_AUDIT_20261009.md) ·
-[Cross-environment results](experiments/wap_support/CROSS_ENVIRONMENT_REPRODUCTION_20261009.md) ·
-[Certificate reproduction](experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md) ·
-[Replication guide](experiments/wap_support/REPLICATION.md)
+[Confirmed result](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/HOLDOUT_RESULTS_20261009.md) ·
+[Paper draft](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/PAPER_DRAFT.md) ·
+[Exact protocol](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/PROTOCOL.md) ·
+[Gate ledger](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/FLAGSHIP_GATE_LEDGER.md) ·
+[Novelty boundary](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/NOVELTY_AND_CLAIM_BOUNDARY.md) ·
+[Prior-art audit](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/PRIOR_ART_AUDIT_20261009.md) ·
+[Cross-environment results](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/CROSS_ENVIRONMENT_REPRODUCTION_20261009.md) ·
+[Certificate reproduction](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/CERTIFICATE_REPRODUCTION_20261009.md) ·
+[Replication guide](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/REPLICATION.md)
 
 The current unreleased tree also contains a
 [versioned proof-carrying exact-query API](docs/EXACT_API.md) with explicit native
@@ -169,7 +169,7 @@ Acquire the five graph blobs listed in
 marijnheule/clicolcom@4932048642da2144f387961b595112277afff82f
 ```
 
-Then follow [REPLICATION.md](experiments/wap_support/REPLICATION.md). The results
+Then follow [REPLICATION.md](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/wap_support/REPLICATION.md). The results
 branch retains the full Ubuntu 22/24 × Python 3.11/3.13 matrix. Project-owned CI is
 cross-environment reproduction, not independent-team replication.
 
@@ -203,6 +203,38 @@ assert verify_session_output(packet, result.output)
 The API contract, packet layouts, CLI, resource accounting and claim boundary are
 documented in [Proof-carrying exact queries](docs/EXACT_API.md). This is not a
 general SAT or colouring-superiority claim.
+
+## General-CNF research track
+
+**Correctness gate failed for the frozen native baseline.** The campaign at
+source [1f6a913](https://github.com/tugrapaydiner/SPECTRA/commit/1f6a9133a08b9d8e5a6a6690979f55fbe633e0c5)
+completed all 768 measurements and recorded
+[ten invalid SAT models](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md#confirmed-native-model-failures)
+from standalone SPECTRA-G. That source remains disqualified. The separately
+identified occurrence-tracking repair completed the same 96 formulas with seven
+checked SAT answers, two checked UNSAT proofs and 87 timeouts. Nine of the ten
+formerly invalid cases still time out. This bounded repair validation does not
+resolve those cases, replace the original result or establish general-CNF
+leadership.
+
+Standalone native **SPECTRA-G** and the **SPECTRA-assisted portfolio** are separate
+experimental entries. The native CDCL engine, checked SAT models, UNSAT proof
+replay, and arbitrary-CNF admission contracts are developed under the
+[general competition protocol](experiments/general_competition/PROTOCOL.md).
+The assisted entry uses the disclosed
+[structural frontend policy](experiments/general_competition/FRONTEND_POLICY.md)
+and upstream solvers; its results do not measure standalone native performance.
+
+Current performance inputs are exposed development data. A complete modern-field
+first-place result, a prospective hidden SAT/UNSAT victory, and outside replication
+have not been established. Development remains on `finish-part3` in
+[draft PR #76](https://github.com/tugrapaydiner/SPECTRA/pull/76). The specialized
+results above do not establish general SAT leadership.
+
+The [current status](docs/STATUS.md) summarizes the remaining validation gaps.
+The [96-formula exposed campaign](https://github.com/tugrapaydiner/SPECTRA/blob/8f7cee1a9c82e7da34cc2704ff7012290a554a91/experiments/general_competition/EXPOSED_CAMPAIGN_20261021.md)
+records the native comparison protocol, corrected frontend accounting, retained
+failures, source identities and current evidence limits.
 
 ## Quotient API boundary
 

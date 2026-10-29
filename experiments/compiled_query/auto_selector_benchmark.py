@@ -1,4 +1,4 @@
-"""Position-balanced, calibrated benchmark for structural auto policy v10."""
+"""Position-balanced, calibrated benchmark for structural auto policy v11."""
 from __future__ import annotations
 
 import argparse
@@ -34,7 +34,7 @@ WARMUPS = 2
 MIN_SAMPLE_NS = 1_000_000
 MAX_BATCH_SIZE = 256
 SCHEMA = "spectra.auto_selector_benchmark.v8"
-POLICY = "structural-v10"
+POLICY = "structural-v11"
 
 
 @dataclass(frozen=True)
@@ -319,8 +319,8 @@ def expected_policy(*, base: bool, pins: int, count: int, vertices: int,
         return "raw", "dense_pin_short"
     if high_pin and vertices < 96 and components < 2 * vertices:
         return "raw", "dense_small_compressed"
-    if count == 64 and components == 2 * vertices and edges >= 4 * vertices:
-        return "raw", "dense_uncompressed_tile64"
+    if count >= 64 and components == 2 * vertices and edges >= 4 * vertices:
+        return "raw", "dense_uncompressed_bank"
     if count >= 64:
         return "scc", "scc_long_bank"
     if count >= 8 and 2 * components <= vertices:

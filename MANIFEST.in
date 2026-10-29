@@ -1,6 +1,17 @@
 include LICENSE README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md
 recursive-include deploy *.cpp *.h *.hpp CMakeLists.txt
 recursive-include examples *.cnf
-recursive-include docs *.md *.json
+prune docs
+include docs/README.md docs/API.md docs/ARCHITECTURE.md docs/DEVELOPMENT.md
+include docs/STATUS.md docs/RELEASING.md docs/EXACT_API.md docs/EXACT_REPLICATION.md
+include docs/EXAM_REPAIR.md docs/DPLL_GUIDE.md docs/FOCUSED_GUIDE.md
+include docs/DEDUCTIVE_GUIDE.md docs/EFFICIENCY_GUIDE.md docs/RUNTIME_GUIDE.md
+include docs/COMPILER_BASELINE_GUIDE.md docs/TRAINED_FP_GUIDE.md
+include docs/SVM.md docs/SVM_BINARY_STREAM.md docs/SVM_FUSED.md
+include docs/SVM_PIPELINE.md docs/SVM_PORTABILITY.md docs/SVM_PREPROCESS_NATIVE.md
+include docs/SVM_RECEIPTS.md docs/SVM_SHARED.md docs/SVM_STREAM.md
+include docs/history/README.md
 recursive-include spectra/_native *.cpp *.h *.hpp
-recursive-include assets/readme *.svg *.json *.md
+include assets/readme/*.svg assets/readme/chart-data.json
+prune tests
+prune test

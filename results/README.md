@@ -1,21 +1,15 @@
-# Active result summaries
+# Research evidence
 
-This directory contains compact, human-auditable summaries and small fixtures that
-are still exercised by the current test suite. Bulky nested source archives,
-workflow downloads, generated figures, and superseded evidence ZIPs are not kept in
-the normal checkout.
+Historical run outputs are kept outside the active source tree. Their original
+bytes, failures and manifests remain in the
+[pre-cleanup evidence tree](https://github.com/tugrapaydiner/SPECTRA/tree/38c13990a1ba92229cf5cf2a57b1a600b218889e/results).
+This includes the failed SAT admission pilot and the CPU replay diagnostics.
+Use the complete pinned source tree when reproducing a historical run.
 
-Their exact pre-cleanup bytes and SHA-256 identities are listed in
-[`HISTORICAL_ARCHIVES.json`](HISTORICAL_ARCHIVES.json). They remain reachable from:
+Keep new experiment outputs, logs, machine details and internal reviews in
+ignored local storage. Publish only evidence deliberately selected to support a
+public result, with a durable archive and exact identities. Existing public
+history remains public after active copies are removed.
 
-- branch `archive/research-history-20261016`;
-- the original immutable commits named by each result report; and
-- the GitHub Actions artifacts cited by the relevant protocol, subject to the
-  artifact retention period.
-
-The sole retained archive in the active tree is
-[`sat_workload/pilot.zip`](sat_workload/pilot.zip). It is a small negative-result
-fixture whose witnesses and corruption paths are independently checked by current
-unit tests. New large evidence must be published as a release or workflow artifact,
-not committed under `results/`. Recover an old archive only in a detached or
-isolated worktree, for example with `git show archive/research-history-20261016:<path>`.
+See [current status](../docs/STATUS.md) for supported claims and
+[historical recovery](../docs/history/README.md) for earlier archives.

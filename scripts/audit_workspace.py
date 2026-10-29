@@ -56,10 +56,6 @@ def audit(root: Path = ROOT) -> dict:
             links += 1
 
     packaged = root / "spectra" / "_native" / "exact_binary.cpp"
-    research = root / "experiments" / "compiled_query" / "exact_native.cpp"
-    if packaged.read_bytes() != research.read_bytes():
-        raise ValueError("packaged and research exact-native sources diverge")
-
     digest = hashlib.sha256(packaged.read_bytes()).hexdigest()
     return {
         "status": "PASS",
@@ -68,7 +64,7 @@ def audit(root: Path = ROOT) -> dict:
         "current_guides": len(GUIDES),
         "local_links_checked": links,
         "external_links_not_fetched": external,
-        "exact_native_sources_byte_identical": True,
+        "exact_native_source": "spectra/_native/exact_binary.cpp",
         "exact_native_sha256": digest,
         "history_branch": "archive/research-history-20261016",
     }

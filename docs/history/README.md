@@ -1,36 +1,45 @@
-# Historical research and evidence
+# Historical research
 
-The active `main` checkout intentionally contains only current source, tests,
-documentation, compact summaries, and seven permanent workflows. The full
-pre-cleanup research histories are preserved without merging their alternate file
-trees into `main`.
+The active tree contains maintained source, regression tests and user-facing
+instructions. Reproduce historical experiments from their complete pinned trees:
 
-## Canonical archive
+- [Original structural transfer harness](https://github.com/tugrapaydiner/SPECTRA/tree/39e9ee0b89f1261106231ee94546758c510291ba)
+  retains the matching native source, comparator patch, frozen protocol and
+  process runner. Current benchmarks keep the unchanged shared generators.
+- [Historical efficiency release assembly](https://github.com/tugrapaydiner/SPECTRA/tree/ad09a843d938f1e773e953c771520047975bbc05)
+  retains the original three-job publication workflow, its evidence packager and
+  dedicated tests. Current release validation uses the maintained package checks.
+- [Failure-information development study](https://github.com/tugrapaydiner/SPECTRA/tree/e2cc522fe7f435c7aca02080475e05e24b718aeb)
+  retains the exact frozen runners, protocols, failed feedback gate, initial
+  aggregation failure and complete replay evidence. Maintained selector and
+  symmetry components keep their current regression tests.
+- [Legacy figure and report tools](https://github.com/tugrapaydiner/SPECTRA/tree/6c47ff9c870a7ac209b1d40ad83249a59743b192/scripts)
+  retains the archived PNG chart generators and blueprint-era report formatter.
+  Current SVG figures, measurement tools and their inputs are separate.
+- [Frozen ITC selector-v10 study](https://github.com/tugrapaydiner/SPECTRA/tree/9e1037f2b46780dc943804f8726cee042108d15a)
+  retains the matching native selector, transfer runners, dedicated tests,
+  protocols, timing amendments, selector-v10 WAP guard and manual workflow.
+  The current selector is v11;
+  old holdout runs must use their original source and declared gates.
+- [Retired milestone runners](https://github.com/tugrapaydiner/SPECTRA/tree/21ef4511ed586c7509c55657dfbbccfb396a1bab)
+  retains one-shot M02-M15 runners, report generators and superseded protocol
+  notes. Numerical replay helpers and current runtime tests stay active.
+- [Completed study source and tests](https://github.com/tugrapaydiner/SPECTRA/tree/757babb05bd631c89075f374ba765a197a1fb77b)
+  retains the WAP confirmation harness, earlier CNF/SVM studies, their reports,
+  and the README chart generator. Active copies of those completed runners
+  and their exclusive tests are retired; shipped APIs and their tests remain.
+- [Part 3 evidence before cleanup](https://github.com/tugrapaydiner/SPECTRA/tree/38c13990a1ba92229cf5cf2a57b1a600b218889e)
+  retains the run artifacts and diagnostic harnesses removed from this checkout.
+- [Earlier research archive](https://github.com/tugrapaydiner/SPECTRA/tree/0b68898f3e64063ac3dc8904ae42f0b33590e7af)
+  is the immutable archive/research-history-20261016 checkpoint.
+- Receipts naming `abd10d3d0ef24300c3e43b8432886c8203fd465b` or
+  `45b7fba65d0eb702616b1f617b3e4f0017fb4438` retain those original identities.
 
-```text
-branch: archive/research-history-20261016
-head:   abd10d3d0ef24300c3e43b8432886c8203fd465b
-```
+Use an isolated historical checkout and verify its recorded input and artifact
+hashes. Old manifests describe their original trees, not the current checkout.
+All failures, missed gates and exposed-input boundaries remain in those records.
+Archiving a result does not promote it into a current claim.
 
-The archive head uses the same file tree as the integration checkpoint but has
-multi-parent history links to the retired research branches. Individual old branch
-refs were removed only after their tips were proven reachable from this archive.
-
-Use an isolated checkout when inspecting or rerunning retired work:
-
-```bash
-git fetch origin archive/research-history-20261016
-git worktree add --detach ../spectra-history origin/archive/research-history-20261016
-```
-
-Large evidence archives and generated figures removed from the active checkout are
-also present in the historical commits that originally introduced them. Reports in
-`docs/`, `experiments/`, and `results/` retain the exact commit, artifact, and hash
-identities needed to locate those bytes.
-
-## Boundary
-
-Archival reachability is not promotion. Failed gates, exposed datasets, negative
-comparisons, and unsupported claims remain historical evidence. They must not be
-copied into current defaults or advertised as results of the proof-carrying exact
-query API or the frozen WAP flagship study.
+Internal plans and working reviews belong in ignored local storage. Removing an
+active copy does not erase earlier public Git history. See
+[current status](../STATUS.md) for the maintained project scope.
