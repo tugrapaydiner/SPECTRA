@@ -713,7 +713,9 @@ SPECTRA_EXPORT int spectra_g_native_solve(
     if (!offsets || (literal_count && !literals)) {
       throw std::invalid_argument("null CNF buffer");
     }
-    if (offsets[0] != 0 || offsets[clause_count] != literal_count) {
+    if (clause_count >= std::numeric_limits<std::size_t>::max() / sizeof(*offsets) ||
+        literal_count > std::numeric_limits<std::size_t>::max() / sizeof(*literals) ||
+        offsets[0] != 0 || offsets[clause_count] != literal_count) {
       throw std::invalid_argument("clause offsets differ from literal buffer");
     }
     std::vector<int> original_variables;
@@ -778,7 +780,8 @@ void check_rup_offsets(const std::int32_t *literals, std::size_t literal_count,
   if (!offsets || (literal_count && !literals)) {
     throw std::invalid_argument("null RUP input buffer");
   }
-  if (clause_count == std::numeric_limits<std::size_t>::max() ||
+  if (clause_count >= std::numeric_limits<std::size_t>::max() / sizeof(*offsets) ||
+      literal_count > std::numeric_limits<std::size_t>::max() / sizeof(*literals) ||
       offsets[0] != 0 || offsets[clause_count] != literal_count) {
     throw std::invalid_argument("RUP offsets differ from literal buffer");
   }

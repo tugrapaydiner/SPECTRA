@@ -787,6 +787,7 @@ from experiments.general_competition.test_native_cdcl import (
     test_raw_native_empty_input_preserves_declared_variables,
     test_raw_native_sparse_input_rejects_invalid_literals,
     test_direct_native_variable_compaction_boundary,
+    test_native_abi_rejects_unrepresentable_buffer_sizes,
 )
 runtime = NativeCDCLRuntime(sys.argv[1])
 clauses = tuple(tuple(v if b else -v for v, b in enumerate(bits, 1)) for bits in product((False, True), repeat=5))
@@ -813,6 +814,7 @@ for nvars in (1, 1024):
         test_raw_native_sparse_input_rejects_invalid_literals(runtime, nvars, literal)
 for nvars in (95, 96, 97):
     test_direct_native_variable_compaction_boundary(runtime, nvars)
+test_native_abi_rejects_unrepresentable_buffer_sizes(runtime)
 """
     environment = os.environ.copy()
     environment["PYTHONPATH"] = os.getcwd()
@@ -1829,3 +1831,45 @@ def test_native_sat_decoder_keeps_strict_boolean_model_contract():
     for raw in (b"\x00" * 4, b"\x00" * 6):
         with pytest.raises(ValueError, match="model length differs"):
             _decode(header(5) + raw)
+
+
+def test_native_abi_rejects_unrepresentable_buffer_sizes(runtime):
+    program = r"""
+import ctypes
+import sys
+from experiments.general_competition.native_cdcl import NativeCDCLRuntime
+
+runtime = NativeCDCLRuntime(sys.argv[1])
+size_max = ctypes.c_size_t(-1).value
+bad_offsets = ctypes.cast(ctypes.c_void_p(1), ctypes.POINTER(ctypes.c_uint64))
+bad_literals = ctypes.cast(ctypes.c_void_p(1), ctypes.POINTER(ctypes.c_int32))
+empty_offsets = (ctypes.c_uint64 * 1)(0)
+cases = ((size_max, 0), (size_max // ctypes.sizeof(ctypes.c_uint64), 0),
+         (1, size_max // ctypes.sizeof(ctypes.c_int32) + 1))
+for clause_count, literal_count in cases:
+    literals = bad_literals if literal_count else None
+    output = ctypes.c_void_p(1)
+    size = ctypes.c_size_t(123)
+    code = runtime._library.spectra_g_native_solve(
+        0, literals, literal_count, bad_offsets, clause_count, 0, 0,
+        ctypes.byref(output), ctypes.byref(size),
+    )
+    assert code == 1 and output.value is None and size.value == 0
+    assert runtime._verify_drup is not None
+    assert runtime._verify_drup(
+        0, literals, literal_count, bad_offsets, clause_count, None, 0, empty_offsets, 0,
+    ) == -1
+    assert runtime._verify_drup(
+        0, None, 0, empty_offsets, 0, literals, literal_count, bad_offsets, clause_count,
+    ) == -1
+print("nine invalid buffer sizes rejected before reading")
+"""
+    root = Path(__file__).resolve().parents[2]
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(root)
+    completed = subprocess.run(
+        [sys.executable, "-c", program, str(runtime.path)],
+        cwd=root, env=environment, capture_output=True, text=True, timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout.strip() == "nine invalid buffer sizes rejected before reading"
