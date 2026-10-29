@@ -615,7 +615,7 @@ def test_drup_replay_rejects_changed_or_missing_additions(runtime):
     assert not verify_drup_proof(4, clauses, replace(proof, schema="wrong"))
 
 
-def test_drup_replay_matches_clause_simplification():
+def test_drup_replay_matches_clause_simplification(runtime):
     def conflict(clauses, denied):
         pending = [set(row) for row in clauses] + [{-lit} for lit in denied]
         while True:
@@ -657,7 +657,12 @@ def test_drup_replay_matches_clause_simplification():
                         break
                     database.append(row)
                 proof = DRUPProof("spectra.general_drup.v1", additions)
-                assert verify_drup_proof(nvars, clauses, proof) == expected
+                reversed_proof = replace(
+                    proof, additions=tuple(tuple(reversed(row)) for row in additions),
+                )
+                for checker in (verify_drup_proof, runtime._verify_drup_proof):
+                    assert checker(nvars, clauses, proof) == expected
+                    assert checker(nvars, clauses, reversed_proof) == expected
 
 
 def test_receipt_rejects_changed_source_and_library_hashes(runtime, tmp_path):
@@ -766,14 +771,25 @@ def test_moderate_random_3sat_differential(runtime):
 def test_native_sanitizer_builds_execute_checked_unsat(tmp_path, sanitizer):
     library = build_native_cdcl(tmp_path / sanitizer.replace(",", "-"), sanitizer=sanitizer)
     program = r"""
+import ctypes
 from itertools import product
 import sys
-from experiments.general_competition.native_cdcl import NativeCDCLRuntime, solve_general_native, verify_native_result
+from experiments.general_competition.native_cdcl import (
+    NativeCDCLRuntime, solve_cnf_native, solve_general_native,
+    verify_direct_native_result, verify_native_result,
+)
 runtime = NativeCDCLRuntime(sys.argv[1])
 clauses = tuple(tuple(v if b else -v for v, b in enumerate(bits, 1)) for bits in product((False, True), repeat=5))
-result = solve_general_native(runtime, 5, clauses, max_conflicts=1000000)
-assert result.status == 'UNSAT_VERIFIED'
-assert verify_native_result(5, clauses, result)
+for solve, verify in ((solve_general_native, verify_native_result),
+                      (solve_cnf_native, verify_direct_native_result)):
+    result = solve(runtime, 5, clauses, max_conflicts=1000000)
+    assert result.status == 'UNSAT_VERIFIED'
+    assert verify(5, clauses, result)
+assert runtime._verify_drup is not None
+invalid = (ctypes.c_int32 * 1)(-2147483648)
+original_offsets = (ctypes.c_uint64 * 2)(0, 1)
+proof_offsets = (ctypes.c_uint64 * 2)(0, 0)
+assert runtime._verify_drup(1, invalid, 1, original_offsets, 1, None, 0, proof_offsets, 1) == -1
 """
     environment = os.environ.copy()
     environment["PYTHONPATH"] = os.getcwd()
@@ -1560,3 +1576,84 @@ print(json.dumps({'reductions': stats.reductions, 'deleted': stats.deleted_claus
     assert "s VERIFIED" in {
         line.strip() for line in (tmp_path / "stress-check" / "stdout.txt").read_text().splitlines()
     }
+
+
+@pytest.mark.parametrize("additions,limits", [
+    ((), {}), (((), ()), {}), (((1,),), {}),
+    (((True,), ()), {}), (((0,), ()), {}), (((3,), ()), {}),
+    (((-3,), ()), {}), (((2**63,), ()), {}), (((-(2**63),), ()), {}),
+    (((1, 1), ()), {}), (((1, -1), ()), {}), (([1], ()), {}),
+    (((),), {"max_clauses": 0}), (((),), {"max_clauses": True}),
+    (((),), {"max_literals": -1}), (((),), {"max_literals": False}),
+    (((1,), ()), {"max_literals": 0}),
+])
+def test_native_drup_rejects_malformed_proofs(runtime, additions, limits):
+    # Contradictory originals must not make a malformed proof acceptable.
+    proof = DRUPProof("spectra.general_drup.v1", additions)
+    for checker in (verify_drup_proof, runtime._verify_drup_proof):
+        assert not checker(2, ((1,), (-1,)), proof, **limits)
+
+
+@pytest.mark.parametrize("nvars,original,original_offsets,proof,proof_offsets", [
+    (10_000_001, [], [0], [], [0, 0]),
+    (1, [0], [0, 1], [], [0, 0]),
+    (1, [-2147483648], [0, 1], [], [0, 0]),
+    (1, [2], [0, 1], [], [0, 0]),
+    (1, [1, -1], [0, 2], [], [0, 0]),
+    (2, [2, 1], [0, 2], [], [0, 0]),
+    (1, [1], [1, 1], [], [0, 0]),
+    (1, [1], [0, 0], [], [0, 0]),
+    (1, [1], [0, 2, 1], [], [0, 0]),
+    (1, [], [0, 0], [1, 1], [0, 2, 2]),
+    (1, [], [0, 0], [0], [0, 1, 1]),
+    (1, [], [0, 0], [], [0, 1, 0]),
+])
+def test_native_drup_abi_rejects_malformed_buffers(
+        runtime, nvars, original, original_offsets, proof, proof_offsets):
+    def buffer(kind, values):
+        return (kind * len(values))(*values)
+
+    code = runtime._verify_drup(
+        nvars, buffer(ctypes.c_int32, original), len(original),
+        buffer(ctypes.c_uint64, original_offsets), len(original_offsets) - 1,
+        buffer(ctypes.c_int32, proof), len(proof),
+        buffer(ctypes.c_uint64, proof_offsets), len(proof_offsets) - 1,
+    )
+    assert code == -1
+    assert runtime._library.spectra_g_native_error()
+
+
+def test_native_drup_abi_empty_and_null_buffers(runtime):
+    offsets = (ctypes.c_uint64 * 2)(0, 0)
+    verify = runtime._verify_drup
+    assert verify(0, None, 0, offsets, 1, None, 0, offsets, 1) == 1
+    assert verify(0, None, 0, offsets, 0, None, 0, offsets, 1) == 0
+    assert verify(0, None, 0, offsets, 1, None, 0, offsets, 0) == 0
+    early_empty = (ctypes.c_uint64 * 3)(0, 0, 0)
+    assert verify(0, None, 0, offsets, 1, None, 0, early_empty, 2) == 0
+    nonempty = (ctypes.c_int32 * 1)(1)
+    nonempty_offsets = (ctypes.c_uint64 * 2)(0, 1)
+    assert verify(1, None, 0, offsets, 1, nonempty, 1, nonempty_offsets, 1) == 0
+    assert verify(0, None, 0, None, 0, None, 0, offsets, 1) == -1
+    assert verify(1, None, 1, offsets, 1, None, 0, offsets, 1) == -1
+    assert verify(0, None, 0, offsets, 1, None, 0, None, 1) == -1
+    assert verify(1, None, 0, offsets, 1, None, 1, offsets, 1) == -1
+    too_many = ctypes.c_size_t(-1).value
+    assert verify(0, None, 0, offsets, too_many, None, 0, offsets, 1) == -1
+    assert verify(0, None, 0, offsets, 1, None, 0, offsets, too_many) == -1
+    assert verify(0, None, 0, offsets, 1, None, 0, offsets, 1) == 1
+    assert runtime._library.spectra_g_native_error() == b""
+
+
+def test_direct_native_replay_checks_failure_and_fallback(runtime, monkeypatch):
+    clauses = ((1,), (-1,))
+    monkeypatch.setattr(runtime, "_verify_drup", lambda *_: 0)
+    with pytest.raises(AssertionError, match="independent replay"):
+        solve_cnf_native(runtime, 1, clauses)
+    monkeypatch.setattr(runtime, "_verify_drup", lambda *_: -1)
+    with pytest.raises(RuntimeError, match="native RUP failure"):
+        solve_cnf_native(runtime, 1, clauses)
+    monkeypatch.setattr(runtime, "_verify_drup", None)
+    result = solve_cnf_native(runtime, 1, clauses)
+    assert result.status == "UNSAT_VERIFIED"
+    assert verify_direct_native_result(1, clauses, result)

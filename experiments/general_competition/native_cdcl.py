@@ -3,9 +3,10 @@
 The native kernel accepts arbitrary canonical CNF clauses, runs deterministic
 CDCL with watched literals, first-UIP learning, phase saving and restarts, and
 returns either a complete model, ``UNKNOWN`` at a resource budget, or a retained
-DRUP-subset clause-addition proof. Python independently checks every SAT model
-and every RUP proof. The engine can run directly on the exact original CNF or
-behind the replayable binary frontend.
+DRUP-subset clause-addition proof. Models and proofs are independently checked
+against the original clauses. Direct solves use a separate native clause-scan
+proof checker, with Python replay available without a native build. The engine
+can run directly on the exact original CNF or behind the replayable binary frontend.
 
 This is a development engine.  Passing these contracts does not imply SAT
 Competition leadership, and the simple proof checker is not a substitute for an
@@ -618,10 +619,44 @@ class NativeCDCLRuntime:
             ctypes.POINTER(ctypes.c_size_t),
         ]
         self._library.spectra_g_native_solve.restype = ctypes.c_int
+        self._verify_drup = getattr(self._library, "spectra_g_native_verify_drup", None)
+        if self._verify_drup is not None:
+            self._verify_drup.argtypes = [
+                ctypes.c_uint32,
+                ctypes.POINTER(ctypes.c_int32), ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_uint64), ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_int32), ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_uint64), ctypes.c_size_t,
+            ]
+            self._verify_drup.restype = ctypes.c_int
         raw = self._library.spectra_g_native_signature()
         self.signature = raw.decode("utf-8", "replace") if raw else ""
         if self.signature != "SPECTRA-G native CDCL v1":
             raise RuntimeError("native CDCL signature differs")
+
+    def _verify_drup_proof(
+        self, nvars: int, clauses: Iterable[Iterable[int]], proof: DRUPProof, *,
+        max_clauses: int = 5_000_000, max_literals: int = 100_000_000,
+    ) -> bool:
+        if self._verify_drup is None:
+            return verify_drup_proof(
+                nvars, clauses, proof, max_clauses=max_clauses, max_literals=max_literals,
+            )
+        checked = _checked_drup_inputs(nvars, clauses, proof, max_clauses, max_literals)
+        if checked is None:
+            return False
+        original, additions = checked
+        _, literals, offsets = _pack_canonical(original)
+        _, proof_literals, proof_offsets = _pack_canonical(additions)
+        code = self._verify_drup(
+            nvars, literals, len(literals), offsets, len(original),
+            proof_literals, len(proof_literals), proof_offsets, len(additions),
+        )
+        if code not in (0, 1):
+            raw = self._library.spectra_g_native_error()
+            message = raw.decode("utf-8", "replace") if raw else "native RUP failure"
+            raise RuntimeError(message)
+        return code == 1
 
     def solve_residual(
         self,
@@ -754,15 +789,10 @@ def _rup_conflict(clauses: tuple[Clause, ...], assumption_clause: Clause, nvars:
     return _RUPDatabase(nvars, clauses).conflict(assumption_clause)
 
 
-def verify_drup_proof(
-    nvars: int,
-    clauses: Iterable[Iterable[int]],
-    proof: DRUPProof,
-    *,
-    max_clauses: int = 5_000_000,
-    max_literals: int = 100_000_000,
-) -> bool:
-    """Replay a clause-addition DRUP subset; the final addition must be empty."""
+def _checked_drup_inputs(
+    nvars: int, clauses: Iterable[Iterable[int]], proof: DRUPProof,
+    max_clauses: int, max_literals: int,
+) -> tuple[tuple[Clause, ...], tuple[Clause, ...]] | None:
     if (
         type(proof) is not DRUPProof
         or proof.schema != PROOF_SCHEMA
@@ -772,36 +802,53 @@ def verify_drup_proof(
         or type(max_literals) is not int
         or not 0 <= len(proof.additions) <= max_clauses
     ):
-        return False
+        return None
     try:
-        database = _RUPDatabase(nvars, canonical_cnf(nvars, clauses))
+        original = canonical_cnf(nvars, clauses)
     except (TypeError, ValueError):
-        return False
+        return None
+    additions = []
     literal_total = 0
     for index, raw in enumerate(proof.additions):
         if type(raw) is not tuple:
-            return False
+            return None
         literal_total += len(raw)
         if literal_total > max_literals:
-            return False
+            return None
         try:
             normalized = canonical_cnf(nvars, (raw,))
         except (TypeError, ValueError):
-            return False
-        if raw:
-            if len(normalized) != 1 or len(normalized[0]) != len(raw):
-                return False
-            row = normalized[0]
-        else:
-            if normalized != ((),):
-                return False
-            row = ()
+            return None
+        if len(normalized) != 1 or len(normalized[0]) != len(raw):
+            return None
+        row = normalized[0]
+        if not row and index != len(proof.additions) - 1:
+            return None
+        additions.append(row)
+    if additions[-1] != ():
+        return None
+    return original, tuple(additions)
+
+
+def verify_drup_proof(
+    nvars: int,
+    clauses: Iterable[Iterable[int]],
+    proof: DRUPProof,
+    *,
+    max_clauses: int = 5_000_000,
+    max_literals: int = 100_000_000,
+) -> bool:
+    """Replay a clause-addition DRUP subset; the final addition must be empty."""
+    checked = _checked_drup_inputs(nvars, clauses, proof, max_clauses, max_literals)
+    if checked is None:
+        return False
+    original, additions = checked
+    database = _RUPDatabase(nvars, original)
+    for row in additions:
         if not database.conflict(row):
             return False
         database.append(row)
-        if not row and index != len(proof.additions) - 1:
-            return False
-    return proof.additions[-1] == ()
+    return True
 
 
 def solve_cnf_native(
@@ -856,8 +903,8 @@ def solve_cnf_native(
         proof_literals=0 if proof is None else sum(map(len, proof.additions)),
         elapsed_ns=time.perf_counter_ns() - started,
     )
-    if result.status != "UNKNOWN" and not verify_direct_native_result(
-        nvars, canonical, result
+    if result.status != "UNKNOWN" and not _verify_direct_native_result(
+        nvars, canonical, result, runtime._verify_drup_proof
     ):
         raise AssertionError("direct native SPECTRA-G result failed independent replay")
     return result
@@ -942,6 +989,12 @@ def verify_direct_native_result(
     result: DirectNativeResult,
 ) -> bool:
     """Independently check a direct native result against the original CNF."""
+    return _verify_direct_native_result(nvars, clauses, result, verify_drup_proof)
+
+
+def _verify_direct_native_result(
+    nvars: int, clauses: Iterable[Iterable[int]], result: DirectNativeResult, verify_proof,
+) -> bool:
     if type(result) is not DirectNativeResult:
         return False
     try:
@@ -972,7 +1025,7 @@ def verify_direct_native_result(
             and _valid_solved_native_statistics(result)
             and result.model == ()
             and result.proof is not None
-            and verify_drup_proof(
+            and verify_proof(
                 nvars,
                 canonical,
                 result.proof,

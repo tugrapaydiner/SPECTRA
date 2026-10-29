@@ -730,3 +730,116 @@ SPECTRA_EXPORT int spectra_g_native_solve(
     return 1;
   }
 }
+
+namespace {
+
+void check_rup_offsets(const std::int32_t *literals, std::size_t literal_count,
+                       const std::uint64_t *offsets, std::size_t clause_count) {
+  if (!offsets || (literal_count && !literals)) {
+    throw std::invalid_argument("null RUP input buffer");
+  }
+  if (clause_count == std::numeric_limits<std::size_t>::max() ||
+      offsets[0] != 0 || offsets[clause_count] != literal_count) {
+    throw std::invalid_argument("RUP offsets differ from literal buffer");
+  }
+  for (std::size_t index = 0; index < clause_count; ++index) {
+    if (offsets[index] > offsets[index + 1] || offsets[index + 1] > literal_count) {
+      throw std::invalid_argument("RUP offsets are not monotonic");
+    }
+  }
+}
+
+std::vector<int> read_rup_row(std::uint32_t nvars, const std::int32_t *literals,
+                             std::uint64_t begin, std::uint64_t end) {
+  std::vector<int> row;
+  int previous = 0;
+  for (std::uint64_t index = begin; index < end; ++index) {
+    const std::int64_t literal = literals[index];
+    if (!literal || literal < -static_cast<std::int64_t>(nvars) ||
+        literal > static_cast<std::int64_t>(nvars)) {
+      throw std::invalid_argument("RUP literal outside declared range");
+    }
+    const int variable = static_cast<int>(literal < 0 ? -literal : literal);
+    if (variable <= previous) {
+      throw std::invalid_argument("RUP row must have increasing distinct variables");
+    }
+    previous = variable;
+    row.push_back(static_cast<int>(literal));
+  }
+  return row;
+}
+
+bool rup_scan_conflict(const std::vector<std::vector<int>> &database,
+                      const std::vector<int> &denied,
+                      std::vector<std::int8_t> &values) {
+  std::fill(values.begin(), values.end(), 0);
+  for (const int literal : denied) {
+    const int variable = literal < 0 ? -literal : literal;
+    values[static_cast<std::size_t>(variable)] = literal > 0 ? -1 : 1;
+  }
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (const auto &row : database) {
+      bool satisfied = false;
+      int unassigned = 0;
+      int unit = 0;
+      for (const int literal : row) {
+        const int variable = literal < 0 ? -literal : literal;
+        const int value = values[static_cast<std::size_t>(variable)];
+        if ((literal > 0 && value > 0) || (literal < 0 && value < 0)) {
+          satisfied = true;
+          break;
+        }
+        if (!value) {
+          unit = literal;
+          if (++unassigned > 1) break;
+        }
+      }
+      if (satisfied || unassigned > 1) continue;
+      if (!unassigned) return true;
+      const int variable = unit < 0 ? -unit : unit;
+      values[static_cast<std::size_t>(variable)] = unit > 0 ? 1 : -1;
+      changed = true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+SPECTRA_EXPORT int spectra_g_native_verify_drup(
+    std::uint32_t nvars, const std::int32_t *original_literals,
+    std::size_t original_literal_count, const std::uint64_t *original_offsets,
+    std::size_t original_clause_count, const std::int32_t *proof_literals,
+    std::size_t proof_literal_count, const std::uint64_t *proof_offsets,
+    std::size_t proof_clause_count) {
+  last_error.clear();
+  try {
+    if (nvars > max_native_variables) throw std::invalid_argument("too many RUP variables");
+    check_rup_offsets(original_literals, original_literal_count,
+                      original_offsets, original_clause_count);
+    check_rup_offsets(proof_literals, proof_literal_count, proof_offsets, proof_clause_count);
+    if (!proof_clause_count) return 0;
+    std::vector<std::vector<int>> database;
+    for (std::size_t index = 0; index < original_clause_count; ++index) {
+      database.push_back(read_rup_row(nvars, original_literals,
+                                      original_offsets[index], original_offsets[index + 1]));
+    }
+    std::vector<std::int8_t> values(static_cast<std::size_t>(nvars) + 1, 0);
+    for (std::size_t index = 0; index < proof_clause_count; ++index) {
+      auto row = read_rup_row(nvars, proof_literals, proof_offsets[index], proof_offsets[index + 1]);
+      if (row.empty() && index + 1 != proof_clause_count) return 0;
+      if (!rup_scan_conflict(database, row, values)) return 0;
+      if (index + 1 == proof_clause_count) return row.empty() ? 1 : 0;
+      database.push_back(std::move(row));
+    }
+    return 0;
+  } catch (const std::exception &error) {
+    last_error = error.what();
+    return -1;
+  } catch (...) {
+    last_error = "unknown native RUP exception";
+    return -1;
+  }
+}
