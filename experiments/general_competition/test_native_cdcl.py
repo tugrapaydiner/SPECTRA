@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 from dataclasses import replace
+import gc
 import hashlib
 import importlib
 from itertools import combinations, product
@@ -10,6 +11,7 @@ import os
 from pathlib import Path
 import random
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -131,6 +133,25 @@ def test_raw_native_abi_rejects_excess_variables_before_indexing(runtime, nvars)
     assert runtime._library.spectra_g_native_error() == b"too many variables"
     assert output.value is None
     assert size.value == 0
+
+
+@pytest.mark.parametrize("nvars,rows,canonical,literals,offsets", [
+    (0, (), (), (), (0,)),
+    (0, ((),), ((),), (), (0, 0)),
+    (3, ((3, -2, 1, 3), (2, -2), (-3,), (-3,)),
+     ((-3,), (1, -2, 3)), (-3, 1, -2, 3), (0, 1, 4)),
+])
+def test_native_input_buffers_keep_their_storage(
+        nvars, rows, canonical, literals, offsets):
+    from experiments.general_competition.native_cdcl import _pack_cnf
+
+    packed, literal_buffer, offset_buffer = _pack_cnf(
+        nvars, (iter(row) for row in rows))
+    _pack_cnf(3, ((-1, 2), (3,)))
+    gc.collect()
+    assert packed == canonical
+    assert bytes(literal_buffer) == struct.pack(f"={len(literals)}i", *literals)
+    assert bytes(offset_buffer) == struct.pack(f"={len(offsets)}Q", *offsets)
 
 
 def test_activity_underflow_preserves_relevant_variables(tmp_path, monkeypatch):

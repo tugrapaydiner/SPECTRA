@@ -13,9 +13,11 @@ official competition checker.
 """
 from __future__ import annotations
 
+from array import array
 import ctypes
 from dataclasses import dataclass
 import hashlib
+from itertools import chain
 import json
 import os
 from pathlib import Path
@@ -519,13 +521,17 @@ def _uint64(value: object, label: str) -> int:
 
 def _pack_cnf(nvars: int, clauses: Iterable[Iterable[int]]):
     canonical = canonical_cnf(nvars, clauses)
-    flattened: list[int] = []
-    offsets = [0]
+    literals = array("i")
+    offsets = array("Q", [0])
+    if (literals.itemsize != ctypes.sizeof(ctypes.c_int32)
+            or offsets.itemsize != ctypes.sizeof(ctypes.c_uint64)):
+        raise RuntimeError("native CDCL input scalar widths differ")
+    literals.extend(chain.from_iterable(canonical))
     for row in canonical:
-        flattened.extend(row)
-        offsets.append(len(flattened))
-    literal_array = (ctypes.c_int32 * len(flattened))(*flattened)
-    offset_array = (ctypes.c_uint64 * len(offsets))(*offsets)
+        offsets.append(offsets[-1] + len(row))
+    # Each ctypes view keeps its backing array alive through the native call.
+    literal_array = (ctypes.c_int32 * len(literals)).from_buffer(literals)
+    offset_array = (ctypes.c_uint64 * len(offsets)).from_buffer(offsets)
     return canonical, literal_array, offset_array
 
 
