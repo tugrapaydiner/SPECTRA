@@ -778,6 +778,10 @@ from experiments.general_competition.native_cdcl import (
     NativeCDCLRuntime, solve_cnf_native, solve_general_native,
     verify_direct_native_result, verify_native_result,
 )
+from experiments.general_competition.test_native_cdcl import (
+    test_native_drup_follows_connected_implication_chains,
+    test_native_drup_rejects_invalid_addition_after_watch_table_growth,
+)
 runtime = NativeCDCLRuntime(sys.argv[1])
 clauses = tuple(tuple(v if b else -v for v, b in enumerate(bits, 1)) for bits in product((False, True), repeat=5))
 for solve, verify in ((solve_general_native, verify_native_result),
@@ -790,6 +794,9 @@ invalid = (ctypes.c_int32 * 1)(-2147483648)
 original_offsets = (ctypes.c_uint64 * 2)(0, 1)
 proof_offsets = (ctypes.c_uint64 * 2)(0, 0)
 assert runtime._verify_drup(1, invalid, 1, original_offsets, 1, None, 0, proof_offsets, 1) == -1
+test_native_drup_follows_connected_implication_chains(runtime, 257, False)
+test_native_drup_follows_connected_implication_chains(runtime, 257, True)
+test_native_drup_rejects_invalid_addition_after_watch_table_growth(runtime)
 """
     environment = os.environ.copy()
     environment["PYTHONPATH"] = os.getcwd()
@@ -1664,3 +1671,33 @@ def test_direct_native_replay_checks_failure_and_fallback(runtime, monkeypatch):
     result = solve_cnf_native(runtime, 1, clauses)
     assert result.status == "UNSAT_VERIFIED"
     assert verify_direct_native_result(1, clauses, result)
+
+
+@pytest.mark.parametrize("nvars", (8, 257))
+@pytest.mark.parametrize("reverse", (False, True))
+def test_native_drup_follows_connected_implication_chains(runtime, nvars, reverse):
+    def label(literal):
+        if not reverse:
+            return literal
+        variable = nvars + 1 - abs(literal)
+        return variable if literal > 0 else -variable
+
+    for disconnected in (False, True):
+        clauses = [(1, 2), (-1, 2), (1, -2), (-1, -2)]
+        for variable in range(2, nvars):
+            if disconnected and variable == nvars // 2:
+                continue
+            clauses.extend(((-variable, variable + 1), (variable, -variable - 1)))
+        original = tuple(tuple(map(label, row)) for row in clauses)
+        proof = DRUPProof("spectra.general_drup.v1", ((label(nvars),), ()))
+        # An UNSAT core does not justify a disconnected, non-RUP addition.
+        for checker in (verify_drup_proof, runtime._verify_drup_proof):
+            assert checker(nvars, original, proof) == (not disconnected)
+
+
+def test_native_drup_rejects_invalid_addition_after_watch_table_growth(runtime):
+    original = tuple((1, 2, variable) for variable in range(3, 130))
+    proof = DRUPProof("spectra.general_drup.v1", ((1, 2, 3), (1, 2), ()))
+    # Denying 1 and 2 moves watches onto 127 previously unindexed literals.
+    for checker in (verify_drup_proof, runtime._verify_drup_proof):
+        assert not checker(129, original, proof)

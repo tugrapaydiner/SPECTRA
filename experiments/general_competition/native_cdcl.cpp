@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -769,42 +770,93 @@ std::vector<int> read_rup_row(std::uint32_t nvars, const std::int32_t *literals,
   return row;
 }
 
-bool rup_scan_conflict(const std::vector<std::vector<int>> &database,
-                      const std::vector<int> &denied,
-                      std::vector<std::int8_t> &values) {
-  std::fill(values.begin(), values.end(), 0);
-  for (const int literal : denied) {
+class RUPReplay {
+  std::vector<std::vector<int>> clauses;
+  std::unordered_map<int, std::vector<std::size_t>> watches;
+  std::vector<int> units;
+  std::vector<std::int8_t> values;
+  std::vector<int> queue;
+  bool has_empty = false;
+
+  int value(int literal) const {
     const int variable = literal < 0 ? -literal : literal;
-    values[static_cast<std::size_t>(variable)] = literal > 0 ? -1 : 1;
+    const int assigned = values[static_cast<std::size_t>(variable)];
+    return literal > 0 ? assigned : -assigned;
   }
-  bool changed = true;
-  while (changed) {
-    changed = false;
-    for (const auto &row : database) {
-      bool satisfied = false;
-      int unassigned = 0;
-      int unit = 0;
-      for (const int literal : row) {
-        const int variable = literal < 0 ? -literal : literal;
-        const int value = values[static_cast<std::size_t>(variable)];
-        if ((literal > 0 && value > 0) || (literal < 0 && value < 0)) {
-          satisfied = true;
-          break;
-        }
-        if (!value) {
-          unit = literal;
-          if (++unassigned > 1) break;
-        }
-      }
-      if (satisfied || unassigned > 1) continue;
-      if (!unassigned) return true;
-      const int variable = unit < 0 ? -unit : unit;
-      values[static_cast<std::size_t>(variable)] = unit > 0 ? 1 : -1;
-      changed = true;
+
+  bool enqueue(int literal) {
+    const int assigned = value(literal);
+    if (assigned) return assigned > 0;
+    const int variable = literal < 0 ? -literal : literal;
+    values[static_cast<std::size_t>(variable)] = literal > 0 ? 1 : -1;
+    queue.push_back(literal);
+    return true;
+  }
+
+ public:
+  explicit RUPReplay(std::uint32_t nvars)
+      : values(static_cast<std::size_t>(nvars) + 1, 0) {}
+
+  void append(std::vector<int> row) {
+    if (row.empty()) {
+      has_empty = true;
+    } else if (row.size() == 1) {
+      units.push_back(row[0]);
+    } else {
+      const std::size_t id = clauses.size();
+      watches[row[0]].push_back(id);
+      watches[row[1]].push_back(id);
+      clauses.push_back(std::move(row));
     }
   }
-  return false;
-}
+
+  bool conflict(const std::vector<int> &denied) {
+    if (has_empty) return true;
+    std::fill(values.begin(), values.end(), 0);
+    queue.clear();
+    for (const int literal : denied) {
+      if (!enqueue(-literal)) return true;
+    }
+    for (const int literal : units) {
+      if (!enqueue(literal)) return true;
+    }
+    for (std::size_t cursor = 0; cursor < queue.size(); ++cursor) {
+      const int falsified = -queue[cursor];
+      const auto found = watches.find(falsified);
+      if (found == watches.end()) continue;
+      auto &watched = found->second;
+      std::size_t index = 0;
+      while (index < watched.size()) {
+        const std::size_t id = watched[index];
+        auto &row = clauses[id];
+        if (row[0] == falsified) std::swap(row[0], row[1]);
+        if (row[1] != falsified) throw std::logic_error("RUP watch differs");
+        const int other = row[0];
+        if (value(other) > 0) {
+          ++index;
+          continue;
+        }
+        bool moved = false;
+        for (std::size_t offset = 2; offset < row.size(); ++offset) {
+          const int literal = row[offset];
+          if (value(literal) >= 0) {
+            std::swap(row[1], row[offset]);
+            watches[literal].push_back(id);
+            watched[index] = watched.back();
+            watched.pop_back();
+            moved = true;
+            break;
+          }
+        }
+        if (!moved) {
+          if (!enqueue(other)) return true;
+          ++index;
+        }
+      }
+    }
+    return false;
+  }
+};
 
 }  // namespace
 
@@ -821,18 +873,17 @@ SPECTRA_EXPORT int spectra_g_native_verify_drup(
                       original_offsets, original_clause_count);
     check_rup_offsets(proof_literals, proof_literal_count, proof_offsets, proof_clause_count);
     if (!proof_clause_count) return 0;
-    std::vector<std::vector<int>> database;
+    RUPReplay database(nvars);
     for (std::size_t index = 0; index < original_clause_count; ++index) {
-      database.push_back(read_rup_row(nvars, original_literals,
+      database.append(read_rup_row(nvars, original_literals,
                                       original_offsets[index], original_offsets[index + 1]));
     }
-    std::vector<std::int8_t> values(static_cast<std::size_t>(nvars) + 1, 0);
     for (std::size_t index = 0; index < proof_clause_count; ++index) {
       auto row = read_rup_row(nvars, proof_literals, proof_offsets[index], proof_offsets[index + 1]);
       if (row.empty() && index + 1 != proof_clause_count) return 0;
-      if (!rup_scan_conflict(database, row, values)) return 0;
+      if (!database.conflict(row)) return 0;
       if (index + 1 == proof_clause_count) return row.empty() ? 1 : 0;
-      database.push_back(std::move(row));
+      database.append(std::move(row));
     }
     return 0;
   } catch (const std::exception &error) {

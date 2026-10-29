@@ -4,7 +4,7 @@ The native kernel accepts arbitrary canonical CNF clauses, runs deterministic
 CDCL with watched literals, first-UIP learning, phase saving and restarts, and
 returns either a complete model, ``UNKNOWN`` at a resource budget, or a retained
 DRUP-subset clause-addition proof. Models and proofs are independently checked
-against the original clauses. Direct solves use a separate native clause-scan
+against the original clauses. Direct solves use a separate native watched-clause
 proof checker, with Python replay available without a native build. The engine
 can run directly on the exact original CNF or behind the replayable binary frontend.
 
