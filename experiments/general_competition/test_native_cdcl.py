@@ -803,7 +803,14 @@ assert runtime._verify_drup(1, invalid, 1, original_offsets, 1, None, 0, proof_o
             text=True,
             check=True,
         ).stdout.strip()
-        environment["LD_PRELOAD"] = resolved
+        cxx_runtime = subprocess.run(
+            [compiler, "-print-file-name=libstdc++.so"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        # ASan must resolve C++ exception handlers before ctypes loads the kernel.
+        environment["LD_PRELOAD"] = os.pathsep.join((resolved, cxx_runtime))
         environment["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1"
     subprocess.run(
         [sys.executable, "-c", program, str(library)],
