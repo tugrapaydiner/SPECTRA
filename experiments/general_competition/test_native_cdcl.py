@@ -301,18 +301,26 @@ def all_blocking_clauses(nvars):
     )
 
 
-def test_direct_native_sat_and_unsat_are_checked_on_original_cnf(runtime, tmp_path):
+@pytest.mark.parametrize("one_pass", (False, True))
+def test_direct_native_sat_and_unsat_are_checked_on_original_cnf(runtime, tmp_path, one_pass):
+    def inputs(clauses):
+        if one_pass:
+            return (iter(row) for row in (*clauses, clauses[0], (1, -1)))
+        return clauses
+
     sat_clauses = ((1, 2, 3), (-1, 2), (-2, 3))
-    sat = solve_cnf_native(runtime, 3, sat_clauses)
+    sat = solve_cnf_native(runtime, 3, inputs(sat_clauses))
     assert sat.status == "SAT_VERIFIED"
+    assert sat.clauses == len(sat_clauses)
     assert sat.reason == "model"
     assert sat.proof is None
     assert model_satisfies(3, sat_clauses, sat.model)
     assert verify_direct_native_result(3, sat_clauses, sat)
 
     unsat_clauses = all_blocking_clauses(4)
-    unsat = solve_cnf_native(runtime, 4, unsat_clauses)
+    unsat = solve_cnf_native(runtime, 4, inputs(unsat_clauses))
     assert unsat.status == "UNSAT_VERIFIED"
+    assert unsat.clauses == len(unsat_clauses)
     assert unsat.reason == "drup"
     assert unsat.proof is not None
     assert verify_direct_native_result(4, unsat_clauses, unsat)

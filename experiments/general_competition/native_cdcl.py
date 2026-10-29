@@ -520,7 +520,10 @@ def _uint64(value: object, label: str) -> int:
 
 
 def _pack_cnf(nvars: int, clauses: Iterable[Iterable[int]]):
-    canonical = canonical_cnf(nvars, clauses)
+    return _pack_canonical(canonical_cnf(nvars, clauses))
+
+
+def _pack_canonical(canonical: tuple[Clause, ...]):
     literals = array("i")
     offsets = array("Q", [0])
     if (literals.itemsize != ctypes.sizeof(ctypes.c_int32)
@@ -632,7 +635,17 @@ class NativeCDCLRuntime:
         max_learned_literals = _uint64(
             max_learned_literals, "max_learned_literals"
         )
-        canonical, literals, offsets = _pack_cnf(nvars, clauses)
+        canonical = canonical_cnf(nvars, clauses)
+        return self._solve_canonical(
+            nvars, canonical, max_conflicts=max_conflicts,
+            max_learned_literals=max_learned_literals,
+        )
+
+    def _solve_canonical(
+        self, nvars: int, canonical: tuple[Clause, ...], *,
+        max_conflicts: int, max_learned_literals: int,
+    ) -> tuple[int, tuple[bool, ...], DRUPProof | None, NativeStats, tuple[Clause, ...]]:
+        canonical, literals, offsets = _pack_canonical(canonical)
         pointer = ctypes.c_void_p()
         size = ctypes.c_size_t()
         code = self._library.spectra_g_native_solve(
@@ -808,7 +821,7 @@ def solve_cnf_native(
     )
     canonical = canonical_cnf(nvars, clauses)
     started = time.perf_counter_ns()
-    status_code, model, proof, stats, observed = runtime.solve_residual(
+    status_code, model, proof, stats, observed = runtime._solve_canonical(
         nvars,
         canonical,
         max_conflicts=max_conflicts,
