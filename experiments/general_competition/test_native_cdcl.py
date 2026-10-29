@@ -607,6 +607,51 @@ def test_drup_replay_rejects_changed_or_missing_additions(runtime):
     assert not verify_drup_proof(4, clauses, replace(proof, schema="wrong"))
 
 
+def test_drup_replay_matches_clause_simplification():
+    def conflict(clauses, denied):
+        pending = [set(row) for row in clauses] + [{-lit} for lit in denied]
+        while True:
+            if any(not row for row in pending):
+                return True
+            units = {next(iter(row)) for row in pending if len(row) == 1}
+            if not units:
+                return False
+            if any(-lit in units for lit in units):
+                return True
+            falsified = {-lit for lit in units}
+            pending = [row - falsified for row in pending if row.isdisjoint(units)]
+
+    rng = random.Random(20261029)
+    for nvars in (2, 3):
+        pool = tuple(
+            tuple((index + 1) * sign for index, sign in enumerate(signs) if sign)
+            for signs in product((-1, 0, 1), repeat=nvars)
+        )
+        if nvars == 2:
+            formulas = [tuple(row for i, row in enumerate(pool) if mask & (1 << i))
+                        for mask in range(1 << len(pool))]
+        else:
+            nonunits = tuple(row for row in pool if len(row) >= 2)
+            formulas = [tuple(row for row in pool if len(row) == 3)]
+            formulas.extend(tuple(rng.sample(nonunits, rng.randint(3, 10)))
+                            for _ in range(64))
+        nonempty = tuple(row for row in pool if row)
+        prefixes = [()] + [(row,) for row in nonempty]
+        prefixes.extend(tuple(rng.sample(nonempty, 3)) for _ in range(16))
+        for clauses in formulas:
+            for prefix in prefixes:
+                additions = prefix + ((),)
+                database = list(clauses)
+                expected = True
+                for row in additions:
+                    if not conflict(database, row):
+                        expected = False
+                        break
+                    database.append(row)
+                proof = DRUPProof("spectra.general_drup.v1", additions)
+                assert verify_drup_proof(nvars, clauses, proof) == expected
+
+
 def test_receipt_rejects_changed_source_and_library_hashes(runtime, tmp_path):
     copied = tmp_path / runtime.path.name
     receipt = tmp_path / "build.json"

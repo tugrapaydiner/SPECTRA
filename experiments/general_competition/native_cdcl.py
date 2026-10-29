@@ -661,57 +661,84 @@ class NativeCDCLRuntime:
         return status, model, proof, stats, canonical
 
 
-def _assign(values: list[int], literal: int) -> bool:
-    variable = abs(literal)
-    sign = 1 if literal > 0 else -1
-    if values[variable] == -sign:
+class _RUPDatabase:
+    """Incremental original-clause propagation for independent DRUP replay."""
+
+    def __init__(self, nvars: int, clauses: Iterable[Clause]):
+        self.nvars = nvars
+        self.clauses: list[list[int]] = []
+        self.watches: dict[int, list[int]] = {}
+        self.units: list[int] = []
+        self.has_empty_clause = False
+        for row in clauses:
+            self.append(row)
+
+    def append(self, row: Clause) -> None:
+        if not row:
+            self.has_empty_clause = True
+        elif len(row) == 1:
+            self.units.append(row[0])
+        else:
+            index = len(self.clauses)
+            self.clauses.append(list(row))
+            self.watches.setdefault(row[0], []).append(index)
+            self.watches.setdefault(row[1], []).append(index)
+
+    def conflict(self, assumptions: Clause) -> bool:
+        if self.has_empty_clause:
+            return True
+        # Watch positions remain valid when each check resets the assignment.
+        values = [0] * (self.nvars + 1)
+        queue: list[int] = []
+
+        def enqueue(literal: int) -> bool:
+            variable = abs(literal)
+            sign = 1 if literal > 0 else -1
+            if values[variable]:
+                return values[variable] == sign
+            values[variable] = sign
+            queue.append(literal)
+            return True
+
+        for literal in assumptions:
+            if not enqueue(-literal):
+                return True
+        for literal in self.units:
+            if not enqueue(literal):
+                return True
+        cursor = 0
+        while cursor < len(queue):
+            false_literal = -queue[cursor]
+            cursor += 1
+            watched = self.watches.get(false_literal, [])
+            index = 0
+            while index < len(watched):
+                clause_id = watched[index]
+                row = self.clauses[clause_id]
+                if row[0] == false_literal:
+                    row[0], row[1] = row[1], row[0]
+                assert row[1] == false_literal
+                other = row[0]
+                if values[abs(other)] == (1 if other > 0 else -1):
+                    index += 1
+                    continue
+                for offset in range(2, len(row)):
+                    literal = row[offset]
+                    if values[abs(literal)] != (-1 if literal > 0 else 1):
+                        row[1], row[offset] = literal, false_literal
+                        watched[index] = watched[-1]
+                        watched.pop()
+                        self.watches.setdefault(literal, []).append(clause_id)
+                        break
+                else:
+                    if not enqueue(other):
+                        return True
+                    index += 1
         return False
-    values[variable] = sign
-    return True
 
 
 def _rup_conflict(clauses: tuple[Clause, ...], assumption_clause: Clause, nvars: int) -> bool:
-    values = [0] * (nvars + 1)
-    for literal in assumption_clause:
-        if not _assign(values, -literal):
-            return True
-    while True:
-        forced: dict[int, int] = {}
-        for row in clauses:
-            satisfied = False
-            open_literal = 0
-            open_count = 0
-            for literal in row:
-                value = values[abs(literal)]
-                if value and value == (1 if literal > 0 else -1):
-                    satisfied = True
-                    break
-                if value == 0:
-                    open_literal = literal
-                    open_count += 1
-            if satisfied:
-                continue
-            if open_count == 0:
-                return True
-            if open_count == 1:
-                variable = abs(open_literal)
-                sign = 1 if open_literal > 0 else -1
-                previous = forced.get(variable)
-                if previous is not None and previous != sign:
-                    return True
-                forced[variable] = sign
-        if not forced:
-            return False
-        changed = False
-        for variable in sorted(forced):
-            sign = forced[variable]
-            if values[variable] == -sign:
-                return True
-            if values[variable] == 0:
-                values[variable] = sign
-                changed = True
-        if not changed:
-            return False
+    return _RUPDatabase(nvars, clauses).conflict(assumption_clause)
 
 
 def verify_drup_proof(
@@ -734,7 +761,7 @@ def verify_drup_proof(
     ):
         return False
     try:
-        database = list(canonical_cnf(nvars, clauses))
+        database = _RUPDatabase(nvars, canonical_cnf(nvars, clauses))
     except (TypeError, ValueError):
         return False
     literal_total = 0
@@ -756,7 +783,7 @@ def verify_drup_proof(
             if normalized != ((),):
                 return False
             row = ()
-        if not _rup_conflict(tuple(database), row, nvars):
+        if not database.conflict(row):
             return False
         database.append(row)
         if not row and index != len(proof.additions) - 1:
