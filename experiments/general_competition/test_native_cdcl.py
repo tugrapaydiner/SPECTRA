@@ -964,11 +964,14 @@ static void test_updates_backtracks_and_rebuilds() {
   for (int step = 0; step < 20000; ++step) {
     random = random * 1664525u + 1013904223u;
     const int var = 1 + static_cast<int>((random >> 8) % 32);
-    switch (random % 5) {
+    switch (random % 6) {
       case 0:
       case 1:
         s.bump_variable(var);  // Includes assigned variables still in the heap.
         s.push_heap(var);      // Repeated insertion must not create duplicates.
+        break;
+      case 5:
+        s.bump_variable(var);
         break;
       case 2:
         if (!choose_and_assign(s)) s.backtrack(0);
@@ -1027,11 +1030,16 @@ static void test_assigned_entry_lifetimes() {
   require(s.enqueue(1, -1), "second lazy assignment rejected");
   require(choose_and_assign(s) == 2, "assigned root was selected");
   require(s.heap_positions[1] == -1, "assigned root was not discarded");
+  s.var_increment = 8.0;
+  s.bump_variable(1);
+  s.bump_variable(2);
+  s.bump_variable(2);
+  valid_heap(s);
   s.backtrack(0);
   valid_heap(s);
   require(s.variable_heap.size() == 3, "discarded entry not restored once");
-  require(choose_and_assign(s) == 1 && choose_and_assign(s) == 2 &&
-      choose_and_assign(s) == 3 && choose_and_assign(s) == 0, "pop/reinsert ordering changed");
+  require(choose_and_assign(s) == 2 && choose_and_assign(s) == 1 &&
+      choose_and_assign(s) == 3 && choose_and_assign(s) == 0, "backtrack lost updated priorities");
 }
 
 SPECTRA_EXPORT int spectra_g_test_indexed_heap() {

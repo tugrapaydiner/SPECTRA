@@ -345,8 +345,8 @@ struct Solver {
       }
       rebuild_heap();
       var_increment *= 1e-100;
-    } else {
-      push_heap(var);
+    } else if (heap_positions[static_cast<std::size_t>(var)] >= 0) {
+      sift_heap_up(static_cast<std::size_t>(heap_positions[static_cast<std::size_t>(var)]));
     }
   }
 
