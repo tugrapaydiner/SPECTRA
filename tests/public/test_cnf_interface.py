@@ -1,5 +1,4 @@
 from io import StringIO
-import json
 import subprocess
 import sys
 

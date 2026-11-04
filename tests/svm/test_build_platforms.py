@@ -1,10 +1,7 @@
 """Build contract tests; command inspection is NOT remote platform execution."""
 import json
-import os
-from pathlib import Path
 import subprocess
 import sys
-import sysconfig
 
 import pytest
 from spectra import svm_build as build

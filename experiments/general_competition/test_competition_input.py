@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import gzip
 import lzma
-from pathlib import Path
 
 import pytest
 

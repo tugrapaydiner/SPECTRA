@@ -1,7 +1,6 @@
 """Reason-directed jumps preserve the complete search space under all supported inputs."""
 from itertools import product
 import random,os
-from pathlib import Path
 import pytest
 from spectra.cnf.sparse import SparseRuntime,build_sparse_runtime,valid_witness
 @pytest.fixture(scope='module')

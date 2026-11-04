@@ -173,7 +173,6 @@ def test_bound_model_rejection(tmp_path,library,fitted,kind):
 def test_unsupported_export_rejected(fitted,kind):
     from sklearn.compose import ColumnTransformer
     from sklearn.preprocessing import FunctionTransformer
-    from sklearn.impute import SimpleImputer
     frame,pp,_=fitted;pp=copy.deepcopy(pp)
     numeric=pp.named_transformers_['n'];enc=pp.named_transformers_['c']
     if kind=='weights':pp.transformer_weights={'n':2}

@@ -1,7 +1,6 @@
 """Whole-relation contracts for the exact arc-free support table."""
 from itertools import combinations, product
 import os, random
-from pathlib import Path
 import pytest
 from spectra.cnf.quotient_query import QuotientRuntime, build_quotient_runtime
 from spectra.cnf.arcfree_support import ArcFreeSupportTable, ResidualImplications

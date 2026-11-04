@@ -1,6 +1,5 @@
 """Truth-table, reversible-state, ownership and resource-contract tests."""
-from itertools import combinations,product
-from pathlib import Path
+from itertools import product
 from concurrent.futures import ThreadPoolExecutor
 import os
 import random

@@ -1,5 +1,4 @@
 """Independent JSONL result audit rejects changed/missing completion and labels."""
-import copy
 import hashlib
 import importlib.util
 import io

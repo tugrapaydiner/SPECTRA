@@ -95,10 +95,8 @@ jobs:
           python -m build --outdir dist/current | tee .public-package/build.txt
           python scripts/check_current_installation.py --dist dist/current --check-sdist \
             --out .public-package/install | tee .public-package/install.txt
-          .public-package/install/venv/bin/python -I scripts/check_focused_installation.py \
-            | tee .public-package/focused-install.txt
-          .public-package/install/venv/bin/python -I scripts/check_dpll_installation.py \
-            | tee .public-package/dpll-install.txt
+          .public-package/install/venv/bin/python -I scripts/check_cnf_installation.py \
+            | tee .public-package/cnf-install.txt
           .public-package/install/venv/bin/python -I scripts/check_exact_installation.py \
             --out .public-package/exact-install.json | tee .public-package/exact-install.txt
           .public-package/install/venv/bin/python -I scripts/check_exam_repair_installation.py \

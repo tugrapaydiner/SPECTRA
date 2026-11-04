@@ -174,7 +174,6 @@ def test_unseeded_cycles_are_not_minimum_solutions(observer,count):
 
 
 def test_all_original_edge_states_not_just_solver_answers(observer):
-    import random
     rng=random.Random(72091)
     states=0
     for _ in range(100):

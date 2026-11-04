@@ -22,8 +22,8 @@ from typing import Iterable, Sequence
 
 from .binary_list import BinaryListProblem
 from spectra._exact_wire import (
-    QUERY_BANK_HEADER, QUERY_BANK_MAGIC, _checked_query_rows,
-    pack_frozen_query_bank, unpack_query_bank,
+    _checked_query_rows,
+    pack_frozen_query_bank,
 )
 from spectra._native_build import native_load_guard, publish_build, snapshot_source
 

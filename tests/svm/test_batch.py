@@ -1,8 +1,6 @@
-from array import array
 import concurrent.futures
 import ctypes as C
 import itertools
-import math
 import pytest
 from spectra.svm import Session, SCHEDULES
 from test_runtime import write_model, oracle

@@ -24,6 +24,11 @@
 - Plain `pytest` now collects `tests/` and `experiments/` and runs from a clean
   `pip install ".[test]"`. Tests that need optional external tools (`dd.cudd`, a
   pinned CaDiCaL checkout) skip with a reason instead of failing.
+- Merge the chained installed-wheel checkers into
+  `scripts/check_current_installation.py` and one installed CNF probe,
+  `scripts/check_cnf_installation.py`; remove two unreferenced SVM benchmarks.
+- Add a ruff lint gate (pyflakes rules) and fix every finding: unused imports and
+  variables, duplicate imports and one closure over a deleted name in a test.
 - Carry a `.devN` version on unreleased source so a source build is never reported
   as the published 0.7.1.
 

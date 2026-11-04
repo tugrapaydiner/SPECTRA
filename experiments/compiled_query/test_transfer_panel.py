@@ -2,7 +2,6 @@
 import random
 import pytest
 
-from .binary_list import BinaryListProblem
 from .cases import Case
 from .transfer_panel import FAMILIES, topology, make_case, gmean, seed_for
 

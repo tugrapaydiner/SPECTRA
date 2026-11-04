@@ -6,7 +6,6 @@ from copy import deepcopy
 import hashlib
 import io
 import json
-from pathlib import Path
 import random
 import sqlite3
 from urllib.error import URLError

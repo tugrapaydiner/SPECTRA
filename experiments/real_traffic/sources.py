@@ -7,7 +7,6 @@ import gzip
 import hashlib
 import io
 import json
-from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
 SOURCE_ROOT = "https://www.cs.utexas.edu/~yzhang/research/AbileneTM"

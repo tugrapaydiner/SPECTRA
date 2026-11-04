@@ -1,5 +1,4 @@
 """Separate original-input observer against pure-Python truth conditions."""
-from itertools import product
 import random
 import os
 import pytest

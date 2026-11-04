@@ -25,7 +25,7 @@ from typing import Iterable, Sequence
 
 from .exact_problem import ExactProblem
 from ._exact_wire import (
-    QUERY_BANK_HEADER, QUERY_BANK_MAGIC, _checked_query_rows,
+    _checked_query_rows,
     pack_frozen_query_bank, unpack_query_bank,
 )
 from .exact_proof import decode_proof, verify_answer

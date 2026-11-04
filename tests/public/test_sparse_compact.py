@@ -1,7 +1,5 @@
 """The compact update path must preserve complete old search traces."""
 import random
-from itertools import product
-from concurrent.futures import ThreadPoolExecutor
 import os
 import pytest
 from spectra.cnf.sparse import SparseRuntime,build_sparse_runtime

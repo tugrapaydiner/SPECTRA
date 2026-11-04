@@ -1,7 +1,7 @@
 """Independent original-input observer, including altered proofs and minima."""
 from dataclasses import replace
 from itertools import combinations,product
-import os,random,struct
+import os,struct
 from concurrent.futures import ThreadPoolExecutor
 import pytest
 from experiments.real_traffic.migration_observer import MigrationObserverRuntime,build_migration_observer
