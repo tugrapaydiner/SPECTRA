@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-p=Path(__file__).resolve().parents[2]/'experiments/streaming/audit.py'
+p=Path(__file__).resolve().parents[2]/'benchmarks/svm_stream/audit.py'
 spec=importlib.util.spec_from_file_location('stream_audit',p)
 audit=importlib.util.module_from_spec(spec);spec.loader.exec_module(audit)
 

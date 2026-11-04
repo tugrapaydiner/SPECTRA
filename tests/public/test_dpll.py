@@ -6,7 +6,7 @@ import pytest
 
 from spectra.cnf.formula import CNF
 from spectra.cnf.dpll import solve_dpll
-from experiments.structured_search.task import check_grid, check_cnf, encode, decode
+from tests.helpers.sudoku import check_grid, check_cnf, encode, decode
 
 
 def satisfies(problem, witness):

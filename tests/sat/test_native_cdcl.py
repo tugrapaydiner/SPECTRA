@@ -40,7 +40,6 @@ def runtime(tmp_path_factory):
 
 _BUILDERS = (
     ("spectra.exact", "build_exact_runtime"),
-    ("experiments.compiled_query.exact", "build_exact_runtime"),
     ("spectra.sat.native_cdcl", "build_native_cdcl"),
     ("spectra.sat.native_binary_core", "build_native_binary_core"),
 )

@@ -16,7 +16,7 @@ from pathlib import Path
 import random
 from typing import Sequence
 
-from experiments.critical_clique_coloring.core import Graph, parse_dimacs_col, verify_coloring
+from benchmarks.wap.graph import Graph, parse_dimacs_col, verify_coloring
 
 SCHEMA = "spectra.wap_support.case.v1"
 MASTER_SEED = 0x9E3779B97F4A7C15

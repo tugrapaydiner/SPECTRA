@@ -5,7 +5,7 @@ import ctypes as C
 import math
 import pytest
 from spectra.svm_shared import PreparedModel, SHARED_SCHEDULES
-from test_shared_model import encoded
+from .test_shared_model import encoded
 
 @pytest.fixture
 def worker(tmp_path, library):

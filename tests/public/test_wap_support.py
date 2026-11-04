@@ -6,8 +6,8 @@ from dataclasses import replace
 
 import pytest
 
-from experiments.critical_clique_coloring.core import Graph
-from experiments.wap_support.workload import (
+from benchmarks.wap.graph import Graph
+from benchmarks.wap.workload import (
     binary_colors, choice_literal, compact_binary_clauses,
     deterministic_dsatur, model_to_labels, restrictions_to_assumptions,
     rotating_triple_masks, verify_labels, WorkloadCase, _sha_json,

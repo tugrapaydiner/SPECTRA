@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE = ROOT / "experiments" / "critical_clique_coloring" / "core.py"
+MODULE = ROOT / "benchmarks" / "wap" / "graph.py"
 SPEC = importlib.util.spec_from_file_location("spectra_critical_clique_core", MODULE)
 assert SPEC and SPEC.loader
 core = importlib.util.module_from_spec(SPEC)

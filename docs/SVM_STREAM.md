@@ -92,7 +92,7 @@ trusted. They are not signatures, true-label proofs or independent SVM verificat
 Use [decision receipts](SVM_RECEIPTS.md) when numerical replay is required. This
 CLI deliberately avoids the cost and disclosure of a receipt on every row.
 
-The [retained-corpus replay](../experiments/streaming/README.md) compares every
+The [retained-corpus replay](../benchmarks/svm_stream/README.md) compares every
 output with fixed expected predictions and checks actual transformed feature bytes.
 It is automated compatibility evidence, not outside researcher reproduction or a
 new held-out benchmark.

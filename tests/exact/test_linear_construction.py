@@ -10,10 +10,10 @@ import random
 
 import pytest
 
-from . import exact
-from .binary_list import BinaryListProblem
-from .proof import verify_answer
-from .sessions import decode_certified_output
+from spectra import exact
+from spectra.exact import ExactProblem
+from spectra.exact import verify_answer
+from spectra.exact import decode_certified_output
 
 
 @pytest.fixture(scope='module')
@@ -26,9 +26,10 @@ def diagnostic(tmp_path_factory):
     try:
         exact.SOURCE = source
         library = exact.build_exact_runtime(folder / 'build')
+        # The runtime binds its receipt to the source it was built from.
+        return exact.ExactRuntime(library)
     finally:
         exact.SOURCE = original
-    return exact.ExactRuntime(library)
 
 
 def replay(runtime, problem, rows):
@@ -49,7 +50,7 @@ def test_every_three_vertex_graph_and_original_domain(diagnostic, graph):
     bank = ((0, 1), (0, 2), (1, 2))
     edges = tuple(edge for i, edge in enumerate(bank) if graph >> i & 1)
     for masks in itertools.product((1, 2, 3, 4, 5, 6), repeat=3):
-        p = BinaryListProblem.create(3, 3, edges, masks)
+        p = ExactProblem.create(3, 3, edges, masks)
         replay(diagnostic, p, ((), ((0, 1),), ((1, 2),), ((2, 0),)))
 
 
@@ -61,7 +62,7 @@ def test_large_labels_relabelling_and_tile_boundaries(diagnostic, n):
                   for _ in range(n))
     edges = tuple((u, v) for u in range(n) for v in range(u + 1, n)
                   if rng.random() < .19)
-    p = BinaryListProblem.create(n, 64, edges, masks)
+    p = ExactProblem.create(n, 64, edges, masks)
     rows = tuple(tuple((rng.randrange(n), rng.getrandbits(64))
                        for _ in range(rng.randrange(5))) if n else ()
                  for _ in range(129))
@@ -70,7 +71,7 @@ def test_large_labels_relabelling_and_tile_boundaries(diagnostic, n):
 
 
 def test_tuple_normalization_precedes_linear_native_construction(diagnostic):
-    # Bypass BinaryListProblem normalization: the native tuple path must still
+    # Bypass ExactProblem normalization: the native tuple path must still
     # supply canonical edges to the new constructor before either CSR is built.
     module = diagnostic._module
     canonical = ((0, 1), (0, 3), (1, 2), (2, 3))

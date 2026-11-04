@@ -2,7 +2,7 @@
 from itertools import combinations
 from spectra.cnf.formula import CNF, SplitMix64
 from spectra.cnf.cover import ChoiceProblem
-from experiments.structured_search.task import validate_puzzle
+from tests.helpers.sudoku import validate_puzzle
 
 
 def sudoku(puzzle: str) -> ChoiceProblem:
@@ -52,7 +52,7 @@ def check(case: dict, witness: tuple[bool,...]) -> bool:
     """Original task checker, independent of the choice/CNF group encoder."""
     if type(witness) is not tuple or any(type(v) is not bool for v in witness): return False
     if case['kind']=='sudoku':
-        from experiments.structured_search.task import decode,check_grid
+        from tests.helpers.sudoku import decode,check_grid
         try: return check_grid(case['puzzle'],decode(witness))
         except ValueError: return False
     n,k=case['n'],case['colours']

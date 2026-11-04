@@ -19,7 +19,7 @@ from spectra.exact import (
 )
 from spectra.exact_proof import decode_proof
 
-from .cadical_exact import (
+from benchmarks.exact.cadical_exact import (
     CADICAL_COMMIT,
     CadicalExactRuntime,
     build_cadical_exact_runtime,

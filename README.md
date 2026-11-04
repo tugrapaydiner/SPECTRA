@@ -193,7 +193,7 @@ Use exact source commit:
 ```
 
 Acquire the five graph blobs listed in
-`experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json` from:
+`benchmarks/wap/upstream_inventory.json` from:
 
 ```text
 marijnheule/clicolcom@4932048642da2144f387961b595112277afff82f

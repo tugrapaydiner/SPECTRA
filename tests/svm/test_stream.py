@@ -11,7 +11,7 @@ import pytest
 from spectra.svm_pipeline import PreparedPipeline
 from spectra.svm_preprocess_native import build_preprocessor
 from spectra.svm_stream import Limits, run_stream
-from test_fused_pipeline import fixture_folder
+from .test_fused_pipeline import fixture_folder
 
 
 @pytest.fixture(scope='module')

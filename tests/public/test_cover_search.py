@@ -156,7 +156,7 @@ def test_native_parser_rejects_bad_offsets_and_literals(cover_library):
 
 
 def test_dense_ablation_preserves_search_and_witness(cover_library):
-    from experiments.cover_search.tasks import colouring,build
+    from tests.helpers.cover_tasks import colouring,build
     for i in range(32):
         p=build(colouring(12,3,401+i,planted=bool(i%2)))
         a=solve_cover(p,cover_library);b=solve_cover(p,cover_library,incremental=False)

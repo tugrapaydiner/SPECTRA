@@ -21,7 +21,7 @@ from spectra.exact import (
     pack_session_packet,
     verify_session_output,
 )
-from .direct_twosat import Direct2SATRuntime, build_direct_twosat_runtime
+from benchmarks.exact.direct_twosat import Direct2SATRuntime, build_direct_twosat_runtime
 
 
 @pytest.fixture(scope="module")

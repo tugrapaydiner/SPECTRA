@@ -17,12 +17,46 @@ import pytest
 
 from spectra.exact import unpack_query_bank
 
-from .binary_list import BinaryListProblem
-from .exact import (ExactRuntime, build_exact_runtime,
+from spectra.exact import ExactProblem
+from spectra.exact import (ExactRuntime, build_exact_runtime,
                     pack_query_bank, pack_session_packet,
                     unpack_session_packet)
-from .proof import decode_proof, verify_answer
-from .sessions import decode_certified_output
+from spectra.exact import decode_proof, verify_answer
+from spectra.exact import decode_certified_output
+
+
+def problem_cnf(problem):
+    """Encode a binary-list problem: variable v true selects its higher colour."""
+    choices = tuple((c[0], c[-1]) for c in problem.colors())
+    clauses = [(-(v + 1),) for v, (low, high) in enumerate(choices) if low == high]
+    for left, right in problem.edges:
+        shared = problem.masks[left] & problem.masks[right]
+        while shared:
+            bit = shared & -shared
+            shared ^= bit
+            color = bit.bit_length() - 1
+            ll = (left + 1 if color == choices[left][1] and choices[left][0] != color
+                  else -(left + 1))
+            rr = (right + 1 if color == choices[right][1] and choices[right][0] != color
+                  else -(right + 1))
+            clauses.append((-ll, -rr))
+    return tuple(clauses)
+
+
+def query_assumptions(problem, query):
+    """SAT assumptions for a restriction query, or None when a domain empties."""
+    domains = {}
+    for vertex, allowed in query:
+        domains[vertex] = domains.get(vertex, problem.masks[vertex]) & allowed
+    literals = []
+    for vertex, remaining in sorted(domains.items()):
+        if remaining == 0:
+            return None
+        if remaining.bit_count() == 1:
+            original = problem.masks[vertex]
+            high = original ^ (original & -original)
+            literals.append(vertex + 1 if remaining == high else -(vertex + 1))
+    return tuple(literals)
 
 
 @pytest.fixture(scope='module')
@@ -57,7 +91,7 @@ def test_exhaustive_three_vertex_original_graphs_domains_and_requests(exact_runt
     for graph in range(8):
         edges = tuple(bank[i] for i in range(3) if (graph >> i) & 1)
         for masks in itertools.product((1, 2, 3, 4, 5, 6), repeat=3):
-            p = BinaryListProblem.create(3, 3, edges, masks)
+            p = ExactProblem.create(3, 3, edges, masks)
             original_models = brute(p, ())
             subsets = [tuple(x for x in range(8) if x & ~d == 0) for d in masks]
             with exact_runtime.prepare(p, mode=mode) as session:
@@ -73,13 +107,13 @@ def test_random_lists_against_native_minicard(exact_runtime, mode):
     rng = random.Random(14972)
     for _ in range(90):
         n = rng.randint(1, 60)
-        p = BinaryListProblem.create(n, 6,
+        p = ExactProblem.create(n, 6,
             ((u, v) for u in range(n) for v in range(u+1, n) if rng.random() < .12),
             (sum(1 << c for c in rng.sample(range(6), rng.choice((1, 2, 2, 2)))) for _ in range(n)))
-        with exact_runtime.prepare(p, mode=mode) as session, Solver(name='minicard', bootstrap_with=p.cnf()) as sat:
+        with exact_runtime.prepare(p, mode=mode) as session, Solver(name='minicard', bootstrap_with=problem_cnf(p)) as sat:
             for _ in range(35):
                 q = tuple((rng.randrange(n), rng.randrange(64)) for _ in range(rng.randrange(9)))
-                literals = p.assumptions(q)
+                literals = query_assumptions(p, q)
                 expected = literals is not None and sat.solve(assumptions=list(literals))
                 a = session.solve(q)
                 assert (a.status == 'SAT_VERIFIED') == expected
@@ -90,11 +124,11 @@ def test_random_lists_against_native_minicard(exact_runtime, mode):
 @pytest.mark.parametrize('kind', (1, 2, 3))
 def test_every_proof_kind_and_single_byte_mutations(exact_runtime, mode, kind):
     if kind == 1:
-        p = BinaryListProblem.create(2, 2, (), (3, 3)); q = ((0, 1), (0, 2))
+        p = ExactProblem.create(2, 2, (), (3, 3)); q = ((0, 1), (0, 2))
     elif kind == 2:
-        p = BinaryListProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,)*4); q = ((0, 1), (3, 1))
+        p = ExactProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,)*4); q = ((0, 1), (3, 1))
     else:
-        p = BinaryListProblem.create(3, 2, ((0, 1), (1, 2), (0, 2)), (3,)*3); q = ()
+        p = ExactProblem.create(3, 2, ((0, 1), (1, 2), (0, 2)), (3,)*3); q = ()
     with exact_runtime.prepare(p, mode=mode) as session:
         a = session.solve(q)
         assert decode_proof(a.proof, p.n)[0] == kind
@@ -114,7 +148,7 @@ def test_every_proof_kind_and_single_byte_mutations(exact_runtime, mode, kind):
 
 @pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_current_request_isolation_and_stale_proofs(exact_runtime, mode):
-    p = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))
+    p = ExactProblem.create(2, 2, ((0, 1),), (3, 3))
     with exact_runtime.prepare(p, mode=mode) as session:
         bad = ((0, 1), (1, 1)); a = session.solve(bad)
         assert not session.check((), a)
@@ -129,10 +163,10 @@ def test_current_request_isolation_and_stale_proofs(exact_runtime, mode):
 @pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_empty_graph_singletons_and_bit63(exact_runtime, mode):
     for p, queries in [
-        (BinaryListProblem.create(0, 64, (), ()), ((),)),
-        (BinaryListProblem.create(3, 64, ((0, 1),), (1 << 63, 1+(1 << 63), 1)),
+        (ExactProblem.create(0, 64, (), ()), ((),)),
+        (ExactProblem.create(3, 64, ((0, 1),), (1 << 63, 1+(1 << 63), 1)),
          ((), ((1, 1 << 63),), ((0, 0),), ((2, (1 << 64)-1),))),
-        (BinaryListProblem.create(2, 1, ((0, 1),), (1, 1)), ((),)),
+        (ExactProblem.create(2, 1, ((0, 1),), (1, 1)), ((),)),
     ]:
         with exact_runtime.prepare(p, mode=mode) as session:
             for q in queries:
@@ -142,14 +176,14 @@ def test_empty_graph_singletons_and_bit63(exact_runtime, mode):
 @pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_long_chain_and_odd_cycle_no_recursion(exact_runtime, mode):
     n = 10001
-    p = BinaryListProblem.create(n, 2, tuple((v, v+1) for v in range(n-1)), (3,)*n)
+    p = ExactProblem.create(n, 2, tuple((v, v+1) for v in range(n-1)), (3,)*n)
     with exact_runtime.prepare(p, mode=mode) as session:
         q = ((0, 1), (n-1, 2))
         answer = session.solve(q)
         assert answer.status == 'UNSAT_VERIFIED'
         assert verify_answer(p, q, answer.status, answer.labels, answer.proof)
         assert session.solve(((0, 1),)).status == 'SAT_VERIFIED'
-    p = BinaryListProblem.create(n, 2, p.edges+((0, n-1),), (3,)*n)
+    p = ExactProblem.create(n, 2, p.edges+((0, n-1),), (3,)*n)
     with exact_runtime.prepare(p, mode=mode) as session:
         answer = session.solve(())
         assert decode_proof(answer.proof, n)[0] == 3
@@ -160,7 +194,7 @@ def test_long_chain_and_odd_cycle_no_recursion(exact_runtime, mode):
     ((0, 0), (0, True)), ((0, 0), (0, 1 << 64)), ((0, 0), (0, -1)), ((0, 0), (0,)),
     ((0, 0), (0., 1)), ((0, 0), (-1, 1))])
 def test_no_early_contradiction_hides_malformed_later_pins(exact_runtime, query):
-    p = BinaryListProblem.create(2, 2, (), (3, 3))
+    p = ExactProblem.create(2, 2, (), (3, 3))
     with exact_runtime.prepare(p) as session:
         with pytest.raises(ValueError):
             session.solve(query)
@@ -173,16 +207,17 @@ def test_no_early_contradiction_hides_malformed_later_pins(exact_runtime, query)
     dict(palette=65), dict(masks=(0, 3)), dict(masks=(7, 3)), dict(masks=(3,)),
     dict(edges=((0, 0),)), dict(edges=((0, 2),)), dict(masks=(True, 3))])
 def test_original_input_validation_native_and_python(exact_runtime, change):
-    p = replace(BinaryListProblem.create(2, 2, (), (3, 3)), **change)
+    fields = {**dict(n=2, palette=2, edges=(), masks=(3, 3)), **change}
     with pytest.raises((ValueError, TypeError)):
-        exact_runtime.prepare(p)
+        ExactProblem.create(**fields)
     with pytest.raises(ValueError):
-        exact_runtime._module.create(p.n, p.palette, p.edges, p.masks, 1, 512 << 20)
+        exact_runtime._module.create(fields['n'], fields['palette'], fields['edges'],
+                                     fields['masks'], 1, 512 << 20)
 
 
 @pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_memory_lifecycle_concurrency_and_fail_closed(exact_runtime, mode, monkeypatch):
-    p = BinaryListProblem.create(8, 2, tuple((v, v+1) for v in range(7)), (3,)*8)
+    p = ExactProblem.create(8, 2, tuple((v, v+1) for v in range(7)), (3,)*8)
     for cap in (True, -1, 0, 100):
         with pytest.raises(ValueError):
             exact_runtime.prepare(p, max_bytes=cap)
@@ -207,7 +242,7 @@ def test_memory_lifecycle_concurrency_and_fail_closed(exact_runtime, mode, monke
 
 
 def test_observer_rejects_status_and_sat_witness_forgery(exact_runtime):
-    p = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))
+    p = ExactProblem.create(2, 2, ((0, 1),), (3, 3))
     with exact_runtime.prepare(p) as session:
         answer = session.solve(())
         for change in (dict(labels=b'\0\0'), dict(labels=b'\xff\0'), dict(labels=b'\0'),
@@ -219,7 +254,7 @@ def test_observer_rejects_status_and_sat_witness_forgery(exact_runtime):
 
 def test_sparse_graph_preserves_proofs_and_drops_dense_arcs(exact_runtime):
     n = 120
-    p = BinaryListProblem.create(n, 2, tuple((u, v) for u in range(n//2) for v in range(n//2, n)), (3,)*n)
+    p = ExactProblem.create(n, 2, tuple((u, v) for u in range(n//2) for v in range(n//2, n)), (3,)*n)
     with exact_runtime.prepare(p, mode='sparse') as sparse, exact_runtime.prepare(p, mode='raw') as raw:
         info = sparse.info
         assert info['retained_proof_arcs'] <= 2*(2*n-info['components'])+info['condensation_arcs']
@@ -234,7 +269,7 @@ def test_sparse_graph_preserves_proofs_and_drops_dense_arcs(exact_runtime):
 
 def test_routed_proofs_have_no_original_search_adjacency(exact_runtime):
     n=300
-    p=BinaryListProblem.create(n,2,tuple((u,v) for u in range(n//2) for v in range(n//2,n)),(3,)*n)
+    p=ExactProblem.create(n,2,tuple((u,v) for u in range(n//2) for v in range(n//2,n)),(3,)*n)
     with exact_runtime.prepare(p,mode='route') as routed, exact_runtime.prepare(p,mode='raw') as raw:
         assert routed.info['original_adjacency_retained'] is False
         assert routed.info['retained_proof_arcs']==0
@@ -248,7 +283,7 @@ def test_routed_proofs_have_no_original_search_adjacency(exact_runtime):
 
 @pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_batched_bank_matches_individually_checked_answers(exact_runtime, mode):
-    p = BinaryListProblem.create(8, 3,
+    p = ExactProblem.create(8, 3,
         ((0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (0, 7)),
         (3, 6, 5, 3, 6, 5, 3, 6))
     queries = ((), ((0, 1),), ((0, 1), (7, 2)), ((3, 0),),
@@ -270,7 +305,7 @@ def test_batched_bank_matches_individually_checked_answers(exact_runtime, mode):
 
 
 def test_batched_packet_and_serialized_output_fail_closed(exact_runtime):
-    p = BinaryListProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,) * 4)
+    p = ExactProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,) * 4)
     queries = ((), ((0, 1),), ((0, 1), (3, 1)), ((1, 0),))
     packet = pack_query_bank(p, queries)
     with exact_runtime.prepare(p, mode='route') as session:
@@ -291,7 +326,7 @@ def test_batched_packet_and_serialized_output_fail_closed(exact_runtime):
 
 
 def test_repeated_proof_checks_reject_cycles_without_sharing_scratch(exact_runtime):
-    p = BinaryListProblem.create(32, 2, ((0, 1), (1, 2), (0, 2)), (3,) * 32)
+    p = ExactProblem.create(32, 2, ((0, 1), (1, 2), (0, 2)), (3,) * 32)
     queries = ((),) * 129
     packet = pack_query_bank(p, queries)
     with exact_runtime.prepare(p, mode='route') as session:
@@ -327,7 +362,7 @@ def test_repeated_proof_checks_reject_cycles_without_sharing_scratch(exact_runti
 
 def test_batched_worst_case_output_is_admitted_before_work(exact_runtime):
     n = 1000
-    p = BinaryListProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)
+    p = ExactProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)
     packet = pack_query_bank(p, ((),) * 100)
     with exact_runtime.prepare(p, mode='route', max_bytes=2 << 20) as session:
         with pytest.raises(MemoryError, match='admission'):
@@ -336,7 +371,7 @@ def test_batched_worst_case_output_is_admitted_before_work(exact_runtime):
 
 @pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_prepared_session_packet_matches_persistent_exact_endpoint(exact_runtime, mode):
-    p = BinaryListProblem.create(8, 3,
+    p = ExactProblem.create(8, 3,
         ((0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (0, 7)),
         (3, 6, 5, 3, 6, 5, 3, 6))
     queries = ((), ((0, 1),), ((0, 1), (7, 2)), ((3, 0),),
@@ -365,7 +400,7 @@ def test_prepared_session_packet_matches_persistent_exact_endpoint(exact_runtime
 @pytest.mark.parametrize('mode', ('scc', 'raw', 'sparse', 'route'))
 def test_prepared_session_packet_tile64_matches_individual_exact_answers(exact_runtime, mode):
     n = 24
-    p = BinaryListProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)
+    p = ExactProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)
     rows = []
     for index in range(130):
         vertex = index % (n - 1)
@@ -400,7 +435,7 @@ def test_prepared_session_packet_tile64_matches_individual_exact_answers(exact_r
 
 
 def test_prepared_tile_threshold_is_explicit(exact_runtime):
-    p = BinaryListProblem.create(8, 2, tuple((v, v + 1) for v in range(7)), (3,) * 8)
+    p = ExactProblem.create(8, 2, tuple((v, v + 1) for v in range(7)), (3,) * 8)
     for count, expected, tiles in ((63, 'serial', 0), (64, 'tile64', 1), (129, 'tile64', 3)):
         packet = pack_session_packet(p, ((),) * count)
         answer = exact_runtime.solve_session_packet(packet, mode='route')
@@ -413,7 +448,7 @@ def test_mixed_domain_tiles_keep_exact_scalar_proofs(exact_runtime, mode):
     # Adjacent domains share one colour, producing a nontrivial condensation
     # DAG. Include repeated/reordered pins, immediate and propagated conflicts,
     # unforced requests, and a partial last tile.
-    p = BinaryListProblem.create(8, 4, tuple((v, v+1) for v in range(7)),
+    p = ExactProblem.create(8, 4, tuple((v, v+1) for v in range(7)),
                                 (3, 6, 12, 9, 3, 6, 12, 9))
     rng = random.Random(73051)
     rows = [(), ((0, 2), (1, 2)), ((0, 1), (0, 2)),
@@ -440,7 +475,7 @@ def test_mixed_domain_tiles_keep_exact_scalar_proofs(exact_runtime, mode):
 def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
     n = 71
     masks = tuple(1 if v % 11 == 0 else 1 | (1 << 63) for v in range(n))
-    p = BinaryListProblem.create(n, 64, tuple((v, v+1) for v in range(0, n-1, 2)), masks)
+    p = ExactProblem.create(n, 64, tuple((v, v+1) for v in range(0, n-1, 2)), masks)
     rng = random.Random(84617)
     rows = []
     for index in range(129):
@@ -471,8 +506,8 @@ def test_tiled_witnesses_keep_high_colours_and_last_lane(exact_runtime, mode):
 
 
 def test_auto_distinguishes_small_compressed_and_uncompressed_dense_banks(exact_runtime):
-    independent = BinaryListProblem.create(16, 2, (), (3,) * 16)
-    path = BinaryListProblem.create(
+    independent = ExactProblem.create(16, 2, (), (3,) * 16)
+    path = ExactProblem.create(
         16, 2, tuple((vertex, vertex + 1) for vertex in range(15)), (3,) * 16
     )
     rows = tuple(tuple((vertex, 3) for vertex in range(8)) for _ in range(64))
@@ -497,7 +532,7 @@ def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, coun
     )
     if structure == 'odd_cycle':
         edges += ((0, n - 1),)
-    p = BinaryListProblem.create(n, 2, edges, (3,) * n)
+    p = ExactProblem.create(n, 2, edges, (3,) * n)
     requests = ((),) if not n else (
         (), ((0, 1),), ((0, 1), (1, 1)), ((0, 0),)
     )
@@ -545,14 +580,14 @@ def test_auto_packet_exposes_and_matches_its_selected_engine(exact_runtime, coun
         )
 
 def test_auto_does_not_hide_malformed_packets_or_resource_limits(exact_runtime):
-    p = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))
+    p = ExactProblem.create(2, 2, ((0, 1),), (3, 3))
     packet = pack_session_packet(p, (((0, 0),), ((1, 1),)))
     # Corrupt the final pin, after a valid immediate contradiction in row one.
     damaged = bytearray(packet)
     struct.pack_into('<I', damaged, 32 + 8*p.n + 8*len(p.edges) + 4*3 + 4, p.n)
     with pytest.raises(ValueError):
         exact_runtime.solve_session_packet(bytes(damaged), mode='auto')
-    large = BinaryListProblem.create(1000, 2, (), (3,) * 1000)
+    large = ExactProblem.create(1000, 2, (), (3,) * 1000)
     with pytest.raises(MemoryError):
         exact_runtime.solve_session_packet(pack_session_packet(large, ((),)*100),
                                            mode='auto', max_bytes=2 << 20)
@@ -563,7 +598,7 @@ def test_impossible_graph_bank_keeps_current_request_proofs(exact_runtime, mode)
     # An odd cycle is impossible before requests arrive. Reusing its fixed proof
     # must not replace an earlier empty-domain proof or leak into another call.
     n = 101
-    p = BinaryListProblem.create(n, 2,
+    p = ExactProblem.create(n, 2,
         tuple((v, v + 1) for v in range(n - 1)) + ((0, n - 1),), (3,) * n)
     rows = (((0, 1), (0, 2)), (), ((7, 1),), ((9, 0),), ()) * 27
     answer = exact_runtime.solve_session_packet(pack_session_packet(p, rows), mode=mode)
@@ -580,13 +615,13 @@ def test_impossible_graph_bank_keeps_current_request_proofs(exact_runtime, mode)
     assert answer.visited <= visits and answer.arcs_scanned < arcs
     assert exact_runtime.solve_session_packet(pack_session_packet(p, rows[::-1]),
                                              mode=mode).unsat_count == len(rows)
-    feasible = BinaryListProblem.create(2, 2, ((0, 1),), (3, 3))
+    feasible = ExactProblem.create(2, 2, ((0, 1),), (3, 3))
     assert exact_runtime.solve_session_packet(pack_session_packet(feasible, ((),) * 65),
                                              mode=mode).sat_count == 65
 
 
 def test_prepared_session_packet_rejects_every_corrupted_region(exact_runtime):
-    p = BinaryListProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,) * 4)
+    p = ExactProblem.create(4, 2, ((0, 1), (1, 2), (2, 3)), (3,) * 4)
     queries = ((), ((0, 1),), ((0, 1), (3, 1)), ((1, 0),))
     packet = pack_session_packet(p, queries)
     with pytest.raises(ValueError, match='immutable'):
@@ -607,7 +642,7 @@ def test_prepared_session_packet_rejects_every_corrupted_region(exact_runtime):
 
 def test_prepared_session_packet_admits_worst_case_output_before_construction(exact_runtime):
     n = 1000
-    p = BinaryListProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)
+    p = ExactProblem.create(n, 2, tuple((v, v + 1) for v in range(n - 1)), (3,) * n)
     packet = pack_session_packet(p, ((),) * 100)
     with pytest.raises(MemoryError, match='admission'):
         exact_runtime.solve_session_packet(packet, mode='route', max_bytes=2 << 20)

@@ -7,8 +7,8 @@ import sysconfig
 
 import pytest
 
-from .binary_list import BinaryListProblem
-from .exact import (ExactRuntime, build_exact_runtime, pack_session_packet,
+from spectra.exact import ExactProblem
+from spectra.exact import (ExactRuntime, build_exact_runtime, pack_session_packet,
                     unpack_session_packet)
 
 
@@ -22,7 +22,7 @@ def runtime(tmp_path_factory):
 
 @pytest.mark.parametrize('kind', ['reverse', 'duplicate', 'unsorted'])
 def test_reference_and_native_reject_noncanonical_edges(runtime, kind):
-    problem = BinaryListProblem.create(3, 2, ((0, 1), (1, 2)), (3, 3, 3))
+    problem = ExactProblem.create(3, 2, ((0, 1), (1, 2)), (3, 3, 3))
     data = bytearray(pack_session_packet(problem, [()]))
     at = 32 + 8 * problem.n
     if kind == 'reverse':
@@ -39,7 +39,7 @@ def test_reference_and_native_reject_noncanonical_edges(runtime, kind):
 
 @pytest.mark.parametrize('cap', [True, -1, 1 << 64, 1.5])
 def test_caps_match_native_uint64_domain(runtime, cap):
-    p = BinaryListProblem.create(1, 2, (), (3,))
+    p = ExactProblem.create(1, 2, (), (3,))
     with pytest.raises(ValueError):
         runtime.prepare(p, max_bytes=cap)
     with pytest.raises(ValueError):
@@ -72,7 +72,7 @@ def test_output_handoff_admission_is_native(runtime):
     # The old single-envelope formula admits this cap; the corrected native
     # boundary must reserve for both owners of returned immutable output.
     n, count = 1001, 512
-    p = BinaryListProblem.create(n, 2, tuple((v, v+1) for v in range(n-1)), (3,)*n)
+    p = ExactProblem.create(n, 2, tuple((v, v+1) for v in range(n-1)), (3,)*n)
     rows = [((0, 1), (n-1, 2))] * count
     packet = pack_session_packet(p, rows)
     envelope = 16 + count * (25 + 17*n)

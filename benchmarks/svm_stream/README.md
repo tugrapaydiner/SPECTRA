@@ -26,7 +26,7 @@ unable to reproduce the original bytes fails instead of issuing a new corpus.
 ```bash
 python -m pip install numpy==2.3.5 scipy==1.17.0 pandas==2.2.3 \
   scikit-learn==1.8.0 joblib==1.5.3 threadpoolctl==3.6.0
-python experiments/streaming/corpus.py --out /new/corpus
+python benchmarks/svm_stream/corpus.py --out /new/corpus
 ```
 
 ## Installed-only target replay

@@ -8,7 +8,7 @@ from pathlib import Path
 import random
 from typing import Any
 
-from .binary_list import BinaryListProblem
+from spectra.exact import ExactProblem
 
 SCHEMA = 'spectra.compiled_query.case.v1'
 MAX_INPUT_BYTES = 128 << 20
@@ -37,7 +37,7 @@ class Case:
     name: str
     cluster: str
     provenance: str
-    problem: BinaryListProblem
+    problem: ExactProblem
     queries: tuple[tuple[tuple[int, int], ...], ...]
 
     def payload(self) -> bytes:
@@ -59,7 +59,7 @@ class Case:
         for key in ('name', 'cluster', 'provenance'):
             if type(value[key]) is not str or not value[key] or len(value[key]) > 4096:
                 raise ValueError('invalid case ' + key)
-        p = BinaryListProblem.create(value['n'], value['palette'],
+        p = ExactProblem.create(value['n'], value['palette'],
                                      value['edges'], value['masks'])
         if type(value['queries']) is not list or not 1 <= len(value['queries']) <= 1_000_000:
             raise ValueError('invalid query bank')
@@ -101,7 +101,7 @@ def synthetic_cases(count: int = 128, n: int = 96, seed: int = 20261013) -> tupl
         else:
             edges = tuple((i, j) for i in range(n // 2) for j in range(n // 2, n))
         masks = tuple((3, 6, 5)[i % 3] if name == 'mixed_path' else 3 for i in range(n))
-        p = BinaryListProblem.create(n, 3, edges, masks)
+        p = ExactProblem.create(n, 3, edges, masks)
         choices = p.colors()
         rng = random.Random(seed + 1009 * index)
         queries = [()]
@@ -126,9 +126,9 @@ def export_wap(graph_dir: Path, destination: Path) -> None:
     That selection is disclosed; no DSATUR/model answer is exported.
     This is development reuse, NOT another prospective confirmation.
     """
-    from experiments.wap_support.workload import build_case
+    from benchmarks.wap.workload import build_case
     root = Path(__file__).resolve().parents[2]
-    inventory_path = root / 'experiments/quotient_application/WAP_UPSTREAM_INVENTORY.json'
+    inventory_path = root / 'benchmarks/wap/upstream_inventory.json'
     inventory = json.loads(inventory_path.read_text())
     destination.mkdir(parents=True, exist_ok=False)
     for name in ('wap05a.col', 'wap06a.col'):
@@ -138,7 +138,7 @@ def export_wap(graph_dir: Path, destination: Path) -> None:
             raise ValueError('refusing to promote another graph to development implicitly')
         old, receipt = build_case(source, graph_name=name,
                                  expected_git_blob_sha1=record['git_blob_sha1'])
-        p = BinaryListProblem.create(old.n, old.palette, old.edges, old.masks)
+        p = ExactProblem.create(old.n, old.palette, old.edges, old.masks)
         provenance = ('exposed WAP development; real conflict topology; synthetic lists; '
                       'SAT-accepted restrictions from historical generator; upstream='
                       + inventory['commit'] + '; graph_sha256=' + old.graph_sha256)

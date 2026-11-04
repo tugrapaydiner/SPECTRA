@@ -41,14 +41,11 @@ def tiny_problem() -> ExactProblem:
 
 
 def test_public_contract_versions_and_packaged_source_identity():
-    from experiments.compiled_query.exact import SOURCE as research_source
-    from experiments.compiled_query.study import sources
+    from spectra.exact import SOURCE
 
     assert EXACT_API_VERSION == 1
     assert EXACT_NATIVE_ABI == 3
-    packaged = ROOT / 'spectra/_native/exact_binary.cpp'
-    assert research_source.resolve() == packaged.resolve()
-    assert sources()[str(packaged.relative_to(ROOT))] == hashlib.sha256(packaged.read_bytes()).hexdigest()
+    assert SOURCE.resolve() == (ROOT / 'spectra/_native/exact_binary.cpp').resolve()
 
 
 def test_problem_canonicalizes_inputs_but_packets_require_canonical_bytes():
@@ -283,11 +280,8 @@ def test_native_load_guard_rechecks_receipt_and_remembers_failed_loads(tmp_path)
 
 
 @pytest.mark.skipif(os.name != 'posix', reason='replacing a loaded extension requires POSIX unlink')
-@pytest.mark.parametrize('research', (False, True))
-def test_exact_runtime_rejects_changed_bytes_at_a_loaded_path(exact_build, tmp_path, research):
+def test_exact_runtime_rejects_changed_bytes_at_a_loaded_path(exact_build, tmp_path):
     runtime_type = ExactRuntime
-    if research:
-        from experiments.compiled_query.exact import ExactRuntime as runtime_type
     library = tmp_path / exact_build.name
     receipt = tmp_path / 'build.json'
     shutil.copy2(exact_build, library)
