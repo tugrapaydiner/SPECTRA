@@ -15,10 +15,12 @@ import struct
 
 import pytest
 
+from spectra.exact import unpack_query_bank
+
 from .binary_list import BinaryListProblem
 from .exact import (ExactRuntime, build_exact_runtime,
                     pack_query_bank, pack_session_packet,
-                    unpack_query_bank, unpack_session_packet)
+                    unpack_session_packet)
 from .proof import decode_proof, verify_answer
 from .sessions import decode_certified_output
 

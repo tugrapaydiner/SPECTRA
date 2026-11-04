@@ -7,6 +7,9 @@ import json
 from pathlib import Path
 import pytest
 
+# The benchmark's bootstrap analysis uses NumPy, which the public package does not need.
+pytest.importorskip('numpy')
+
 spec=importlib.util.spec_from_file_location('compact_bench',Path(__file__).resolve().parents[1]/'scripts/bench_compact_cnf.py')
 bench=importlib.util.module_from_spec(spec);spec.loader.exec_module(bench)
 

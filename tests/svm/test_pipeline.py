@@ -201,7 +201,7 @@ def test_deployment_import_is_framework_free():
 
 
 def test_exact_float_fastpath_preserves_other_real_types():
-    import numpy as np
+    np=pytest.importorskip('numpy')
     class FloatSubclass(float): pass
     p=plan()
     for value in (1.25,FloatSubclass(1.25),np.float64(1.25),np.float32(1.25),np.int64(1),1):
