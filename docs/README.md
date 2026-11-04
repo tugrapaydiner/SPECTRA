@@ -35,12 +35,14 @@ historical neural, MCTS, low-bit, general-SAT, or universal CPU-performance clai
 
 ## Other measured systems work
 
-[Indexed efficiency](EFFICIENCY_GUIDE.md),
-[matched native alternatives](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/native_baselines/RESULTS.md),
-[prepared FP32](TRAINED_FP_GUIDE.md), [packed runtime](RUNTIME_GUIDE.md), and
-[compiler controls](COMPILER_BASELINE_GUIDE.md) are separate tracks with separate
-inputs, hardware, cost boundaries, and conclusions. Do not multiply their speedups
-or use the WAP result to promote them.
+[Indexed efficiency](EFFICIENCY_GUIDE.md) and
+[matched native alternatives](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/experiments/native_baselines/RESULTS.md)
+are separate tracks with separate inputs, hardware, cost boundaries, and
+conclusions. Do not multiply their speedups or use the WAP result to promote them.
+
+The historical neural, low-bit, packed-runtime, prepared-FP32 and compiler-control
+tracks were removed from the active package in 0.8.0. Their source, guides and
+tests remain at [df63249](https://github.com/tugrapaydiner/SPECTRA/tree/df63249617add008b8ead1538cf52dac40b81615).
 
 ## Preserved history
 

@@ -19,8 +19,7 @@ def check(wheel: Path, out: Path) -> dict:
         if z.testzip() is not None:
             raise ValueError('wheel CRC failure')
         natives = sorted(p for p in z.namelist() if p.endswith('.cpp'))
-        required = {'deploy/m10_dense_extension.cpp', 'deploy/replay_ordered_extension.cpp',
-                    'deploy/cpp_sparse_kernel/extension.cpp', 'deploy/cpp_sparse_kernel/spectra_kernel.cpp'}
+        required = {'spectra/_native/exact_binary.cpp', 'spectra/_native/quotient_query.cpp'}
         if not required <= set(natives):
             raise ValueError('wheel is missing native sources')
     env_dir = out / 'venv'
@@ -43,13 +42,15 @@ def check(wheel: Path, out: Path) -> dict:
         return p.stdout
     run([python, '-m', 'pip', 'install', '--no-index', '--no-deps', wheel])
     probe = run([python, '-I', '-c', '''import importlib.util,json,pathlib,sys
-import spectra,deploy
+import spectra
 from spectra.cnf import CNF,solve,CompactCNFRepairState
 assert importlib.util.find_spec("torch") is None
 assert importlib.util.find_spec("numpy") is None
 assert "torch" not in sys.modules and "numpy" not in sys.modules
 assert pathlib.Path(spectra.__file__).is_relative_to(pathlib.Path(sys.prefix))
-assert (pathlib.Path(deploy.__file__).parent/"replay_ordered_extension.cpp").is_file()
+assert (pathlib.Path(spectra.__file__).parent/"_native"/"exact_binary.cpp").is_file()
+for name in ("common","model","train","eval","data","deploy"):
+    assert importlib.util.find_spec(name) is None, name
 r=solve(CNF(1,((1,),)),seed=7,max_flips=128)
 assert r.status=="SAT_VERIFIED" and r.witness==(True,)
 print(json.dumps({"package":spectra.__file__,"version":spectra.__version__,"optional_imports":False}))

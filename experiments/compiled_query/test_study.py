@@ -7,6 +7,7 @@ import itertools
 import json
 import os
 from pathlib import Path
+import importlib
 import random
 import subprocess
 
@@ -18,6 +19,16 @@ from experiments.compiled_query.cases import Case, canonical, digest, load_case,
 from experiments.compiled_query.sessions import ARMS, decode_output, preload, query_order, run_session
 from experiments.compiled_query.study import Config, create_study, read_manifest, run_study, schedule
 from spectra.cnf.quotient_query import QuotientRuntime, build_quotient_runtime
+
+
+def require_cudd():
+    """Skip CUDD arms unless the optional native dd.cudd backend is installed."""
+    try:
+        importlib.import_module('dd.cudd')
+    except ImportError:
+        if os.environ.get('SPECTRA_REQUIRE_CUDD') == '1':
+            pytest.fail('Required actual native dd.cudd backend is unavailable')
+        pytest.skip('Explicit optional backend dd.cudd not installed')
 
 
 @pytest.fixture(scope='module')
@@ -92,6 +103,8 @@ def test_independent_non_sat_observer_against_original_enumeration():
 @pytest.mark.parametrize('arm', ARMS)
 @pytest.mark.parametrize('order', ('forward', 'reverse', 'shuffle'))
 def test_complete_costs_full_outputs_and_unknown_not_promoted(tmp_path, library, case, arm, order):
+    if arm.startswith('cudd'):
+        require_cudd()
     path = tmp_path / 'input.json'; write_case(path, case)
     preload(arm)
     record, output = run_session(path, QuotientRuntime(library), arm, count=5, order=order, seed=12)
@@ -186,6 +199,7 @@ def test_timeout_kills_process_group_and_is_never_a_solver_answer(tmp_path, libr
 
 
 def test_compilation_limit_is_retained_as_resource_failure(tmp_path, library, case):
+    require_cudd()
     root = make_study(tmp_path, library, case, arms=('cudd-bfs',), prefixes=(1,), bdd_nodes=1)
     assert run_study(root)[0]['status'] == 'RESOURCE_LIMIT'
     assert audit_study(root)['outcomes'] == {'RESOURCE_LIMIT': 1}

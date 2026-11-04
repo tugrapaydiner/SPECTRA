@@ -21,10 +21,8 @@ from spectra import __version__
 from check_indexed_installation import verify
 
 REQUIRED_SOURCES = {
-    "spectra/_native/blocked_linear.cpp", "spectra/_native/fp_step.cpp",
-    "spectra/_native/exact_binary.cpp",
-    "deploy/m10_dense_extension.cpp", "deploy/replay_ordered_extension.cpp",
-    "deploy/cpp_sparse_kernel/extension.cpp", "deploy/cpp_sparse_kernel/spectra_kernel.cpp",
+    "spectra/_native/exact_binary.cpp", "spectra/_native/quotient_query.cpp",
+    "spectra/_native/coloring.cpp", "spectra/_native/sparse_cover.cpp",
 }
 
 
@@ -61,7 +59,7 @@ def select_wheel(directory: Path, expected_version: str = __version__) -> Path:
     return wheel
 
 
-SOURCE_PACKAGES = ("spectra", "common", "model", "train", "eval", "data", "deploy")
+SOURCE_PACKAGES = ("spectra",)
 
 
 def source_files(source_root: Path) -> dict:
@@ -71,7 +69,7 @@ def source_files(source_root: Path) -> dict:
         if not folder.is_dir() or folder.is_symlink():
             raise ValueError(f"missing source package: {package}")
         for path in folder.rglob("*"):
-            if path.is_file() and (path.suffix in {".py", ".cpp", ".h", ".hpp"} or path.name == "CMakeLists.txt"):
+            if path.is_file() and path.suffix in {".py", ".cpp", ".h", ".hpp"}:
                 if path.is_symlink():
                     raise ValueError("symlinked package source")
                 expected[path.relative_to(source_root).as_posix()] = path.read_bytes()
@@ -104,7 +102,7 @@ def verify_sdist(path: Path, source_root: Path = ROOT, expected_version: str = _
     if path.name != prefix + ".tar.gz":
         raise ValueError("expected the current SPECTRA source archive")
     expected = source_files(source_root)
-    selected = [source_root / name for name in ("MANIFEST.in", "pyproject.toml", "setup.py")]
+    selected = [source_root / name for name in ("MANIFEST.in", "pyproject.toml")]
     selected.extend((source_root / "examples").rglob("*.cnf"))
     # Public documents and figures are explicitly selected by MANIFEST.in.
     for line in (source_root / "MANIFEST.in").read_text(encoding="utf-8").splitlines():

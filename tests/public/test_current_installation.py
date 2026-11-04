@@ -50,7 +50,6 @@ def test_source_archive_has_only_selected_matching_files(tmp_path, change):
     files.update({
         "MANIFEST.in": b"include README.md docs/API.md assets/readme/chart-data.json\n",
         "pyproject.toml": b'[project]\nname = "spectra"\nversion = "1.2.3"\n',
-        "setup.py": b"# synthetic build fixture\n",
         "README.md": b"# Fixture\n", "docs/API.md": b"# Public guide\n",
         "assets/readme/chart-data.json": b"{}\n", "examples/tiny.cnf": b"p cnf 0 0\n",
     })

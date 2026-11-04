@@ -34,7 +34,7 @@ def versions(root: Path) -> str:
     tree = ast.parse((root / "spectra/__init__.py").read_text(encoding="utf-8"))
     values = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
               and any(isinstance(t, ast.Name) and t.id == "__version__" for t in n.targets)]
-    if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[ab]|rc)?[0-9]*", version):
+    if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+)?(?:\.dev[0-9]+)?", version):
         raise ValueError("expected a supported numeric package version")
     if values != [version]:
         raise ValueError("pyproject.toml and spectra.__version__ disagree")

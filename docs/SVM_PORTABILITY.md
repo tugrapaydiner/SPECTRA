@@ -33,8 +33,7 @@ reassociation are not enabled to make a platform test pass.
 
 The CPython extension is **not abi3**. Build it separately per interpreter ABI.
 Free-threaded Python, subinterpreters, 32-bit hosts, big-endian hosts, macOS and
-Windows ARM are not included. This is not blanket portability for historical
-PyTorch-based research modules.
+Windows ARM are not included.
 
 ## File paths and ownership
 

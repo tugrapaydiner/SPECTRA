@@ -343,4 +343,4 @@ def test_every_shipped_source_is_bound(tmp_path, change):
             wheel_check.verify_sources(wheel, source)
     else:
         assert wheel_check.verify_sources(wheel, source) == {
-            'matched_source_files': 8, 'source_identity': 'PASS'}
+            'matched_source_files': 2, 'source_identity': 'PASS'}

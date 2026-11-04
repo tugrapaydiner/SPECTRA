@@ -5,21 +5,26 @@
 Use Python 3.10 or newer in a virtual environment:
 
 ```bash
-python -m pip install ".[test]"
+python -m pip install -e ".[dev]"
 python -m spectra doctor
-python -m pytest tests/public --confcutdir=tests/public
+python -m pytest
+ruff check .
 python scripts/check_active_tree.py
 python scripts/check_release_readiness.py
 python scripts/audit_workspace.py --out workspace-audit.json
 ```
 
-Run these development commands from a Git checkout. The full tests and research
-harnesses stay in the repository; distribution archives contain the package,
-native build sources, selected public guides and example inputs.
+Run these development commands from a Git checkout. `pytest` collects `tests/`
+and `experiments/`; tests that need a C++ compiler build their native runtimes into
+temporary directories, and tests that need optional external tools (`dd.cudd`, a
+pinned CaDiCaL checkout, the DRAT-trim checker, Windows Job Objects, NumPy or
+scikit-learn) skip with the reason shown in the summary. Distribution archives
+contain only the package, native build sources, public guides and example inputs.
 
-The base package has no mandatory third-party dependencies; the `test` extra adds
-pytest and the pinned SAT wrapper required by public exact-query contracts. Native
-builds are explicit and never occur during import.
+The package has no mandatory third-party dependencies. The `test` extra adds
+pytest and the pinned SAT wrapper used as an independent reference; `dev` adds
+ruff; `svm` adds the NumPy/scikit-learn exporters. Native builds are explicit and
+never occur during import.
 
 ## Build and test the distribution
 
@@ -47,10 +52,10 @@ missing, changed, duplicate or linked archive files before installation. CI keep
 built packages outside the upload directory until package and installed API checks
 pass. The wheel-only form remains available for existing wheel distributions.
 
-The canonical fast CPU matrix runs on Python 3.11 and 3.13. It executes the active
-test suite, native builds, the optimizer/energy smoke test, release checks, and the
-active-tree budget. It no longer replays multi-megabyte historical archives on every
-pull request.
+The canonical fast CPU matrix runs on Python 3.11 and 3.13. It executes lint, the
+complete test suite including native builds, release checks, and the active-tree
+budget. It does not replay multi-megabyte historical archives on every pull
+request.
 
 ### Permanent workflow dependencies
 

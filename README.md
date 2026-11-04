@@ -291,17 +291,17 @@ PASS, but they determine how broadly the result may be advertised.
 
 ## Other project tracks
 
-The public package retains backward-compatible bounded CNF, CPU SVM, neural,
-low-bit, compiler, and deployment modules. Their full historical branch and bulky
-evidence trees are preserved on `archive/research-history-20261016`, not copied
-into the active checkout. Each track keeps its own limitations and **none inherits
-the WAP result**. In particular:
+The package also ships bounded CNF search, native SVM execution, exact exam
+repair and two-plan migration tooling. Each track keeps its own limitations and
+**none inherits the WAP result**. Bulky historical evidence and retired experiment
+branches are preserved on `archive/research-history-20261016`; the retired neural,
+low-bit, packed-runtime and compiler-control code was removed in 0.8.0 and remains
+at [df63249](https://github.com/tugrapaydiner/SPECTRA/tree/df63249617add008b8ead1538cf52dac40b81615).
 
 | Track | Retained value | Not established |
 |---|---|---|
 | Bounded CNF search | reproducible paths, reusable indexes, original-clause checks | general SAT superiority or UNSAT proofs |
 | Native SVM execution | faithful same-model CPU execution and pipeline receipts | best task accuracy or universal speedups |
-| Neural/low-bit history | retained hypotheses, models, failures, and controls | a flagship learned-reasoning result |
 | Cover/domain experiments | exact structured execution and negative competitor results | universal graph-colouring advantage |
 | Two-plan migration support | complete minimum-change answers, fresh contradiction paths, independent native checking | operational network control, fresh confirmation, or universal speedups |
 
@@ -323,22 +323,24 @@ python -m spectra cnf solve examples/tiny.cnf --seed 7 --max-flips 1024 --out an
 python -m spectra cnf check examples/tiny.cnf answer.json
 ```
 
-The base installation does not require PyTorch or a compiler. Native runtimes are
-explicit builds. Bounded search returns `SAT_VERIFIED` or `UNKNOWN`; process success
+The installation has no third-party dependencies and does not require a
+compiler. Native runtimes are explicit builds. Bounded search returns `SAT_VERIFIED` or `UNKNOWN`; process success
 alone never means the problem was solved.
 
 ## Verify and develop
 
 ```bash
-python -m pip install ".[test]"
-python -m pytest tests/public --confcutdir=tests/public
+python -m pip install -e ".[dev]"
+python -m pytest
+ruff check .
 python scripts/check_release_readiness.py
 ```
 
-Historical slow retraining and large evidence replays live in the dedicated archive
-branch and are not routine pull-request gates. Test passes are implementation
-evidence, not proof of generalization or support for every platform/input. Read [SECURITY.md](SECURITY.md) before accepting external inputs,
-native libraries, or checkpoints, and [CONTRIBUTING.md](CONTRIBUTING.md) before
+Tests that need a C++ compiler build native runtimes into temporary directories;
+tests that need optional external tools skip and say why. Large evidence replays
+live in the dedicated archive branch and are not routine pull-request gates. Test passes are implementation
+evidence, not proof of generalization or support for every platform/input. Read [SECURITY.md](SECURITY.md) before accepting external inputs
+or native libraries, and [CONTRIBUTING.md](CONTRIBUTING.md) before
 changing numerical code or retained experiments.
 
 Code is distributed under [MIT](LICENSE). Upstream datasets and third-party

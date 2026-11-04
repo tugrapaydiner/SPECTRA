@@ -7,13 +7,16 @@ approve broader scientific claims.
 ## Source and version
 
 Release from the exact reviewed commit on `main`. The existing v0.7.1 tag and assets
-must not be moved or replaced. Change both `[project].version` and
-`spectra.__version__` in one intentional release commit.
+must not be moved or replaced. Unreleased source carries a `.devN` version (currently
+`0.8.0.dev0`) so a source build can never be mistaken for a published release. Change
+both `[project].version` and `spectra.__version__` to the final version in one
+intentional release commit.
 
 ## Required local acceptance
 
 ```bash
-python -m pytest tests/public --confcutdir=tests/public
+python -m pytest
+ruff check .
 python scripts/check_active_tree.py --out active-tree.json
 python scripts/check_release_readiness.py --out release-readiness.json
 python scripts/audit_workspace.py --out workspace-audit.json

@@ -1,6 +1,31 @@
 # Changelog
 
-## Unreleased
+## Unreleased (0.8.0.dev0)
+
+### Breaking: focused package and repository cleanup
+
+- The wheel now installs only the `spectra` package. Earlier wheels also
+  installed generic top-level packages named `common`, `data`, `deploy`, `eval`,
+  `model` and `train`, which could shadow or be shadowed by unrelated packages.
+- The CNF core types now live inside the package: `data.cnf` is
+  `spectra.cnf.formula`, `eval.cnf_cached` is `spectra.cnf.cached`, and
+  `eval.cnf_repair` is `spectra.cnf.repair`. `from spectra.cnf import CNF, ...`
+  is unchanged.
+- Remove the retired neural, low-bit, packed-runtime, prepared-FP32 and
+  compiler-control tracks: `spectra.inference`, `spectra.blocked_runtime`,
+  `spectra.fp_runtime`, `spectra.compiler_runtime`, `spectra.fp_evidence`,
+  `spectra.compiler_evidence`, their native sources, the PyTorch training,
+  evaluation and deployment packages, their scripts, configs, requirements files,
+  guides and tests, and the torch-only `setup.py`. None carried a confirmed
+  result. The last commit containing them is
+  [df63249](https://github.com/tugrapaydiner/SPECTRA/tree/df63249617add008b8ead1538cf52dac40b81615).
+- Drop the `research` and `native` extras; add `svm` (NumPy/scikit-learn
+  exporters) and give `dev` the linter.
+- Plain `pytest` now collects `tests/` and `experiments/` and runs from a clean
+  `pip install ".[test]"`. Tests that need optional external tools (`dd.cudd`, a
+  pinned CaDiCaL checkout) skip with a reason instead of failing.
+- Carry a `.devN` version on unreleased source so a source build is never reported
+  as the published 0.7.1.
 
 ### Release and replication readiness (Part 3, in progress)
 

@@ -1,8 +1,8 @@
 # Public API and CLI
 
-The supported base interfaces use Python's standard library. They do not train a
-model, download data or import PyTorch. Optional inference is documented separately
-in [the efficiency guide](EFFICIENCY_GUIDE.md).
+The supported interfaces use only Python's standard library. Native runtimes are
+compiled explicitly by the caller; importing `spectra` never compiles, downloads
+data or imports third-party packages.
 
 ## Boolean CNF
 

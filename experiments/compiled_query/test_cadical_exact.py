@@ -30,7 +30,7 @@ from .cadical_exact import (
 def cadical_runtime(tmp_path_factory):
     source = os.environ.get("CADICAL_SOURCE")
     if not source:
-        raise RuntimeError("CADICAL_SOURCE must point to the pinned official checkout")
+        pytest.skip("set CADICAL_SOURCE to the pinned official CaDiCaL checkout")
     sanitizer = os.environ.get("CADICAL_ADAPTER_SANITIZER", "none")
     library = build_cadical_exact_runtime(
         tmp_path_factory.mktemp("cadical-exact"),

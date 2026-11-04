@@ -5,7 +5,8 @@ No comprehensive security certification is claimed for the research archive.
 
 ## Public input handling
 
-The base CNF and evidence tools do not import PyTorch or load checkpoints.
+The installed package imports only the Python standard library and never loads
+pickles or model checkpoints.
 Witness/manifest JSON rejects duplicate object keys, nonfinite numbers and
 floating-point overflow. Input is limited to 16 MiB by default, with an explicit
 positive `--max-json-bytes` override. This limits input bytes, not total decoder
@@ -21,14 +22,13 @@ make concurrent filesystem mutation safe.
 
 ## Research artifacts and native code
 
-Historical research loaders include trusted-checkpoint deserialization, including
-pickle-compatible PyTorch paths. Only load models and archives from a trusted,
-verified source in an isolated environment. Do not expose research loaders to
-uploaded third-party files. A checksum proves identity only when the expected
-checksum itself is trusted. No loader was silently rewritten in this cleanup.
+Historical neural research loaders, including pickle-compatible checkpoint
+paths, are no longer part of the package. If you check out an archived commit to
+replay them, load only models and archives from a trusted, verified source in an
+isolated environment. A checksum proves identity only when the expected checksum
+itself is trusted.
 
-Native execution compiles bundled C++ with the local compiler. Some historical
-runtimes use optional PyTorch APIs; the proof-carrying exact API does not. Its
+Native execution compiles bundled C++ with the local compiler. The exact API
 builder emits a receipt binding source, Python ABI, compiler command and final
 binary, and the runtime checks that receipt by default. This detects accidental
 or post-build byte changes; it does not sandbox the compiler, authenticate the

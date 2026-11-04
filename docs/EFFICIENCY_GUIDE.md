@@ -3,8 +3,8 @@
 SPECTRA's indexed search is an **optional implementation of the same seeded
 classical search**, not a new SAT algorithm or a learned reasoner. It addresses
 a measured bottleneck: the historical driver sorted every unsatisfied clause ID
-on every flip. The original `solve`, full repair state and neural runtime remain
-unchanged for historical replay.
+on every flip. The original `solve` and full repair state remain unchanged for historical
+replay.
 
 ## Use the new path
 
@@ -115,39 +115,16 @@ Warm and index columns have distinct lifetime scopes, not a free total-memory
 reduction. These are tracemalloc allocations, not RSS, native memory or energy.
 Cold peak allocation increases. This release's search result is a speed result.
 
-## Output-only neural deployment
-
-```python
-from spectra.inference import predict_final
-# runtime is the stock deploy.m10_runtime.CPURecursiveRuntime
-prediction = predict_final(runtime, input_tokens)
-```
-
-This requires the research/native extras. It keeps all recurrent computation,
-only omitting intermediate heads that cannot feed back into this graph and the
-returned diagnostic trajectory. Final logits, answer and halt output must match
-historical `forward` bitwise. It is not early stopping, a changed training loss,
-or a new model. Custom runtime subclasses are rejected; a runtime instance is
-not shared concurrently between workers.
-
-Six deterministic **untrained** artifacts, dimensions 16/64, supervision depths
-1/4/16, batches 1/4 and five rounds produce 120 measured calls. At dim64, depth16,
-batch1, reachable returned tensor storage falls from **136,384 to 452 bytes**.
-This is storage reachable from the returned object, **not peak inference RAM or
-RSS**. The local mean latency ratio in that cell is 0.964; some cells regress.
-No universal inference speedup or improved answer quality is claimed.
-
 ## Reproduce and inspect
 
 ```bash
 python -m pytest -m 'not slow'
 python scripts/bench_indexed_search.py run --out outputs/indexed-new
 python scripts/bench_indexed_search.py verify --out outputs/indexed-new --replay
-python scripts/bench_output_only.py --out outputs/output-only-new
 ```
 
 New output directories are required. Use a single pinned core when available;
-compilation and model loading precede warm inference timing. Source hashes,
+Source hashes,
 complete input formulas, raw timing rows, all outcomes, allocation/preparation
 records and analysis travel together. The versioned GitHub release workflow
 publishes source, installed wheel and selected literal CI evidence only after
