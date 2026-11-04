@@ -12,7 +12,7 @@ exact classical data structure, NOT a predictor of eventual search success.
 """
 from __future__ import annotations
 
-from data.cnf import CNF
+from .formula import CNF
 
 
 class CachedCNFRepairState:

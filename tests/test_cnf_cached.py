@@ -4,9 +4,9 @@ import random
 
 import pytest
 
-from data.cnf import CNF
-from eval.cnf_cached import CachedCNFRepairState
-from eval.cnf_repair import CNFRepairState
+from spectra.cnf.formula import CNF
+from spectra.cnf.cached import CachedCNFRepairState
+from spectra.cnf.repair import CNFRepairState
 
 
 def flipped(witness, patch):

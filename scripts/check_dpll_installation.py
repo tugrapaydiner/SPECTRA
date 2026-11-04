@@ -18,7 +18,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='spectra-dpll-installed-') as temporary:
         os.chdir(temporary)
         import spectra.cnf.dpll
-        from data.cnf import CNF
+        from spectra.cnf.formula import CNF
         from spectra.cnf.dpll import solve_dpll
         require(Path(spectra.cnf.dpll.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()),
                 'DPLL must come from installed wheel')

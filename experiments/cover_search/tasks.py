@@ -1,6 +1,6 @@
 """Direct problem adapters and reproducible synthetic development generators."""
 from itertools import combinations
-from data.cnf import CNF, SplitMix64
+from spectra.cnf.formula import CNF, SplitMix64
 from spectra.cnf.cover import ChoiceProblem
 from experiments.structured_search.task import validate_puzzle
 

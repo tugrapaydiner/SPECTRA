@@ -22,7 +22,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from data.cnf import CNF
+from spectra.cnf.formula import CNF
 from eval.sat_workload import (execution_schedule, generate_cases, independent_check,
                                model_to_witness, run_case, summarize, validate_protocol)
 

@@ -9,8 +9,8 @@ an extra count array for avoiding high-index sparse bitsets. Old source stays
 unchanged for historical replay. Common validation/public observations are reused.
 """
 from __future__ import annotations
-from data.cnf import CNF
-from eval.cnf_cached import CachedCNFRepairState
+from .formula import CNF
+from .cached import CachedCNFRepairState
 
 
 class CompactCNFRepairState(CachedCNFRepairState):

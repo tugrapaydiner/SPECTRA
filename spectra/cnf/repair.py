@@ -5,7 +5,7 @@ with repeated literals, tautologies, empty clauses and unused variables.
 """
 from __future__ import annotations
 
-from data.cnf import CNF
+from .formula import CNF
 
 
 class CNFRepairState:

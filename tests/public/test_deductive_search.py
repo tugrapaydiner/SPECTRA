@@ -47,7 +47,7 @@ def test_propagated_assignment_survives_residual_search():
 
 
 def test_general_formulas_preserve_indexed_search_outcomes():
-    from data.cnf import random_3sat
+    from spectra.cnf.formula import random_3sat
     for seed in range(12):
         problem, _ = random_3sat(32, 134, 202610030000+seed)
         for cap in (0, 128):

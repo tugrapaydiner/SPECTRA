@@ -1,6 +1,6 @@
 """Sudoku task encoding and independent original-grid solution checking."""
 from itertools import combinations
-from data.cnf import CNF
+from spectra.cnf.formula import CNF
 
 
 def validate_puzzle(puzzle):

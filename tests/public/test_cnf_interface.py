@@ -6,7 +6,7 @@ import sys
 import pytest
 from spectra.cnf import CNF, read_dimacs, write_dimacs, solve
 from spectra.cnf.search import _execute
-from eval.cnf_cached import CachedCNFRepairState
+from spectra.cnf.cached import CachedCNFRepairState
 from spectra.cli import main
 
 @pytest.mark.parametrize("text", ["p cnf 0 0\n", "p cnf 0 1\n0\n",
@@ -28,7 +28,7 @@ def test_resource_limits():
 
 @pytest.mark.parametrize("seed", range(12))
 def test_identical_policy_and_verified_witness(seed):
-    from data.cnf import random_3sat
+    from spectra.cnf.formula import random_3sat
     p,_=random_3sat(32,134,seed)
     a=solve(p,seed=seed,max_flips=128)
     b=_execute(p,seed=seed,max_flips=128,state_class=CachedCNFRepairState)

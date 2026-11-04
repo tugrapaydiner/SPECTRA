@@ -21,7 +21,7 @@ import tracemalloc
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from data.cnf import CNF, SplitMix64, random_3sat
+from spectra.cnf.formula import CNF, SplitMix64, random_3sat
 from spectra.cnf.search import solve
 from spectra.cnf.indexed import PreparedCNF, solve_indexed, _solve_ranked
 
@@ -30,7 +30,7 @@ CONFIG = dict(sizes=[512, 4096, 16384], families=['uniform', 'planted'], per_cel
               rounds=3, order_seed=91326, bootstrap_seed=91327, bootstrap_repeats=4000,
               primary_maximum_ratio=0.70, primary_maximum_upper95=1.0)
 ENGINES = ('reference', 'ranked', 'indexed_cold', 'indexed_warm')
-SOURCES = ('data/cnf.py', 'eval/cnf_cached.py', 'spectra/cnf/state.py',
+SOURCES = ('spectra/cnf/formula.py', 'spectra/cnf/cached.py', 'spectra/cnf/state.py',
            'spectra/cnf/search.py', 'spectra/cnf/ranked.py', 'spectra/cnf/indexed.py',
            'scripts/bench_indexed_search.py')
 RESULT_FIELDS = {'schema', 'status', 'witness', 'unsatisfied', 'flips', 'queries',

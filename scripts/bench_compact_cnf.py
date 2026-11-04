@@ -12,8 +12,8 @@ import tracemalloc
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from data.cnf import CNF, SplitMix64, random_3sat
-from eval.cnf_cached import CachedCNFRepairState
+from spectra.cnf.formula import CNF, SplitMix64, random_3sat
+from spectra.cnf.cached import CachedCNFRepairState
 from spectra.cnf.state import CompactCNFRepairState
 from spectra.cnf.search import _execute
 
@@ -22,7 +22,7 @@ CONFIG = dict(sizes=[512, 4096, 16384], families=['uniform','planted'], per_cell
               bootstrap_repeats=4000, bootstrap_seed=91226,
               maximum_cell_mean_ratio=1.10, maximum_large_memory_ratio=0.70)
 ENGINES = {'bitset':CachedCNFRepairState, 'compact':CompactCNFRepairState}
-SOURCES = ['data/cnf.py','eval/cnf_cached.py','spectra/cnf/state.py',
+SOURCES = ['spectra/cnf/formula.py','spectra/cnf/cached.py','spectra/cnf/state.py',
            'spectra/cnf/search.py','scripts/bench_compact_cnf.py']
 
 

@@ -52,7 +52,7 @@ def test_forgery_with_recomputed_checksum(evidence,name):
     if name=='cases.json':value[0]['seed']+=1
     elif name=='summary.json':value['gate']='FORGED'
     elif name=='config.json':value['moves']+=1
-    else:value['data/cnf.py']='0'*64
+    else:value['spectra/cnf/formula.py']='0'*64
     bench.write(p,value)
     inventory=json.loads((out/'SHA256.json').read_text());inventory[name]=hashlib.sha256(p.read_bytes()).hexdigest();bench.write(out/'SHA256.json',inventory)
     with pytest.raises(ValueError):bench.verify(out)

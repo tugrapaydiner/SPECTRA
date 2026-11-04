@@ -4,7 +4,7 @@ import random
 
 import pytest
 
-from data.cnf import CNF
+from spectra.cnf.formula import CNF
 from spectra.cnf.dpll import solve_dpll
 from experiments.structured_search.task import check_grid, check_cnf, encode, decode
 

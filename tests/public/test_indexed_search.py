@@ -4,7 +4,7 @@ from dataclasses import FrozenInstanceError
 import itertools
 import random
 import pytest
-from data.cnf import CNF, random_3sat
+from spectra.cnf.formula import CNF, random_3sat
 from spectra.cnf import PreparedCNF, solve, solve_indexed
 from spectra.cnf.indexed import _BreakState, _RankedCompactState, _solve_ranked
 from spectra.cnf.ranked import RankedSet

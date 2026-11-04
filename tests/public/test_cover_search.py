@@ -7,7 +7,7 @@ from pathlib import Path
 import random
 
 import pytest
-from data.cnf import CNF
+from spectra.cnf.formula import CNF
 from spectra.cnf.cover import (ChoiceProblem, PreparedCover, UnsupportedStructure,
                               build_cover_runtime, solve_cover)
 

@@ -21,7 +21,7 @@ import tempfile
 import threading
 import time
 
-from data.cnf import CNF
+from .formula import CNF
 
 SOURCE = Path(__file__).resolve().parents[1] / '_native' / 'cover_search.cpp'
 DEFAULT_INDEX_BYTES = 64 * 1024 * 1024

@@ -4,7 +4,7 @@ import hashlib
 import importlib.util
 from pathlib import Path
 import pytest
-from data.cnf import CNF
+from spectra.cnf.formula import CNF
 
 SPEC = importlib.util.spec_from_file_location('indexed_benchmark', Path(__file__).resolve().parents[2]/'scripts/bench_indexed_search.py')
 bench = importlib.util.module_from_spec(SPEC)

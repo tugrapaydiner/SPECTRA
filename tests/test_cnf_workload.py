@@ -11,8 +11,8 @@ import types
 
 import pytest
 
-from data.cnf import CNF, SplitMix64, random_3sat
-from eval.cnf_repair import CNFRepairState
+from spectra.cnf.formula import CNF, SplitMix64, random_3sat
+from spectra.cnf.repair import CNFRepairState
 from eval.sat_workload import (execution_schedule, generate_cases, independent_check,
     model_to_witness, run_case, summarize, validate_protocol, _worker)
 from scripts import sat_workload_gate as cli
