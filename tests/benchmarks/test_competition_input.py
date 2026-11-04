@@ -5,7 +5,7 @@ import lzma
 
 import pytest
 
-from experiments.general_competition.competition_input import admit_and_load_cnf
+from benchmarks.sat.competition_input import admit_and_load_cnf
 
 
 TEXT = "c identity\np cnf 4 4\n1 -2 0\n3\n4 0\n-1 -3 -4 0\n0\n"
@@ -50,7 +50,7 @@ def test_xz_limits_and_malformed_data_fail_closed(tmp_path):
 def test_xz_staging_preserves_files_when_exclusive_creation_fails(
     tmp_path, destination_is_source,
 ):
-    from experiments.general_competition.competition_input import _copy_xz
+    from benchmarks.sat.competition_input import _copy_xz
 
     source = tmp_path / "input.cnf.xz"
     source.write_bytes(lzma.compress(TEXT.encode("ascii")))
@@ -69,7 +69,7 @@ def test_xz_staging_preserves_files_when_exclusive_creation_fails(
 
 @pytest.mark.parametrize("failure", ["truncated", "limit", "missing-source"])
 def test_xz_staging_removes_its_new_output_on_failure(tmp_path, failure):
-    from experiments.general_competition.competition_input import _copy_xz
+    from benchmarks.sat.competition_input import _copy_xz
 
     source = tmp_path / "input.cnf.xz"
     compressed = lzma.compress(TEXT.encode("ascii"))
@@ -92,7 +92,7 @@ def test_xz_staging_removes_its_new_output_on_failure(tmp_path, failure):
 def test_replay_rejects_changed_decoded_bytes_even_when_semantics_match(
     tmp_path, monkeypatch, compression, change,
 ):
-    from experiments.general_competition import competition_input
+    from benchmarks.sat import competition_input
 
     content = TEXT.encode("ascii")
     suffix = {"none": ".cnf", "gzip": ".cnf.gz", "xz": ".cnf.xz"}[compression]
@@ -125,7 +125,7 @@ def test_replay_rejects_changed_decoded_bytes_even_when_semantics_match(
 def test_replay_rejects_changed_compressed_source_with_identical_decoded_bytes(
     tmp_path, monkeypatch, compression,
 ):
-    from experiments.general_competition import competition_input
+    from benchmarks.sat import competition_input
 
     content = TEXT.encode("ascii")
     source = tmp_path / ("source.cnf." + {"gzip": "gz", "xz": "xz"}[compression])
@@ -167,7 +167,7 @@ def test_loader_rejects_header_digit_separators(tmp_path, counts, compression):
 def test_replay_checks_header_tokens_even_with_matching_identity(tmp_path, counts):
     from dataclasses import replace
     import hashlib
-    from experiments.general_competition import competition_input
+    from benchmarks.sat import competition_input
 
     source = tmp_path / "counts.cnf"
     source.write_bytes(b"p cnf 10 1\n1 0\n")
@@ -191,7 +191,7 @@ def test_replay_checks_header_tokens_even_with_matching_identity(tmp_path, count
 def test_replay_integer_grammar_matches_admission(tmp_path, token, position):
     from dataclasses import replace
     import hashlib
-    from experiments.general_competition import competition_input
+    from benchmarks.sat import competition_input
 
     source = tmp_path / "tokens.cnf"
     source.write_bytes(b"p cnf 1 1\n1 0\n")
@@ -230,7 +230,7 @@ def test_replay_integer_grammar_matches_admission(tmp_path, token, position):
 def test_replay_preserves_numeric_error_messages(tmp_path, token, message):
     from dataclasses import replace
     import hashlib
-    from experiments.general_competition import competition_input
+    from benchmarks.sat import competition_input
 
     source = tmp_path / "tokens.cnf"
     source.write_bytes(b"p cnf 2 1\n1 0\n")

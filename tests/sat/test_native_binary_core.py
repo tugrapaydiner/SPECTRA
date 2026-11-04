@@ -9,13 +9,13 @@ import sys
 
 import pytest
 
-from experiments.general_competition.binary_core import (
+from spectra.sat.binary_core import (
     build_binary_core,
     canonical_cnf,
     model_satisfies,
     verify_binary_core,
 )
-from experiments.general_competition.native_binary_core import (
+from spectra.sat.native_binary_core import (
     NativeBinaryCore,
     assert_matches_python,
     build_native_binary_core,

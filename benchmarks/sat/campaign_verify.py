@@ -31,8 +31,8 @@ import sys
 import tempfile
 from typing import Mapping
 
-from .campaign import checker_resource_diagnostic, digest, load_inventory, load_solvers, run_process, score_campaign
-from .cnf_admission import admit_cnf
+from benchmarks.sat.campaign import checker_resource_diagnostic, digest, load_inventory, load_solvers, run_process, score_campaign
+from spectra.sat.admission import admit_cnf
 
 MANIFEST = "evidence-sha256.json"
 CLAIM = "Exposed declared-field development measurement only; no leadership or hidden-set claim."
@@ -380,7 +380,7 @@ def _checker_argv(process: dict, answer: str, solver: dict, paths: dict, config:
     working = _historical_path(paths["working"])
     _same(process["working_directory"], str(working / "check"), "recorded checker working directory")
     if answer == "SAT":
-        expected = [process["command"][0], "-m", "experiments.general_competition.campaign", "check-model",
+        expected = [process["command"][0], "-m", "benchmarks.sat.campaign", "check-model",
                     "--cnf", paths["original"], "--stdout", str(working / "solve" / "stdout.txt"),
                     "--out", str(working / "complete.model")]
     elif solver.get("proof_checker"):
@@ -636,7 +636,7 @@ def _fresh_checks(root: Path, cells: list[dict], archive: _Archive, *, recheck_m
             if sat:
                 archive.copy(cell_dir / "solve" / "stdout.txt", work / "stdout.txt")
                 inputs["stdout.txt"] = archive.sha256(cell_dir / "solve" / "stdout.txt")
-                command = [sys.executable, "-m", "experiments.general_competition.campaign", "check-model",
+                command = [sys.executable, "-m", "benchmarks.sat.campaign", "check-model",
                            "--cnf", str(work / "input.cnf"), "--stdout", str(work / "stdout.txt"), "--out", str(work / "complete.model")]
             else:
                 checker, executable = trusted[cell["solver_id"]]
@@ -681,8 +681,13 @@ def verify_campaign(evidence: Path, *, expected_manifest_sha256: str | None = No
     mappings. Without those files the retained decompressed CNF is still parsed
     and hash-checked, but its compressed source hash remains a recorded claim.
     """
-    implementations = {name: Path(__file__).with_name(name + ".py") for name in
-                       ("campaign_verify", "campaign", "cnf_admission", "official_score")}
+    here = Path(__file__).resolve().parent
+    implementations = {
+        "campaign_verify": here / "campaign_verify.py",
+        "campaign": here / "campaign.py",
+        "cnf_admission": here.parents[1] / "spectra" / "sat" / "admission.py",
+        "official_score": here / "official_score.py",
+    }
     implementation_hashes = {name: digest(path) for name, path in implementations.items()}
     root = _root(Path(evidence))
     hashes, directories = _verify_inventory(root, expected_manifest_sha256)

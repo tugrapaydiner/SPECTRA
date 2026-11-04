@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from experiments.general_competition.cnf_admission import _BoundedReader, admit_cnf, main
+from spectra.sat.admission import _BoundedReader, admit_cnf, main
 
 
 def write(path: Path, text: str) -> Path:
@@ -133,12 +133,12 @@ def test_exact_decoded_byte_limit_accepts_eof_without_changing_identity(
 
 @pytest.mark.parametrize("prefix", [b"c ", b" ", b"p cnf 1 1\n1 "])
 def test_gzip_long_physical_line_stops_at_decoded_budget(tmp_path, monkeypatch, prefix):
-    from experiments.general_competition import cnf_admission
+    from spectra.sat import admission
 
     path = tmp_path / "long-line.cnf.gz"
     path.write_bytes(gzip.compress(prefix + b" " * (1 << 20), mtime=0))
     opened = []
-    original_open = cnf_admission._open_dimacs
+    original_open = admission._open_dimacs
 
     class GuardedGzip:
         def __init__(self, stream):
@@ -160,7 +160,7 @@ def test_gzip_long_physical_line_stops_at_decoded_budget(tmp_path, monkeypatch, 
         opened.append(guarded)
         return guarded, compression
 
-    monkeypatch.setattr(cnf_admission, "_open_dimacs", guarded_open)
+    monkeypatch.setattr(admission, "_open_dimacs", guarded_open)
     with pytest.raises(MemoryError, match="DIMACS"):
         admit_cnf(path, max_dimacs_bytes=64)
     assert opened[0].decoded == 65
@@ -229,7 +229,7 @@ def test_header_counts_preserve_supported_signed_and_zero_padded_integers(
 
 def test_numeric_token_fast_path_matches_strict_reference_byte_space():
     from itertools import chain, product
-    from experiments.general_competition.cnf_admission import _parse_int
+    from spectra.sat.admission import _parse_int
 
     def reference(token):
         try:

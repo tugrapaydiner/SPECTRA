@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from experiments.general_competition.official_score import (
+from benchmarks.sat.official_score import (
     ScoreRow,
     main,
     parse_scores,

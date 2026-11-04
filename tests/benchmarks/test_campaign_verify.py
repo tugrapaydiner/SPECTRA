@@ -11,9 +11,9 @@ import sys
 
 import pytest
 
-from . import campaign_verify as verifier
-from .campaign import digest, run_campaign, score_campaign
-from .campaign_verify import TrustedProofChecker, VerificationError, verify_campaign
+from benchmarks.sat import campaign_verify as verifier
+from benchmarks.sat.campaign import digest, run_campaign, score_campaign
+from benchmarks.sat.campaign_verify import TrustedProofChecker, VerificationError, verify_campaign
 
 
 pytestmark = pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")

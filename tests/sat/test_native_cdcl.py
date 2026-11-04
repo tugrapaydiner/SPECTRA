@@ -17,9 +17,9 @@ import sys
 
 import pytest
 
-from experiments.general_competition.binary_core import canonical_cnf, model_satisfies
-from experiments.general_competition.proof_backend import check_drat, write_dimacs
-from experiments.general_competition.native_cdcl import (
+from spectra.sat.binary_core import canonical_cnf, model_satisfies
+from spectra.sat.drat import check_drat, write_dimacs
+from spectra.sat.native_cdcl import (
     DRUPProof,
     NativeCDCLRuntime,
     build_native_cdcl,
@@ -41,8 +41,8 @@ def runtime(tmp_path_factory):
 _BUILDERS = (
     ("spectra.exact", "build_exact_runtime"),
     ("experiments.compiled_query.exact", "build_exact_runtime"),
-    ("experiments.general_competition.native_cdcl", "build_native_cdcl"),
-    ("experiments.general_competition.native_binary_core", "build_native_binary_core"),
+    ("spectra.sat.native_cdcl", "build_native_cdcl"),
+    ("spectra.sat.native_binary_core", "build_native_binary_core"),
 )
 
 
@@ -143,7 +143,7 @@ def test_raw_native_abi_rejects_excess_variables_before_indexing(runtime, nvars)
 ])
 def test_native_input_buffers_keep_their_storage(
         nvars, rows, canonical, literals, offsets):
-    from experiments.general_competition.native_cdcl import _pack_cnf
+    from spectra.sat.native_cdcl import _pack_cnf
 
     packed, literal_buffer, offset_buffer = _pack_cnf(
         nvars, (iter(row) for row in rows))
@@ -155,7 +155,7 @@ def test_native_input_buffers_keep_their_storage(
 
 
 def test_activity_underflow_preserves_relevant_variables(tmp_path, monkeypatch):
-    from experiments.general_competition import native_cdcl
+    from spectra.sat import native_cdcl
 
     # Exercise the native rescaling invariant directly: a full search requires
     # tens of thousands of conflicts to reach the same four rescalings. Variables
@@ -193,7 +193,7 @@ SPECTRA_EXPORT int spectra_g_test_activity_underflow() {
 
 
 def test_compact_watch_pairs_track_moves_rebuild_and_deletion(tmp_path, monkeypatch):
-    from experiments.general_competition import native_cdcl
+    from spectra.sat import native_cdcl
 
     source = native_cdcl.SOURCE.resolve().as_posix()
     harness = tmp_path / "watch_pairs.cpp"
@@ -776,11 +776,11 @@ def test_native_sanitizer_builds_execute_checked_unsat(tmp_path, sanitizer):
 import ctypes
 from itertools import product
 import sys
-from experiments.general_competition.native_cdcl import (
+from spectra.sat.native_cdcl import (
     NativeCDCLRuntime, solve_cnf_native, solve_general_native,
     verify_direct_native_result, verify_native_result,
 )
-from experiments.general_competition.test_native_cdcl import (
+from tests.sat.test_native_cdcl import (
     test_native_drup_follows_connected_implication_chains,
     test_native_drup_rejects_invalid_addition_after_watch_table_growth,
     test_direct_native_sparse_variables_preserve_original_evidence,
@@ -847,7 +847,7 @@ test_native_abi_rejects_unrepresentable_buffer_sizes(runtime)
 
 
 def test_native_proof_ids_preserve_deleted_rows_and_relocation(tmp_path, monkeypatch):
-    from experiments.general_competition import native_cdcl
+    from spectra.sat import native_cdcl
 
     source = native_cdcl.SOURCE.resolve().as_posix()
     harness = tmp_path / "proof_ids.cpp"
@@ -923,7 +923,7 @@ SPECTRA_EXPORT int spectra_g_test_proof_ids() {
 
 
 def test_indexed_heap_matches_linear_selection_and_preserves_membership(tmp_path, monkeypatch):
-    from experiments.general_competition import native_cdcl
+    from spectra.sat import native_cdcl
 
     # Check decision priority independently of the heap implementation, including
     # rounded-to-zero ties, lazy assigned entries, and backtrack reinsertion.
@@ -1121,7 +1121,7 @@ SPECTRA_EXPORT int spectra_g_test_indexed_heap() {
 
 @pytest.fixture(scope="module")
 def native_proof_core(tmp_path_factory):
-    from experiments.general_competition.native_binary_core import NativeBinaryCore, build_native_binary_core
+    from spectra.sat.native_binary_core import NativeBinaryCore, build_native_binary_core
 
     if sys.platform != "linux" or shutil.which("g++") is None:
         pytest.skip("native binary-core builder currently requires Linux and g++")
@@ -1134,7 +1134,7 @@ def _equivalence_created_units():
 
 
 def test_original_rup_requires_full_substitution_before_residual(native_proof_core):
-    from experiments.general_competition.native_cdcl import _rup_conflict
+    from spectra.sat.native_cdcl import _rup_conflict
 
     original = _equivalence_created_units() + ((-1, -3, 5, 6),)
     reduction = native_proof_core.reduce(6, original)
@@ -1149,7 +1149,7 @@ def test_original_rup_requires_full_substitution_before_residual(native_proof_co
 
 
 def test_original_rup_composes_native_backend_in_original_namespace(native_proof_core, runtime):
-    from experiments.general_competition.native_cdcl import (
+    from spectra.sat.native_cdcl import (
         _compose_native_original_rup, _OriginalProofBudgetExceeded,
     )
 
@@ -1196,7 +1196,7 @@ def test_original_rup_composes_native_backend_in_original_namespace(native_proof
 ))
 def test_original_rup_frontend_contradiction_branches(
         native_proof_core, nvars, original, kind, expected):
-    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+    from spectra.sat.native_cdcl import _compose_native_original_rup
 
     reduction = native_proof_core.reduce(nvars, original)
     assert reduction.contradiction and reduction.conflict_kind == kind
@@ -1213,7 +1213,7 @@ def test_original_rup_frontend_contradiction_branches(
 
 
 def test_original_rup_exact_certificate_budgets(native_proof_core):
-    from experiments.general_competition.native_cdcl import _compose_native_original_rup, _OriginalProofBudgetExceeded
+    from spectra.sat.native_cdcl import _compose_native_original_rup, _OriginalProofBudgetExceeded
 
     original = ((1, 2), (1, -2), (-1, 2), (-1, -2))
     reduction = native_proof_core.reduce(2, original)
@@ -1238,7 +1238,7 @@ def test_original_rup_exact_certificate_budgets(native_proof_core):
 
 
 def test_original_rup_rejects_malformed_composition_evidence(native_proof_core, runtime):
-    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+    from spectra.sat.native_cdcl import _compose_native_original_rup
 
     original = _equivalence_created_units() + tuple(
         (-1, -3) + tuple(5 + index if bit else -(5 + index)
@@ -1263,7 +1263,7 @@ def test_original_rup_rejects_malformed_composition_evidence(native_proof_core, 
 
 
 def test_original_rup_does_not_mistake_rat_only_addition_for_rup():
-    from experiments.general_competition.native_cdcl import PROOF_SCHEMA
+    from spectra.sat.native_cdcl import PROOF_SCHEMA
 
     original = ((1, 2), (1, -2), (-1, 2), (-1, -2))
     # Pure unused variable 3 makes (3) vacuously RAT, but not RUP. This stream
@@ -1274,7 +1274,7 @@ def test_original_rup_does_not_mistake_rat_only_addition_for_rup():
 @pytest.mark.parametrize("fixed_class", (False, True))
 def test_original_rup_signed_multihop_free_and_fixed_classes(
         native_proof_core, runtime, fixed_class):
-    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+    from spectra.sat.native_cdcl import _compose_native_original_rup
 
     # 1 = -2 = 3, with 1 as the positive original representative.
     equivalences = ((1, 2), (-1, -2), (2, 3), (-2, -3))
@@ -1339,7 +1339,7 @@ def test_native_original_signed_lifting_keeps_unused_header_variables(native_pro
 
 
 def test_original_rup_large_original_ids_have_exact_byte_limits(native_proof_core, runtime, tmp_path):
-    from experiments.general_competition.native_cdcl import (
+    from spectra.sat.native_cdcl import (
         _compose_native_original_rup, _OriginalProofBudgetExceeded,
     )
 
@@ -1376,7 +1376,7 @@ def test_original_rup_large_original_ids_have_exact_byte_limits(native_proof_cor
 
 
 def test_original_rup_rejects_bad_evidence_before_tiny_budget(native_proof_core, runtime):
-    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+    from spectra.sat.native_cdcl import _compose_native_original_rup
 
     original = _equivalence_created_units() + tuple(
         (-1, -3) + tuple(abs(lit) + 4 if lit > 0 else -(abs(lit) + 4) for lit in row)
@@ -1416,7 +1416,7 @@ def test_original_rup_rejects_bad_evidence_before_tiny_budget(native_proof_core,
 
 
 def test_original_empty_precedes_unrelated_binary_conflict(native_proof_core):
-    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+    from spectra.sat.native_cdcl import _compose_native_original_rup
 
     original = ((), (1, 2), (1, -2), (-1, 2), (-1, -2))
     reduction = native_proof_core.reduce(2, original)
@@ -1429,7 +1429,7 @@ def test_original_empty_precedes_unrelated_binary_conflict(native_proof_core):
 
 
 def test_original_rup_well_shaped_false_reduction_is_not_certified(native_proof_core):
-    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+    from spectra.sat.native_cdcl import _compose_native_original_rup
 
     original = _equivalence_created_units() + ((-1, -3, 5, 6),)
     reduction = native_proof_core.reduce(6, original)
@@ -1451,8 +1451,8 @@ def test_original_rup_well_shaped_false_reduction_is_not_certified(native_proof_
 ))
 def test_original_rup_deduplicated_prefix_external_verdict(
         native_proof_core, runtime, tmp_path, case):
-    from experiments.general_competition.campaign import run_process
-    from experiments.general_competition.native_cdcl import _compose_native_original_rup
+    from benchmarks.sat.campaign import run_process
+    from spectra.sat.native_cdcl import _compose_native_original_rup
 
     if case.startswith("identity"):
         nvars, original = 3, all_blocking_clauses(3)
@@ -1544,7 +1544,7 @@ def test_original_rup_deduplicated_prefix_external_verdict(
 )
 def test_original_rup_genuine_prefix_retains_deleted_backend_additions(
         native_proof_core, runtime, tmp_path):
-    from experiments.general_competition.campaign import run_process
+    from benchmarks.sat.campaign import run_process
 
     # Keep both the stress solve/composition and independent check supervised.
     # Do not run the simple Python replay on this large certificate in pytest.
@@ -1553,12 +1553,12 @@ import json
 from itertools import product
 from pathlib import Path
 import sys
-from experiments.general_competition.binary_core import canonical_cnf
-from experiments.general_competition.native_binary_core import NativeBinaryCore
-from experiments.general_competition.native_cdcl import (
+from spectra.sat.binary_core import canonical_cnf
+from spectra.sat.native_binary_core import NativeBinaryCore
+from spectra.sat.native_cdcl import (
     NativeCDCLRuntime, _compose_native_original_rup, _rup_conflict, write_drup,
 )
-from experiments.general_competition.proof_backend import write_dimacs
+from spectra.sat.drat import write_dimacs
 core = NativeBinaryCore(sys.argv[1])
 backend = NativeCDCLRuntime(sys.argv[2])
 out = Path(sys.argv[3])
@@ -1759,7 +1759,7 @@ def test_direct_native_sparse_variables_preserve_original_evidence(runtime, case
 @pytest.mark.parametrize("nvars", (0, 1024))
 @pytest.mark.parametrize("empty_clause", (False, True))
 def test_raw_native_empty_input_preserves_declared_variables(runtime, nvars, empty_clause):
-    from experiments.general_competition.native_cdcl import _decode
+    from spectra.sat.native_cdcl import _decode
 
     offsets = (ctypes.c_uint64 * 2)(0, 0)
     output = ctypes.c_void_p()
@@ -1810,7 +1810,7 @@ def test_direct_native_variable_compaction_boundary(runtime, nvars):
 
 
 def test_native_sat_decoder_keeps_strict_boolean_model_contract():
-    from experiments.general_competition.native_cdcl import _decode
+    from spectra.sat.native_cdcl import _decode
 
     def header(nvars):
         return struct.pack("<4sII8Q", b"SGC1", 10, nvars, *range(8))
@@ -1837,7 +1837,7 @@ def test_native_abi_rejects_unrepresentable_buffer_sizes(runtime):
     program = r"""
 import ctypes
 import sys
-from experiments.general_competition.native_cdcl import NativeCDCLRuntime
+from spectra.sat.native_cdcl import NativeCDCLRuntime
 
 runtime = NativeCDCLRuntime(sys.argv[1])
 size_max = ctypes.c_size_t(-1).value

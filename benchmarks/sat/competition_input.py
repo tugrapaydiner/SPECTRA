@@ -16,8 +16,8 @@ from pathlib import Path
 import tempfile
 from typing import BinaryIO
 
-from experiments.general_competition.binary_core import Clause
-from experiments.general_competition.cnf_admission import (
+from spectra.sat.binary_core import Clause
+from spectra.sat.admission import (
     _BoundedReader,
     CNFAdmission,
     DEFAULT_MAX_DIMACS_BYTES,

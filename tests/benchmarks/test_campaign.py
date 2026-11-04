@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-from .campaign import (
+from benchmarks.sat.campaign import (
     _status, checker_resource_diagnostic, check_model, digest, load_inventory, load_solvers,
     run_campaign, run_process, score_campaign, stage_input,
 )
@@ -297,11 +297,11 @@ def test_missing_checker_does_not_falsely_disqualify_valid_proof(tmp_path):
 
 @pytest.mark.skipif(shutil.which("cl" if os.name == "nt" else "g++") is None, reason="native build")
 def test_native_worker_emits_independently_checkable_complete_model_and_budget_unknown(tmp_path):
-    from .native_cdcl import build_native_cdcl
+    from spectra.sat.native_cdcl import build_native_cdcl
     library = build_native_cdcl(tmp_path / "build")
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 3 2\n1 2 3 0\n-1 2 0\n")
-    command = [sys.executable, "-m", "experiments.general_competition.campaign", "native",
+    command = [sys.executable, "-m", "benchmarks.sat.campaign", "native",
                "--library", str(library), "--cnf", "{cnf}", "--proof", "{proof}", "--stats", "{stats}"]
     native = solver("native", command=command, track="standalone-native", upstream_engines=[], artifact_paths=[str(library)])
     inventory, field = manifests(tmp_path, [instance(cnf)], [native])
@@ -343,11 +343,11 @@ def test_complete_campaign_native_unsat_passes_real_external_drat_trim(tmp_path)
     checker_path = os.environ.get("DRAT_TRIM")
     if not checker_path:
         pytest.skip("set DRAT_TRIM to the pinned external checker")
-    from .native_cdcl import build_native_cdcl
+    from spectra.sat.native_cdcl import build_native_cdcl
     library = build_native_cdcl(tmp_path / "build")
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 2 4\n1 2 0\n-1 2 0\n1 -2 0\n-1 -2 0\n")
-    command = [sys.executable, "-m", "experiments.general_competition.campaign", "native",
+    command = [sys.executable, "-m", "benchmarks.sat.campaign", "native",
                "--library", str(library), "--cnf", "{cnf}", "--proof", "{proof}", "--stats", "{stats}"]
     native = solver("native", command=command, track="standalone-native", upstream_engines=[])
     inventory, field = manifests(tmp_path, [instance(cnf, expected="UNSAT")], [native])
@@ -369,7 +369,7 @@ def test_model_checker_handles_admitted_comment_syntax(tmp_path):
 @pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 @pytest.mark.parametrize("late_phase,expected", [("check", "CHECKER_TIMEOUT"), ("admission-process", "ADMISSION_FAILURE")])
 def test_late_successful_checker_or_admission_cannot_escape_deadline(tmp_path, monkeypatch, late_phase, expected):
-    from . import campaign
+    from benchmarks.sat import campaign
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 1 1\n1 0\n")
     inventory, field = manifests(tmp_path, [instance(cnf)], [solver()])
@@ -474,7 +474,7 @@ def test_alternative_solver_exit_codes_require_explicit_declaration():
 
 
 def test_compression_roundtrip_preserves_logical_identity_and_journal(tmp_path):
-    from .campaign import compress_evidence_file
+    from benchmarks.sat.campaign import compress_evidence_file
     data = b"1 -2 3 0\n" * 10000
     source = tmp_path / "proof.drat"
     source.write_bytes(data)
@@ -492,7 +492,7 @@ def test_compression_roundtrip_preserves_logical_identity_and_journal(tmp_path):
 
 
 def test_compression_corruption_keeps_original_and_publishes_no_archive(tmp_path, monkeypatch):
-    from . import campaign
+    from benchmarks.sat import campaign
     source = tmp_path / "proof.drat"
     source.write_bytes(b"0\n" * 40000)
     original = source.read_bytes()
@@ -506,7 +506,7 @@ def test_compression_corruption_keeps_original_and_publishes_no_archive(tmp_path
 
 
 def test_compression_never_overwrites_existing_archive_or_follows_symlink(tmp_path):
-    from .campaign import compress_evidence_file
+    from benchmarks.sat.campaign import compress_evidence_file
     source = tmp_path / "proof.drat"
     source.write_text("original")
     archive = tmp_path / "proof.drat.xz"
@@ -523,7 +523,7 @@ def test_compression_never_overwrites_existing_archive_or_follows_symlink(tmp_pa
 
 
 def test_compression_journal_failure_keeps_original_and_verified_archive(tmp_path):
-    from .campaign import compress_evidence_file
+    from benchmarks.sat.campaign import compress_evidence_file
     source = tmp_path / "proof.drat"
     data = b"0\n" * 40000
     source.write_bytes(data)
@@ -567,7 +567,7 @@ def test_campaign_compression_retains_checked_result_and_hashes_all_stored_files
 
 @pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 def test_campaign_storage_failure_retains_cell_and_refuses_partial_ranking(tmp_path, monkeypatch):
-    from . import campaign
+    from benchmarks.sat import campaign
     cnf = tmp_path / "input.cnf"
     cnf.write_text("p cnf 1 1\n1 0\n")
     inventory, field = manifests(tmp_path, [instance(cnf)], [solver()])
@@ -708,7 +708,7 @@ def test_dsr_io_failure_only_recognizes_explicit_lsr_output():
     ("legacy-v1", "legacy-v1"),
 ])
 def test_scoring_policy_cli_default_and_explicit_choices(tmp_path, monkeypatch, requested, expected):
-    from . import campaign
+    from benchmarks.sat import campaign
     observed = []
 
     def capture(args):
@@ -745,14 +745,14 @@ def test_explicit_legacy_run_preserves_historical_metadata_conflict_status(tmp_p
 def preprocessed_native_libraries(tmp_path_factory):
     if sys.platform != "linux" or shutil.which("g++") is None:
         pytest.skip("native binary frontend currently requires Linux and g++")
-    from .native_binary_core import build_native_binary_core
-    from .native_cdcl import build_native_cdcl
+    from spectra.sat.native_binary_core import build_native_binary_core
+    from spectra.sat.native_cdcl import build_native_cdcl
     root = tmp_path_factory.mktemp("preprocessed-native-worker")
     return build_native_cdcl(root / "backend"), build_native_binary_core(root / "frontend")
 
 
 def _preprocessed_worker_args(tmp_path, libraries, nvars, rows, **limits):
-    from .proof_backend import write_dimacs
+    from spectra.sat.drat import write_dimacs
     return argparse.Namespace(
         cnf=write_dimacs(tmp_path / "input.cnf", nvars, rows),
         library=libraries[0], binary_library=libraries[1],
@@ -776,7 +776,7 @@ def test_preprocessed_native_campaign_checks_original_models_and_proofs(
     checker = os.environ.get("DRAT_TRIM")
     if not checker:
         pytest.skip("set DRAT_TRIM to the pinned external checker")
-    from .proof_backend import write_dimacs
+    from spectra.sat.drat import write_dimacs
     fixtures = (
         ("empty-sat", 0, (), "SAT"),
         ("signed-model", 3, ((1, 2), (-1, -2), (1,)), "SAT"),
@@ -791,7 +791,7 @@ def test_preprocessed_native_campaign_checks_original_models_and_proofs(
                         ident=name, expected=expected)
                for name, nvars, rows, expected in fixtures]
     backend, frontend = preprocessed_native_libraries
-    command = [sys.executable, "-m", "experiments.general_competition.campaign", "native",
+    command = [sys.executable, "-m", "benchmarks.sat.campaign", "native",
                "--library", str(backend), "--binary-library", str(frontend),
                "--cnf", "{cnf}", "--proof", "{proof}", "--stats", "{stats}"]
     # This pinned DRAT-trim returns 1 with "s VERIFIED" when the original
@@ -841,7 +841,7 @@ def test_preprocessed_native_campaign_checks_original_models_and_proofs(
 def test_preprocessed_worker_proof_budget_emits_unknown_without_partial_proof(
     tmp_path, preprocessed_native_libraries, capsys, limit, reason,
 ):
-    from .campaign import native_worker
+    from benchmarks.sat.campaign import native_worker
     args = _preprocessed_worker_args(tmp_path, preprocessed_native_libraries, 6,
                                      _preprocessed_unsat_rows(), **{limit: 0})
     assert native_worker(args) == 0
@@ -858,7 +858,7 @@ def test_preprocessed_worker_proof_budget_emits_unknown_without_partial_proof(
 def test_preprocessed_worker_validates_limits_before_terminal_frontend(
     tmp_path, preprocessed_native_libraries, limit, capsys,
 ):
-    from .campaign import native_worker
+    from benchmarks.sat.campaign import native_worker
     args = _preprocessed_worker_args(tmp_path, preprocessed_native_libraries, 0, ((),), **{limit: -1})
     with pytest.raises(ValueError):
         native_worker(args)
@@ -869,7 +869,7 @@ def test_preprocessed_worker_validates_limits_before_terminal_frontend(
 def test_preprocessed_worker_backend_unknown_is_not_upgraded(
     tmp_path, preprocessed_native_libraries, capsys,
 ):
-    from .campaign import native_worker
+    from benchmarks.sat.campaign import native_worker
     args = _preprocessed_worker_args(tmp_path, preprocessed_native_libraries, 6,
                                      _preprocessed_unsat_rows(), max_conflicts=0)
     assert native_worker(args) == 0
@@ -883,7 +883,7 @@ def test_preprocessed_worker_backend_unknown_is_not_upgraded(
 def test_preprocessed_worker_frontend_proof_budget_keeps_backend_idle(
     tmp_path, preprocessed_native_libraries, capsys,
 ):
-    from .campaign import native_worker
+    from benchmarks.sat.campaign import native_worker
     args = _preprocessed_worker_args(tmp_path, preprocessed_native_libraries, 0, ((),),
                                      max_proof_bytes=1)
     assert native_worker(args) == 0
@@ -898,8 +898,8 @@ def test_preprocessed_worker_frontend_proof_budget_keeps_backend_idle(
 def test_preprocessed_worker_malformed_composition_is_not_a_budget_unknown(
     tmp_path, preprocessed_native_libraries, monkeypatch, capsys,
 ):
-    from . import native_cdcl
-    from .campaign import native_worker
+    from spectra.sat import native_cdcl
+    from benchmarks.sat.campaign import native_worker
     def malformed(*args, **kwargs):
         raise ValueError("malformed original-CNF evidence")
     monkeypatch.setattr(native_cdcl, "_compose_native_original_rup", malformed)

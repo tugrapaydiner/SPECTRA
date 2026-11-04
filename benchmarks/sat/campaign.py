@@ -1,6 +1,6 @@
 """Retained, exposed one-formula-per-process CNF campaigns.
 
-Run ``python -m experiments.general_competition.campaign --help``.  The runner
+Run ``python -m benchmarks.sat.campaign --help``.  The runner
 never certifies a hidden win or a complete modern field.  Every declared cell is
 retained; only independently checked answers earn runtime instead of PAR-2.
 Linux/POSIX RLIMIT_AS is a per-process address-space bound, not a cgroup aggregate
@@ -32,11 +32,11 @@ import sys
 import tempfile
 import time
 
-from .cnf_admission import admit_cnf
-from .official_score import score_bytes
+from spectra.sat.admission import admit_cnf
+from benchmarks.sat.official_score import score_bytes
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE = "experiments.general_competition.campaign"
+MODULE = "benchmarks.sat.campaign"
 SOLVED = {"SAT_VERIFIED": "sat-verified", "UNSAT_VERIFIED": "unsat-verified"}
 TRACKS = {"standalone-native", "assisted-portfolio", "upstream-baseline"}
 
@@ -348,7 +348,7 @@ def run_process(command: list[str], destination: Path, *, timeout: float,
 
     started = time.perf_counter()
     if os.name == "nt":
-        from .windows_process import run_windows
+        from benchmarks.sat.windows_process import run_windows
         record.update(run_windows(command, destination, workdir, environment,
                                   timeout, memory_mib, output_mib, output_directory))
     else:
@@ -459,8 +459,8 @@ def _native_preprocessed_solve(args, admitted, runtime):
     preprocessing and proof composition consume the declared solver deadline.
     Only the own native backend's RUP additions can use this composition path.
     """
-    from .native_binary_core import NativeBinaryCore
-    from .native_cdcl import (
+    from spectra.sat.native_binary_core import NativeBinaryCore
+    from spectra.sat.native_cdcl import (
         NativeStats, _compose_native_original_rup, _OriginalProofBudgetExceeded,
     )
 
@@ -528,8 +528,8 @@ def _native_preprocessed_solve(args, admitted, runtime):
 
 
 def native_worker(args: argparse.Namespace) -> int:
-    from .competition_input import admit_and_load_cnf
-    from .native_cdcl import NativeCDCLRuntime, _uint64, write_drup
+    from benchmarks.sat.competition_input import admit_and_load_cnf
+    from spectra.sat.native_cdcl import NativeCDCLRuntime, _uint64, write_drup
     # Validate even when preprocessing settles the formula without a CDCL call.
     for name in ("max_conflicts", "max_learned_literals"):
         _uint64(getattr(args, name), name)

@@ -6,7 +6,7 @@ from itertools import combinations, product
 
 import pytest
 
-from experiments.general_competition.binary_core import (
+from spectra.sat.binary_core import (
     BinaryCore,
     UnitStep,
     build_binary_core,
@@ -174,7 +174,7 @@ def test_replay_rejects_unproved_variable_merge():
 
 
 def test_singleton_class_replay_work_is_linear(monkeypatch):
-    from experiments.general_competition import binary_core
+    from spectra.sat import binary_core
 
     # Count literal inspections, not elapsed time: unused declared variables
     # must not cause a complete mapping scan for every singleton class.
@@ -227,7 +227,7 @@ def test_replay_rejects_malformed_core_receipt(field, value):
 
 
 def test_replay_bounds_class_count_before_allocating(monkeypatch):
-    from experiments.general_competition import binary_core
+    from spectra.sat import binary_core
 
     core = build_binary_core(1, ())
 

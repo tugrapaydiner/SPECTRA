@@ -573,7 +573,7 @@ def reduce_and_verify(
     clauses: Iterable[Iterable[int]],
 ) -> NativeReduction:
     """Run both implementations and return the native result only on equality."""
-    from experiments.general_competition.binary_core import (
+    from .binary_core import (
         build_binary_core,
         verify_binary_core,
     )
