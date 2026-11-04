@@ -1,8 +1,9 @@
-"""Offline release metadata and current-guide checks; not scientific approval.
+"""Offline repository checks run before a release and in CI.
 
-Retired evidence archives live in the dedicated history branch rather than the
-active checkout. Run ``audit_workspace.py`` and ``check_active_tree.py`` for the
-current-tree integrity and size boundaries.
+Checks that the package version is declared once and consistently, the test
+extras pin the reference SAT wrapper, every local documentation link and heading
+anchor resolves, every GitHub Actions step uses an immutable reference, and the
+package workflow runs the installed-wheel checks.
 """
 from __future__ import annotations
 
@@ -16,9 +17,17 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 GUIDES = (
     "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md",
-    "docs/README.md", "docs/DEVELOPMENT.md", "docs/STATUS.md",
-    "docs/API.md", "docs/RELEASING.md",
+    "docs/cli.md", "docs/cnf.md", "docs/development.md", "docs/exact.md",
+    "docs/migration.md", "docs/sat.md", "docs/svm.md", "benchmarks/README.md",
 )
+WORKFLOW_REQUIREMENTS = {
+    "package.yml": ("check_current_installation.py", "check_exact_installation.py",
+                    "check_exam_repair_installation.py", "check_cnf_installation.py",
+                    "check_svm_installation.py"),
+}
+ACTION_USE = re.compile(r"^\s*(?:-\s*)?(?:uses|\"uses\"|'uses'):\s*(.*?)\s*$")
+REMOTE_ACTION = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}")
+CONTAINER_ACTION = re.compile(r"docker://[^\s@]+@sha256:[0-9a-f]{64}")
 
 
 def versions(root: Path) -> str:
@@ -39,6 +48,29 @@ def versions(root: Path) -> str:
     if values != [version]:
         raise ValueError("pyproject.toml and spectra.__version__ disagree")
     return version
+
+
+def action_references(text: str, name: str) -> list[str]:
+    """Require an immutable reference for every workflow ``uses:`` declaration.
+
+    Local actions inherit the checked-out commit. Remote actions and reusable
+    workflows need a full 40-character commit SHA; container actions need a digest.
+    """
+    references: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), 1):
+        match = ACTION_USE.fullmatch(line)
+        if match is None:
+            continue
+        reference = match.group(1).split(" #", 1)[0].strip()
+        if len(reference) >= 2 and reference[0] in "\"'" and reference[-1] == reference[0]:
+            reference = reference[1:-1]
+        if reference.startswith("./"):
+            if ".." in Path(reference).parts or any(c.isspace() for c in reference):
+                raise ValueError(f"unsafe local action: {name}:{line_number}: {reference}")
+        elif not (REMOTE_ACTION.fullmatch(reference) or CONTAINER_ACTION.fullmatch(reference)):
+            raise ValueError(f"action is not immutably pinned: {name}:{line_number}: {reference}")
+        references.append(reference)
+    return references
 
 
 REQUIRED_TEST_DEPENDENCIES = {
@@ -139,21 +171,20 @@ def check(root: Path = ROOT) -> dict:
             if parsed.fragment and target.suffix == ".md" and unquote(parsed.fragment) not in anchors(target):
                 raise ValueError(f"broken local heading anchor: {name}: {link}")
             links += 1
-    workflow_requirements = {
-        "public-package.yml": "check_current_installation.py",
-        "exact-public-api.yml": "check_exact_installation.py",
-    }
-    for name, required in workflow_requirements.items():
-        text = (root / ".github/workflows" / name).read_text(encoding="utf-8")
+    workflows = root / ".github" / "workflows"
+    actions = 0
+    for path in sorted(workflows.glob("*.y*ml")):
+        actions += len(action_references(path.read_text(encoding="utf-8"), path.name))
+    for name, required in WORKFLOW_REQUIREMENTS.items():
+        text = (workflows / name).read_text(encoding="utf-8")
         if re.search(r"spectra-[0-9]+\.[0-9]+\.[0-9]+[^\s]*\.whl", text):
             raise ValueError(f"hard-coded wheel version in {name}")
-        if required not in text:
-            raise ValueError(f"required installed-wheel check missing from {name}: {required}")
-    return {"status": "PASS", "version": version, "current_guides": len(GUIDES),
-            **dependency_report,
-            "local_links_checked": links, "external_links_not_fetched": external,
-            "scope": "offline metadata, test-install contract and navigation only; "
-                     "not release or scientific approval"}
+        for script in required:
+            if script not in text:
+                raise ValueError(f"required installed-wheel check missing from {name}: {script}")
+    return {"status": "PASS", "version": version, "guides": len(GUIDES),
+            **dependency_report, "workflow_actions_checked": actions,
+            "local_links_checked": links, "external_links_not_fetched": external}
 
 
 def main() -> None:

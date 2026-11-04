@@ -1,4 +1,4 @@
-"""Strict SBQ1 query-bank codec shared by the public and research wrappers."""
+"""Strict SBQ1 query-bank codec for :mod:`spectra.exact`."""
 from __future__ import annotations
 
 import struct

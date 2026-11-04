@@ -371,7 +371,7 @@ struct Index {
         // literal contributes at most one arc per neighbour. Singleton unit
         // arcs have otherwise empty source/target rows. Stable CSR scattering
         // therefore produces exactly the same two ordered adjacencies as a
-        // global arc sort, with no duplicates. See LINEAR_CONSTRUCTION.md.
+        // global arc sort, with no duplicates.
         full_arcs=arcs.size();original=CSR(2*n,arcs);CSR reverse(2*n,arcs,true);
 #if defined(SPECTRA_EXACT_VALIDATE_LINEAR_CSR)
         // Diagnostic builds only: compare actual native arrays, not a model of

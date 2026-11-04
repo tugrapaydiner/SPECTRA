@@ -27,7 +27,7 @@ classifiers = [
 
 [project.urls]
 Repository = "https://github.com/tugrapaydiner/SPECTRA"
-Documentation = "https://github.com/tugrapaydiner/SPECTRA/blob/main/docs/README.md"
+Documentation = "https://github.com/tugrapaydiner/SPECTRA/tree/main/docs"
 Issues = "https://github.com/tugrapaydiner/SPECTRA/issues"
 Changelog = "https://github.com/tugrapaydiner/SPECTRA/blob/main/CHANGELOG.md"
 

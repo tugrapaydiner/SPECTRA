@@ -1,4 +1,4 @@
-"""Optional exact CNF score cache; historical CNFRepairState remains unchanged.
+"""Exact incremental make/break score cache for CNF local search.
 
 For each non-tautological clause, a bit set records the variables whose literals
 are true. A zero set contributes one make to every incident variable; a singleton

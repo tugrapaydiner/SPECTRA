@@ -1,4 +1,4 @@
-"""Proof-replayable unit/binary core for arbitrary CNF development.
+"""Proof-replayable unit/binary simplification for arbitrary CNF.
 
 The core uses only generic propositional operations: tautology/duplicate removal,
 unit and binary implication SCCs, signed-equivalence substitution, and unit

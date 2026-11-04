@@ -1,50 +1,29 @@
-# Security boundaries
+# Security
 
-SPECTRA is a local research toolkit, not a sandbox or a multi-tenant service.
-No comprehensive security certification is claimed for the research archive.
+SPECTRA is a local library and CLI, not a sandbox or a multi-tenant service.
 
-## Public input handling
+## Inputs
 
-The installed package imports only the Python standard library and never loads
-pickles or model checkpoints.
-Witness/manifest JSON rejects duplicate object keys, nonfinite numbers and
-floating-point overflow. Input is limited to 16 MiB by default, with an explicit
-positive `--max-json-bytes` override. This limits input bytes, not total decoder
-memory or CPU. DIMACS variable/clause/literal limits do not cap arbitrary text
-file size or enforce a hard solve deadline.
+- The installed package imports only the Python standard library and never
+  loads pickles or executes code from input files.
+- JSON inputs are read with a strict decoder (no duplicate keys, `NaN`, overflow
+  or invalid UTF-8) and a byte limit (16 MiB by default). Binary packets have
+  their own limits, and DIMACS parsers bound variables, clauses and literals.
+- These limits bound input size, not total memory or run time. Run untrusted
+  workloads under operating-system memory, time and filesystem limits.
+- Output files are created exclusively; existing paths are never overwritten.
+- Hash manifests and receipts detect accidental changes; they are not signatures.
 
-Run untrusted workloads with operating-system memory/time limits and restricted
-filesystem permissions. Do not use special files or attacker-controlled,
-concurrently changing paths. Exclusive output creation prevents normal accidental
-overwrite; hash/size manifests are not signatures or authenticity guarantees.
-Evidence checking rejects symlinked/traversing artifact paths, but it does not
-make concurrent filesystem mutation safe.
+## Native code
 
-## Research artifacts and native code
+Native components are compiled from the packaged C++ source with your local
+compiler, only when you call a `build_*` function. Each build writes a receipt
+binding the source hash, compiler command, Python ABI and binary hash, and
+runtimes verify it before loading. This detects accidental or post-build changes;
+it does not sandbox the compiler or make the native code safe. Build only with a
+trusted toolchain, and treat built libraries as executable code.
 
-Historical neural research loaders, including pickle-compatible checkpoint
-paths, are no longer part of the package. If you check out an archived commit to
-replay them, load only models and archives from a trusted, verified source in an
-isolated environment. A checksum proves identity only when the expected checksum
-itself is trusted.
+## Reporting a vulnerability
 
-Native execution compiles bundled C++ with the local compiler. The exact API
-builder emits a receipt binding source, Python ABI, compiler command and final
-binary, and the runtime checks that receipt by default. This detects accidental
-or post-build byte changes; it does not sandbox the compiler, authenticate the
-installed package, or prove the native code safe. Build only trusted source with
-a trusted toolchain.
-
-Historical dependency pins exist for reproducibility, not as a claim of current
-vulnerability-free support. Review dependencies separately before deployment; do
-not reinterpret an updated dependency's outputs as a bitwise replay of the old
-environment. Prepared-packet byte admission is not a total RSS or wall-time bound.
-
-## Reporting
-
-Do not post credentials, private datasets or an exploit containing sensitive
-artifacts in public issues. Use a repository private-vulnerability report when
-that GitHub feature is enabled; otherwise contact the maintainer privately
-through an established channel. No private reporting address or response-time
-commitment is invented here. General non-sensitive bugs can use
-[GitHub issues](https://github.com/tugrapaydiner/SPECTRA/issues).
+Please use GitHub's private vulnerability reporting for this repository. Do not
+include credentials or private data in public issues.

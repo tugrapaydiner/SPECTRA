@@ -1,4 +1,4 @@
-"""Exact failure residuals for future SAT repair policies, not a learned solver.
+"""Reference CNF repair state with exact make/break counts.
 
 Flips touch only occurrences of that variable. Make/break counts remain exact
 with repeated literals, tautologies, empty clauses and unused variables.

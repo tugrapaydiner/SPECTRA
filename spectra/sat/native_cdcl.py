@@ -1,4 +1,4 @@
-"""Receipt-bound native learned-clause residual solver for SPECTRA-G.
+"""Receipt-bound native CDCL solver with checked models and DRUP proofs.
 
 The native kernel accepts arbitrary canonical CNF clauses, runs deterministic
 CDCL with watched literals, first-UIP learning, phase saving and restarts, and

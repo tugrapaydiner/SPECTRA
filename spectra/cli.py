@@ -1,4 +1,4 @@
-"""Small, standard-library command interface. Research remains an optional extra."""
+"""The ``spectra`` command-line interface; standard library only."""
 from __future__ import annotations
 import argparse
 import importlib.util
