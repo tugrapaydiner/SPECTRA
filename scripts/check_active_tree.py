@@ -16,10 +16,9 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_TRACKED_BYTES = 14 * 1024 * 1024
-# Part 3 keeps the current competition adapters, contracts, and compact result
-# receipts in the active tree. The historical archive and per-file limits remain
-# unchanged; this is not permission to restore retired branches or large evidence.
-MAX_TRACKED_FILES = 1000
+# The 0.8.0 cleanup reduced the active tree to under 300 files. Keep headroom for
+# maintained work, not for restoring retired tracks or large evidence.
+MAX_TRACKED_FILES = 400
 MAX_SINGLE_FILE_BYTES = 2 * 1024 * 1024
 ACTIVE_WORKFLOWS = {
     "cpu-regression.yml",

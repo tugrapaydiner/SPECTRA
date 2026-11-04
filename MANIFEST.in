@@ -1,7 +1,6 @@
 include LICENSE README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md
 recursive-include examples *.cnf
 recursive-include spectra/_native *.cpp *.h *.hpp
-include assets/readme/*.svg assets/readme/chart-data.json
 include docs/*.md docs/history/README.md
 prune tests
 prune experiments

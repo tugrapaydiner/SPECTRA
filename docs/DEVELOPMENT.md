@@ -221,10 +221,3 @@ Bulky evidence archives and one-shot workflows are stored in Git history and on
 [history index](history/README.md). Do not restore them merely to make routine CI
 replay old results; use an isolated historical worktree instead. Exact archived
 paths and hashes are recorded in [`results/HISTORICAL_ARCHIVES.json`](https://github.com/tugrapaydiner/SPECTRA/blob/38c13990a1ba92229cf5cf2a57b1a600b218889e/results/HISTORICAL_ARCHIVES.json).
-
-## README figures
-
-The active README uses compact SVG assets. Historical PNG figures are archived.
-The [historical generator](https://github.com/tugrapaydiner/SPECTRA/blob/757babb05bd631c89075f374ba765a197a1fb77b/scripts/render_readme_charts.py)
-checks the source hashes and regenerates the figures from its complete pinned
-tree. Chart values and SVG assets are unchanged by archiving that tool.

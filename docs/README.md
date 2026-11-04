@@ -21,7 +21,7 @@ historical neural, MCTS, low-bit, general-SAT, or universal CPU-performance clai
 
 | Task | Guide |
 |---|---|
-| Install and run the public tools | [Quick start](../README.md#base-toolkit-quick-start) |
+| Install and run the public tools | [Quick start](../README.md#install-and-quick-start) |
 | Understand API, input formats and return values | [API and CLI](API.md) |
 | Build and use checked SAT/UNSAT exact queries | [Proof-carrying exact API](EXACT_API.md) |
 | Run the deterministic self-test and submit independent evidence | [Exact replication](EXACT_REPLICATION.md) |

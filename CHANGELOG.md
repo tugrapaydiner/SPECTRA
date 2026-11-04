@@ -24,6 +24,9 @@
 - Plain `pytest` now collects `tests/` and `experiments/` and runs from a clean
   `pip install ".[test]"`. Tests that need optional external tools (`dd.cudd`, a
   pinned CaDiCaL checkout) skip with a reason instead of failing.
+- Remove the unreferenced README SVG charts and their provenance files, and
+  `.gitattributes`, which only protected those bytes. Tighten the active-tree
+  file cap from 1000 to 400.
 - Merge the chained installed-wheel checkers into
   `scripts/check_current_installation.py` and one installed CNF probe,
   `scripts/check_cnf_installation.py`; remove two unreferenced SVM benchmarks.

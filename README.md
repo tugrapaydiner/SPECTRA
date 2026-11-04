@@ -44,10 +44,40 @@ synthetic development graphs and do not replace the frozen WAP result above.
 
 **Package: Python 3.10+ · Flagship complete-call result: Python 3.13 · MIT-licensed project code · CPU-first · explicit verification boundaries**
 
-The active checkout is intentionally lean: current source, tests, compact summaries,
-and seven permanent workflows. Bulky historical evidence and retired experiment
-branch histories remain available from `archive/research-history-20261016` and the
-original immutable commits rather than being duplicated in every clone.
+## Install and quick start
+
+```bash
+git clone https://github.com/tugrapaydiner/SPECTRA.git
+cd SPECTRA
+python -m venv .venv
+# Linux/macOS: source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install .
+python -m spectra doctor
+python -m spectra cnf solve examples/tiny.cnf --seed 7 --max-flips 1024 --out answer.json
+python -m spectra cnf check examples/tiny.cnf answer.json
+```
+
+The package has no third-party dependencies and does not require a compiler to
+install. Native runtimes are compiled only when you call an explicit build
+(`spectra exact build`, `build_quotient_runtime`, ...). Bounded search returns
+`SAT_VERIFIED` or `UNKNOWN`; process success alone never means a problem was
+solved. The [API and CLI guide](docs/API.md) and the [docs index](docs/README.md)
+cover every public interface.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `spectra/` | The installed package: CNF tools, quotient and exact-query runtimes, SVM execution, exam repair, native C++ sources |
+| `experiments/` | Research harnesses with their protocols and tests: compiled queries, general CNF, real-traffic migration, streaming SVM, WAP support |
+| `tests/` | Package tests (`tests/public`, `tests/svm`) and evidence-tooling tests |
+| `scripts/` | Benchmarks, installed-wheel checks and repository audits used by CI |
+| `docs/` | User guides, protocols, status and release process |
+
+The active checkout is intentionally lean. Bulky historical evidence and retired
+experiment branch histories remain available from `archive/research-history-20261016`
+and the original immutable commits rather than being duplicated in every clone.
 
 ## Flagship result
 
@@ -309,24 +339,6 @@ The latest published package release remains
 [v0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1). The WAP
 flagship source is unreleased research until a separately audited release is made.
 
-## Base toolkit quick start
-
-```bash
-git clone https://github.com/tugrapaydiner/SPECTRA.git
-cd SPECTRA
-python -m venv .venv
-# Linux/macOS: source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install .
-python -m spectra doctor
-python -m spectra cnf solve examples/tiny.cnf --seed 7 --max-flips 1024 --out answer.json
-python -m spectra cnf check examples/tiny.cnf answer.json
-```
-
-The installation has no third-party dependencies and does not require a
-compiler. Native runtimes are explicit builds. Bounded search returns `SAT_VERIFIED` or `UNKNOWN`; process success
-alone never means the problem was solved.
-
 ## Verify and develop
 
 ```bash
@@ -338,10 +350,11 @@ python scripts/check_release_readiness.py
 
 Tests that need a C++ compiler build native runtimes into temporary directories;
 tests that need optional external tools skip and say why. Large evidence replays
-live in the dedicated archive branch and are not routine pull-request gates. Test passes are implementation
-evidence, not proof of generalization or support for every platform/input. Read [SECURITY.md](SECURITY.md) before accepting external inputs
-or native libraries, and [CONTRIBUTING.md](CONTRIBUTING.md) before
-changing numerical code or retained experiments.
+live in the dedicated archive branch and are not routine pull-request gates. Test
+passes are implementation evidence, not proof of generalization or support for every
+platform or input. Read [SECURITY.md](SECURITY.md) before accepting external inputs
+or native libraries, and [CONTRIBUTING.md](CONTRIBUTING.md) before changing numerical
+code or retained experiments.
 
 Code is distributed under [MIT](LICENSE). Upstream datasets and third-party
 components retain their own licenses and attribution requirements.

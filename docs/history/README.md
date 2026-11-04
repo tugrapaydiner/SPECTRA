@@ -11,11 +11,12 @@ instructions. Reproduce historical experiments from their complete pinned trees:
   dedicated tests. Current release validation uses the maintained package checks.
 - [Failure-information development study](https://github.com/tugrapaydiner/SPECTRA/tree/e2cc522fe7f435c7aca02080475e05e24b718aeb)
   retains the exact frozen runners, protocols, failed feedback gate, initial
-  aggregation failure and complete replay evidence. Maintained selector and
-  symmetry components keep their current regression tests.
+  aggregation failure and complete replay evidence. The maintained exact-query
+  selector keeps its current regression tests.
 - [Legacy figure and report tools](https://github.com/tugrapaydiner/SPECTRA/tree/6c47ff9c870a7ac209b1d40ad83249a59743b192/scripts)
   retains the archived PNG chart generators and blueprint-era report formatter.
-  Current SVG figures, measurement tools and their inputs are separate.
+  The README SVG charts and their provenance were retired in 0.8.0; they remain
+  at df63249 under `assets/readme/`.
 - [Frozen ITC selector-v10 study](https://github.com/tugrapaydiner/SPECTRA/tree/9e1037f2b46780dc943804f8726cee042108d15a)
   retains the matching native selector, transfer runners, dedicated tests,
   protocols, timing amendments, selector-v10 WAP guard and manual workflow.
@@ -30,6 +31,11 @@ instructions. Reproduce historical experiments from their complete pinned trees:
   and their exclusive tests are retired; shipped APIs and their tests remain.
 - [Part 3 evidence before cleanup](https://github.com/tugrapaydiner/SPECTRA/tree/38c13990a1ba92229cf5cf2a57b1a600b218889e)
   retains the run artifacts and diagnostic harnesses removed from this checkout.
+- [Neural, low-bit and compiler-control tracks](https://github.com/tugrapaydiner/SPECTRA/tree/df63249617add008b8ead1538cf52dac40b81615)
+  retains the PyTorch models, training, evaluation and deployment packages,
+  the packed/prepared-FP32/compiler runtimes, their native kernels, configs,
+  milestone scripts, guides and tests, as last shipped before 0.8.0. Replay
+  them with that tree's `requirements-cpu-research.txt`.
 - [Earlier research archive](https://github.com/tugrapaydiner/SPECTRA/tree/0b68898f3e64063ac3dc8904ae42f0b33590e7af)
   is the immutable archive/research-history-20261016 checkpoint.
 - Receipts naming `abd10d3d0ef24300c3e43b8432886c8203fd465b` or
