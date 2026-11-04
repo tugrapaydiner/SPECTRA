@@ -3,9 +3,9 @@
 from dataclasses import replace
 import os, random, struct, itertools
 import pytest
-from experiments.real_traffic.packet_migration import PacketMigrationRuntime,build_packet_migration
-from experiments.real_traffic.packet_observer import PacketObserverRuntime,build_packet_observer
-from experiments.real_traffic.migration_session import MigrationVerifier,MigrationBatch
+from spectra.migration.packet_migration import PacketMigrationRuntime,build_packet_migration
+from spectra.migration.packet_observer import PacketObserverRuntime,build_packet_observer
+from spectra.migration.migration_session import MigrationVerifier,MigrationBatch
 
 @pytest.fixture(scope='session')
 def solver(tmp_path_factory):
@@ -136,7 +136,7 @@ def test_single_byte_and_zero_length_outputs_are_private(solver):
 
 def test_packet_service_snapshots_mutable_inputs_and_rechecks(solver,checker):
     from concurrent.futures import ThreadPoolExecutor
-    from experiments.real_traffic.packet_service import PacketService
+    from spectra.migration.packet_service import PacketService
     service=object.__new__(PacketService);service.solver=solver;service.observer=checker
     source=[[[0,2]],[[0,2],[1,2]]]
     packet=service.pack(source)
@@ -162,7 +162,7 @@ def test_packet_service_snapshots_mutable_inputs_and_rechecks(solver,checker):
     p.close()
 
 def test_packet_service_caps_and_iterator_failure(solver,checker):
-    from experiments.real_traffic.packet_service import PacketService
+    from spectra.migration.packet_service import PacketService
     service=object.__new__(PacketService);service.solver=solver;service.observer=checker
     with pytest.raises(MemoryError):service.prepare((),(0,),(1,),max_bytes=1)
     def broken():

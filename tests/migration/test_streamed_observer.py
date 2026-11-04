@@ -4,9 +4,9 @@ from itertools import combinations,product
 import os,random,struct
 from concurrent.futures import ThreadPoolExecutor
 import pytest
-from experiments.real_traffic.streamed_observer import StreamedObserverRuntime,build_streamed_observer
-from experiments.real_traffic.compact_migration import CompactMigrationRuntime,build_compact_migration
-from experiments.real_traffic.migration_session import MigrationVerifier,MigrationBatch
+from spectra.migration.streamed_observer import StreamedObserverRuntime,build_streamed_observer
+from spectra.migration.compact_migration import CompactMigrationRuntime,build_compact_migration
+from spectra.migration.migration_session import MigrationVerifier,MigrationBatch
 
 @pytest.fixture(scope='session', params=['bfs','tiled'])
 def observer(tmp_path_factory, request):
@@ -108,7 +108,7 @@ def test_lifecycle_parallel_and_linear_storage(observer,runtime):
     with observer.prepare(ee,aa,bb,max_bytes=4*1024**2) as p:assert p.info['payload_bytes']<20*n
 
 def test_checked_service_never_returns_an_unchecked_answer(observer,runtime):
-    from experiments.real_traffic.compact_service import CompactService
+    from spectra.migration.compact_service import CompactService
     service=object.__new__(CompactService);service.solver=runtime;service.observer=observer
     e,a,b,q,_=fixture(runtime)
     with service.prepare(e,a,b) as p:
@@ -209,7 +209,7 @@ def test_vacuous_edges_need_no_retained_edge_bank(observer):
 
 
 def test_new_checked_service_freezes_once_and_checks_fresh_outputs(observer,runtime):
-    from experiments.real_traffic.streamed_service import StreamedService
+    from spectra.migration.streamed_service import StreamedService
     service=object.__new__(StreamedService);service.solver=runtime;service.observer=observer
     e,a,b,q,_=fixture(runtime)
     with service.prepare(e,a,b) as p:

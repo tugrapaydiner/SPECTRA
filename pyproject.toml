@@ -48,6 +48,7 @@ include = ["spectra*"]
 [tool.setuptools.package-data]
 "spectra._native" = ["*.cpp", "ovo/*.cpp", "ovo/*.hpp", "ovo/*/*.cpp", "ovo/*/*.hpp"]
 "spectra.sat" = ["*.cpp"]
+"spectra.migration" = ["*.cpp"]
 
 [tool.pytest.ini_options]
 # Put the repository root on sys.path so the experiments package and scripts

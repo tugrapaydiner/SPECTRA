@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import threading
 import time
-from experiments.real_traffic.compact_migration import (CompactMigrationRuntime, CompactBatch,
+from .compact_migration import (CompactMigrationRuntime, CompactBatch,
                                                        build_compact_migration, DEFAULT_BYTES)
-from experiments.real_traffic.migration_observer import (MigrationObserverRuntime, OriginalAudit,
+from .migration_observer import (MigrationObserverRuntime, OriginalAudit,
                                                         build_migration_observer)
 
 @dataclass(frozen=True)

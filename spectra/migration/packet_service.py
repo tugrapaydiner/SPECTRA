@@ -9,11 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import time
-from experiments.real_traffic.compact_service import CheckedBatch, CheckedSession
-from experiments.real_traffic.packet_migration import (
+from .compact_service import CheckedBatch, CheckedSession
+from .packet_migration import (
     PacketMigrationRuntime, build_packet_migration, DEFAULT_BYTES,
 )
-from experiments.real_traffic.packet_observer import (
+from .packet_observer import (
     PacketObserverRuntime, build_packet_observer,
 )
 

@@ -1,24 +1,23 @@
-"""Exact migration with independently validated immutable request packets.
+"""Sparse two-plan migration; no quadratic reachability table.
 
-The solve algorithm is the prior sparse SCC-BFS/tiled engine. Full answer bytes
-are allocated once, filled privately, and never mutated after publication.
+Modes share one exact SCC index, output format and original-path proof contract.
 """
 from __future__ import annotations
 from dataclasses import dataclass
 import hashlib, importlib.util, json, os, platform, shutil, subprocess, sysconfig, tempfile, threading, time
 from pathlib import Path
-from experiments.real_traffic.migration_session import MigrationBatch
+from .migration_session import MigrationBatch
 SOURCE=Path(__file__).with_suffix('.cpp')
 DEFAULT_BYTES=512*1024**2
 MODES={'bfs':0,'tiled':1,'auto':2}
 
-def build_packet_migration(directory,*,compiler='g++',sanitize=False):
+def build_compact_migration(directory,*,compiler='g++',sanitize=False):
     if platform.system()!='Linux':raise NotImplementedError('Linux builder only')
     if type(sanitize) is not bool:raise TypeError('sanitize must be bool')
     cc=shutil.which(compiler)
     if cc is None:raise FileNotFoundError(compiler)
     dest=Path(directory).resolve();dest.mkdir(parents=True,exist_ok=True)
-    library=dest/('_spectra_packet_migration'+sysconfig.get_config_var('EXT_SUFFIX'))
+    library=dest/('_spectra_compact_migration'+sysconfig.get_config_var('EXT_SUFFIX'))
     receipt=dest/'build.json'
     if library.exists() or receipt.exists():raise FileExistsError('build outputs already exist')
     flags=['-std=c++17','-shared','-fPIC','-Wall','-Wextra','-Werror','-fno-fast-math','-ffp-contract=off']
@@ -35,7 +34,7 @@ def build_packet_migration(directory,*,compiler='g++',sanitize=False):
     return library
 
 @dataclass(frozen=True)
-class PacketBatch(MigrationBatch):
+class CompactBatch(MigrationBatch):
     mode: str
     dag_edge_visits: int
     proof_edge_visits: int
@@ -43,18 +42,15 @@ class PacketBatch(MigrationBatch):
     scratch_payload_bytes: int
     batch_admission_bound: int
 
-class PacketMigrationRuntime:
+class CompactMigrationRuntime:
     def __init__(self, library):
-        spec=importlib.util.spec_from_file_location('_spectra_packet_migration',Path(library).resolve())
+        spec=importlib.util.spec_from_file_location('_spectra_compact_migration',Path(library).resolve())
         if spec is None or spec.loader is None: raise ValueError('invalid trusted native library')
         self.module=importlib.util.module_from_spec(spec); spec.loader.exec_module(self.module)
-    def pack_frozen(self,queries,*,max_bytes=DEFAULT_BYTES):
-        """Pack raw original-address uint64 masks, without formula-specific reduction."""
-        return self.module.pack(queries,max_bytes)
     def prepare(self, edges, plan_a, plan_b, *, max_bytes=DEFAULT_BYTES, sparsify=True):
-        return PreparedPacketMigration(self.module,tuple(map(tuple,edges)),tuple(plan_a),tuple(plan_b),max_bytes,sparsify)
+        return PreparedCompactMigration(self.module,tuple(map(tuple,edges)),tuple(plan_a),tuple(plan_b),max_bytes,sparsify)
 
-class PreparedPacketMigration:
+class PreparedCompactMigration:
     def __init__(self,module,edges,a,b,cap,sparse):
         self._module=module; self._lock=threading.RLock()
         self._handle=module.create(edges,a,b,cap,sparse)
@@ -71,7 +67,7 @@ class PreparedPacketMigration:
             if self._handle is None: raise RuntimeError('migration session is closed')
             s,l,k,offsets,path,chosen,edges,proof_edges,tiles,scratch,bound=self._module.solve(self._handle,qs,MODES[mode],max_bytes)
         # A tile has no meaningful individual query solve time. Do not invent one.
-        return PacketBatch(s,l,k,offsets,path,(),(),time.perf_counter_ns()-begin,
+        return CompactBatch(s,l,k,offsets,path,(),(),time.perf_counter_ns()-begin,
                             ('bfs','tiled')[chosen],edges,proof_edges,tiles,scratch,bound)
     def solve_frozen(self, queries, *, mode='auto', max_bytes=DEFAULT_BYTES):
         if type(mode) is not str or mode not in MODES: raise ValueError('unknown execution mode')
@@ -82,17 +78,8 @@ class PreparedPacketMigration:
             if self._handle is None: raise RuntimeError('migration session is closed')
             s,l,k,offsets,path,chosen,edges,proof_edges,tiles,scratch,bound=self._module.solve(self._handle,qs,MODES[mode],max_bytes)
         # A tile has no meaningful individual query solve time. Do not invent one.
-        return PacketBatch(s,l,k,offsets,path,(),(),time.perf_counter_ns()-begin,
+        return CompactBatch(s,l,k,offsets,path,(),(),time.perf_counter_ns()-begin,
                             ('bfs','tiled')[chosen],edges,proof_edges,tiles,scratch,bound)
-    def solve_packet(self,packet,*,mode='auto',max_bytes=DEFAULT_BYTES):
-        if type(packet) is not bytes:raise ValueError('packet must be exact immutable bytes')
-        if type(mode) is not str or mode not in MODES:raise ValueError('unknown execution mode')
-        begin=time.perf_counter_ns()
-        with self._lock:
-            if self._handle is None:raise RuntimeError('migration session is closed')
-            s,l,k,offsets,path,chosen,edges,proof_edges,tiles,scratch,bound=self._module.solve(self._handle,packet,MODES[mode],max_bytes)
-        return PacketBatch(s,l,k,offsets,path,(),(),time.perf_counter_ns()-begin,
-                           ('bfs','tiled')[chosen],edges,proof_edges,tiles,scratch,bound)
     def close(self):
         with self._lock:self._handle=None
     def __enter__(self):

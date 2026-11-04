@@ -7,17 +7,17 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from experiments.real_traffic.plan import align_target_plan, color_graph
-from experiments.real_traffic.certificate import (
+from benchmarks.traffic.plan import align_target_plan, color_graph
+from benchmarks.traffic.certificate import (
     PreparedContradictionChecker,
     solve_with_proof,
 )
-from experiments.real_traffic.observer import (
+from benchmarks.traffic.observer import (
     masks_from_plans,
     verify_coloring_edges,
     verify_labels,
 )
-from experiments.real_traffic.sources import (
+from benchmarks.traffic.sources import (
     MATRIX_WIDTH,
     SNAPSHOTS_PER_WEEK,
     ConflictGraph,

@@ -1,22 +1,22 @@
 """Trace-driven repeated support research."""
 
-from experiments.real_traffic.case import TrafficCase, build_case, build_queries
-from experiments.real_traffic.certificate import (
+from benchmarks.traffic.case import TrafficCase, build_case, build_queries
+from benchmarks.traffic.certificate import (
     ExactOutcome,
     InvalidContradiction,
     PreparedContradictionChecker,
     solve_with_proof,
     verify_contradiction,
 )
-from experiments.real_traffic.plan import align_target_plan, color_graph
-from experiments.real_traffic.observer import (
+from benchmarks.traffic.plan import align_target_plan, color_graph
+from benchmarks.traffic.observer import (
     binary_clauses,
     masks_from_plans,
     solve_binary,
     verify_coloring_edges,
     verify_labels,
 )
-from experiments.real_traffic.sources import (
+from benchmarks.traffic.sources import (
     FIELDS_PER_DEMAND,
     MATRIX_WIDTH,
     SNAPSHOTS_PER_WEEK,

@@ -5,7 +5,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Sequence
 
-from experiments.real_traffic.observer import (
+from benchmarks.traffic.observer import (
     binary_clauses,
     restrictions_to_units,
     solve_binary,

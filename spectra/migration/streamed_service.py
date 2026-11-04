@@ -8,11 +8,11 @@ checking. No certificate or answer cache is supplied to either implementation.
 from __future__ import annotations
 from pathlib import Path
 import time
-from experiments.real_traffic.compact_migration import (
+from .compact_migration import (
     CompactMigrationRuntime, build_compact_migration, DEFAULT_BYTES,
 )
-from experiments.real_traffic.compact_service import CheckedBatch, CheckedSession
-from experiments.real_traffic.streamed_observer import StreamedObserverRuntime, build_streamed_observer
+from .compact_service import CheckedBatch, CheckedSession
+from .streamed_observer import StreamedObserverRuntime, build_streamed_observer
 
 class StreamedService:
     def __init__(self,solver_library,observer_library):

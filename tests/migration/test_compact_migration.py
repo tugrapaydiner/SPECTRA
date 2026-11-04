@@ -6,8 +6,8 @@ import os
 import random
 import struct
 import pytest
-from experiments.real_traffic.compact_migration import CompactMigrationRuntime, build_compact_migration
-from experiments.real_traffic.migration_session import MigrationRuntime, build_migration_session, MigrationVerifier, InvalidMigrationProof
+from spectra.migration.compact_migration import CompactMigrationRuntime, build_compact_migration
+from spectra.migration.migration_session import MigrationRuntime, build_migration_session, MigrationVerifier, InvalidMigrationProof
 
 @pytest.fixture(scope='session')
 def compact(tmp_path_factory):

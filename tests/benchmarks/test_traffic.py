@@ -8,7 +8,7 @@ import random
 
 import pytest
 
-from experiments.real_traffic import (
+from benchmarks.traffic import (
     ConflictGraph,
     Demand,
     InvalidContradiction,

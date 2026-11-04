@@ -1,17 +1,25 @@
 """Independent original-input observer, including altered proofs and minima."""
 from dataclasses import replace
 from itertools import combinations,product
-import os,struct
+import os,random,struct
 from concurrent.futures import ThreadPoolExecutor
 import pytest
-from experiments.real_traffic.migration_observer import MigrationObserverRuntime,build_migration_observer
-from experiments.real_traffic.compact_migration import CompactMigrationRuntime,build_compact_migration
-from experiments.real_traffic.migration_session import MigrationVerifier,MigrationBatch
+from spectra.migration.packet_observer import PacketObserverRuntime,build_packet_observer
+from spectra.migration.compact_migration import CompactMigrationRuntime,build_compact_migration
+from spectra.migration.migration_session import MigrationVerifier,MigrationBatch
 
-@pytest.fixture(scope='session')
-def observer(tmp_path_factory):
-    p=os.environ.get('SPECTRA_OBSERVER_LIBRARY') or build_migration_observer(tmp_path_factory.mktemp('original-observer'))
-    return MigrationObserverRuntime(p)
+@pytest.fixture(scope='session', params=['direct','rows'])
+def observer(tmp_path_factory, request):
+    p=os.environ.get('SPECTRA_PACKET_OBSERVER_LIBRARY') or build_packet_observer(tmp_path_factory.mktemp('original-observer'))
+    runtime=PacketObserverRuntime(p)
+    original=runtime.prepare
+    def prepare(*args,**kwargs):
+        from functools import partial
+        obj=original(*args,**kwargs)
+        obj.verify=partial(obj.verify, mode=request.param)
+        return obj
+    runtime.prepare=prepare
+    return runtime
 
 @pytest.fixture(scope='session')
 def runtime(tmp_path_factory):
@@ -100,7 +108,7 @@ def test_lifecycle_parallel_and_linear_storage(observer,runtime):
     with observer.prepare(ee,aa,bb,max_bytes=4*1024**2) as p:assert p.info['payload_bytes']<20*n
 
 def test_checked_service_never_returns_an_unchecked_answer(observer,runtime):
-    from experiments.real_traffic.compact_service import CompactService
+    from spectra.migration.compact_service import CompactService
     service=object.__new__(CompactService);service.solver=runtime;service.observer=observer
     e,a,b,q,_=fixture(runtime)
     with service.prepare(e,a,b) as p:
@@ -122,3 +130,102 @@ def test_dense_bit_checker_rejects_each_lane_of_a_false_colouring(observer,chang
         changed=bytearray(labels);changed[changed_lane*n]=b[0]
         with pytest.raises(ValueError,match='original conflict'):
             check.verify(q,replace(good,labels=bytes(changed)),minimal=False)
+
+
+def test_canonical_bank_is_reused_but_mutable_rows_are_snapshotted(observer):
+    q=(((0,1),(2,8)),(),((1,2),))
+    assert observer.freeze_queries(q) is q
+    mutable=[[[0,1],[2,8]],[],[[1,2]]]
+    frozen=observer.freeze_queries(mutable)
+    assert frozen==q
+    mutable[0][0][1]=7
+    assert frozen==q
+    assert observer.freeze_queries((iter(row) for row in q))==q
+    class TupleChild(tuple):pass
+    frozen=observer.freeze_queries(TupleChild((TupleChild((TupleChild((0,1)),)),)))
+    assert frozen==(((0,1),),)
+    assert type(frozen) is type(frozen[0]) is type(frozen[0][0]) is tuple
+
+
+def test_freezing_is_bounded_and_propagates_iterator_errors(observer):
+    with pytest.raises(MemoryError):observer.freeze_queries((() for _ in range(5)),max_queries=4)
+    with pytest.raises(MemoryError):observer.freeze_queries((((0,1),(0,1)),),max_pins=1)
+    with pytest.raises(MemoryError):observer.freeze_queries([[[0,1,2]]])
+    for q in (((),), [[[True,1]]], [[[0,False]]], [[[0,1.5]]]):
+        if q==((),):
+            assert observer.freeze_queries(q)==q
+        else:
+            with pytest.raises(ValueError):observer.freeze_queries(q)
+    def broken():
+        yield ()
+        raise RuntimeError('input iterator failed')
+    with pytest.raises(RuntimeError,match='input iterator failed'):observer.freeze_queries(broken())
+    with pytest.raises(TypeError):observer.freeze_queries([None])
+    assert observer.freeze_queries((),max_queries=0,max_pins=0)==()
+
+
+@pytest.mark.parametrize('count',[1,63,64,65,128,129])
+def test_unseeded_cycles_are_not_minimum_solutions(observer,count):
+    a=(0,1);b=(1,0);e=((0,1),);q=((),)*count
+    r=MigrationBatch(bytes(count),bytes(b)*count,bytes(count),(0,)*(count+1),b'',(),(),0)
+    with observer.prepare(e,a,b) as check:
+        assert check.verify(q,r,minimal=False).sat==count
+        with pytest.raises(ValueError,match='minimum'):check.verify(q,r,minimal=True)
+
+
+def test_all_original_edge_states_not_just_solver_answers(observer):
+    rng=random.Random(72091)
+    states=0
+    for _ in range(100):
+        n=rng.randrange(2,8)
+        a=tuple(rng.randrange(5) for _ in range(n));b=tuple(rng.randrange(5) for _ in range(n))
+        e=tuple((u,v) for u,v in combinations(range(n),2) if a[u]!=a[v] and b[u]!=b[v] and rng.randrange(2))
+        # Enumerate proper and deliberately improper submitted assignments.
+        with observer.prepare(e,a,b) as ck:
+            for bits in product((0,1),repeat=n):
+                labels=bytes(b[v] if bits[v] else a[v] for v in range(n))
+                r=MigrationBatch(b'\0',labels,b'\0',(0,0),b'',(),(),0)
+                valid=all(labels[u]!=labels[v] for u,v in e)
+                if valid:assert ck.verify(((),),r,minimal=False).sat==1
+                else:
+                    with pytest.raises(ValueError,match='original conflict'):ck.verify(((),),r,minimal=False)
+                states+=1
+    assert states>3000
+
+
+def test_vacuous_edges_need_no_retained_edge_bank(observer):
+    # A and B use disjoint colour ranges; every A/B combination is valid.
+    n=16;a=tuple(range(n));b=tuple(v+16 for v in range(n))
+    e=tuple(combinations(range(n),2))
+    with observer.prepare(e,a,b) as ck:
+        assert ck.info['original_edges']==120
+        assert ck.info['original_dependency_arcs']==0
+        assert ck.info['payload_bytes']==6*n+4
+        r=MigrationBatch(b'\0',bytes(b),b'\0',(0,0),b'',(),(),0)
+        assert ck.verify(((),),r,minimal=False).sat==1
+        with pytest.raises(ValueError,match='minimum'):ck.verify(((),),r)
+    # Improper original plans are still rejected even if an edge would be pruned.
+    with pytest.raises(ValueError):observer.prepare(((0,1),),(0,0),(1,2))
+
+
+def test_new_checked_service_freezes_once_and_checks_fresh_outputs(observer,runtime):
+    from spectra.migration.streamed_service import StreamedService
+    service=object.__new__(StreamedService);service.solver=runtime;service.observer=observer
+    e,a,b,q,_=fixture(runtime)
+    with service.prepare(e,a,b) as p:
+        r=p.solve([list(map(list,row)) for row in q],mode='tiled')
+        assert r.audit.sat==1 and r.audit.unsat==2 and r.audit.minimum_checked
+        assert p.info['combined_index_payload_bytes']<1000
+    with pytest.raises(RuntimeError):p.solve(q)
+
+
+def test_frozen_entry_points_do_not_skip_native_validation(observer,runtime):
+    with runtime.prepare(((0,1),),(0,1),(1,0)) as p,observer.prepare(((0,1),),(0,1),(1,0)) as ck:
+        r=p.solve_frozen(((),))
+        with pytest.raises(ValueError):p.solve_frozen([[]])
+        with pytest.raises(ValueError):p.solve_frozen(([(0,1)],))
+        with pytest.raises(ValueError):p.solve_frozen((((False,1),),))
+        with pytest.raises(ValueError):p.solve_frozen((((0,1<<64),),))
+        with pytest.raises(ValueError):ck.verify_frozen([[]],r)
+        with pytest.raises(ValueError):ck.verify_frozen(([(0,1)],),r)
+        with pytest.raises(ValueError):ck.verify_frozen((((0,True),),),r)
