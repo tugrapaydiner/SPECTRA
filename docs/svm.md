@@ -25,9 +25,10 @@ from spectra.svm_shared import PreparedModel
 library = build_runtime("build/svm")                 # explicit C++17 build
 model = PreparedModel("model.srt", library, input_dtype="float64")
 with model.session() as worker:
-    result = worker.predict_with_certificate([0.0] * worker.features)
+    features = [0.0] * worker.features
+    result = worker.predict_with_certificate(features)
     print(result.label, result.class_index)
-    labels = worker.predict_many(rows)
+    labels = worker.predict_many([features])
 model.close()
 ```
 
@@ -71,9 +72,14 @@ is validated before any output is written.
 ```python
 from spectra.svm_receipt import create_receipt, verify_receipt
 
-receipt = create_receipt(worker, features, schedule="binary_stream")
+# Reuse the library built above; create the receipt while its worker is open.
+with PreparedModel("model.srt", library, input_dtype="float64") as model:
+    with model.session() as worker:
+        features = [0.0] * worker.features
+        receipt = create_receipt(worker, features, schedule="binary_stream")
+
 check = verify_receipt("model.srt", receipt, expected_input=features,
-                       input_dtype="float64")
+                      input_dtype="float64")
 assert check["verified"]
 ```
 
@@ -93,13 +99,12 @@ export_pipeline(column_transformer, svc, "deployment")
 ```
 
 ```python
-from spectra.svm import build_runtime
 from spectra.svm_pipeline import PreparedPipeline
 from spectra.svm_preprocess_native import build_preprocessor
 
-svm = build_runtime("build/svm")
+# Reuse the SVM library built above.
 pre = build_preprocessor("build/preprocess")          # optional native preprocessing
-with PreparedPipeline("deployment", svm, preprocessor_library=pre) as model:
+with PreparedPipeline("deployment", library, preprocessor_library=pre) as model:
     with model.session() as worker:
         labels = worker.predict_fused(raw_rows, columns=model.columns)
 ```
@@ -117,9 +122,13 @@ order. Without the native preprocessor, use `predict_many`; with it,
 
 ```bash
 spectra svm run deployment --library build/svm/libspectra_svm.so \
-    --preprocessor build/preprocess/_spectra_preprocess.so \
+    --preprocessor build/preprocess/_spectra_preprocess*.so \
     --input rows.jsonl --output predictions.jsonl --batch-rows 128
 ```
+
+The command above uses Linux library names; the shell expands the preprocessor's
+Python-specific extension suffix. On Windows, pass the `.dll` and `.pyd` paths
+returned by the builders.
 
 Each input line is a JSON array in the plan's column order (numbers, strings,
 `null` for missing numerics). Input is processed in bounded chunks and the output

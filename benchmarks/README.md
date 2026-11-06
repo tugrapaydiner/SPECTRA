@@ -23,8 +23,10 @@ the certified critical-clique quotient used to derive colour lists.
 
 ## Exact queries against independent baselines
 
-`benchmarks/exact` holds two baselines that share no code with `spectra.exact` and
-emit the same `SCQ2` answer format, so every answer is verified identically:
+`benchmarks/exact` holds two independent solver implementations with shared
+input/output and verification contracts. Their benchmark harnesses use
+`spectra.exact` packet and verification helpers; both baselines emit the same
+`SCQ2` answer format, so every answer is verified identically:
 
 - `direct_twosat`: an independent native 2-SAT service with three strategies;
 - `cadical_exact`: an adapter around the official CaDiCaL 3.0.1 library

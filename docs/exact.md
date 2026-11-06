@@ -125,9 +125,11 @@ colouring and checked against the original graph.
 ```python
 from spectra.cnf.quotient_query import QuotientRuntime, build_quotient_runtime
 
-runtime = QuotientRuntime(build_quotient_runtime("build/quotient"))
-prepared = runtime.prepare(n=4, k=3, edges=((0, 1), (1, 2), (2, 3)),
-                           masks=(0b011, 0b110, 0b101, 0b011), mode="scc")
+quotient_runtime = QuotientRuntime(build_quotient_runtime("build/quotient"))
+prepared = quotient_runtime.prepare(
+    n=4, k=3, edges=((0, 1), (1, 2), (2, 3)),
+    masks=(0b011, 0b110, 0b101, 0b011), mode="scc",
+)
 try:
     result = prepared.solve(restrictions=((0, 0b001), (3, 0b010)), max_work=1_000_000)
     if result.status == "SAT_VERIFIED":

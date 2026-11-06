@@ -19,6 +19,7 @@ from spectra.exact_selftest import AUDIT_SCHEMA, SCHEMA, verify_exact_selftest
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
+_MISSING_SOABI = object()
 
 
 def _compiler_available() -> bool:
@@ -43,6 +44,56 @@ def _refresh_manifest(root: Path) -> None:
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+@pytest.fixture(scope="module")
+def selftest_bundle(tmp_path_factory):
+    if sys.platform not in ("linux", "win32") or not _compiler_available():
+        pytest.skip("supported native compiler is unavailable")
+    root = tmp_path_factory.mktemp("exact-audit") / "selftest"
+    generated = _run("exact", "selftest", root)
+    assert generated.returncode == 0, generated.stderr
+    return root
+
+
+@pytest.mark.parametrize(("soabi", "error"), [
+    pytest.param(None, None, id="unset-soabi"),
+    pytest.param("cp311-win_amd64", None, id="string-soabi"),
+    pytest.param(False, "receipt soabi differs", id="boolean-soabi"),
+    pytest.param(0, "receipt soabi differs", id="integer-soabi"),
+    pytest.param([], "receipt soabi differs", id="array-soabi"),
+    pytest.param({}, "receipt soabi differs", id="object-soabi"),
+    pytest.param(_MISSING_SOABI, "build receipt fields differ", id="missing-soabi"),
+])
+def test_exact_audit_checks_nullable_soabi(tmp_path, selftest_bundle, soabi, error):
+    root = tmp_path / "selftest"
+    shutil.copytree(selftest_bundle, root)
+    report = json.loads((root / "selftest.json").read_text(encoding="utf-8"))
+    receipt_path = root / report["build"]["receipt"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    if soabi is _MISSING_SOABI:
+        del receipt["soabi"]
+    else:
+        receipt["soabi"] = soabi
+    receipt_path.write_text(
+        json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8",
+    )
+    _refresh_manifest(root)
+
+    # Rehash the modified metadata so this exercises the receipt schema, not
+    # merely the evidence hash guard. Audit must still run without native code.
+    audited = _run("exact", "audit", root)
+    if error is not None:
+        assert audited.returncode == 2, audited.stderr
+        assert error in audited.stderr
+    else:
+        assert audited.returncode == 0, audited.stderr
+        result = json.loads(audited.stdout)
+        assert result["verified"] is True
+        assert (result["queries"], result["sat"], result["unsat"]) == (13, 10, 3)
+        assert result["proof_kinds"] == [1, 2, 3]
+        assert result["native_execution"] is False
+        assert result["native_module_loaded"] is False
 
 
 def test_audit_refuses_an_already_loaded_native_module(tmp_path, monkeypatch):

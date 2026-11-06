@@ -446,10 +446,17 @@ def verify_exact_selftest(
     )
     for field in (
         "compiler", "library_name", "platform", "python_executable",
-        "python_implementation", "python_version", "sanitizer", "soabi",
+        "python_implementation", "python_version", "sanitizer",
         "source_sha256", "library_sha256", "stderr", "stdout",
     ):
         _require(type(receipt[field]) is str, f"receipt {field} differs")
+    # sysconfig may leave SOABI undefined (for example on Windows Python 3.11).
+    # This audit reads metadata without loading the library; native loading
+    # still requires the receipt to match the running interpreter's SOABI.
+    _require(
+        receipt["soabi"] is None or type(receipt["soabi"]) is str,
+        "receipt soabi differs",
+    )
     _require(
         type(receipt["elapsed_ns"]) is int and receipt["elapsed_ns"] >= 0,
         "receipt elapsed time differs",

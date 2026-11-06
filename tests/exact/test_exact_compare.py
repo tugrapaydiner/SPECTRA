@@ -70,6 +70,11 @@ def test_cli_exact_compare_accepts_environment_changes_but_rejects_semantic_drif
         second_receipt_path.read_text(encoding="utf-8")
     )
     second_receipt["platform"] = "different-test-platform"
+    # Older Windows interpreters record null SOABI. Portable proof comparison
+    # accepts that metadata difference without loading either retained library.
+    second_receipt["soabi"] = (
+        "cp311-win_amd64" if second_receipt["soabi"] is None else None
+    )
     second_receipt_path.write_text(
         json.dumps(second_receipt, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

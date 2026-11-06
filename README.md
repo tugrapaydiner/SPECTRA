@@ -1,10 +1,10 @@
 # SPECTRA
 
-**Certified repeated-query solving on CPUs.** SPECTRA compiles a fixed constraint
-problem once and then answers many restricted queries against it, returning a
-complete witness or an independently checkable proof for every answer. Nothing is
-trusted on the solver's word: SAT answers are checked against the original input,
-and UNSAT answers carry proofs that a separate, standard-library verifier replays.
+**Certified repeated-query solving on CPUs.** SPECTRA's exact runtime compiles a
+fixed constraint problem once and then answers many restricted queries against
+it. Each completed exact query returns a complete witness or an independently
+checkable contradiction proof. SAT answers are checked against the original
+input, and UNSAT proofs can be replayed by a separate standard-library verifier.
 
 ```bash
 pip install .
@@ -77,15 +77,19 @@ are synthetic.
 
 Under Python 3.11 the warm query loop is unchanged (15% of MiniCard's time), but
 slower JSON decoding and validation of the multi-megabyte inputs dominates the
-complete-session cost. The original source tree, inputs, outputs and analysis are
-preserved at commit
-[`0af6fda`](https://github.com/tugrapaydiner/SPECTRA/tree/0af6fda36c60a110584e7db836ee5724e530fbd4);
-[`benchmarks/`](benchmarks/README.md) contains the workload generator.
+complete-session cost. The frozen benchmark source is preserved at commit
+[`0af6fda`](https://github.com/tugrapaydiner/SPECTRA/tree/0af6fda36c60a110584e7db836ee5724e530fbd4).
+The original results, run identifier and output archive's SHA-256 are recorded in
+[the evidence and replication issue](https://github.com/tugrapaydiner/SPECTRA/issues/55).
+[`benchmarks/`](benchmarks/README.md) contains the workload generator. These
+measurements and automated reruns were produced by the project; independent
+replication remains open in that issue.
 
 **Scope.** These are results on a specific repeated-query workload. They are not a
 claim that SPECTRA outperforms SAT solvers or graph-colouring systems in general.
-The general-CNF solver in `spectra.sat` is correct by construction-and-check but is
-not competitive with state-of-the-art SAT solvers on hard instances.
+The native general-CNF solver in `spectra.sat` checks returned SAT witnesses and
+UNSAT proofs, and returns `UNKNOWN` when its budget is exhausted. It is not
+competitive with state-of-the-art SAT solvers on hard instances.
 
 ## Documentation
 
@@ -102,8 +106,8 @@ not competitive with state-of-the-art SAT solvers on hard instances.
 
 Python 3.10–3.13. Every native component builds on Linux x86-64 and ARM64 with
 GCC. `spectra.exact`, the `spectra.sat` CDCL solver and `spectra.svm` also build on
-Windows x64 with MSVC. Building requires a C++17 compiler and the CPython
-development headers; nothing is downloaded.
+Windows x64 with MSVC. Building requires a C++17 compiler; CPython extension
+components also require the Python development headers. Nothing is downloaded.
 
 ## License
 

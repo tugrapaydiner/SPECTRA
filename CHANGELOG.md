@@ -34,6 +34,18 @@
 - `pip install ".[test]"` followed by `pytest` runs the whole suite; optional
   external tools are skipped with a reason.
 
+### Fixed
+
+- Exact self-test auditing accepts a null SOABI when CPython does not define one
+  (including Windows Python 3.11), while rejecting malformed ABI metadata and
+  preserving the native loader's interpreter compatibility checks.
+- Installed-wheel checks include native CDCL execution on Linux and Windows;
+  cross-platform exact self-test comparison includes Windows Python 3.11 and
+  retains its comparison report.
+- Runnable guide examples preserve the exact runtime for exam repair, create SVM
+  receipts with an open worker, and supply the correct streaming CLI engine and
+  native preprocessing library path.
+
 ### Removed
 
 - The PyTorch models, training, evaluation and deployment code, and the

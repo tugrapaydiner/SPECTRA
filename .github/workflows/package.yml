@@ -66,6 +66,7 @@ jobs:
           - {os: ubuntu-24.04, python: '3.10', bundle: linux-py310}
           - {os: ubuntu-24.04, python: '3.13', bundle: linux-py313}
           - {os: ubuntu-24.04-arm, python: '3.13', bundle: linux-arm-py313}
+          - {os: windows-2022, python: '3.11', bundle: windows-py311}
           - {os: windows-2022, python: '3.13', bundle: windows-py313}
     defaults:
       run:
@@ -97,7 +98,6 @@ jobs:
           .install/venv/Scripts/python.exe -m pip install --no-deps dist/*.whl
           echo "VENV_PYTHON=.install/venv/Scripts/python.exe" >> "$GITHUB_ENV"
       - name: CNF solvers
-        if: runner.os == 'Linux'
         run: '"$VENV_PYTHON" -I scripts/check_cnf_installation.py'
       - name: Exact queries and exam repair
         run: |
@@ -158,6 +158,11 @@ jobs:
           python - <<'PY'
           import json
           result = json.load(open('comparison.json'))
-          assert result['verified'] is True and result['bundles'] == 4, result
+          assert result['verified'] is True and result['bundles'] == 5, result
           assert result['native_execution'] is False and result['native_module_loaded'] is False
           PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: exact-selftest-comparison
+          path: comparison.json
+          if-no-files-found: error

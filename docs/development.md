@@ -50,8 +50,10 @@ cross-checks; and GCC/Clang builds of the CDCL solver.
 `package.yml` builds the sdist and wheel once, checks that every shipped file
 matches the checkout, installs the wheel into clean environments on Linux, ARM64
 and Windows, exercises the installed APIs from outside the checkout, replays the
-SVM fixture corpus, and requires `spectra exact selftest` bundles from all
-platforms to agree.
+SVM fixture corpus, and builds and exercises the installed native CDCL solver on
+Linux and Windows. It requires `spectra exact selftest` bundles from all five
+environments, including Windows Python 3.11, to agree and retains the comparison
+report as a CI artifact.
 
 All third-party actions are pinned to full commit SHAs;
 `scripts/check_release_readiness.py` enforces this.
@@ -59,11 +61,16 @@ All third-party actions are pinned to full commit SHAs;
 ## Native code conventions
 
 - Importing a module never compiles. Each component exposes an explicit
-  `build_*` function that writes the library and a `build.json` receipt (source
-  hash, compiler, Python ABI, binary hash) into a fresh directory.
-- Runtimes verify the receipt before loading the library.
-- Every answer is checked before it is returned: SAT witnesses against the original
-  input, UNSAT answers by a separately implemented proof checker.
+  `build_*` function that writes the library and a `build.json` receipt with
+  source and binary hashes and the compiler command into a fresh directory.
+  CPython extension receipts also record interpreter compatibility metadata.
+- The exact runtime and native CDCL solver verify their build receipts before
+  loading. Other native loaders accept a trusted library path; receipt checking
+  is component-specific.
+- The exact runtime and native CDCL solver independently check completed SAT and
+  UNSAT answers. The quotient runtime checks returned colourings but emits no
+  UNSAT proof. SVM voting certificates check the winner implied by disclosed pair
+  outcomes; decision receipts also replay those outcomes against the model.
 
 ## Releases
 

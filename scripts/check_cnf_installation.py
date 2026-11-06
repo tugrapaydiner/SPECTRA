@@ -8,6 +8,9 @@ satisfy an import, for example after ``check_current_installation.py``::
 Every two-variable formula over nine candidate clauses (512 formulas) is solved
 by the focused local search and by DPLL and compared with a truth table; the
 focused backend is also driven through the installed ``spectra`` CLI.
+The installed native CDCL source is compiled in a child process and both public
+solver paths are checked for SAT, UNSAT, and UNKNOWN. A separate child replays
+the retained original-CNF proof after the native build has been removed.
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import itertools
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -43,10 +47,16 @@ def all_formulas():
 def check_installed_origin() -> None:
     import spectra.cnf.dpll
     import spectra.cnf.focused
+    import spectra.sat.binary_core
+    import spectra.sat.native_cdcl
     prefix = Path(sys.prefix).resolve()
-    for module in (spectra.cnf.dpll, spectra.cnf.focused):
+    for module in (spectra.cnf.dpll, spectra.cnf.focused,
+                   spectra.sat.binary_core, spectra.sat.native_cdcl):
         require(Path(module.__file__).resolve().is_relative_to(prefix),
                 f"{module.__name__} must come from the installed environment")
+    source = spectra.sat.native_cdcl.SOURCE.resolve()
+    require(source.is_relative_to(prefix) and source.is_file(),
+            "installed wheel must include native CDCL source")
     for dependency in OPTIONAL_DEPENDENCIES:
         require(importlib.util.find_spec(dependency) is None,
                 f"unexpected dependency: {dependency}")
@@ -101,18 +111,105 @@ def check_cli() -> int:
     return len(commands)
 
 
+def check_native() -> dict:
+    def isolated(code: str) -> dict:
+        call = subprocess.run([sys.executable, "-I", "-c", code],
+                              text=True, capture_output=True, timeout=360)
+        require(call.returncode == 0,
+                f"installed native check failed:\n{call.stdout}\n{call.stderr}")
+        return json.loads(call.stdout)
+
+    # The child owns the DLL lifetime, so cleanup also works on Windows.
+    report = isolated('''
+from dataclasses import asdict
+from itertools import product
+import json
+from pathlib import Path
+from spectra.sat.binary_core import model_satisfies
+from spectra.sat.native_cdcl import (
+    NativeCDCLRuntime, build_native_cdcl, solve_cnf_native, solve_general_native,
+    verify_direct_native_result, verify_native_result,
+)
+
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+runtime = NativeCDCLRuntime(build_native_cdcl("native-cdcl"))
+sat_clauses = ((1, -2), (-1, 2), (2, 3, 4), (-3, 4), (-4, 5, 6))
+unsat_clauses = tuple(tuple(sign * variable for variable, sign in enumerate(signs, 1))
+                      for signs in product((-1, 1), repeat=3))
+report = {}
+for name, solve, verify in (
+    ("direct", solve_cnf_native, verify_direct_native_result),
+    ("binary_core", solve_general_native, verify_native_result),
+):
+    sat = solve(runtime, 6, sat_clauses, max_conflicts=64, max_learned_literals=1024)
+    require(sat.status == "SAT_VERIFIED" and sat.reason == "model", name + " SAT failed")
+    require(model_satisfies(6, sat_clauses, sat.model) and verify(6, sat_clauses, sat),
+            name + " original-CNF model replay failed")
+    unsat = solve(runtime, 3, unsat_clauses, max_conflicts=64, max_learned_literals=1024)
+    require(unsat.status == "UNSAT_VERIFIED" and unsat.reason == "drup",
+            name + " UNSAT failed")
+    require(unsat.proof is not None and len(unsat.proof.additions) > 1
+            and unsat.proof.additions[-1] == () and verify(3, unsat_clauses, unsat),
+            name + " nontrivial proof replay failed")
+    unknown = solve(runtime, 3, unsat_clauses, max_conflicts=0, max_learned_literals=1024)
+    require(unknown.status == "UNKNOWN" and unknown.reason == "conflict_budget"
+            and unknown.model == () and unknown.proof is None
+            and verify(3, unsat_clauses, unknown), name + " UNKNOWN budget check failed")
+    report[name] = {"sat": 1, "unsat": 1, "unknown": 1,
+                    "proof_clauses": unsat.proof_clauses}
+    if name == "direct":
+        Path("native-proof.json").write_text(json.dumps({
+            "nvars": 3, "clauses": unsat_clauses, "proof": asdict(unsat.proof),
+        }), encoding="utf-8")
+print(json.dumps(report))
+''')
+    shutil.rmtree("native-cdcl")
+    report["offline_replay"] = isolated('''
+import ctypes
+import json
+from pathlib import Path
+import sys
+
+def reject_native_load(event, arguments):
+    if event == "ctypes.dlopen":
+        raise RuntimeError("offline proof replay attempted to load native code")
+
+sys.addaudithook(reject_native_load)
+from spectra.sat.native_cdcl import DRUPProof, verify_drup_proof
+
+record = json.loads(Path("native-proof.json").read_text(encoding="utf-8"))
+proof = DRUPProof(record["proof"]["schema"],
+                  tuple(tuple(clause) for clause in record["proof"]["additions"]))
+if not verify_drup_proof(record["nvars"], record["clauses"], proof):
+    raise RuntimeError("standalone original-CNF proof replay failed")
+if verify_drup_proof(record["nvars"], record["clauses"], DRUPProof(proof.schema, ((),))):
+    raise RuntimeError("standalone replay accepted an invalid proof")
+print(json.dumps({"verified": True, "rejected_invalid_proof": True,
+                  "native_execution": False}))
+''')
+    return report
+
+
 def main() -> None:
+    previous = Path.cwd()
     with tempfile.TemporaryDirectory(prefix="spectra-cnf-installed-") as temporary:
-        os.chdir(temporary)
-        check_installed_origin()
-        report = {
-            "status": "PASS",
-            "focused_formulas": check_focused(),
-            "dpll_formulas": check_dpll(),
-            "cli_checks": check_cli(),
-            "optional_dependencies": False,
-            "scope": "actual installed wheel; isolated Python; outside checkout",
-        }
+        try:
+            os.chdir(temporary)
+            check_installed_origin()
+            report = {
+                "status": "PASS",
+                "focused_formulas": check_focused(),
+                "dpll_formulas": check_dpll(),
+                "cli_checks": check_cli(),
+                "native_cdcl": check_native(),
+                "optional_dependencies": False,
+                "scope": "actual installed wheel; isolated Python; outside checkout",
+            }
+        finally:
+            os.chdir(previous)
     print(json.dumps(report, indent=2))
 
 

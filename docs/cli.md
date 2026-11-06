@@ -12,7 +12,7 @@ spectra exact verify request.sbc1 answer.scq2
 spectra exact selftest bundle/ && spectra exact audit bundle/
 spectra exact compare linux-bundle/ windows-bundle/
 spectra evidence run/ manifest.json
-spectra svm run deployment --library build/svm/libspectra_svm.so --input rows.jsonl --output out.jsonl
+spectra svm run deployment --library build/svm/libspectra_svm.so --engine two_stage --input rows.jsonl --output out.jsonl
 python -m spectra.sat.admission formula.cnf.gz
 ```
 
