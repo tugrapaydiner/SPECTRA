@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 from fractions import Fraction
 import gc
 import hashlib
-import itertools
 import json
 import math
 import os
@@ -27,7 +26,7 @@ def prelib(tmp_path_factory):
 
 def fixture_folder(path, features=5, categories=True):
     path.mkdir()
-    labels=['left','middle','right'];classes=3
+    labels=['left','middle','right']
     # Fully specified valid model with unequal signed coefficients and biases.
     vectors=[(i+1)/(features+7) for i in range(features*3)]
     coeff=[.5,-.125,.25, -.5,.75,-.25]

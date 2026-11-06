@@ -1,4 +1,4 @@
-"""Bounded, unambiguous JSON input for the public CLI, not historical replay."""
+"""Bounded binary and unambiguous JSON input for public commands."""
 from __future__ import annotations
 
 import json
@@ -31,14 +31,10 @@ def _finite_float(value: str) -> float:
     return parsed
 
 
-def load_file(path: Path, *, max_bytes: int = DEFAULT_MAX_BYTES) -> Any:
-    """Reject duplicate keys, nonfinite numbers, excess bytes and deep nesting.
-
-    The byte cap bounds input, not total decoder memory or CPU time. This is not
-    a resource sandbox. Existing Python evidence APIs are intentionally unchanged.
-    """
+def read_bounded(path: Path, *, max_bytes: int) -> bytes:
+    """Read at most one byte past the cap without allocating the cap up front."""
     if type(max_bytes) is not int or not 1 <= max_bytes <= sys.maxsize - 1:
-        raise ValueError("max-json-bytes must be a positive integer no greater than sys.maxsize - 1")
+        raise ValueError("max-bytes must be a positive bounded integer")
     # A cap is a limit, not a request to allocate that many bytes immediately.
     # Read at most one byte past it, in fixed-size chunks, even for huge caps.
     raw = bytearray()
@@ -49,7 +45,19 @@ def load_file(path: Path, *, max_bytes: int = DEFAULT_MAX_BYTES) -> Any:
                 break
             raw.extend(chunk)
     if len(raw) > max_bytes:
-        raise ValueError(f"JSON input exceeds the {max_bytes}-byte limit")
+        raise ValueError(f"{path} exceeds max-bytes ({max_bytes}-byte limit)")
+    return bytes(raw)
+
+
+def load_file(path: Path, *, max_bytes: int = DEFAULT_MAX_BYTES) -> Any:
+    """Reject duplicate keys, nonfinite numbers, excess bytes and deep nesting.
+
+    The byte cap bounds input, not total decoder memory or CPU time. This is not
+    a resource sandbox. Existing Python evidence APIs are intentionally unchanged.
+    """
+    if type(max_bytes) is not int or not 1 <= max_bytes <= sys.maxsize - 1:
+        raise ValueError("max-json-bytes must be a positive integer no greater than sys.maxsize - 1")
+    raw = read_bounded(path, max_bytes=max_bytes)
     try:
         return json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object,
                           parse_constant=_reject_constant, parse_float=_finite_float)

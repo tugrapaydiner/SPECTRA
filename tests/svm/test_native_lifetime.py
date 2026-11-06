@@ -5,7 +5,6 @@ The guard assertion stops the old implementation before it can use the freed
 pointer. These are lifecycle tests, not benchmark or arbitrary-signal proofs.
 """
 from array import array
-import ctypes as C
 import struct
 import zlib
 
