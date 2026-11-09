@@ -79,7 +79,8 @@ jobs:
           tests/exact/test_exact_edgeless.py tests/exact/test_exam_repair.py
           tests/exact/test_itc2007_exam.py tests/exact/test_runtime.py
           tests/exact/test_transfer_hardening.py tests/exact/test_linear_construction.py
-          tests/sat/test_native_cdcl.py tests/benchmarks/test_campaign.py
+          tests/sat/test_admission.py tests/sat/test_native_cdcl.py
+          tests/benchmarks/test_competition_input.py tests/benchmarks/test_campaign.py
           tests/benchmarks/test_campaign_verify.py tests/svm
           -k "not native_sanitizer_builds_execute_checked_unsat"
 
