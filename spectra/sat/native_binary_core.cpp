@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -132,13 +133,17 @@ std::vector<Clause> read_input(
     const std::int32_t* literals,
     std::uint64_t literal_count,
     bool canonical_input) {
+    if (nvars > 10000000U) throw std::invalid_argument("too many variables");
+    const auto max_input_bytes = static_cast<std::uint64_t>(
+        std::numeric_limits<std::ptrdiff_t>::max());
+    if (clause_count >= max_input_bytes / sizeof(*offsets) ||
+        literal_count > max_input_bytes / sizeof(*literals)) {
+        throw std::invalid_argument("CNF input exceeds addressable size");
+    }
     if (!offsets) throw std::invalid_argument("offsets pointer is null");
     if (literal_count && !literals) throw std::invalid_argument("literals pointer is null");
     if (offsets[0] != 0 || offsets[clause_count] != literal_count) {
         throw std::invalid_argument("clause offsets do not span the literal array");
-    }
-    if (clause_count > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
-        throw std::invalid_argument("clause count is too large");
     }
     std::vector<Clause> rows;
     rows.reserve(static_cast<std::size_t>(clause_count));
@@ -148,9 +153,6 @@ std::vector<Clause> read_input(
         const std::uint64_t stop = offsets[index + 1];
         if (start > stop || stop > literal_count) {
             throw std::invalid_argument("clause offsets are not monotone");
-        }
-        if (stop - start > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
-            throw std::invalid_argument("clause width is too large");
         }
         Clause row;
         row.reserve(static_cast<std::size_t>(stop - start));

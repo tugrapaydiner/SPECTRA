@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 from itertools import product
 import hashlib
 import json
@@ -168,6 +169,50 @@ def test_wrapper_rejects_non_exact_and_out_of_range_inputs(native_runtime):
         native_runtime.reduce(1, 4)
     with pytest.raises(ValueError, match="iterable"):
         native_runtime.reduce(1, (4,))
+
+
+def _check_raw_native_limits(runtime):
+    cases = (
+        (2**32 - 1, 0, 0, b"too many variables"),
+        (10_000_001, 0, 0, b"too many variables"),
+        (0, sys.maxsize // 8, 0, b"CNF input exceeds addressable size"),
+        (0, 0, sys.maxsize // 4 + 1, b"CNF input exceeds addressable size"),
+        (0, 2**64 - 1, 0, b"CNF input exceeds addressable size"),
+        (0, 0, 2**64 - 1, b"CNF input exceeds addressable size"),
+    )
+    for name in ("spectra_general_reduce", "spectra_general_reduce_canonical"):
+        for nvars, clauses, literals, expected in cases:
+            offsets = (ctypes.c_uint64 * 1)(0)
+            values = (ctypes.c_int32 * 1)(0)
+            output = ctypes.cast(ctypes.c_void_p(1), ctypes.POINTER(ctypes.c_uint8))
+            size = ctypes.c_uint64(123)
+            error = ctypes.create_string_buffer(128)
+            code = getattr(runtime._module, name)(
+                nvars, clauses, offsets, values, literals,
+                ctypes.byref(output), ctypes.byref(size), error, len(error),
+            )
+            assert code == 1, (name, nvars, clauses, literals, code, error.value)
+            assert error.value == expected
+            assert not output and size.value == 0
+    assert not runtime.reduce(0, ()).contradiction
+
+
+def test_raw_native_limits_are_checked_before_buffers(native_runtime, tmp_path):
+    from benchmarks.sat.campaign import run_process
+
+    program = """
+import sys
+from spectra.sat.native_binary_core import NativeBinaryCore
+from tests.sat.test_native_binary_core import _check_raw_native_limits
+_check_raw_native_limits(NativeBinaryCore(sys.argv[1]))
+"""
+    destination = tmp_path / "raw-limits"
+    result = run_process(
+        [sys.executable, "-c", program, str(native_runtime.path)], destination,
+        timeout=5, memory_mib=128, output_mib=1, workdir=tmp_path,
+    )
+    assert not result["timed_out"] and not result["output_limit_exceeded"]
+    assert result["returncode"] == 0, (destination / "stderr.txt").read_text()
 
 
 def test_build_is_receipt_bound_and_refuses_replacement(native_runtime, tmp_path):

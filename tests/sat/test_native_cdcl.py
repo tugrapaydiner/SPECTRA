@@ -770,11 +770,15 @@ def test_moderate_random_3sat_differential(runtime):
 @pytest.mark.skipif(os.name != "posix", reason="GCC/Clang sanitizer contract")
 @pytest.mark.parametrize("sanitizer", ("undefined", "address,undefined"))
 def test_native_sanitizer_builds_execute_checked_unsat(tmp_path, sanitizer):
+    from spectra.sat.native_binary_core import build_native_binary_core
+
     library = build_native_cdcl(tmp_path / sanitizer.replace(",", "-"), sanitizer=sanitizer)
+    core_library = build_native_binary_core(tmp_path / "binary-core", sanitizer=sanitizer)
     program = r"""
 import ctypes
 from itertools import product
 import sys
+from spectra.sat.native_binary_core import NativeBinaryCore
 from spectra.sat.native_cdcl import (
     NativeCDCLRuntime, solve_cnf_native, solve_general_native,
     verify_direct_native_result, verify_native_result,
@@ -788,6 +792,7 @@ from tests.sat.test_native_cdcl import (
     test_direct_native_variable_compaction_boundary,
     test_native_abi_rejects_unrepresentable_buffer_sizes,
 )
+from tests.sat.test_native_binary_core import _check_raw_native_limits
 runtime = NativeCDCLRuntime(sys.argv[1])
 clauses = tuple(tuple(v if b else -v for v, b in enumerate(bits, 1)) for bits in product((False, True), repeat=5))
 for solve, verify in ((solve_general_native, verify_native_result),
@@ -814,6 +819,7 @@ for nvars in (1, 1024):
 for nvars in (95, 96, 97):
     test_direct_native_variable_compaction_boundary(runtime, nvars)
 test_native_abi_rejects_unrepresentable_buffer_sizes(runtime)
+_check_raw_native_limits(NativeBinaryCore(sys.argv[2]))
 """
     environment = os.environ.copy()
     environment["PYTHONPATH"] = os.getcwd()
@@ -837,7 +843,7 @@ test_native_abi_rejects_unrepresentable_buffer_sizes(runtime)
         environment["LD_PRELOAD"] = os.pathsep.join((resolved, cxx_runtime))
         environment["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1"
     subprocess.run(
-        [sys.executable, "-c", program, str(library)],
+        [sys.executable, "-c", program, str(library), str(core_library)],
         cwd=os.getcwd(),
         env=environment,
         check=True,
