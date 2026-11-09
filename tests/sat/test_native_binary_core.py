@@ -211,7 +211,7 @@ _check_raw_native_limits(NativeBinaryCore(sys.argv[1]))
         [sys.executable, "-c", program, str(native_runtime.path)], destination,
         timeout=5, memory_mib=128, output_mib=1, workdir=tmp_path,
     )
-    assert not result["timed_out"] and not result["output_limit_exceeded"]
+    assert not result["timed_out"] and not result.get("output_limit_exceeded", False)
     assert result["returncode"] == 0, (destination / "stderr.txt").read_text()
 
 
