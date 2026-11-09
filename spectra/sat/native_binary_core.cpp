@@ -10,6 +10,12 @@
 #include <utility>
 #include <vector>
 
+#if defined(_WIN32)
+#define SPECTRA_EXPORT extern "C" __declspec(dllexport)
+#else
+#define SPECTRA_EXPORT extern "C" __attribute__((visibility("default")))
+#endif
+
 namespace {
 using Clause = std::vector<std::int32_t>;
 
@@ -590,9 +596,9 @@ int reduce_entry(
 }
 }  // namespace
 
-extern "C" std::uint32_t spectra_general_abi() noexcept { return 1; }
+SPECTRA_EXPORT std::uint32_t spectra_general_abi() noexcept { return 1; }
 
-extern "C" int spectra_general_reduce(
+SPECTRA_EXPORT int spectra_general_reduce(
     std::uint32_t nvars,
     std::uint64_t clause_count,
     const std::uint64_t* offsets,
@@ -607,7 +613,7 @@ extern "C" int spectra_general_reduce(
         output_data, output_size, error, error_capacity);
 }
 
-extern "C" int spectra_general_reduce_canonical(
+SPECTRA_EXPORT int spectra_general_reduce_canonical(
     std::uint32_t nvars,
     std::uint64_t clause_count,
     const std::uint64_t* offsets,
@@ -622,4 +628,4 @@ extern "C" int spectra_general_reduce_canonical(
         output_data, output_size, error, error_capacity);
 }
 
-extern "C" void spectra_general_free(void* pointer) noexcept { std::free(pointer); }
+SPECTRA_EXPORT void spectra_general_free(void* pointer) noexcept { std::free(pointer); }

@@ -48,15 +48,18 @@ def check_installed_origin() -> None:
     import spectra.cnf.dpll
     import spectra.cnf.focused
     import spectra.sat.binary_core
+    import spectra.sat.native_binary_core
     import spectra.sat.native_cdcl
     prefix = Path(sys.prefix).resolve()
     for module in (spectra.cnf.dpll, spectra.cnf.focused,
-                   spectra.sat.binary_core, spectra.sat.native_cdcl):
+                   spectra.sat.binary_core, spectra.sat.native_binary_core,
+                   spectra.sat.native_cdcl):
         require(Path(module.__file__).resolve().is_relative_to(prefix),
                 f"{module.__name__} must come from the installed environment")
-    source = spectra.sat.native_cdcl.SOURCE.resolve()
-    require(source.is_relative_to(prefix) and source.is_file(),
-            "installed wheel must include native CDCL source")
+    for module in (spectra.sat.native_binary_core, spectra.sat.native_cdcl):
+        source = module.SOURCE.resolve()
+        require(source.is_relative_to(prefix) and source.is_file(),
+                f"installed wheel must include {module.__name__} source")
     for dependency in OPTIONAL_DEPENDENCIES:
         require(importlib.util.find_spec(dependency) is None,
                 f"unexpected dependency: {dependency}")
@@ -125,7 +128,12 @@ from dataclasses import asdict
 from itertools import product
 import json
 from pathlib import Path
-from spectra.sat.binary_core import model_satisfies
+from spectra.sat.binary_core import (
+    build_binary_core, canonical_cnf, model_satisfies, verify_binary_core,
+)
+from spectra.sat.native_binary_core import (
+    NativeBinaryCore, assert_matches_python, build_native_binary_core,
+)
 from spectra.sat.native_cdcl import (
     NativeCDCLRuntime, build_native_cdcl, solve_cnf_native, solve_general_native,
     verify_direct_native_result, verify_native_result,
@@ -140,6 +148,21 @@ sat_clauses = ((1, -2), (-1, 2), (2, 3, 4), (-3, 4), (-4, 5, 6))
 unsat_clauses = tuple(tuple(sign * variable for variable, sign in enumerate(signs, 1))
                       for signs in product((-1, 1), repeat=3))
 report = {}
+core = NativeBinaryCore(build_native_binary_core("native-binary-core"))
+cases = ((0, ()), (0, ((),)), (1, ((1,), (-1,))),
+         (6, sat_clauses), (3, unsat_clauses))
+for nvars, clauses in cases:
+    reference = build_binary_core(nvars, clauses)
+    require(verify_binary_core(nvars, clauses, reference), "binary-core reference replay failed")
+    prepared = core.prepare_canonical(nvars, canonical_cnf(nvars, clauses))
+    for reduced in (core.reduce(nvars, clauses), core.reduce_prepared(prepared)):
+        assert_matches_python(nvars, clauses, reduced, reference)
+        if not reduced.contradiction:
+            for witness in product((False, True), repeat=reduced.reduced_nvars):
+                if model_satisfies(reduced.reduced_nvars, reduced.residual_clauses, witness):
+                    require(model_satisfies(nvars, clauses, reduced.lift(witness)),
+                            "native binary-core model lift failed")
+report["native_binary_core"] = {"formulas": len(cases), "paths": 2}
 for name, solve, verify in (
     ("direct", solve_cnf_native, verify_direct_native_result),
     ("binary_core", solve_general_native, verify_native_result),
@@ -167,6 +190,7 @@ for name, solve, verify in (
 print(json.dumps(report))
 ''')
     shutil.rmtree("native-cdcl")
+    shutil.rmtree("native-binary-core")
     report["offline_replay"] = isolated('''
 import ctypes
 import json

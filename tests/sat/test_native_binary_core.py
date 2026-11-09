@@ -3,6 +3,7 @@ from __future__ import annotations
 from itertools import product
 import hashlib
 import json
+import os
 import random
 import shutil
 import sys
@@ -34,8 +35,9 @@ def cube_clauses():
 
 @pytest.fixture(scope="session")
 def native_runtime(tmp_path_factory):
-    if sys.platform != "linux" or shutil.which("g++") is None:
-        pytest.skip("the native general-CNF core currently requires Linux and g++")
+    compiler = "cl" if os.name == "nt" else "g++"
+    if sys.platform not in ("linux", "win32") or shutil.which(compiler) is None:
+        pytest.skip("native general-CNF core requires Linux/g++ or Windows/MSVC")
     library = build_native_binary_core(
         tmp_path_factory.mktemp("native-general-core")
     )
@@ -169,6 +171,9 @@ def test_wrapper_rejects_non_exact_and_out_of_range_inputs(native_runtime):
 
 
 def test_build_is_receipt_bound_and_refuses_replacement(native_runtime, tmp_path):
+    assert {path.name for path in native_runtime.path.parent.iterdir()} == {
+        native_runtime.path.name, "build.json",
+    }
     with pytest.raises(FileExistsError):
         build_native_binary_core(native_runtime.path.parent)
 
@@ -188,6 +193,7 @@ def test_build_is_receipt_bound_and_refuses_replacement(native_runtime, tmp_path
         NativeBinaryCore(library)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="replacing a loaded library requires POSIX unlink")
 def test_native_core_rejects_changed_bytes_at_a_loaded_path(native_runtime, tmp_path):
     library = tmp_path / native_runtime.path.name
     receipt = tmp_path / "build.json"

@@ -50,8 +50,8 @@ _BUILDERS = (
 def test_native_build_publication_and_source_identity(
         tmp_path, monkeypatch, module_name, builder_name, event):
     module = importlib.import_module(module_name)
-    if module_name.endswith("native_binary_core") and sys.platform != "linux":
-        pytest.skip("binary-core builder supports Linux only")
+    if module_name.endswith("native_binary_core") and sys.platform not in ("linux", "win32"):
+        pytest.skip("binary-core builder supports Linux and Windows")
     source = tmp_path / module.SOURCE.name
     original = b"// original source bytes\n"
     source.write_bytes(original)
@@ -1122,8 +1122,9 @@ SPECTRA_EXPORT int spectra_g_test_indexed_heap() {
 def native_proof_core(tmp_path_factory):
     from spectra.sat.native_binary_core import NativeBinaryCore, build_native_binary_core
 
-    if sys.platform != "linux" or shutil.which("g++") is None:
-        pytest.skip("native binary-core builder currently requires Linux and g++")
+    compiler = "cl" if os.name == "nt" else "g++"
+    if sys.platform not in ("linux", "win32") or shutil.which(compiler) is None:
+        pytest.skip("native binary-core builder requires Linux/g++ or Windows/MSVC")
     return NativeBinaryCore(build_native_binary_core(
         tmp_path_factory.mktemp("native-original-rup-core")))
 

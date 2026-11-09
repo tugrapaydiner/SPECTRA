@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import ctypes
 import hashlib
 import json
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -44,49 +45,58 @@ def build_native_binary_core(
     compiler: str | None = None,
     sanitizer: str = "none",
 ) -> Path:
-    """Build a receipt-bound Linux shared library without importing it."""
-    if sys.platform != "linux":
-        raise NotImplementedError("native general-CNF builder currently supports Linux")
+    """Build a receipt-bound Linux or Windows library without importing it."""
+    if sys.platform not in ("linux", "win32"):
+        raise NotImplementedError("native general-CNF builder supports Linux and Windows")
     if sanitizer not in ("none", "undefined", "address,undefined"):
         raise ValueError("unsupported sanitizer")
-    compiler = compiler or "g++"
+    if os.name == "nt" and sanitizer != "none":
+        raise NotImplementedError("sanitizer builds currently require Linux and GCC or Clang")
+    compiler = compiler or ("cl" if os.name == "nt" else "g++")
     executable = shutil.which(compiler)
     if executable is None:
         raise FileNotFoundError(compiler)
+    executable = str(Path(executable).resolve())
     destination = Path(directory).resolve()
     destination.mkdir(parents=True, exist_ok=True)
-    library = destination / "libspectra_general_core.so"
+    library = destination / (
+        "spectra_general_core.dll" if os.name == "nt" else "libspectra_general_core.so")
     receipt = destination / "build.json"
     if library.exists() or receipt.exists():
         raise FileExistsError("native general-CNF build outputs already exist")
 
-    flags = [
-        "-std=c++17",
-        "-shared",
-        "-fPIC",
-        "-Wall",
-        "-Wextra",
-        "-Werror",
-        "-fno-fast-math",
-        "-ffp-contract=off",
-    ]
-    if sanitizer == "none":
-        flags += ["-O3", "-DNDEBUG"]
+    if os.name == "nt":
+        flags = ["/nologo", "/std:c++17", "/O2", "/DNDEBUG", "/EHsc", "/LD"]
     else:
-        flags += [
-            "-O1",
-            "-g",
-            "-fno-omit-frame-pointer",
-            f"-fsanitize={sanitizer}",
-            "-fno-sanitize-recover=all",
+        flags = [
+            "-std=c++17",
+            "-shared",
+            "-fPIC",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-fno-fast-math",
+            "-ffp-contract=off",
         ]
+        if sanitizer == "none":
+            flags += ["-O3", "-DNDEBUG"]
+        else:
+            flags += [
+                "-O1",
+                "-g",
+                "-fno-omit-frame-pointer",
+                f"-fsanitize={sanitizer}",
+                "-fno-sanitize-recover=all",
+            ]
     started = time.perf_counter_ns()
     with tempfile.TemporaryDirectory(dir=destination) as temporary:
         target = Path(temporary) / library.name
         source, source_sha256 = snapshot_source(SOURCE, Path(temporary))
-        command = [executable, *flags, str(source), "-o", str(target)]
+        command = [executable, *flags, str(source)]
+        command += ["/link", "/OUT:" + str(target)] if os.name == "nt" else ["-o", str(target)]
         completed = subprocess.run(
             command,
+            cwd=temporary,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -96,8 +106,9 @@ def build_native_binary_core(
         if completed.returncode:
             raise RuntimeError(completed.stdout + completed.stderr)
         version = subprocess.run(
-            [executable, "--version"],
-            check=True,
+            [executable] if os.name == "nt" else [executable, "--version"],
+            cwd=temporary,
+            check=os.name != "nt",  # MSVC prints its version but exits nonzero without a source.
             capture_output=True,
             text=True,
             encoding="utf-8",
