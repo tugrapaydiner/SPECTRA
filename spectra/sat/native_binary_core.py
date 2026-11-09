@@ -495,6 +495,8 @@ class NativeBinaryCore:
         self, nvars: int, clauses: Iterable[Iterable[int]]
     ) -> NativeReduction:
         offsets, literals = self._flatten(nvars, clauses)
+        if len(offsets) == 1:
+            return self.reduce_prepared(self.prepare_canonical(nvars, ()))
         offset_array = (ctypes.c_uint64 * len(offsets))(*offsets)
         literal_array = (ctypes.c_int32 * max(1, len(literals)))(*(literals or (0,)))
         return self._invoke(

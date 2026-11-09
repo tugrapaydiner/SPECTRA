@@ -134,6 +134,19 @@ def test_zero_variable_and_direct_conflict_cases_match(native_runtime):
     check_equal(native_runtime, 4, ((1, -2), (-1, 2), (2,), (-4, 3), (-3, 4)))
 
 
+@pytest.mark.parametrize("nvars", [0, 3, 4096])
+def test_empty_formula_uses_identity_without_native_call(native_runtime, monkeypatch, nvars):
+    def fail(*_args, **_kwargs):
+        raise AssertionError("empty formula should not enter native code")
+
+    reference = build_binary_core(nvars, ())
+    monkeypatch.setattr(native_runtime, "_invoke", fail)
+    for clauses in ((), iter(())):
+        reduction = native_runtime.reduce(nvars, clauses)
+        assert_matches_python(nvars, (), reduction, reference)
+        assert reduction.lift((False,) * nvars) == (False,) * nvars
+
+
 def test_prepared_identity_path_never_calls_native_code(native_runtime, monkeypatch):
     prepared = native_runtime.prepare_canonical(3, ((1, 2, 3),))
 
@@ -220,7 +233,7 @@ def _check_raw_native_limits(runtime):
             assert code == 1, (name, nvars, clauses, literals, code, error.value)
             assert error.value == expected
             assert not output and size.value == 0
-    assert not runtime.reduce(0, ()).contradiction
+    assert runtime.reduce(1, ((1,),)).fixed == (True,)
 
 
 def test_raw_native_limits_are_checked_before_buffers(native_runtime, tmp_path):
