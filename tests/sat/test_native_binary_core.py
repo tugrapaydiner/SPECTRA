@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+from dataclasses import replace
 from itertools import product
 import hashlib
 import json
@@ -156,6 +157,31 @@ def test_prepared_canonical_validation_is_fail_closed(native_runtime):
         native_runtime.prepare_canonical(2, ((-1, 1),))
     with pytest.raises(ValueError, match="literal"):
         native_runtime.prepare_canonical(1, ((True,),))
+
+
+@pytest.mark.parametrize("nvars,clauses", [
+    (1, ((-1,),)), (3, ((1, 2, 3),)), (0, ((),)), (0, ()),
+])
+def test_prepared_replacement_rebuilds_native_input(native_runtime, nvars, clauses):
+    original = native_runtime.prepare_canonical(3, ((1,),))
+    changed = replace(original, nvars=nvars, clauses=clauses)
+    reference = build_binary_core(nvars, clauses)
+    assert_matches_python(nvars, clauses, native_runtime.reduce_prepared(changed), reference)
+    assert_matches_python(
+        3, ((1,),), native_runtime.reduce_prepared(original), build_binary_core(3, ((1,),)),
+    )
+    with pytest.raises(ValueError, match="literal"):
+        replace(original, nvars=0)
+
+
+@pytest.mark.parametrize("name", [
+    "clause_count", "literal_count", "unit_clauses", "binary_clauses",
+    "long_clauses", "empty_clauses",
+])
+def test_prepared_metadata_is_derived(native_runtime, name):
+    prepared = native_runtime.prepare_canonical(1, ((1,),))
+    with pytest.raises((TypeError, ValueError), match="init=False"):
+        replace(prepared, **{name: getattr(prepared, name) + 1})
 
 
 def test_wrapper_rejects_non_exact_and_out_of_range_inputs(native_runtime):

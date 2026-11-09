@@ -136,20 +136,95 @@ def build_native_binary_core(
 
 @dataclass(frozen=True)
 class PreparedNativeFormula:
-    """Canonical CNF packed once for the receipt-bound canonical entry point."""
+    """Validated canonical CNF with derived counts and owned native buffers."""
 
     nvars: int
-    clause_count: int
-    literal_count: int
-    unit_clauses: int
-    binary_clauses: int
-    long_clauses: int
-    empty_clauses: int
     clauses: tuple[tuple[int, ...], ...] = field(repr=False, compare=False)
-    _offset_storage: array = field(repr=False, compare=False)
-    _literal_storage: array = field(repr=False, compare=False)
-    _offset_view: object = field(repr=False, compare=False)
-    _literal_view: object = field(repr=False, compare=False)
+    clause_count: int = field(init=False)
+    literal_count: int = field(init=False)
+    unit_clauses: int = field(init=False)
+    binary_clauses: int = field(init=False)
+    long_clauses: int = field(init=False)
+    empty_clauses: int = field(init=False)
+    _offset_storage: array = field(init=False, repr=False, compare=False)
+    _literal_storage: array = field(init=False, repr=False, compare=False)
+    _offset_view: object = field(init=False, repr=False, compare=False)
+    _literal_view: object = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        nvars = self.nvars
+        NativeBinaryCore._validate_nvars(nvars)
+        try:
+            iterator = iter(self.clauses)
+        except TypeError as error:
+            raise ValueError("clauses must be iterable") from error
+
+        offsets = array("Q", [0])
+        literals = array("i")
+        previous: tuple[int, ...] | None = None
+        frozen_rows: list[tuple[int, ...]] = []
+        units = binaries = longs = empties = 0
+        for clause in iterator:
+            if type(clause) is not tuple:
+                try:
+                    row = tuple(clause)
+                except TypeError as error:
+                    raise ValueError("each clause must be iterable") from error
+            else:
+                row = clause
+            previous_key: tuple[int, int] | None = None
+            previous_abs = 0
+            for literal in row:
+                if (
+                    type(literal) is not int
+                    or literal == 0
+                    or abs(literal) > nvars
+                ):
+                    raise ValueError(
+                        "CNF literal must be a nonzero in-range exact integer"
+                    )
+                key = (abs(literal), literal)
+                if previous_key is not None and not previous_key < key:
+                    raise ValueError("canonical CNF clause is not strictly normalized")
+                if previous_key is not None and previous_abs == abs(literal):
+                    raise ValueError("canonical CNF clause is tautological")
+                previous_key = key
+                previous_abs = abs(literal)
+                literals.append(literal)
+            if previous is not None and not (len(previous), previous) < (len(row), row):
+                raise ValueError("canonical CNF clauses are not strictly ordered")
+            previous = row
+            frozen_rows.append(row)
+            offsets.append(len(literals))
+            if len(row) == 0:
+                empties += 1
+            elif len(row) == 1:
+                units += 1
+            elif len(row) == 2:
+                binaries += 1
+            elif len(row) >= 3:
+                longs += 1
+
+        if offsets.itemsize != ctypes.sizeof(ctypes.c_uint64):
+            raise RuntimeError("platform unsigned-long-long width differs")
+        if literals.itemsize != ctypes.sizeof(ctypes.c_int32):
+            raise RuntimeError("platform integer width differs")
+        literal_count = len(literals)
+        if literal_count == 0:
+            literals.append(0)  # stable non-null buffer; count remains zero
+        offset_view = (ctypes.c_uint64 * len(offsets)).from_buffer(offsets)
+        literal_view = (ctypes.c_int32 * len(literals)).from_buffer(literals)
+        object.__setattr__(self, "clauses", tuple(frozen_rows))
+        object.__setattr__(self, "clause_count", len(offsets) - 1)
+        object.__setattr__(self, "literal_count", literal_count)
+        object.__setattr__(self, "unit_clauses", units)
+        object.__setattr__(self, "binary_clauses", binaries)
+        object.__setattr__(self, "long_clauses", longs)
+        object.__setattr__(self, "empty_clauses", empties)
+        object.__setattr__(self, "_offset_storage", offsets)
+        object.__setattr__(self, "_literal_storage", literals)
+        object.__setattr__(self, "_offset_view", offset_view)
+        object.__setattr__(self, "_literal_view", literal_view)
 
 
 @dataclass(frozen=True)
@@ -275,81 +350,7 @@ class NativeBinaryCore:
         clauses: Iterable[Iterable[int]],
     ) -> PreparedNativeFormula:
         """Validate canonical order and pack one immutable repeated-use input."""
-        cls._validate_nvars(nvars)
-        try:
-            iterator = iter(clauses)
-        except TypeError as error:
-            raise ValueError("clauses must be iterable") from error
-
-        offsets = array("Q", [0])
-        literals = array("i")
-        previous: tuple[int, ...] | None = None
-        frozen_rows: list[tuple[int, ...]] = []
-        units = binaries = longs = empties = 0
-        for clause in iterator:
-            if type(clause) is not tuple:
-                try:
-                    row = tuple(clause)
-                except TypeError as error:
-                    raise ValueError("each clause must be iterable") from error
-            else:
-                row = clause
-            previous_key: tuple[int, int] | None = None
-            previous_abs = 0
-            for literal in row:
-                if (
-                    type(literal) is not int
-                    or literal == 0
-                    or abs(literal) > nvars
-                ):
-                    raise ValueError(
-                        "CNF literal must be a nonzero in-range exact integer"
-                    )
-                key = (abs(literal), literal)
-                if previous_key is not None and not previous_key < key:
-                    raise ValueError("canonical CNF clause is not strictly normalized")
-                if previous_key is not None and previous_abs == abs(literal):
-                    raise ValueError("canonical CNF clause is tautological")
-                previous_key = key
-                previous_abs = abs(literal)
-                literals.append(literal)
-            if previous is not None and not (len(previous), previous) < (len(row), row):
-                raise ValueError("canonical CNF clauses are not strictly ordered")
-            previous = row
-            frozen_rows.append(row)
-            offsets.append(len(literals))
-            if len(row) == 0:
-                empties += 1
-            elif len(row) == 1:
-                units += 1
-            elif len(row) == 2:
-                binaries += 1
-            elif len(row) >= 3:
-                longs += 1
-
-        if offsets.itemsize != ctypes.sizeof(ctypes.c_uint64):
-            raise RuntimeError("platform unsigned-long-long width differs")
-        if literals.itemsize != ctypes.sizeof(ctypes.c_int32):
-            raise RuntimeError("platform integer width differs")
-        literal_count = len(literals)
-        if literal_count == 0:
-            literals.append(0)  # stable non-null buffer; count remains zero
-        offset_view = (ctypes.c_uint64 * len(offsets)).from_buffer(offsets)
-        literal_view = (ctypes.c_int32 * len(literals)).from_buffer(literals)
-        return PreparedNativeFormula(
-            nvars=nvars,
-            clause_count=len(offsets) - 1,
-            literal_count=literal_count,
-            unit_clauses=units,
-            binary_clauses=binaries,
-            long_clauses=longs,
-            empty_clauses=empties,
-            clauses=tuple(frozen_rows),
-            _offset_storage=offsets,
-            _literal_storage=literals,
-            _offset_view=offset_view,
-            _literal_view=literal_view,
-        )
+        return PreparedNativeFormula(nvars, clauses)
 
     @staticmethod
     def _parse(payload: bytes) -> NativeReduction:
@@ -507,7 +508,7 @@ class NativeBinaryCore:
 
     def reduce_prepared(self, prepared: PreparedNativeFormula) -> NativeReduction:
         if type(prepared) is not PreparedNativeFormula:
-            raise ValueError("prepared formula must come from prepare_canonical")
+            raise ValueError("prepared formula must be a PreparedNativeFormula")
         if (
             prepared.empty_clauses == 0
             and prepared.unit_clauses == 0
