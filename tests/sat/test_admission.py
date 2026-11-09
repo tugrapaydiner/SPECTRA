@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import gzip
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -68,6 +70,52 @@ def test_clauses_can_span_lines_and_gzip_has_separate_source_identity(tmp_path):
     assert compressed.compression == "gzip"
 
 
+@pytest.mark.parametrize("compressed", [False, True])
+def test_source_identity_describes_the_bytes_that_were_parsed(tmp_path, monkeypatch, compressed):
+    content = b"p cnf 2 1\n1 -2 0\n"
+    replacement = b"p cnf 1 1\n-1 0\n"
+    original = gzip.compress(content, mtime=0) if compressed else content
+    changed = gzip.compress(replacement, mtime=0) if compressed else replacement
+    path = tmp_path / ("changing.cnf.gz" if compressed else "changing.cnf")
+    path.write_bytes(original)
+    original_open = Path.open
+    replaced = False
+
+    class ReplacingReader:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def __getattr__(self, name):
+            return getattr(self.stream, name)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            self.close()
+
+        def close(self):
+            nonlocal replaced
+            self.stream.close()
+            if not replaced:
+                replaced = True
+                with original_open(path, "wb") as stream:
+                    stream.write(changed)
+
+    def replace_after_read(self, mode="r", *args, **kwargs):
+        stream = original_open(self, mode, *args, **kwargs)
+        return ReplacingReader(stream) if self == path and mode == "rb" else stream
+
+    monkeypatch.setattr(Path, "open", replace_after_read)
+    receipt = admit_cnf(path)
+    assert replaced
+    assert receipt.source_bytes == len(original)
+    assert receipt.source_sha256 == hashlib.sha256(original).hexdigest()
+    assert receipt.dimacs_bytes == len(content)
+    assert receipt.dimacs_sha256 == hashlib.sha256(content).hexdigest()
+    assert receipt.declared_variables == receipt.used_variables == 2
+
+
 @pytest.mark.parametrize(
     ("text", "message"),
     [
@@ -97,6 +145,50 @@ def test_byte_and_index_limits_fail_closed(tmp_path):
         admit_cnf(path, max_dimacs_bytes=4)
     with pytest.raises(MemoryError, match="variable bitmap"):
         admit_cnf(path, max_variable_bitmap_bytes=1)
+
+
+@pytest.mark.parametrize("compressed", [False, True])
+def test_source_read_is_bounded_and_closed_on_failure(tmp_path, monkeypatch, compressed):
+    content = b"c " + b" " * 5000 + b"\np cnf 0 0\n"
+    raw = gzip.compress(content, mtime=0) if compressed else content
+    path = tmp_path / ("bounded.cnf.gz" if compressed else "bounded.cnf")
+    path.write_bytes(raw)
+    original_open = Path.open
+
+    class GuardedStream(io.BytesIO):
+        def read(self, size=-1):
+            assert 0 <= size <= 17 - self.tell()
+            return super().read(size)
+
+        def readline(self, size=-1):
+            assert 0 < size <= 17 - self.tell()
+            return super().readline(size)
+
+        def close(self):
+            self.consumed = self.tell()
+            super().close()
+
+    stream = GuardedStream(raw)
+    monkeypatch.setattr(Path, "open", lambda self, *args, **kwargs:
+                        stream if self == path else original_open(self, *args, **kwargs))
+    with pytest.raises(MemoryError, match="source file exceeds max_source_bytes"):
+        admit_cnf(path, max_source_bytes=16)
+    assert stream.closed
+    assert stream.consumed == 17
+
+
+def test_gzip_source_identity_includes_all_members_and_padding(tmp_path):
+    header, body = b"p cnf 2 1\n", b"1 -2 0\n"
+    raw = gzip.compress(header, mtime=0) + gzip.compress(body, mtime=0) + b"\0" * 9
+    path = tmp_path / "members.cnf.gz"
+    path.write_bytes(raw)
+    receipt = admit_cnf(path, max_source_bytes=len(raw), max_dimacs_bytes=len(header + body))
+    assert receipt.source_bytes == len(raw)
+    assert receipt.source_sha256 == hashlib.sha256(raw).hexdigest()
+    assert receipt.dimacs_sha256 == hashlib.sha256(header + body).hexdigest()
+    assert receipt.used_variables == 2
+    with pytest.raises(MemoryError, match="source"):
+        admit_cnf(path, max_source_bytes=len(raw) - 1)
 
 
 def test_decompressed_read_is_bounded_before_allocating_the_next_line():
@@ -138,7 +230,7 @@ def test_gzip_long_physical_line_stops_at_decoded_budget(tmp_path, monkeypatch, 
     path = tmp_path / "long-line.cnf.gz"
     path.write_bytes(gzip.compress(prefix + b" " * (1 << 20), mtime=0))
     opened = []
-    original_open = admission._open_dimacs
+    original_gzip = gzip.GzipFile
 
     class GuardedGzip:
         def __init__(self, stream):
@@ -154,13 +246,14 @@ def test_gzip_long_physical_line_stops_at_decoded_budget(tmp_path, monkeypatch, 
         def close(self):
             self.stream.close()
 
-    def guarded_open(source):
-        stream, compression = original_open(source)
-        guarded = GuardedGzip(stream)
-        opened.append(guarded)
-        return guarded, compression
+    @contextmanager
+    def guarded_gzip(*args, **kwargs):
+        with original_gzip(*args, **kwargs) as stream:
+            guarded = GuardedGzip(stream)
+            opened.append(guarded)
+            yield guarded
 
-    monkeypatch.setattr(admission, "_open_dimacs", guarded_open)
+    monkeypatch.setattr(admission.gzip, "GzipFile", guarded_gzip)
     with pytest.raises(MemoryError, match="DIMACS"):
         admit_cnf(path, max_dimacs_bytes=64)
     assert opened[0].decoded == 65

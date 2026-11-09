@@ -15,7 +15,7 @@ def test_plain_gzip_and_xz_replay_the_same_admitted_formula(tmp_path):
     plain = tmp_path / "sample.cnf"
     zipped = tmp_path / "sample.cnf.gz"
     xz = tmp_path / "sample.cnf.xz"
-    plain.write_text(TEXT, encoding="ascii")
+    plain.write_bytes(TEXT.encode("ascii"))
     with gzip.GzipFile(filename=str(zipped), mode="wb", mtime=0) as stream:
         stream.write(TEXT.encode("ascii"))
     with lzma.open(xz, "wb", format=lzma.FORMAT_XZ) as stream:

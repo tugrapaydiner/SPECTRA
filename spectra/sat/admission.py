@@ -8,6 +8,7 @@ an instance is favourable to SPECTRA.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import gzip
 import hashlib
@@ -19,7 +20,6 @@ from typing import BinaryIO, Iterable
 DEFAULT_MAX_SOURCE_BYTES = 2 * 1024 * 1024 * 1024
 DEFAULT_MAX_DIMACS_BYTES = 8 * 1024 * 1024 * 1024
 DEFAULT_MAX_VARIABLE_BITMAP_BYTES = 512 * 1024 * 1024
-_READ_CHUNK = 1 << 20
 
 
 @dataclass(frozen=True)
@@ -53,23 +53,31 @@ class CNFAdmission:
 
 
 class _BoundedReader:
-    """Count and hash bytes while enforcing a decompressed-byte bound."""
+    """Count and hash the bytes actually consumed, with a bounded read size."""
 
-    def __init__(self, stream: BinaryIO, limit: int) -> None:
+    def __init__(self, stream: BinaryIO, limit: int,
+                 error: str = "DIMACS input exceeds max_dimacs_bytes") -> None:
         self._stream = stream
         self._limit = limit
+        self._error = error
         self.count = 0
         self.hash = hashlib.sha256()
 
+    def read(self, size: int = -1) -> bytes:
+        # One extra byte distinguishes exact-limit EOF from an oversized stream.
+        remaining = min(self._limit - self.count + 1, sys.maxsize)
+        data = self._stream.read(remaining if size < 0 else min(size, remaining))
+        self.count += len(data)
+        if self.count > self._limit:
+            raise MemoryError(self._error)
+        self.hash.update(data)
+        return data
+
     def readline(self) -> bytes:
-        # Bound the read itself, not just the returned length: a gzip member may
-        # expand to one enormous physical line. One extra byte distinguishes EOF
-        # exactly at the limit from an over-limit stream without requesting the
-        # rest. The decoder can still buffer a limited amount of read-ahead.
         line = self._stream.readline(min(self._limit - self.count + 1, sys.maxsize))
         self.count += len(line)
         if self.count > self._limit:
-            raise MemoryError("DIMACS input exceeds max_dimacs_bytes")
+            raise MemoryError(self._error)
         self.hash.update(line)
         return line
 
@@ -80,22 +88,18 @@ def _positive_int(value: int, name: str) -> int:
     return value
 
 
-def _source_identity(path: Path, max_source_bytes: int) -> tuple[int, str]:
-    total = 0
-    digest = hashlib.sha256()
+@contextmanager
+def _open_dimacs(path: Path, max_source_bytes: int, max_dimacs_bytes: int):
     with path.open("rb") as stream:
-        while chunk := stream.read(_READ_CHUNK):
-            total += len(chunk)
-            if total > max_source_bytes:
-                raise MemoryError("source file exceeds max_source_bytes")
-            digest.update(chunk)
-    return total, digest.hexdigest()
-
-
-def _open_dimacs(path: Path) -> tuple[BinaryIO, str]:
-    if path.suffix.lower() == ".gz":
-        return gzip.open(path, "rb"), "gzip"
-    return path.open("rb"), "none"
+        if path.suffix.lower() == ".gz":
+            source = _BoundedReader(stream, max_source_bytes, "source file exceeds max_source_bytes")
+            with gzip.GzipFile(fileobj=source, mode="rb") as decoded:
+                yield _BoundedReader(decoded, max_dimacs_bytes), "gzip", source
+        else:
+            error = ("source file exceeds max_source_bytes" if max_source_bytes <= max_dimacs_bytes
+                     else "DIMACS input exceeds max_dimacs_bytes")
+            reader = _BoundedReader(stream, min(max_source_bytes, max_dimacs_bytes), error)
+            yield reader, "none", reader
 
 
 def _parse_int(token: bytes, *, line_number: int) -> int:
@@ -133,10 +137,6 @@ def admit_cnf(
     source = Path(path).resolve(strict=True)
     if not source.is_file():
         raise ValueError("CNF source must be a regular file")
-    source_bytes, source_sha256 = _source_identity(source, max_source_bytes)
-
-    raw_stream, compression = _open_dimacs(source)
-    reader = _BoundedReader(raw_stream, max_dimacs_bytes)
     semantic = hashlib.sha256()
 
     header_seen = False
@@ -193,7 +193,7 @@ def admit_cnf(
         current = []
 
     line_number = 0
-    try:
+    with _open_dimacs(source, max_source_bytes, max_dimacs_bytes) as (reader, compression, source_reader):
         while True:
             raw_line = reader.readline()
             if not raw_line:
@@ -264,8 +264,6 @@ def admit_cnf(
                     used_bitmap[byte_index] |= bit
                     used_variables += 1
                 current.append(value)
-    finally:
-        raw_stream.close()
 
     if not header_seen:
         raise ValueError("missing DIMACS header")
@@ -293,9 +291,9 @@ def admit_cnf(
         schema="spectra.general_cnf_admission.v1",
         source_name=source.name,
         compression=compression,
-        source_bytes=source_bytes,
+        source_bytes=source_reader.count,
         dimacs_bytes=reader.count,
-        source_sha256=source_sha256,
+        source_sha256=source_reader.hash.hexdigest(),
         dimacs_sha256=reader.hash.hexdigest(),
         semantic_sha256=semantic.hexdigest(),
         declared_variables=declared_variables,
