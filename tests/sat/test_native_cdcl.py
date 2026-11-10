@@ -1053,7 +1053,29 @@ def test_native_proof_ids_preserve_deleted_rows_and_relocation(tmp_path, monkeyp
     harness = tmp_path / "proof_ids.cpp"
     harness.write_text(
         '#include "' + source + '"\n' + r"""
+static std::vector<std::uint8_t> encoded_bytes(const Solver &solver, int status,
+    std::uint32_t nvars, const std::vector<int> &mapping) {
+  auto result = encode_result(solver, status, nvars, mapping);
+  return {result.data.get(), result.data.get() + result.size};
+}
+static void append_u32(std::vector<std::uint8_t> &out, std::uint32_t value) {
+  for (int shift = 0; shift < 32; shift += 8)
+    out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xffu));
+}
+static void append_i32(std::vector<std::uint8_t> &out, std::int32_t value) {
+  append_u32(out, static_cast<std::uint32_t>(value));
+}
 SPECTRA_EXPORT int spectra_g_test_proof_ids() {
+  std::size_t boundary = std::numeric_limits<std::size_t>::max() - 7;
+  add_result_words(boundary, 1);
+  const auto unchanged = boundary;
+  try {
+    add_result_words(boundary, 1);
+    return 11;
+  } catch (const std::length_error &) {
+    if (boundary != unchanged) return 12;
+  }
+
   Solver solver(11);
   // These 2,048 blocking clauses form a real UNSAT formula whose search learns
   // and deletes clauses. The ordinary reduction test independently checks RUP.
@@ -1083,7 +1105,7 @@ SPECTRA_EXPORT int spectra_g_test_proof_ids() {
       solver.proof_clause_ids.size() != proof_index + 1 ||
       solver.proof_clause_ids.back() != -1) return 5;
 
-  const auto encoded = encode_result(solver, 20, solver.nvars, {});
+  const auto encoded = encoded_bytes(solver, 20, solver.nvars, {});
   // Construct the proof payload independently from the append-only clause
   // arena, including deleted rows, to catch dropped or reordered additions.
   if (encoded.size() < 76) return 6;
@@ -1098,7 +1120,7 @@ SPECTRA_EXPORT int spectra_g_test_proof_ids() {
   if (encoded != expected) return 7;
   // Force relocation explicitly instead of depending on vector growth policy.
   solver.clauses.reserve(solver.clauses.capacity() + 1);
-  if (encode_result(solver, 20, solver.nvars, {}) != encoded) return 8;
+  if (encoded_bytes(solver, 20, solver.nvars, {}) != encoded) return 8;
 
   Solver root(1);
   root.add_clause({}, false);
@@ -1109,7 +1131,7 @@ SPECTRA_EXPORT int spectra_g_test_proof_ids() {
   root_expected[0] = 'S'; root_expected[1] = 'G';
   root_expected[2] = 'C'; root_expected[3] = '1';
   root_expected[4] = 20; root_expected[8] = 1; root_expected[76] = 1;
-  return encode_result(root, 20, root.nvars, {}) == root_expected ? 0 : 10;
+  return encoded_bytes(root, 20, root.nvars, {}) == root_expected ? 0 : 10;
 }
 """,
         encoding="utf-8",

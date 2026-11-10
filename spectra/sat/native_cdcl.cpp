@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -655,28 +656,66 @@ struct Solver {
   }
 };
 
-void append_u32(std::vector<std::uint8_t> &out, std::uint32_t value) {
+struct EncodedResult {
+  std::unique_ptr<std::uint8_t, decltype(&std::free)> data{nullptr, &std::free};
+  std::size_t size = 0;
+};
+
+void add_result_words(std::size_t &size, std::size_t words) {
+  if (words > (std::numeric_limits<std::size_t>::max() - size) / 4) {
+    throw std::length_error("native result exceeds addressable size");
+  }
+  size += 4 * words;
+}
+
+void append_u32(std::uint8_t *&out, std::uint32_t value) {
   for (int shift = 0; shift < 32; shift += 8) {
-    out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xffu));
+    *out++ = static_cast<std::uint8_t>((value >> shift) & 0xffu);
   }
 }
 
-void append_i32(std::vector<std::uint8_t> &out, std::int32_t value) {
+void append_i32(std::uint8_t *&out, std::int32_t value) {
   append_u32(out, static_cast<std::uint32_t>(value));
 }
 
-void append_u64(std::vector<std::uint8_t> &out, std::uint64_t value) {
+void append_u64(std::uint8_t *&out, std::uint64_t value) {
   for (int shift = 0; shift < 64; shift += 8) {
-    out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xffu));
+    *out++ = static_cast<std::uint8_t>((value >> shift) & 0xffu);
   }
 }
 
-std::vector<std::uint8_t> encode_result(const Solver &solver, int status,
-                                      std::uint32_t original_nvars,
-                                      const std::vector<int> &original_variables) {
-  std::vector<std::uint8_t> out;
-  out.reserve(80 + (status == 10 ? static_cast<std::size_t>(original_nvars) : 0));
-  out.insert(out.end(), {'S', 'G', 'C', '1'});
+EncodedResult encode_result(const Solver &solver, int status,
+                            std::uint32_t original_nvars,
+                            const std::vector<int> &original_variables) {
+  std::size_t size = 76;
+  if (status == 10) {
+    if (original_nvars > std::numeric_limits<std::size_t>::max() - size) {
+      throw std::length_error("native model exceeds addressable size");
+    }
+    size += original_nvars;
+  } else if (status == 20) {
+    if (solver.proof_clause_ids.size() > std::numeric_limits<std::uint32_t>::max()) {
+      throw std::length_error("native proof has too many clauses");
+    }
+    add_result_words(size, 1);
+    add_result_words(size, solver.proof_clause_ids.size());
+    for (const int clause_id : solver.proof_clause_ids) {
+      if (clause_id < 0) continue;
+      const auto width = solver.clauses[static_cast<std::size_t>(clause_id)].lits.size();
+      if (width > std::numeric_limits<std::uint32_t>::max()) {
+        throw std::length_error("native proof clause is too wide");
+      }
+      add_result_words(size, width);
+    }
+  }
+
+  EncodedResult result;
+  result.data.reset(static_cast<std::uint8_t *>(std::malloc(size)));
+  if (!result.data) throw std::bad_alloc();
+  result.size = size;
+  auto *out = result.data.get();
+  std::memcpy(out, "SGC1", 4);
+  out += 4;
   append_u32(out, static_cast<std::uint32_t>(status));
   append_u32(out, original_nvars);
   append_u64(out, solver.stats.decisions);
@@ -688,12 +727,11 @@ std::vector<std::uint8_t> encode_result(const Solver &solver, int status,
   append_u64(out, solver.stats.reductions);
   append_u64(out, solver.stats.deleted_clauses);
   if (status == 10) {
-    const std::size_t model_start = out.size();
-    out.resize(model_start + original_nvars, 0);
+    std::memset(out, 0, original_nvars);
     for (int var = 1; var <= solver.nvars; ++var) {
       const int original = original_variables.empty() ? var
           : original_variables[static_cast<std::size_t>(var - 1)];
-      out[model_start + static_cast<std::size_t>(original - 1)] =
+      out[static_cast<std::size_t>(original - 1)] =
           solver.values[static_cast<std::size_t>(var)] > 0 ? 1 : 0;
     }
   } else if (status == 20) {
@@ -712,7 +750,7 @@ std::vector<std::uint8_t> encode_result(const Solver &solver, int status,
       }
     }
   }
-  return out;
+  return result;
 }
 
 }  // namespace
@@ -785,12 +823,9 @@ SPECTRA_EXPORT int spectra_g_native_solve(
     }
     solver.initialize_heap();
     const int status = solver.solve(max_conflicts, max_learned_literals);
-    std::vector<std::uint8_t> encoded = encode_result(solver, status, nvars, original_variables);
-    void *buffer = std::malloc(encoded.size());
-    if (!buffer) throw std::bad_alloc();
-    std::memcpy(buffer, encoded.data(), encoded.size());
-    *output = buffer;
-    *output_size = encoded.size();
+    auto encoded = encode_result(solver, status, nvars, original_variables);
+    *output_size = encoded.size;
+    *output = encoded.data.release();
     return 0;
   } catch (const std::exception &error) {
     last_error = error.what();
