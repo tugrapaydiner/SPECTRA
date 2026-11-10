@@ -153,6 +153,80 @@ def test_native_input_buffers_keep_their_storage(
     assert bytes(offset_buffer) == struct.pack(f"={len(offsets)}Q", *offsets)
 
 
+def test_conflict_minimization_reuses_only_proved_dependencies(tmp_path, monkeypatch):
+    from spectra.sat import native_cdcl
+
+    source = native_cdcl.SOURCE.resolve().as_posix()
+    harness = tmp_path / "minimization.cpp"
+    harness.write_text('#include "' + source + '"\n' + r"""
+static bool supported(const Solver &s, int var,
+                      const std::vector<std::uint8_t> &sources,
+                      const std::vector<std::uint8_t> &allowed) {
+  if (s.levels[var] == 0 || sources[var]) return true;
+  if (!allowed[s.levels[var]] || s.reasons[var] < 0) return false;
+  for (const int literal : s.clauses[s.reasons[var]].lits) {
+    const int parent = Solver::variable(literal);
+    if (parent != var && !supported(s, parent, sources, allowed)) return false;
+  }
+  return true;
+}
+
+SPECTRA_EXPORT int spectra_g_test_minimization() {
+  Solver s(13);
+  for (int var = 1; var <= 13; ++var) s.levels[var] = 1;
+  s.levels[10] = 0;
+  s.levels[12] = 2;
+  const auto reason = [&](int var, std::vector<int> row) {
+    s.reasons[var] = s.add_clause(std::move(row), false);
+  };
+  reason(2, {2, -1});
+  reason(3, {3, -2});
+  reason(4, {4, -2});
+  reason(6, {6, -5});
+  reason(7, {7, -6, -2});
+  reason(8, {8, -6});
+  reason(9, {9, -2, -6, -5});
+  reason(11, {11, -10});
+  reason(12, {12, -1});
+  reason(13, {13, -12});
+  const std::vector<int> original{1, 3, 4, 7, 8, 9, 11, 13};
+  std::vector<std::uint8_t> sources(14, 0), allowed{0, 1, 0};
+  for (const int var : original) sources[var] = 1;
+  const std::vector<int> queries{3, 4, 7, 9, 8, 11, 13, 5, 4, 3};
+  for (const int sign : {1, -1}) {
+    s.seen = sources;
+    std::vector<int> touched = original, stack;
+    for (const int var : queries) {
+      bool expected = s.reasons[var] >= 0;
+      if (expected) {
+        for (const int literal : s.clauses[s.reasons[var]].lits) {
+          const int parent = Solver::variable(literal);
+          if (parent != var && !supported(s, parent, sources, allowed)) expected = false;
+        }
+      }
+      const auto before = s.seen;
+      const auto before_touched = touched;
+      if (s.redundant_literal(sign * var, allowed, stack, touched) != expected) return 1;
+      if (!expected && (s.seen != before || touched != before_touched)) return 2;
+      for (int seen_var = 1; seen_var <= 13; ++seen_var) {
+        if (s.seen[seen_var] && !supported(s, seen_var, sources, allowed)) return 3;
+      }
+    }
+    if (!s.seen[2] || s.seen[6] || s.seen[12]) return 4;
+    for (const int var : touched) s.seen[var] = 0;
+    if (std::any_of(s.seen.begin(), s.seen.end(), [](int value) { return value != 0; })) return 5;
+  }
+  return 0;
+}
+""", encoding="utf-8")
+    monkeypatch.setattr(native_cdcl, "SOURCE", harness)
+    library = ctypes.CDLL(str(build_native_cdcl(tmp_path / "minimization-build")))
+    check = library.spectra_g_test_minimization
+    check.argtypes = []
+    check.restype = ctypes.c_int
+    assert check() == 0
+
+
 def test_activity_underflow_preserves_relevant_variables(tmp_path, monkeypatch):
     from spectra.sat import native_cdcl
 

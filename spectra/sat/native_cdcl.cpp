@@ -62,7 +62,6 @@ struct Solver {
   std::vector<int> heap_positions;
   std::vector<int> variable_heap;
   std::vector<std::uint8_t> seen;
-  std::vector<std::uint8_t> minimize_seen;
   std::vector<int> trail;
   std::vector<int> trail_limits;
   std::size_t qhead = 0;
@@ -85,8 +84,7 @@ struct Solver {
         occurs(static_cast<std::size_t>(variables + 1), 0),
         polarity_bias(static_cast<std::size_t>(variables + 1), 0),
         heap_positions(static_cast<std::size_t>(variables + 1), -1),
-        seen(static_cast<std::size_t>(variables + 1), 0),
-        minimize_seen(static_cast<std::size_t>(variables + 1), 0) {}
+        seen(static_cast<std::size_t>(variables + 1), 0) {}
 
   static int variable(int literal) { return literal < 0 ? -literal : literal; }
 
@@ -413,16 +411,23 @@ struct Solver {
   }
 
   bool redundant_literal(
-      int literal, const std::vector<std::uint8_t> &allowed_levels) {
-    std::vector<int> stack;
-    std::vector<int> touched;
+      int literal, const std::vector<std::uint8_t> &allowed_levels,
+      std::vector<int> &stack, std::vector<int> &touched) {
+    stack.clear();
+    const std::size_t first = touched.size();
+    const auto rollback = [&] {
+      for (std::size_t index = first; index < touched.size(); ++index) {
+        seen[static_cast<std::size_t>(touched[index])] = 0;
+      }
+      touched.resize(first);
+    };
     stack.push_back(variable(literal));
     while (!stack.empty()) {
       const int current = stack.back();
       stack.pop_back();
       const int reason_id = reasons[static_cast<std::size_t>(current)];
       if (reason_id < 0) {
-        for (const int var : touched) minimize_seen[static_cast<std::size_t>(var)] = 0;
+        rollback();
         return false;
       }
       const Clause &reason = clauses[static_cast<std::size_t>(reason_id)];
@@ -435,20 +440,15 @@ struct Solver {
         if (level >= static_cast<int>(allowed_levels.size())
             || !allowed_levels[static_cast<std::size_t>(level)]
             || reasons[static_cast<std::size_t>(var)] < 0) {
-          for (const int item : touched) {
-            minimize_seen[static_cast<std::size_t>(item)] = 0;
-          }
+          rollback();
           return false;
         }
-        if (!minimize_seen[static_cast<std::size_t>(var)]) {
-          minimize_seen[static_cast<std::size_t>(var)] = 1;
-          touched.push_back(var);
-          stack.push_back(var);
-        }
+        seen[static_cast<std::size_t>(var)] = 1;
+        touched.push_back(var);
+        stack.push_back(var);
       }
     }
-    for (const int var : touched) minimize_seen[static_cast<std::size_t>(var)] = 0;
-    return true;
+    return true;  // Reuse proved dependencies until this conflict is finished.
   }
 
   void analyze(int conflict_id, std::vector<int> &learned,
@@ -499,12 +499,13 @@ struct Solver {
       const int level = levels[static_cast<std::size_t>(variable(learned[index]))];
       if (level > 0) allowed_levels[static_cast<std::size_t>(level)] = 1;
     }
+    std::vector<int> minimize_stack;
     std::size_t write = 1;
     for (std::size_t index = 1; index < learned.size(); ++index) {
       const int literal = learned[index];
       const int var = variable(literal);
       if (reasons[static_cast<std::size_t>(var)] >= 0
-          && redundant_literal(literal, allowed_levels)) {
+          && redundant_literal(literal, allowed_levels, minimize_stack, touched)) {
         continue;
       }
       learned[write++] = literal;
