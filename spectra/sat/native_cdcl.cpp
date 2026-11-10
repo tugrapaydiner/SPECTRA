@@ -45,6 +45,34 @@ struct Stats {
   std::uint64_t deleted_clauses = 0;
 };
 
+struct RestartHistory {
+  int recent[50] = {};
+  std::size_t next = 0;
+  std::size_t used = 0;
+  std::uint64_t recent_sum = 0;
+  double total_lbd = 0.0;
+
+  void observe(int lbd) {
+    if (used == 50) recent_sum -= static_cast<std::uint64_t>(recent[next]);
+    else ++used;
+    recent[next] = lbd;
+    recent_sum += static_cast<std::uint64_t>(lbd);
+    total_lbd += static_cast<double>(lbd);
+    next = (next + 1) % 50;
+  }
+
+  bool ready(std::uint64_t learned) const {
+    return used == 50 && learned > 0
+        && 0.8 * (static_cast<double>(recent_sum) / 50.0)
+             > total_lbd / static_cast<double>(learned);
+  }
+
+  void reset_window() {
+    next = used = 0;
+    recent_sum = 0;
+  }
+};
+
 struct Solver {
   int nvars;
   std::vector<Clause> clauses;
@@ -573,8 +601,7 @@ struct Solver {
       return 20;
     }
 
-    std::uint64_t next_restart = 100;
-    std::uint64_t restart_span = 100;
+    RestartHistory restart_history;
     std::uint64_t next_reduction = 512;
     std::uint64_t reduction_span = 512;
     std::vector<int> learned;
@@ -599,17 +626,17 @@ struct Solver {
           proof_clause_ids.push_back(-1);
           return 20;
         }
+        restart_history.observe(learned_lbd);
         if (stats.conflicts >= next_reduction) {
           reduce_database();
           reduction_span = std::min<std::uint64_t>(
               reduction_span * 3 / 2, 100000);
           next_reduction += reduction_span;
         }
-        if (stats.conflicts >= next_restart && decision_level() > 0) {
+        if (restart_history.ready(stats.learned_clauses) && decision_level() > 0) {
           backtrack(0);
           ++stats.restarts;
-          restart_span = std::min<std::uint64_t>(restart_span * 3 / 2, 100000);
-          next_restart += restart_span;
+          restart_history.reset_window();
         }
         continue;
       }

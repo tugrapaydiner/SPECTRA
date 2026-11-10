@@ -210,6 +210,70 @@ def test_native_input_buffers_keep_their_storage(
     assert bytes(offset_buffer) == struct.pack(f"={len(offsets)}Q", *offsets)
 
 
+def test_lbd_restart_window_preserves_global_history(tmp_path, monkeypatch):
+    from spectra.sat import native_cdcl
+
+    source = native_cdcl.SOURCE.resolve().as_posix()
+    harness = tmp_path / "restart_history.cpp"
+    harness.write_text('#include "' + source + '"\n' + r"""
+SPECTRA_EXPORT int spectra_g_test_restart_history() {
+  if (sizeof(RestartHistory) > 256) return 1;
+  RestartHistory history;
+  if (history.ready(0)) return 2;
+  for (std::uint64_t count = 1; count < 50; ++count) {
+    history.observe(2);
+    if (history.ready(count)) return 3;
+  }
+  history.observe(2);
+  if (history.ready(50)) return 4;
+  for (std::uint64_t count = 51; count <= 100; ++count) history.observe(10);
+  if (!history.ready(100)) return 5;
+  history.reset_window();
+  if (history.ready(100) || history.total_lbd != 600.0) return 6;
+  for (std::uint64_t count = 101; count < 150; ++count) {
+    history.observe(10);
+    if (history.ready(count)) return 7;
+  }
+  history.observe(10);
+  if (!history.ready(150)) return 8;
+
+  RestartHistory tie;
+  for (int i = 0; i < 25; ++i) tie.observe(2);
+  for (int i = 0; i < 75; ++i) tie.observe(10);
+  if (tie.ready(100)) return 9;
+
+  RestartHistory large;
+  for (int i = 0; i < 1000; ++i) large.observe(10000000);
+  if (large.recent_sum != 500000000 || large.ready(1000)) return 10;
+
+  RestartHistory sliding;
+  std::vector<int> observed;
+  std::uint64_t total = 0;
+  for (int i = 0; i < 2000; ++i) {
+    const int value = 1 + ((i * 31 + i / 53) % 200);
+    observed.push_back(value);
+    total += static_cast<std::uint64_t>(value);
+    sliding.observe(value);
+    if (observed.size() < 50) continue;
+    std::uint64_t recent_total = 0;
+    for (std::size_t j = observed.size() - 50; j < observed.size(); ++j) {
+      recent_total += static_cast<std::uint64_t>(observed[j]);
+    }
+    const bool expected = 4 * recent_total * observed.size() > 250 * total;
+    if (sliding.recent_sum != recent_total
+        || sliding.ready(observed.size()) != expected) return 11;
+  }
+  return 0;
+}
+""", encoding="utf-8")
+    monkeypatch.setattr(native_cdcl, "SOURCE", harness)
+    library = ctypes.CDLL(str(build_native_cdcl(tmp_path / "restart-history-build")))
+    check = library.spectra_g_test_restart_history
+    check.argtypes = []
+    check.restype = ctypes.c_int
+    assert check() == 0
+
+
 def test_conflict_minimization_reuses_only_proved_dependencies(tmp_path, monkeypatch):
     from spectra.sat import native_cdcl
 
