@@ -19,7 +19,6 @@ import ctypes
 from dataclasses import dataclass
 import hashlib
 from itertools import chain
-import json
 import os
 from pathlib import Path
 import platform
@@ -30,6 +29,7 @@ import tempfile
 import time
 from typing import Iterable
 
+from spectra._json import load_file
 from spectra._native_build import native_load_guard, publish_build, snapshot_source
 
 from .binary_core import (
@@ -499,7 +499,7 @@ def build_native_cdcl(
 
 def _check_receipt(library: Path) -> dict:
     receipt = library.with_name("build.json")
-    value = json.loads(receipt.read_text(encoding="utf-8"))
+    value = load_file(receipt)
     required = {
         "schema", "source", "source_sha256", "library", "library_sha256",
         "compiler", "compiler_version", "command", "stdout", "stderr",

@@ -29,6 +29,7 @@ from ._exact_wire import (
     pack_frozen_query_bank, unpack_query_bank,
 )
 from .exact_proof import decode_proof, verify_answer
+from ._json import load_file
 from ._native_build import native_load_guard, publish_build, snapshot_source
 
 SOURCE = Path(__file__).with_name('_native') / 'exact_binary.cpp'
@@ -341,7 +342,7 @@ def _read_build_receipt(library: Path) -> dict:
     library = Path(library).resolve()
     receipt = library.with_name('build.json')
     try:
-        record = json.loads(receipt.read_text(encoding='utf-8'))
+        record = load_file(receipt)
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError('trusted exact runtime requires a valid adjacent build.json') from error
     if type(record) is not dict:

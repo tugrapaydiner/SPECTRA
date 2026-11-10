@@ -45,6 +45,63 @@ _BUILDERS = (
 )
 
 
+_RECEIPT_RUNTIMES = (
+    ("spectra.exact", "ExactRuntime"),
+    ("spectra.sat.native_cdcl", "NativeCDCLRuntime"),
+    ("spectra.sat.native_binary_core", "NativeBinaryCore"),
+)
+
+
+@pytest.mark.parametrize("module_name,runtime_name", _RECEIPT_RUNTIMES)
+def test_native_receipt_read_is_bounded(tmp_path, monkeypatch, module_name, runtime_name):
+    from spectra._json import DEFAULT_MAX_BYTES
+
+    runtime_type = getattr(importlib.import_module(module_name), runtime_name)
+    library = tmp_path / "unused.dll"
+    library.touch()
+    receipt = library.with_name("build.json")
+    consumed = 0
+
+    class EndlessReceipt:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def read(self, size=-1):
+            nonlocal consumed
+            assert 0 < size <= 65536, "receipt read must use bounded chunks"
+            consumed += size
+            return b" " * size
+
+    original_open = Path.open
+
+    def open_receipt(path, *args, **kwargs):
+        return EndlessReceipt() if path == receipt else original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", open_receipt)
+    with pytest.raises(ValueError, match="exceeds"):
+        runtime_type(library)
+    assert consumed == DEFAULT_MAX_BYTES + 1
+
+
+@pytest.mark.parametrize("module_name,runtime_name", _RECEIPT_RUNTIMES)
+@pytest.mark.parametrize("content,message", [
+    ('{"schema":1,"schema":2}', "duplicate"),
+    ('{"elapsed_ns":NaN}', "nonfinite"),
+    ('[]', "receipt"),
+])
+def test_native_receipt_rejects_ambiguous_input(
+        tmp_path, module_name, runtime_name, content, message):
+    library = tmp_path / "unused.dll"
+    library.touch()
+    library.with_name("build.json").write_text(content, encoding="utf-8")
+    runtime_type = getattr(importlib.import_module(module_name), runtime_name)
+    with pytest.raises(ValueError, match=message):
+        runtime_type(library)
+
+
 @pytest.mark.parametrize("module_name,builder_name", _BUILDERS)
 @pytest.mark.parametrize("event", ("source-edit", "receipt-collision", "compiler-failure"))
 def test_native_build_publication_and_source_identity(

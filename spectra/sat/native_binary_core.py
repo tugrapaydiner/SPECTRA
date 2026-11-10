@@ -11,7 +11,6 @@ from array import array
 from dataclasses import dataclass, field
 import ctypes
 import hashlib
-import json
 import os
 from pathlib import Path
 import platform
@@ -23,6 +22,7 @@ import tempfile
 import time
 from typing import Iterable
 
+from spectra._json import load_file
 from spectra._native_build import native_load_guard, publish_build, snapshot_source
 
 SOURCE = Path(__file__).with_name("native_binary_core.cpp")
@@ -270,7 +270,9 @@ class NativeBinaryCore:
     def __init__(self, library: str | Path) -> None:
         path = Path(library).resolve(strict=True)
         receipt_path = path.with_name("build.json")
-        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt = load_file(receipt_path)
+        if type(receipt) is not dict:
+            raise ValueError("native general-CNF build receipt must be an object")
         if receipt.get("schema") != "spectra.general_native_build.v1":
             raise ValueError("native general-CNF build receipt schema differs")
         if receipt.get("native_abi") != NATIVE_ABI:
