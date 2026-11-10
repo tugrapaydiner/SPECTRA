@@ -743,8 +743,9 @@ def test_explicit_legacy_run_preserves_historical_metadata_conflict_status(tmp_p
 
 @pytest.fixture(scope="module")
 def preprocessed_native_libraries(tmp_path_factory):
-    if sys.platform != "linux" or shutil.which("g++") is None:
-        pytest.skip("native binary frontend currently requires Linux and g++")
+    compiler = "cl" if os.name == "nt" else "g++"
+    if sys.platform not in ("linux", "win32") or shutil.which(compiler) is None:
+        pytest.skip("native binary frontend requires Linux/g++ or Windows/MSVC")
     from spectra.sat.native_binary_core import build_native_binary_core
     from spectra.sat.native_cdcl import build_native_cdcl
     root = tmp_path_factory.mktemp("preprocessed-native-worker")
