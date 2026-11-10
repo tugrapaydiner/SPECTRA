@@ -1271,6 +1271,7 @@ def test_original_rup_composes_native_backend_in_original_namespace(native_proof
     (2, ((1, 2), (1, -2), (-1, 2), (-1, -2)), "binary", ((1,), ())),
     (2, ((1,), (1, 2), (1, -2), (-1, 2), (-1, -2)), "binary", ((),)),
     (1, ((1,), (-1,)), "binary", ((),)),
+    (3, ((1,), (2,), (3,), (-1, -2, -3)), "unit", ((),)),
     (5, _equivalence_created_units() + ((-5,), (-1, -3, 5)), "unit", None),
     (0, ((),), "unit", ((),)),
 ))

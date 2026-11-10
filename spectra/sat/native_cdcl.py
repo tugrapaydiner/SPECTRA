@@ -278,6 +278,8 @@ def _compose_native_original_rup(
         return target if (literal > 0) == (label > 0) else -target
 
     def append_substituted() -> None:
+        if count == nvars:  # Identity substitution adds no new clauses.
+            return
         # Validate all branch evidence before calling this function: a tiny
         # certificate budget must never mask malformed native evidence.
         # Substitute the full row first; fixed literals are never omitted from
