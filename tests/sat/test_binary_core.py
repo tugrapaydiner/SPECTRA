@@ -117,6 +117,22 @@ def test_canonicalization_validates_before_removing_tautologies():
         canonical_cnf(1, (7,))
 
 
+def test_empty_and_unit_rows_keep_order_and_owned_values():
+    rows = [[], [2], [-1], [2], [], [-1], [1, -1]]
+    canonical = canonical_cnf(2, (iter(row) for row in rows))
+    assert canonical == ((), (-1,), (2,))
+    rows[1][0] = -2
+    assert canonical == ((), (-1,), (2,))
+    assert canonical_cnf(0, (iter(()), iter(()))) == ((),)
+
+
+@pytest.mark.parametrize("invalid", [0, 2, -2, True, 1.0])
+def test_canonicalization_validates_unit_suffix_after_contradiction(invalid):
+    rows = ((), (1,), (-1,), (invalid,))
+    with pytest.raises(ValueError):
+        canonical_cnf(1, (iter(row) for row in rows))
+
+
 def test_zero_variable_true_and_false_formulas():
     true_core = build_binary_core(0, ())
     assert not true_core.contradiction

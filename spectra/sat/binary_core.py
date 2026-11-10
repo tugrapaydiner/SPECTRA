@@ -141,6 +141,11 @@ def canonical_cnf(
             row = tuple(clause)
         except TypeError as exc:
             raise ValueError("each clause must be iterable") from exc
+        if len(row) <= 1:
+            if row:
+                _validate_literal(row[0], nvars)
+            rows.add(row)
+            continue
         values: set[int] = set()
         tautology = False
         for literal in row:
