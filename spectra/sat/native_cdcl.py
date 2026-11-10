@@ -583,8 +583,7 @@ def _decode(data: bytes) -> tuple[int, int, NativeStats, tuple[bool, ...], DRUPP
             size = width * _I32.size
             if offset + size > len(data):
                 raise ValueError("native proof clause is truncated")
-            row = tuple(_I32.unpack_from(data, offset + index * 4)[0]
-                        for index in range(width))
+            row = struct.unpack_from(f"<{width}i", data, offset)
             offset += size
             additions.append(row)
         if offset != len(data):

@@ -2097,3 +2097,27 @@ print("nine invalid buffer sizes rejected before reading")
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert completed.stdout.strip() == "nine invalid buffer sizes rejected before reading"
+
+
+def test_native_unsat_decoder_preserves_signed_rows_and_bounds():
+    from spectra.sat.native_cdcl import _decode
+
+    header = struct.pack("<4sII8Q", b"SGC1", 20, 4096, *range(8))
+    rows = ((), (-2147483648,), (2147483647, -1, 1), tuple(range(-1024, 1025)))
+    raw = header + struct.pack("<I", len(rows))
+    for row in rows:
+        raw += struct.pack("<I", len(row)) + struct.pack(f"<{len(row)}i", *row)
+    status, nvars, stats, model, proof = _decode(raw)
+    assert (status, nvars, model) == (20, 4096, ())
+    assert tuple(vars(stats).values()) == tuple(range(8))
+    assert proof.additions == rows
+    assert all(type(literal) is int for row in proof.additions for literal in row)
+    for boundary in (76, 77, 79, 80, 83, 84, 87, 88, 91, len(raw) - 1):
+        with pytest.raises(ValueError, match="truncated"):
+            _decode(raw[:boundary])
+    with pytest.raises(ValueError, match="trailing bytes"):
+        _decode(raw + b"\x00")
+    with pytest.raises(ValueError, match="count is excessive"):
+        _decode(header + struct.pack("<II", 1, 100000001))
+    empty = _decode(header + struct.pack("<I", 0))
+    assert empty[4].additions == ()
