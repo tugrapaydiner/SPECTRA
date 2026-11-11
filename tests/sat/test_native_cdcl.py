@@ -2121,3 +2121,41 @@ def test_native_unsat_decoder_preserves_signed_rows_and_bounds():
         _decode(header + struct.pack("<II", 1, 100000001))
     empty = _decode(header + struct.pack("<I", 0))
     assert empty[4].additions == ()
+
+
+def test_raw_native_offsets_rejected_before_solver_allocation(runtime, tmp_path):
+    from benchmarks.sat.campaign import run_process
+
+    program = r"""
+from array import array
+import ctypes
+import json
+import sys
+from spectra.sat.native_cdcl import NativeCDCLRuntime, solve_cnf_native
+
+runtime = NativeCDCLRuntime(sys.argv[1])
+count = 500001
+backing = array("i", [1]) * count
+literals = (ctypes.c_int32 * count).from_buffer(backing)
+for bounds in ((0, 2, 1, count), (0, count + 1, count)):
+    offsets = (ctypes.c_uint64 * len(bounds))(*bounds)
+    pointer, size = ctypes.c_void_p(123), ctypes.c_size_t(123)
+    code = runtime._library.spectra_g_native_solve(
+        2000000, literals, count, offsets, len(bounds) - 1, 0, 0,
+        ctypes.byref(pointer), ctypes.byref(size))
+    assert code == 1 and not pointer.value and size.value == 0
+    message = runtime._library.spectra_g_native_error()
+    assert message == b"clause offsets are not monotonic", repr(message)
+result = solve_cnf_native(runtime, 1, ((1,),))
+assert result.status == "SAT_VERIFIED" and result.model == (True,)
+print(json.dumps({"malformed_rejected": 2, "recovery": result.status}))
+"""
+    # The header would require more solver state than this child can allocate.
+    process = run_process(
+        [sys.executable, "-B", "-c", program, str(runtime.path)],
+        tmp_path / "offset-admission", timeout=10, memory_mib=128, output_mib=1)
+    assert not process["timed_out"] and process["spawn_error"] is None, process
+    assert not process["output_limit_exceeded"], process
+    assert process["returncode"] == 0, (tmp_path / "offset-admission/stderr.txt").read_text()
+    observed = json.loads((tmp_path / "offset-admission/stdout.txt").read_text())
+    assert observed == {"malformed_rejected": 2, "recovery": "SAT_VERIFIED"}

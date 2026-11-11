@@ -784,6 +784,11 @@ SPECTRA_EXPORT int spectra_g_native_solve(
         offsets[0] != 0 || offsets[clause_count] != literal_count) {
       throw std::invalid_argument("clause offsets differ from literal buffer");
     }
+    for (std::size_t clause = 0; clause < clause_count; ++clause) {
+      if (offsets[clause] > offsets[clause + 1] || offsets[clause + 1] > literal_count) {
+        throw std::invalid_argument("clause offsets are not monotonic");
+      }
+    }
     std::vector<int> original_variables;
     std::vector<int> compact_literals;
     const bool compact = nvars && literal_count <= nvars / 4;  // At least 75% unused.
@@ -816,9 +821,6 @@ SPECTRA_EXPORT int spectra_g_native_solve(
     for (std::size_t clause = 0; clause < clause_count; ++clause) {
       const std::uint64_t begin = offsets[clause];
       const std::uint64_t end = offsets[clause + 1];
-      if (begin > end || end > literal_count) {
-        throw std::invalid_argument("clause offsets are not monotonic");
-      }
       solver.add_initial(input + begin, input + end);
     }
     solver.initialize_heap();
