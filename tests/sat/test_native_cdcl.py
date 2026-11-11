@@ -2155,7 +2155,7 @@ print(json.dumps({"malformed_rejected": 2, "recovery": result.status}))
         [sys.executable, "-B", "-c", program, str(runtime.path)],
         tmp_path / "offset-admission", timeout=10, memory_mib=128, output_mib=1)
     assert not process["timed_out"] and process["spawn_error"] is None, process
-    assert not process["output_limit_exceeded"], process
+    assert not process.get("output_limit_exceeded", False), process
     assert process["returncode"] == 0, (tmp_path / "offset-admission/stderr.txt").read_text()
     observed = json.loads((tmp_path / "offset-admission/stdout.txt").read_text())
     assert observed == {"malformed_rejected": 2, "recovery": "SAT_VERIFIED"}
