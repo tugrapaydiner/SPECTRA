@@ -6,6 +6,8 @@
 #include <deque>
 #include <limits>
 #include <map>
+#include <memory>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -501,24 +503,48 @@ Reduction reduce_formula(std::uint32_t nvars, std::vector<Clause> canonical) {
     return result;
 }
 
-void append_u32(std::vector<std::uint8_t>& output, std::uint32_t value) {
-    for (unsigned shift = 0; shift < 32; shift += 8) output.push_back(static_cast<std::uint8_t>(value >> shift));
+struct SerializedResult {
+    std::unique_ptr<std::uint8_t, decltype(&std::free)> data{nullptr, &std::free};
+    std::size_t size = 0;
+};
+
+void add_output_items(std::size_t& size, std::size_t count, std::size_t width) {
+    if (count > (std::numeric_limits<std::size_t>::max() - size) / width) {
+        throw std::length_error("native binary core result exceeds addressable size");
+    }
+    size += count * width;
 }
 
-void append_i32(std::vector<std::uint8_t>& output, std::int32_t value) {
+void append_u32(std::uint8_t*& output, std::uint32_t value) {
+    for (unsigned shift = 0; shift < 32; shift += 8) *output++ = static_cast<std::uint8_t>(value >> shift);
+}
+
+void append_i32(std::uint8_t*& output, std::int32_t value) {
     append_u32(output, static_cast<std::uint32_t>(value));
 }
 
-void append_u64(std::vector<std::uint8_t>& output, std::uint64_t value) {
-    for (unsigned shift = 0; shift < 64; shift += 8) output.push_back(static_cast<std::uint8_t>(value >> shift));
+void append_u64(std::uint8_t*& output, std::uint64_t value) {
+    for (unsigned shift = 0; shift < 64; shift += 8) *output++ = static_cast<std::uint8_t>(value >> shift);
 }
 
-std::vector<std::uint8_t> serialize(std::uint32_t nvars, const Reduction& result) {
+SerializedResult serialize(std::uint32_t nvars, const Reduction& result) {
+    std::size_t size = 84;  // Header and the first residual offset.
+    add_output_items(size, result.class_literals.size(), 4);
+    add_output_items(size, result.mapping.size(), 4);
+    add_output_items(size, result.fixed.size(), 1);
+    add_output_items(size, result.residual_clauses.size(), 8);
     std::uint64_t residual_literals = 0;
-    for (const Clause& row : result.residual_clauses) residual_literals += row.size();
-    std::vector<std::uint8_t> output;
-    output.reserve(96ULL + 9ULL * nvars + 8ULL * (result.residual_clauses.size() + 1) + 4ULL * residual_literals);
-    output.insert(output.end(), {'S', 'G', 'C', '1'});
+    for (const Clause& row : result.residual_clauses) {
+        add_output_items(size, row.size(), 4);
+        residual_literals += row.size();
+    }
+    SerializedResult encoded;
+    encoded.data.reset(static_cast<std::uint8_t*>(std::malloc(size)));
+    if (!encoded.data) throw std::bad_alloc();
+    encoded.size = size;
+    auto* output = encoded.data.get();
+    std::memcpy(output, "SGC1", 4);
+    output += 4;
     append_u32(output, 1);
     append_u32(output, result.contradiction ? 1U : 0U);
     append_u32(output, result.conflict_code);
@@ -537,7 +563,7 @@ std::vector<std::uint8_t> serialize(std::uint32_t nvars, const Reduction& result
     append_u64(output, residual_literals);
     for (std::int32_t value : result.class_literals) append_i32(output, value);
     for (std::int32_t value : result.mapping) append_i32(output, value);
-    output.insert(output.end(), result.fixed.begin(), result.fixed.end());
+    for (std::uint8_t value : result.fixed) *output++ = value;
     std::uint64_t cursor = 0;
     append_u64(output, 0);
     for (const Clause& row : result.residual_clauses) {
@@ -547,7 +573,7 @@ std::vector<std::uint8_t> serialize(std::uint32_t nvars, const Reduction& result
     for (const Clause& row : result.residual_clauses) {
         for (std::int32_t literal : row) append_i32(output, literal);
     }
-    return output;
+    return encoded;
 }
 
 void write_error(char* buffer, std::uint64_t capacity, const char* message) noexcept {
@@ -578,12 +604,9 @@ int reduce_entry(
         std::vector<Clause> canonical = read_input(
             nvars, clause_count, offsets, literals, literal_count, canonical_input);
         const Reduction reduction = reduce_formula(nvars, std::move(canonical));
-        const std::vector<std::uint8_t> bytes = serialize(nvars, reduction);
-        void* memory = std::malloc(bytes.size());
-        if (!memory) throw std::bad_alloc();
-        std::memcpy(memory, bytes.data(), bytes.size());
-        *output_data = static_cast<std::uint8_t*>(memory);
-        *output_size = bytes.size();
+        auto bytes = serialize(nvars, reduction);
+        *output_size = bytes.size;
+        *output_data = bytes.data.release();
         return 0;
     } catch (const std::bad_alloc&) {
         write_error(error, error_capacity, "native binary core ran out of memory");
