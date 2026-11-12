@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import time
-from data.cnf import CNF, SplitMix64
+from .formula import CNF, SplitMix64
 from .ranked import RankedSet
 from .search import SolveResult
 from .state import CompactCNFRepairState

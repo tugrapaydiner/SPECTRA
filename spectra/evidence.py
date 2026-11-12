@@ -1,4 +1,4 @@
-"""Fail-closed file identity checks for frozen research evidence.
+"""Fail-closed file identity checks for evidence directories.
 
 A matching checksum proves byte identity, not data independence or scientific
 validity. Manifests use relative paths and can be moved with their evidence root.

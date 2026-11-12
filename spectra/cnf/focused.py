@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import hashlib
 import time
 
-from data.cnf import CNF, SplitMix64
+from .formula import CNF, SplitMix64
 from .indexed import PreparedCNF, _BreakState, _settings
 from .search import SolveResult
 

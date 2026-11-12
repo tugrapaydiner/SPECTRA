@@ -8,15 +8,10 @@ from __future__ import annotations
 from array import array
 from dataclasses import dataclass
 import ctypes as C
-import hashlib
-import json
 import math
 import os
 from pathlib import Path
-import platform
-import subprocess
 import sys
-import threading
 from typing import Iterable
 from .svm_lifetime import _NativeOwner
 

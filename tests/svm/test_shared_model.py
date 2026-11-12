@@ -13,7 +13,7 @@ import zlib
 
 import pytest
 from spectra.svm import Session, verify_certificate
-from spectra.svm_shared import PreparedModel, SHARED_SCHEDULES, _decode
+from spectra.svm_shared import PreparedModel, SHARED_SCHEDULES
 from spectra.svm_export import export_prepared_svc
 
 

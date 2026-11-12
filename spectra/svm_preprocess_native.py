@@ -6,12 +6,9 @@ to the reference on the same bounded materialized rows; no labels are cached.
 """
 from __future__ import annotations
 
-import hashlib
 import importlib.util
-import json
 import itertools
 from pathlib import Path
-import subprocess
 import sys
 import sysconfig
 
