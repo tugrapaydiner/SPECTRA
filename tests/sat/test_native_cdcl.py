@@ -2068,6 +2068,15 @@ size_max = ctypes.c_size_t(-1).value
 bad_offsets = ctypes.cast(ctypes.c_void_p(1), ctypes.POINTER(ctypes.c_uint64))
 bad_literals = ctypes.cast(ctypes.c_void_p(1), ctypes.POINTER(ctypes.c_int32))
 empty_offsets = (ctypes.c_uint64 * 1)(0)
+int_max = (1 << (ctypes.sizeof(ctypes.c_int) * 8 - 1)) - 1
+for clause_count in (int_max + 1, int_max + 2):
+    output, size = ctypes.c_void_p(1), ctypes.c_size_t(123)
+    code = runtime._library.spectra_g_native_solve(
+        0, None, 0, bad_offsets, clause_count, 0, 0,
+        ctypes.byref(output), ctypes.byref(size),
+    )
+    assert code == 1 and output.value is None and size.value == 0
+    assert runtime._library.spectra_g_native_error() == b"too many clauses"
 cases = ((size_max, 0), (size_max // ctypes.sizeof(ctypes.c_uint64), 0),
          (1, size_max // ctypes.sizeof(ctypes.c_int32) + 1))
 for clause_count, literal_count in cases:
@@ -2086,7 +2095,8 @@ for clause_count, literal_count in cases:
     assert runtime._verify_drup(
         0, None, 0, empty_offsets, 0, literals, literal_count, bad_offsets, clause_count,
     ) == -1
-print("nine invalid buffer sizes rejected before reading")
+assert runtime.solve_residual(1, ((1,),))[:2] == (10, (True,))
+print("eleven invalid buffer sizes rejected before reading")
 """
     root = Path(__file__).resolve().parents[2]
     environment = os.environ.copy()
@@ -2096,7 +2106,7 @@ print("nine invalid buffer sizes rejected before reading")
         cwd=root, env=environment, capture_output=True, text=True, timeout=10,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert completed.stdout.strip() == "nine invalid buffer sizes rejected before reading"
+    assert completed.stdout.strip() == "eleven invalid buffer sizes rejected before reading"
 
 
 def test_native_unsat_decoder_preserves_signed_rows_and_bounds():
