@@ -254,6 +254,71 @@ _check_raw_native_limits(NativeBinaryCore(sys.argv[1]))
     assert result["returncode"] == 0, (destination / "stderr.txt").read_text()
 
 
+def _check_raw_native_admission(runtime, buffer_kind):
+    if buffer_kind == "offsets":
+        clause_count, literal_count = 6_000_000, 1
+        offsets = (ctypes.c_uint64 * (clause_count + 1))()
+        offsets[-1] = literal_count
+        literals = (ctypes.c_int32 * 1)(-1)
+        buffer, original = offsets, 0
+        mutations = ((1, 2), (clause_count // 2, 2),
+                     (clause_count - 1, 2), (clause_count // 2, 1))
+    else:
+        assert buffer_kind == "literals"
+        clause_count, literal_count = 1, 1 << 24
+        offsets = (ctypes.c_uint64 * 2)(0, literal_count)
+        literals = (ctypes.c_int32 * literal_count)()
+        ctypes.memset(literals, 255, ctypes.sizeof(literals))
+        buffer, original = literals, -1
+        mutations = tuple((index, value) for index in (0, literal_count - 1)
+                          for value in (0, 2, -2, -(2**31)))
+    checked = 0
+    for name in ("spectra_general_reduce", "spectra_general_reduce_canonical"):
+        expected = b"clause offsets are not monotone"
+        if buffer_kind == "literals":
+            prefix = b"canonical " if name.endswith("_canonical") else b""
+            expected = prefix + b"CNF literal must be nonzero and in range"
+        for index, value in mutations:
+            buffer[index] = value
+            output = ctypes.cast(ctypes.c_void_p(1), ctypes.POINTER(ctypes.c_uint8))
+            size = ctypes.c_uint64(123)
+            error = ctypes.create_string_buffer(128)
+            code = getattr(runtime._module, name)(
+                1, clause_count, offsets, literals, literal_count,
+                ctypes.byref(output), ctypes.byref(size), error, len(error),
+            )
+            buffer[index] = original
+            assert code == 1, (name, buffer_kind, index, value, code, error.value)
+            assert error.value == expected
+            assert not output and size.value == 0
+            checked += 1
+    assert runtime.reduce(1, ((1,),)).fixed == (True,)
+    prepared = runtime.prepare_canonical(1, ((1,),))
+    assert runtime.reduce_prepared(prepared).fixed == (True,)
+    return checked
+
+
+@pytest.mark.parametrize("buffer_kind,expected_checks", [("offsets", 8), ("literals", 16)])
+def test_raw_native_rejects_malformed_input_before_allocation(
+        native_runtime, tmp_path, buffer_kind, expected_checks):
+    from benchmarks.sat.campaign import run_process
+
+    program = """
+import sys
+from spectra.sat.native_binary_core import NativeBinaryCore
+from tests.sat.test_native_binary_core import _check_raw_native_admission
+print(_check_raw_native_admission(NativeBinaryCore(sys.argv[1]), sys.argv[2]))
+"""
+    destination = tmp_path / "raw-admission"
+    result = run_process(
+        [sys.executable, "-c", program, str(native_runtime.path), buffer_kind], destination,
+        timeout=10, memory_mib=128, output_mib=1, workdir=tmp_path,
+    )
+    assert not result["timed_out"] and not result.get("output_limit_exceeded", False)
+    assert result["returncode"] == 0, (destination / "stderr.txt").read_text()
+    assert (destination / "stdout.txt").read_text().strip() == str(expected_checks)
+
+
 def test_build_is_receipt_bound_and_refuses_replacement(native_runtime, tmp_path):
     assert {path.name for path in native_runtime.path.parent.iterdir()} == {
         native_runtime.path.name, "build.json",

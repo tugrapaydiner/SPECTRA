@@ -147,15 +147,26 @@ std::vector<Clause> read_input(
     if (offsets[0] != 0 || offsets[clause_count] != literal_count) {
         throw std::invalid_argument("clause offsets do not span the literal array");
     }
+    for (std::uint64_t index = 0; index < clause_count; ++index) {
+        if (offsets[index] > offsets[index + 1] || offsets[index + 1] > literal_count) {
+            throw std::invalid_argument("clause offsets are not monotone");
+        }
+    }
+    for (std::uint64_t index = 0; index < literal_count; ++index) {
+        const std::int64_t literal = literals[index];
+        if (!literal || literal < -static_cast<std::int64_t>(nvars) ||
+            literal > static_cast<std::int64_t>(nvars)) {
+            throw std::invalid_argument(canonical_input
+                ? "canonical CNF literal must be nonzero and in range"
+                : "CNF literal must be nonzero and in range");
+        }
+    }
     std::vector<Clause> rows;
     rows.reserve(static_cast<std::size_t>(clause_count));
     ClauseLess clause_less;
     for (std::uint64_t index = 0; index < clause_count; ++index) {
         const std::uint64_t start = offsets[index];
         const std::uint64_t stop = offsets[index + 1];
-        if (start > stop || stop > literal_count) {
-            throw std::invalid_argument("clause offsets are not monotone");
-        }
         Clause row;
         row.reserve(static_cast<std::size_t>(stop - start));
         for (std::uint64_t offset = start; offset < stop; ++offset) row.push_back(literals[offset]);
