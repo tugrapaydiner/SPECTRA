@@ -929,6 +929,7 @@ class RUPReplay {
       : values(static_cast<std::size_t>(nvars) + 1, 0) {}
 
   void append(std::vector<int> row) {
+    if (has_empty) return;
     if (row.empty()) {
       has_empty = true;
     } else if (row.size() == 1) {

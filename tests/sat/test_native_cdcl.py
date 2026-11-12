@@ -2264,3 +2264,57 @@ print(json.dumps({"prefix": prefix, "status": "UNSAT_VERIFIED", "malformed_rejec
     assert process["returncode"] == 0, (tmp_path / "initial-contradiction/stderr.txt").read_text()
     observed = json.loads((tmp_path / "initial-contradiction/stdout.txt").read_text())
     assert observed == {"prefix": prefix, "status": "UNSAT_VERIFIED", "malformed_rejected": 2}
+
+
+@pytest.mark.parametrize("leading_clause", (False, True))
+def test_native_drup_empty_original_bounds_storage(runtime, tmp_path, leading_clause):
+    from benchmarks.sat.campaign import run_process
+
+    program = r"""
+from array import array
+import ctypes
+import json
+import sys
+from spectra.sat.native_cdcl import NativeCDCLRuntime
+
+runtime = NativeCDCLRuntime(sys.argv[1])
+leading = sys.argv[2] == 'True'
+backing = array('i', [1, 2] if leading else [])
+bounds = array('Q', [0, 2, 2] if leading else [0, 0])
+backing.extend(array('i', [2, 3]) * 2000000)
+bounds.extend(range(bounds[-1] + 2, len(backing) + 1, 2))
+literals = (ctypes.c_int32 * len(backing)).from_buffer(backing)
+offsets = (ctypes.c_uint64 * len(bounds)).from_buffer(bounds)
+empty = (ctypes.c_uint64 * 2)(0, 0)
+
+def replay(proof=None, proof_offsets=empty, proof_count=1):
+    return runtime._verify_drup(
+        3, literals, len(literals), offsets, len(offsets) - 1,
+        proof, len(proof) if proof is not None else 0, proof_offsets, proof_count)
+
+# The original empty clause justifies the final empty proof clause.
+code = replay()
+assert code == 1, (code, runtime._library.spectra_g_native_error())
+backing[-1] = 0
+assert replay() == -1
+assert runtime._library.spectra_g_native_error() == b'RUP literal outside declared range'
+backing[-1] = 3
+invalid = (ctypes.c_int32 * 2)(1, 1)
+invalid_bounds = (ctypes.c_uint64 * 3)(0, 2, 2)
+assert replay(invalid, invalid_bounds, 2) == -1
+assert runtime._library.spectra_g_native_error() == b'RUP row must have increasing distinct variables'
+unfinished = (ctypes.c_int32 * 1)(1)
+unfinished_bounds = (ctypes.c_uint64 * 2)(0, 1)
+assert replay(unfinished, unfinished_bounds) == 0
+assert replay() == 1
+assert runtime._library.spectra_g_native_error() == b''
+print(json.dumps({'verified': True, 'malformed_rejected': 2, 'unfinished_rejected': True}))
+"""
+    process = run_process(
+        [sys.executable, "-B", "-c", program, str(runtime.path), str(leading_clause)],
+        tmp_path / "empty-original", timeout=10, memory_mib=128, output_mib=1)
+    assert not process["timed_out"] and process["spawn_error"] is None, process
+    assert not process.get("output_limit_exceeded", False), process
+    assert process["returncode"] == 0, (tmp_path / "empty-original/stderr.txt").read_text()
+    observed = json.loads((tmp_path / "empty-original/stdout.txt").read_text())
+    assert observed == {"verified": True, "malformed_rejected": 2, "unfinished_rejected": True}
