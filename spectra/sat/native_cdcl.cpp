@@ -789,6 +789,13 @@ SPECTRA_EXPORT int spectra_g_native_solve(
         throw std::invalid_argument("clause offsets are not monotonic");
       }
     }
+    for (std::size_t index = 0; index < literal_count; ++index) {
+      const int literal = literals[index];
+      if (!literal || literal == std::numeric_limits<int>::min() ||
+          Solver::variable(literal) > static_cast<int>(nvars)) {
+        throw std::invalid_argument("literal outside declared variable range");
+      }
+    }
     std::vector<int> original_variables;
     std::vector<int> compact_literals;
     const bool compact = nvars && literal_count <= nvars / 4;  // At least 75% unused.
@@ -796,10 +803,6 @@ SPECTRA_EXPORT int spectra_g_native_solve(
       original_variables.reserve(literal_count);
       for (std::size_t index = 0; index < literal_count; ++index) {
         const int literal = literals[index];
-        if (!literal || literal == std::numeric_limits<int>::min() ||
-            Solver::variable(literal) > static_cast<int>(nvars)) {
-          throw std::invalid_argument("literal outside declared variable range");
-        }
         original_variables.push_back(Solver::variable(literal));
       }
       std::sort(original_variables.begin(), original_variables.end());

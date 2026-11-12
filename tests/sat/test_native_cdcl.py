@@ -2123,7 +2123,7 @@ def test_native_unsat_decoder_preserves_signed_rows_and_bounds():
     assert empty[4].additions == ()
 
 
-def test_raw_native_offsets_rejected_before_solver_allocation(runtime, tmp_path):
+def test_raw_native_buffers_rejected_before_solver_allocation(runtime, tmp_path):
     from benchmarks.sat.campaign import run_process
 
     program = r"""
@@ -2146,16 +2146,28 @@ for bounds in ((0, 2, 1, count), (0, count + 1, count)):
     assert code == 1 and not pointer.value and size.value == 0
     message = runtime._library.spectra_g_native_error()
     assert message == b"clause offsets are not monotonic", repr(message)
+offsets = (ctypes.c_uint64 * 2)(0, count)
+for index, invalid in ((0, -(1 << 31)), (count - 1, 0),
+                       (count - 1, 2000001), (count - 1, -2000001)):
+    backing[index] = invalid
+    pointer, size = ctypes.c_void_p(123), ctypes.c_size_t(123)
+    code = runtime._library.spectra_g_native_solve(
+        2000000, literals, count, offsets, 1, 0, 0,
+        ctypes.byref(pointer), ctypes.byref(size))
+    assert code == 1 and not pointer.value and size.value == 0
+    message = runtime._library.spectra_g_native_error()
+    assert message == b"literal outside declared variable range", repr(message)
+    backing[index] = 1
 result = solve_cnf_native(runtime, 1, ((1,),))
 assert result.status == "SAT_VERIFIED" and result.model == (True,)
-print(json.dumps({"malformed_rejected": 2, "recovery": result.status}))
+print(json.dumps({"malformed_rejected": 6, "recovery": result.status}))
 """
     # The header would require more solver state than this child can allocate.
     process = run_process(
         [sys.executable, "-B", "-c", program, str(runtime.path)],
-        tmp_path / "offset-admission", timeout=10, memory_mib=128, output_mib=1)
+        tmp_path / "buffer-admission", timeout=10, memory_mib=128, output_mib=1)
     assert not process["timed_out"] and process["spawn_error"] is None, process
     assert not process.get("output_limit_exceeded", False), process
-    assert process["returncode"] == 0, (tmp_path / "offset-admission/stderr.txt").read_text()
-    observed = json.loads((tmp_path / "offset-admission/stdout.txt").read_text())
-    assert observed == {"malformed_rejected": 2, "recovery": "SAT_VERIFIED"}
+    assert process["returncode"] == 0, (tmp_path / "buffer-admission/stderr.txt").read_text()
+    observed = json.loads((tmp_path / "buffer-admission/stdout.txt").read_text())
+    assert observed == {"malformed_rejected": 6, "recovery": "SAT_VERIFIED"}
