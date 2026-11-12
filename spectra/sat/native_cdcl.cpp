@@ -828,12 +828,12 @@ SPECTRA_EXPORT int spectra_g_native_solve(
     const int *input = literal_count ? (compact ? compact_literals.data() : literals)
                                     : &empty_literal;
     Solver solver(compact ? static_cast<int>(original_variables.size()) : static_cast<int>(nvars));
-    for (std::size_t clause = 0; clause < clause_count; ++clause) {
+    for (std::size_t clause = 0; clause < clause_count && !solver.root_conflict; ++clause) {
       const std::uint64_t begin = offsets[clause];
       const std::uint64_t end = offsets[clause + 1];
       solver.add_initial(input + begin, input + end);
     }
-    solver.initialize_heap();
+    if (!solver.root_conflict) solver.initialize_heap();
     const int status = solver.solve(max_conflicts, max_learned_literals);
     auto encoded = encode_result(solver, status, nvars, original_variables);
     *output_size = encoded.size;

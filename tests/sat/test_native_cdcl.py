@@ -2181,3 +2181,66 @@ print(json.dumps({"malformed_rejected": 6, "recovery": result.status}))
     assert process["returncode"] == 0, (tmp_path / "buffer-admission/stderr.txt").read_text()
     observed = json.loads((tmp_path / "buffer-admission/stdout.txt").read_text())
     assert observed == {"malformed_rejected": 6, "recovery": "SAT_VERIFIED"}
+
+
+@pytest.mark.parametrize("prefix", ("empty", "units"))
+def test_raw_native_initial_contradiction_bounds_clause_storage(runtime, tmp_path, prefix):
+    from benchmarks.sat.campaign import run_process
+
+    program = r"""
+from array import array
+import ctypes
+import json
+import sys
+from spectra.sat.native_cdcl import NativeCDCLRuntime, _decode, solve_cnf_native, verify_drup_proof
+
+runtime = NativeCDCLRuntime(sys.argv[1])
+prefix = sys.argv[2]
+count = 1000000
+backing = array("i", [] if prefix == "empty" else [1, -1])
+backing.extend(array("i", [2, 3]) * count)
+bounds = array("Q", [0, 0] if prefix == "empty" else [0, 1, 2])
+bounds.extend(range(bounds[-1] + 2, len(backing) + 1, 2))
+literals = (ctypes.c_int32 * len(backing)).from_buffer(backing)
+offsets = (ctypes.c_uint64 * len(bounds)).from_buffer(bounds)
+
+def call():
+    pointer, size = ctypes.c_void_p(123), ctypes.c_size_t(123)
+    code = runtime._library.spectra_g_native_solve(
+        3, literals, len(backing), offsets, len(bounds) - 1, 0, 0,
+        ctypes.byref(pointer), ctypes.byref(size))
+    if code:
+        assert not pointer.value and size.value == 0
+        return code, runtime._library.spectra_g_native_error()
+    try:
+        return code, _decode(ctypes.string_at(pointer, size.value))
+    finally:
+        runtime._library.spectra_g_native_free(pointer)
+
+code, result = call()
+assert code == 0, repr(result)
+status, nvars, stats, model, proof = result
+assert status == 20 and nvars == 3 and model == () and proof.additions == ((),)
+assert not any(vars(stats).values())
+# Repeated (2, 3) clauses cannot invalidate the contradictory original prefix.
+original_prefix = ((),) if prefix == "empty" else ((1,), (-1,))
+assert verify_drup_proof(3, original_prefix + ((2, 3),), proof)
+backing[-1] = 0
+assert call() == (1, b"literal outside declared variable range")
+backing[-1] = 3
+saved = bounds[-2]
+bounds[-2] = len(backing) + 1
+assert call() == (1, b"clause offsets are not monotonic")
+bounds[-2] = saved
+recovered = solve_cnf_native(runtime, 1, ((1,),))
+assert recovered.status == "SAT_VERIFIED" and recovered.model == (True,)
+print(json.dumps({"prefix": prefix, "status": "UNSAT_VERIFIED", "malformed_rejected": 2}))
+"""
+    process = run_process(
+        [sys.executable, "-B", "-c", program, str(runtime.path), prefix],
+        tmp_path / "initial-contradiction", timeout=10, memory_mib=128, output_mib=1)
+    assert not process["timed_out"] and process["spawn_error"] is None, process
+    assert not process.get("output_limit_exceeded", False), process
+    assert process["returncode"] == 0, (tmp_path / "initial-contradiction/stderr.txt").read_text()
+    observed = json.loads((tmp_path / "initial-contradiction/stdout.txt").read_text())
+    assert observed == {"prefix": prefix, "status": "UNSAT_VERIFIED", "malformed_rejected": 2}
