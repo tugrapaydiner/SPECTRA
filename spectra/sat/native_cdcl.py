@@ -723,6 +723,8 @@ class _RUPDatabase:
             self.append(row)
 
     def append(self, row: Clause) -> None:
+        if self.has_empty_clause:
+            return
         if not row:
             self.has_empty_clause = True
         elif len(row) == 1:

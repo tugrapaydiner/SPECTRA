@@ -2322,3 +2322,39 @@ print(json.dumps({'verified': True, 'malformed_rejected': 2, 'unfinished_rejecte
     assert process["returncode"] == 0, (tmp_path / "initial-contradiction/stderr.txt").read_text()
     observed = json.loads((tmp_path / "initial-contradiction/stdout.txt").read_text())
     assert observed == {"verified": True, "malformed_rejected": 2, "unfinished_rejected": True}
+
+
+def test_python_drup_empty_clause_bounds_replay_storage(tmp_path):
+    from benchmarks.sat.campaign import run_process
+
+    program = r"""
+from itertools import chain
+import json
+import tracemalloc
+from spectra.sat.native_cdcl import DRUPProof, PROOF_SCHEMA, _RUPDatabase, verify_drup_proof
+
+nvars = 25001
+original = ((),) + tuple((1, variable) for variable in range(2, nvars + 1))
+tracemalloc.start()
+database = _RUPDatabase(nvars, original)
+assert database.conflict(())
+_, peak = tracemalloc.get_traced_memory()
+tracemalloc.stop()
+assert peak < 1024 * 1024, peak
+proof = DRUPProof(PROOF_SCHEMA, ((),))
+assert verify_drup_proof(nvars, original, proof)
+assert not verify_drup_proof(nvars, chain(original, ((0,),)), proof)
+assert not verify_drup_proof(nvars, original, DRUPProof(PROOF_SCHEMA, ((1, 1), ())))
+assert not verify_drup_proof(nvars, original, DRUPProof(PROOF_SCHEMA, ((1,),)))
+assert verify_drup_proof(nvars, original, proof)
+assert not verify_drup_proof(2, ((1, 2),), proof)
+print(json.dumps({'verified': True, 'malformed_rejected': 2, 'unfinished_rejected': True}))
+"""
+    process = run_process(
+        [sys.executable, "-B", "-c", program], tmp_path / "python-replay",
+        timeout=15, memory_mib=128, output_mib=1)
+    assert not process["timed_out"] and process["spawn_error"] is None, process
+    assert not process.get("output_limit_exceeded", False), process
+    assert process["returncode"] == 0, (tmp_path / "python-replay/stderr.txt").read_text()
+    observed = json.loads((tmp_path / "python-replay/stdout.txt").read_text())
+    assert observed == {"verified": True, "malformed_rejected": 2, "unfinished_rejected": True}
