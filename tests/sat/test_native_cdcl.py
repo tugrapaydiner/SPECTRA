@@ -541,6 +541,26 @@ def test_direct_native_proof_passes_drat_trim(runtime, tmp_path, variables):
     assert checked.verified, checked.record()
 
 
+@pytest.mark.parametrize("sign", [-1, 1])
+@pytest.mark.parametrize("case", ["pure", "sat-core", "unsat-core"])
+def test_native_pure_literals_preserve_models_and_original_proofs(runtime, sign, case):
+    clauses = [(4 * sign, -5, -5), (-5, 6), (4 * sign, 6), (-7,), (8, -8)]
+    if case != "pure":
+        core = list(product((1, -1), (2, -2), (3, -3)))
+        clauses += core if case == "unsat-core" else core[:-1]
+    result = solve_cnf_native(runtime, 9, clauses)
+    assert verify_direct_native_result(9, clauses, result)
+    if case == "unsat-core":
+        assert result.status == "UNSAT_VERIFIED"
+        assert all(abs(lit) <= 3 for row in result.proof.additions for lit in row)
+    else:
+        assert result.status == "SAT_VERIFIED"
+        assert result.model[3:7] == (sign > 0, False, True, False)
+        if case == "pure":
+            assert result.stats.decisions == 0
+            assert result.stats.conflicts == 0
+
+
 def test_direct_native_budget_is_unknown(runtime):
     clauses = all_blocking_clauses(5)
     result = solve_cnf_native(runtime, 5, clauses, max_conflicts=0)

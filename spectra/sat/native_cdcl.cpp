@@ -86,7 +86,7 @@ struct Solver {
   std::vector<int> reasons;
   std::vector<std::int8_t> phases;
   std::vector<double> activity;
-  // Relevance must survive floating-point activity rescaling and underflow.
+  // Original polarity bits also preserve relevance through activity underflow.
   std::vector<std::uint8_t> occurs;
   std::vector<std::int64_t> polarity_bias;
   std::vector<int> heap_positions;
@@ -213,7 +213,7 @@ struct Solver {
         std::uint64_t{1} << std::max(0, 16 - std::min(static_cast<int>(width), 16));
     for (const int literal : row) {
       const int var = variable(literal);
-      occurs[static_cast<std::size_t>(var)] = 1;
+      occurs[static_cast<std::size_t>(var)] |= literal > 0 ? 1 : 2;
       activity[static_cast<std::size_t>(var)] += static_cast<double>(weight);
       polarity_bias[static_cast<std::size_t>(var)] +=
           literal > 0 ? static_cast<std::int64_t>(weight)
@@ -346,9 +346,20 @@ struct Solver {
     return var;
   }
 
+  void assign_pure_literals() {
+    for (int var = 1; var <= nvars; ++var) {
+      const auto signs = occurs[static_cast<std::size_t>(var)];
+      if (signs != 1 && signs != 2) continue;
+      if (!enqueue(signs == 1 ? var : -var, -1)) {
+        throw std::logic_error("pure literal conflicts with initial assignment");
+      }
+    }
+  }
+
   void initialize_heap() {
     for (int var = 1; var <= nvars; ++var) {
-      if (occurs[static_cast<std::size_t>(var)]) push_heap(var);
+      const auto index = static_cast<std::size_t>(var);
+      if (occurs[index] && !values[index]) push_heap(var);
     }
   }
 
@@ -647,8 +658,8 @@ struct Solver {
       }
 
       const int var = choose_variable();
-      // Every variable occurring in an input or learned clause is represented in
-      // the heap.  If none remains unassigned and propagation found no conflict,
+      // Every unassigned variable occurring in a clause is represented in the
+      // heap. If none remains unassigned and propagation found no conflict,
       // the complete relevant assignment satisfies the formula.  Variables that
       // never occur are left false in the serialized model.
       if (!var) return 10;
@@ -833,7 +844,10 @@ SPECTRA_EXPORT int spectra_g_native_solve(
       const std::uint64_t end = offsets[clause + 1];
       solver.add_initial(input + begin, input + end);
     }
-    if (!solver.root_conflict) solver.initialize_heap();
+    if (!solver.root_conflict) {
+      solver.assign_pure_literals();
+      solver.initialize_heap();
+    }
     const int status = solver.solve(max_conflicts, max_learned_literals);
     auto encoded = encode_result(solver, status, nvars, original_variables);
     *output_size = encoded.size;
