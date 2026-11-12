@@ -907,7 +907,7 @@ class RUPReplay {
   std::vector<int> units;
   std::vector<std::int8_t> values;
   std::vector<int> queue;
-  bool has_empty = false;
+  bool root_conflict = false;
 
   int value(int literal) const {
     const int variable = literal < 0 ? -literal : literal;
@@ -929,9 +929,9 @@ class RUPReplay {
       : values(static_cast<std::size_t>(nvars) + 1, 0) {}
 
   void append(std::vector<int> row) {
-    if (has_empty) return;
+    if (root_conflict) return;
     if (row.empty()) {
-      has_empty = true;
+      root_conflict = true;
     } else if (row.size() == 1) {
       units.push_back(row[0]);
     } else {
@@ -942,8 +942,21 @@ class RUPReplay {
     }
   }
 
+  void append_original(std::vector<int> row) {
+    if (!root_conflict && row.size() == 1) {
+      const int literal = row[0];
+      if (value(literal) < 0) {
+        root_conflict = true;
+        return;
+      }
+      const int variable = literal < 0 ? -literal : literal;
+      values[static_cast<std::size_t>(variable)] = literal > 0 ? 1 : -1;
+    }
+    append(std::move(row));
+  }
+
   bool conflict(const std::vector<int> &denied) {
-    if (has_empty) return true;
+    if (root_conflict) return true;
     std::fill(values.begin(), values.end(), 0);
     queue.clear();
     for (const int literal : denied) {
@@ -1007,8 +1020,8 @@ SPECTRA_EXPORT int spectra_g_native_verify_drup(
     if (!proof_clause_count) return 0;
     RUPReplay database(nvars);
     for (std::size_t index = 0; index < original_clause_count; ++index) {
-      database.append(read_rup_row(nvars, original_literals,
-                                      original_offsets[index], original_offsets[index + 1]));
+      database.append_original(read_rup_row(
+          nvars, original_literals, original_offsets[index], original_offsets[index + 1]));
     }
     for (std::size_t index = 0; index < proof_clause_count; ++index) {
       auto row = read_rup_row(nvars, proof_literals, proof_offsets[index], proof_offsets[index + 1]);
