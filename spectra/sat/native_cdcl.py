@@ -717,18 +717,22 @@ class _RUPDatabase:
         self.nvars = nvars
         self.clauses: list[list[int]] = []
         self.watches: dict[int, list[int]] = {}
-        self.units: list[int] = []
-        self.has_empty_clause = False
+        self.units: dict[int, None] = {}
+        self.root_conflict = False
         for row in clauses:
             self.append(row)
 
     def append(self, row: Clause) -> None:
-        if self.has_empty_clause:
+        if self.root_conflict:
             return
         if not row:
-            self.has_empty_clause = True
+            self.root_conflict = True
         elif len(row) == 1:
-            self.units.append(row[0])
+            literal = row[0]
+            if -literal in self.units:
+                self.root_conflict = True
+            else:
+                self.units[literal] = None
         else:
             index = len(self.clauses)
             self.clauses.append(list(row))
@@ -736,7 +740,7 @@ class _RUPDatabase:
             self.watches.setdefault(row[1], []).append(index)
 
     def conflict(self, assumptions: Clause) -> bool:
-        if self.has_empty_clause:
+        if self.root_conflict:
             return True
         # Watch positions remain valid when each check resets the assignment.
         values = [0] * (self.nvars + 1)

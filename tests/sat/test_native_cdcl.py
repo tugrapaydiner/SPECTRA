@@ -2324,17 +2324,20 @@ print(json.dumps({'verified': True, 'malformed_rejected': 2, 'unfinished_rejecte
     assert observed == {"verified": True, "malformed_rejected": 2, "unfinished_rejected": True}
 
 
-def test_python_drup_empty_clause_bounds_replay_storage(tmp_path):
+@pytest.mark.parametrize("prefix", [((),), ((1,), (-1,)), ((-1,), (1,))])
+def test_python_drup_initial_contradiction_bounds_replay_storage(tmp_path, prefix):
     from benchmarks.sat.campaign import run_process
 
     program = r"""
 from itertools import chain
 import json
+import sys
 import tracemalloc
 from spectra.sat.native_cdcl import DRUPProof, PROOF_SCHEMA, _RUPDatabase, verify_drup_proof
 
 nvars = 25001
-original = ((),) + tuple((1, variable) for variable in range(2, nvars + 1))
+prefix = tuple(tuple(row) for row in json.loads(sys.argv[1]))
+original = prefix + tuple((1, variable) for variable in range(2, nvars + 1))
 tracemalloc.start()
 database = _RUPDatabase(nvars, original)
 assert database.conflict(())
@@ -2348,10 +2351,12 @@ assert not verify_drup_proof(nvars, original, DRUPProof(PROOF_SCHEMA, ((1, 1), (
 assert not verify_drup_proof(nvars, original, DRUPProof(PROOF_SCHEMA, ((1,),)))
 assert verify_drup_proof(nvars, original, proof)
 assert not verify_drup_proof(2, ((1, 2),), proof)
+assert verify_drup_proof(3, ((1, 2), (1, -2), (-1, 3), (-1, -3)),
+                         DRUPProof(PROOF_SCHEMA, ((1,), (1,), (-1,), (2, 3), ())))
 print(json.dumps({'verified': True, 'malformed_rejected': 2, 'unfinished_rejected': True}))
 """
     process = run_process(
-        [sys.executable, "-B", "-c", program], tmp_path / "python-replay",
+        [sys.executable, "-B", "-c", program, json.dumps(prefix)], tmp_path / "python-replay",
         timeout=15, memory_mib=128, output_mib=1)
     assert not process["timed_out"] and process["spawn_error"] is None, process
     assert not process.get("output_limit_exceeded", False), process
