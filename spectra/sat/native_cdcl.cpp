@@ -1,8 +1,12 @@
 #include <algorithm>
+#include <array>
+#include <bitset>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <limits>
+#include <map>
 #include <memory>
 #include <new>
 #include <stdexcept>
@@ -74,6 +78,118 @@ struct RestartHistory {
     recent_sum = 0;
   }
 };
+
+struct ParityEquation {
+  std::vector<int> vars;
+  bool odd;
+};
+
+std::vector<int> parity_sum(const std::vector<int> &a, const std::vector<int> &b) {
+  std::vector<int> result;
+  std::set_symmetric_difference(a.begin(), a.end(), b.begin(), b.end(),
+                                std::back_inserter(result));
+  return result;
+}
+
+std::vector<ParityEquation> conflicting_parity_equations(const std::vector<Clause> &clauses) {
+  std::map<std::array<int, 3>, unsigned> masks;
+  for (std::size_t i = 0; i < std::min<std::size_t>(4096, clauses.size()); ++i) {
+    const Clause &clause = clauses[i];
+    if (clause.learned) break;
+    if (clause.lits.size() != 3) continue;
+    const auto &row = clause.lits;
+    const std::array<int, 3> vars{std::abs(row[0]), std::abs(row[1]), std::abs(row[2])};
+    if (vars[0] >= vars[1] || vars[1] >= vars[2]) continue;
+    if (masks.size() == 512 && masks.find(vars) == masks.end()) continue;
+    const unsigned assignment = (row[0] < 0) | ((row[1] < 0) << 1) | ((row[2] < 0) << 2);
+    masks[vars] |= 1u << assignment;
+  }
+
+  constexpr std::size_t max_equations = 128;
+  struct BasisRow {
+    ParityEquation equation;
+    std::bitset<max_equations> sources;
+  };
+  std::map<int, BasisRow> basis;
+  std::vector<ParityEquation> equations;
+  for (const auto &[vars, mask] : masks) {
+    for (const unsigned forbidden : {0x69u, 0x96u}) {  // Four even or four odd assignments.
+      if ((mask & forbidden) != forbidden) continue;
+      if (equations.size() == max_equations) return {};
+      BasisRow row{{{vars.begin(), vars.end()}, forbidden == 0x69u}, {}};
+      row.sources.set(equations.size());
+      equations.push_back(row.equation);
+      while (!row.equation.vars.empty()) {
+        const int pivot = row.equation.vars.front();
+        const auto [it, inserted] = basis.try_emplace(pivot, row);
+        if (inserted) break;
+        const auto &other = it->second;
+        row.equation.vars = parity_sum(row.equation.vars, other.equation.vars);
+        row.equation.odd ^= other.equation.odd;
+        row.sources ^= other.sources;
+      }
+      if (row.equation.vars.empty() && row.equation.odd) {
+        std::vector<ParityEquation> conflict;
+        for (std::size_t i = 0; i < equations.size(); ++i) {
+          if (row.sources[i]) conflict.push_back(std::move(equations[i]));
+        }
+        return conflict;
+      }
+    }
+  }
+  return {};
+}
+
+struct ParityStep {
+  ParityEquation sum;
+  std::vector<int> common;
+};
+
+std::vector<ParityStep> plan_parity_proof(std::vector<ParityEquation> live,
+                                         std::size_t rows_left, std::uint64_t literals_left) {
+  std::vector<ParityStep> steps;
+  unsigned comparisons = 0;
+  while (live.size() > 1) {
+    // Prefer the merge with the smallest proof truth table, then the shortest sum.
+    std::tuple<std::size_t, std::size_t, std::size_t, std::size_t> best{15, 0, 0, 0};
+    for (std::size_t i = 0; i < live.size(); ++i) {
+      const auto &a = live[i].vars;
+      for (std::size_t j = i + 1; j < live.size(); ++j) {
+        if (++comparisons > 100000) return {};
+        const auto &b = live[j].vars;
+        std::size_t shared = 0;
+        for (const int var : a) shared += std::binary_search(b.begin(), b.end(), var);
+        const std::size_t width = a.size() + b.size() - shared;
+        if (shared && width <= 14) {
+          best = std::min(best, std::make_tuple(width, width - shared, i, j));
+        }
+      }
+    }
+    const auto [width, outside, i, j] = best;
+    if (width > 14) return {};
+    const auto &a = live[i], &b = live[j];
+    ParityStep step{{parity_sum(a.vars, b.vars), a.odd != b.odd}, {}};
+    std::set_intersection(a.vars.begin(), a.vars.end(), b.vars.begin(), b.vars.end(),
+                          std::back_inserter(step.common));
+    live.erase(live.begin() + j);
+    live.erase(live.begin() + i);
+    if (outside == 0 && !step.sum.odd) continue;
+
+    const std::size_t assignments = outside ? 1u << (outside - 1) : 1;
+    const std::size_t rows = assignments << (step.common.size() - 1);
+    std::size_t literals = outside * rows;
+    for (std::size_t depth = 1; depth < step.common.size(); ++depth) {
+      literals += (assignments << (depth - 1)) * depth;
+    }
+    if (rows > rows_left || literals > literals_left) return {};
+    rows_left -= rows;
+    literals_left -= literals;
+    if (outside) live.push_back(step.sum);
+    steps.push_back(std::move(step));
+    if (!outside) return steps;  // The equations derived 0 = 1.
+  }
+  return {};
+}
 
 struct Solver {
   int nvars;
@@ -605,6 +721,41 @@ struct Solver {
     return 0;
   }
 
+  bool prove_parity_conflict(std::uint64_t literal_room) {
+    const auto steps = plan_parity_proof(conflicting_parity_equations(clauses),
+        std::min<std::size_t>(8192, max_native_clauses - clauses.size()),
+        std::min<std::uint64_t>(65536, literal_room));
+    if (steps.empty()) return false;
+    // Emit only after the complete proof fits. Each row uses original variables.
+    for (const auto &step : steps) {
+      const auto &vars = step.sum.vars;
+      for (unsigned assignment = 0; assignment < (1u << vars.size()); ++assignment) {
+        std::vector<int> clause;
+        bool odd = false;
+        for (std::size_t i = 0; i < vars.size(); ++i) {
+          const bool value = (assignment >> i) & 1u;
+          odd ^= value;
+          clause.push_back(value ? -vars[i] : vars[i]);
+        }
+        if (odd == step.sum.odd) continue;
+        // Negating the row forces each remaining common variable through the
+        // longer blockers. The two parent equations then force opposite units.
+        for (std::size_t depth = step.common.size() - 1; depth > 0; --depth) {
+          for (unsigned bits = 0; bits < (1u << (depth - 1)); ++bits) {
+            auto blocker = clause;
+            for (std::size_t i = 0; i + 1 < depth; ++i) {
+              blocker.push_back((bits >> i) & 1u ? -step.common[i] : step.common[i]);
+            }
+            blocker.push_back(step.common[depth - 1]);
+            add_clause(std::move(blocker), true);
+          }
+        }
+        add_clause(std::move(clause), true);
+      }
+    }
+    return true;
+  }
+
   int solve(std::uint64_t max_conflicts,
             std::uint64_t max_learned_literals) {
     if (root_conflict) {
@@ -643,6 +794,8 @@ struct Solver {
           return 20;
         }
         restart_history.observe(learned_lbd);
+        if (stats.conflicts == 512 && stats.conflicts < max_conflicts
+            && prove_parity_conflict(max_learned_literals - stats.learned_literals)) return 20;
         if (stats.conflicts >= next_reduction) {
           reduce_database();
           reduction_span = std::min<std::uint64_t>(

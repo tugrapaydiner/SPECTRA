@@ -794,6 +794,47 @@ def test_binary_core_shortcuts_keep_native_solver_out_of_the_way(runtime):
     assert verify_native_result(4, (), sat)
 
 
+def test_native_parity_refutation_with_mixed_sparse_input(runtime, tmp_path):
+    # Each edge occurs twice, so an odd sum of vertex charges is inconsistent.
+    size = 16
+    offset = 100
+    clauses = []
+    for i in range(size):
+        previous = (i - 1) % size
+        left = (previous, i, 2 * size + i)
+        right = (size + previous, size + i, 2 * size + (5 * i + 3) % size)
+        for edge_ids, odd in ((left, i == 0), (right, False)):
+            for bits in product((False, True), repeat=3):
+                if bool(sum(bits) % 2) != odd:
+                    clauses.append(tuple(
+                        -(edge + offset) if bit else edge + offset
+                        for edge, bit in zip(edge_ids, bits)
+                    ))
+    loose_clause = clauses[0]  # Removing it admits the all-false edge assignment.
+    clauses.extend([(-2,), (1, 3, 4, 5)])
+    nvars = 2000
+    result = solve_cnf_native(runtime, nvars, clauses, max_conflicts=513,
+                              max_learned_literals=100_000)
+    assert result.status == "UNSAT_VERIFIED"
+    assert verify_direct_native_result(nvars, clauses, result)
+    if checker := os.environ.get("DRAT_TRIM"):
+        formula = write_dimacs(tmp_path / "parity.cnf", nvars, clauses)
+        proof = write_drup(tmp_path / "parity.drat", result.proof)
+        checked = check_drat(checker, formula, proof)
+        assert checked.verified, checked.record()
+
+    limited = solve_cnf_native(runtime, nvars, clauses, max_conflicts=513,
+                               max_learned_literals=10_000)
+    assert limited.stats.learned_literals <= 10_000
+    assert verify_direct_native_result(nvars, clauses, limited)
+
+    relaxed = [row for row in clauses if row != loose_clause]
+    result = solve_cnf_native(runtime, nvars, relaxed, max_conflicts=10_000,
+                              max_learned_literals=100_000)
+    assert result.status == "SAT_VERIFIED"
+    assert verify_direct_native_result(nvars, relaxed, result)
+
+
 def test_conflict_budget_is_unknown_not_unsat(runtime):
     # This formula needs search and reaches a conflict before it can complete.
     clauses = all_blocking_clauses(5)
