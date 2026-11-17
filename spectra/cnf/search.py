@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import time
-from data.cnf import CNF, SplitMix64
+from .formula import CNF, SplitMix64
 from .state import CompactCNFRepairState
 
 

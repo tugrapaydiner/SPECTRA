@@ -6,7 +6,6 @@ Reject unsupported transformations instead of silently approximating a pipeline.
 from __future__ import annotations
 import hashlib
 import json
-import math
 from pathlib import Path
 
 from .svm_pipeline import Preprocessor, SCHEMA, MAX_PLAN_BYTES

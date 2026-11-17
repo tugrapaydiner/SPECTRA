@@ -21,10 +21,7 @@ outputs/
 logs/
 
 # Datasets / generated data (keep generators, not bulk data)
-data/cache/
-data/raw/
 *.npz
-!results/failure_information/fit/policies.npz
 *.npy
 
 # Test / tooling

@@ -1,6 +1,5 @@
 """Framework-free package tests; fixture outcomes are not accuracy benchmarks."""
 import concurrent.futures
-import ctypes as C
 import itertools
 import math
 import struct

@@ -1,10 +1,7 @@
 """Build contract tests; command inspection is NOT remote platform execution."""
 import json
-import os
-from pathlib import Path
 import subprocess
 import sys
-import sysconfig
 
 import pytest
 from spectra import svm_build as build
@@ -87,7 +84,7 @@ def test_all_declared_exports_exist(library):
 
 
 def test_shared_model_unicode_path(tmp_path, library):
-    from test_shared_model import encoded
+    from .test_shared_model import encoded
     from spectra.svm_shared import PreparedModel
     folder = tmp_path/'Türkçe 日本語'; folder.mkdir()
     model = encoded(folder/'model.srt')

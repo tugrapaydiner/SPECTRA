@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor
 import ctypes as C
 import json
 import math
-from pathlib import Path
 import random
 import struct
 import sys
@@ -91,7 +90,7 @@ def test_extreme_finite_inputs_and_cancellation(tmp_path,library,tables):
 def test_late_invalid_batch_does_not_write_outputs(tmp_path,library):
     path=encoded(tmp_path/'model.srt',3)
     with PreparedModel(path,library,input_dtype='float64') as model,model.session() as w:
-        p=w.predict_with_certificate([0.,0.,0.],schedule='binary_stream')
+        w.predict_with_certificate([0.,0.,0.],schedule='binary_stream')
         values=(C.c_double*15)(*([0.]*14+[math.nan]));output=(C.c_int*5)(*([123]*5));stats=(C.c_uint64*5)()
         assert w._lib.sp_worker_run(w._handle,values,5,3,7,-1,output,5,stats,5,0)!=0
         assert list(output)==[123]*5

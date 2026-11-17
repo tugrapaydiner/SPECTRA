@@ -9,7 +9,7 @@ from dataclasses import dataclass, asdict
 import hashlib
 import time
 
-from data.cnf import CNF
+from .formula import CNF
 
 
 def _index(literal):

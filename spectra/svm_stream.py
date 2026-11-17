@@ -69,7 +69,7 @@ def _row(raw: bytes, columns: int, line: int) -> list:
             elif type(value) not in (int, float) or not math.isfinite(value):
                 raise ValueError('invalid scalar')
         return values
-    except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError) as error:
+    except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError):
         # Do not expose potentially sensitive input values through exception text.
         raise ValueError(f'invalid raw JSON row at line {line}') from None
 

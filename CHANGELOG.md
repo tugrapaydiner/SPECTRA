@@ -1,71 +1,61 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 (unreleased)
 
-### Versioned proof-carrying exact-query API
+### Added
 
-- Add dependency-light `spectra.exact` API version 1 with native ABI 3.
-- Package the exact native source in compiler-free wheels; compilation remains an
-  explicit local action and publishes a source/Python/compiler/binary receipt.
-- Return complete checked SAT colourings or portable `SBP1` UNSAT proofs through
-  persistent sessions and one-call `SBC1` to `SCQ2` execution.
-- Add strict independent Python replay, `spectra exact verify`, installed-wheel
-  native execution, receipt-tamper tests and cross-platform CI contracts.
-- Do not publish a new package version or transfer exposed synthetic performance
-  evidence into the frozen WAP claim.
+- `spectra.exact`: proof-carrying list-colouring queries for one- and two-colour
+  domains, with `SBC1` session packets, `SCQ2` answer banks, `SBP1` proofs, a
+  pure-Python verifier, a structural `auto` mode, and `spectra exact
+  build|verify|selftest|audit|compare`.
+- `spectra.cnf.quotient_query`: the SCC quotient runtime for repeated
+  list-colouring support queries, with an independent certificate verifier.
+- `spectra.sat`: a native CDCL solver with checked models and DRUP proofs over the
+  original variables, a proof-replayable unit/binary simplifier, strict DIMACS
+  admission and a DRAT-trim adapter. Builds on Linux and Windows.
+- `spectra.migration`: checked two-plan migration with unique minimal move sets
+  and original-edge contradiction paths.
+- `spectra.exam_repair` and `spectra.itc2007_exam`: bounded exam rescheduling with
+  named infeasibility explanations.
+- SVM execution: generic feature counts and labels, shared prepared models,
+  fitted preprocessing plans, native preprocessing, a binary-classifier fast
+  path, replayable decision receipts and `spectra svm run`.
+- `benchmarks/`: the WAP workload, independent direct 2-SAT and CaDiCaL baselines,
+  a SAT campaign runner and verifier, and CNF and SVM fixture benchmarks.
 
-### Certified repeated-query compilation
+### Changed
 
-- Integrate SPECTRA's prospectively frozen WAP support-query result into `main`.
-- Preserve the exact Python 3.13 headline: mean complete-session ratio `0.363503`
-  against persistent native MiniCard, exact whole-graph 95% interval
-  `[0.346789, 0.372944]`, p95 ratio `0.364735`, five of five graph wins, and
-  `107,520` independently checked full answers.
-- Publish the freeze/open identities, full claim boundary, gate ledger, paper draft,
-  prior-art audit, cross-environment reproduction, exact certificate reproduction,
-  and external replication procedure.
-- Retain both Python 3.11 complete-call gate failures. The threshold is not relaxed
-  and warm-session timing is not substituted for the frozen endpoint.
-- Keep primitive-algorithm novelty, general SAT/colouring superiority, deployed
-  network traces, independent-team replication, and external adoption explicitly
-  unclaimed.
+- The wheel now installs only the `spectra` package and has no dependencies.
+  Earlier wheels also installed top-level `common`, `data`, `deploy`, `eval`,
+  `model` and `train` packages.
+- CNF core types moved into the package: `data.cnf` is now `spectra.cnf.formula`,
+  `eval.cnf_cached` is `spectra.cnf.cached` and `eval.cnf_repair` is
+  `spectra.cnf.repair`. `from spectra.cnf import CNF, ...` is unchanged.
+- `pip install ".[test]"` followed by `pytest` runs the whole suite; optional
+  external tools are skipped with a reason.
 
-### Active-tree slimdown
+### Fixed
 
-- Consolidate routine CI to seven permanent workflows and remove branch-specific,
-  one-shot, acquisition, publication, and superseded benchmark automation.
-- Remove nested historical source/evidence archives and six generated PNGs from the
-  active checkout while preserving their exact bytes on
-  `archive/research-history-20261016` and original commits.
-- Add a fail-closed active-tree budget (14 MiB, 950 files, 2 MiB per file) and
-  archive/workflow guards to prevent repository bloat from returning.
-- Make the structural `auto` selector the default for one-call proof-carrying exact
-  sessions; explicit raw/SCC/sparse/route modes remain available.
-- Replace full-history PR bundling and routine historical evidence replay with
-  current source, package, native, and semantic contracts.
+- Exact self-test auditing accepts a null SOABI when CPython does not define one
+  (including Windows Python 3.11), while rejecting malformed ABI metadata and
+  preserving the native loader's interpreter compatibility checks.
+- Installed-wheel checks include native CDCL execution on Linux and Windows;
+  cross-platform exact self-test comparison includes Windows Python 3.11 and
+  retains its comparison report.
+- Runnable guide examples preserve the exact runtime for exam repair, create SVM
+  receipts with an open worker, and supply the correct streaming CLI engine and
+  native preprocessing library path.
 
-### Merge cleanup
+### Removed
 
-- Remove transport-only Base64 patch chunks and their one-shot apply workflows from
-  the working tree. Their immutable history remains available in the research
-  commits.
-- Retire preflight, holdout-opening, development-acquisition, completed diagnostic,
-  and failed draft-archive workflows that must not rerun as ordinary `main` CI.
-- Add a permanent lightweight WAP regression workflow for source, certificate,
-  original-checker, audit, sanitizer, documentation, and packaging contracts.
-- Refresh the documentation index and current-status page around the exact result
-  that earned promotion.
+- The PyTorch models, training, evaluation and deployment code, and the
+  `spectra.inference`, `spectra.fp_runtime`, `spectra.blocked_runtime`,
+  `spectra.compiler_runtime`, `spectra.fp_evidence` and
+  `spectra.compiler_evidence` modules, together with the `research` and `native`
+  extras. They remain available in the 0.7.1 release.
 
-This merge does not publish a new Python package or replace v0.7.1 release assets.
+## 0.7.1 (2026-09-12)
 
-## 0.7.1 — 2026-09-12
-
-Published as [SPECTRA 0.7.1](https://github.com/tugrapaydiner/SPECTRA/releases/tag/v0.7.1).
-Added opt-in indexed/prepared CNF search with preserved seeded paths and an
-output-only CPU inference interface with checked final-output equivalence.
-Measurements retain small-case regressions, increased cold allocation and the
-`UNKNOWN` large-case outcomes. No external SAT superiority or learned-capability
-improvement was established. See [the efficiency guide](docs/EFFICIENCY_GUIDE.md).
-
-Earlier packaging and compact-state work is described in
-[current status](docs/STATUS.md) and the [history index](docs/history/README.md).
+- Indexed and prepared CNF local search with the same seeded trajectories as the
+  reference solver.
+- Output-only CPU inference for the recurrent model.

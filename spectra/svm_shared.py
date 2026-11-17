@@ -11,14 +11,12 @@ import hashlib
 import json
 import math
 import itertools
-import os
 from pathlib import Path
 import struct
 import sys
-import threading
 from typing import Iterable
 import zlib
-from .svm import SCHEDULES, build_runtime, verify_certificate
+from .svm import SCHEDULES, verify_certificate
 from .svm_lifetime import _NativeOwner
 
 MAX_BYTES = 64 * 1024 * 1024
