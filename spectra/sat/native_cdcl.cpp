@@ -729,28 +729,30 @@ struct Solver {
     // Emit only after the complete proof fits. Each row uses original variables.
     for (const auto &step : steps) {
       const auto &vars = step.sum.vars;
+      std::vector<int> clause;
+      clause.reserve(vars.size() + step.common.size() - 1);
+      clause.resize(vars.size());
       for (unsigned assignment = 0; assignment < (1u << vars.size()); ++assignment) {
-        std::vector<int> clause;
         bool odd = false;
         for (std::size_t i = 0; i < vars.size(); ++i) {
           const bool value = (assignment >> i) & 1u;
           odd ^= value;
-          clause.push_back(value ? -vars[i] : vars[i]);
+          clause[i] = value ? -vars[i] : vars[i];
         }
         if (odd == step.sum.odd) continue;
         // Negating the row forces each remaining common variable through the
         // longer blockers. The two parent equations then force opposite units.
         for (std::size_t depth = step.common.size() - 1; depth > 0; --depth) {
           for (unsigned bits = 0; bits < (1u << (depth - 1)); ++bits) {
-            auto blocker = clause;
             for (std::size_t i = 0; i + 1 < depth; ++i) {
-              blocker.push_back((bits >> i) & 1u ? -step.common[i] : step.common[i]);
+              clause.push_back((bits >> i) & 1u ? -step.common[i] : step.common[i]);
             }
-            blocker.push_back(step.common[depth - 1]);
-            add_clause(std::move(blocker), true);
+            clause.push_back(step.common[depth - 1]);
+            add_clause(clause, true);
+            clause.resize(vars.size());
           }
         }
-        add_clause(std::move(clause), true);
+        add_clause(clause, true);
       }
     }
     return true;
