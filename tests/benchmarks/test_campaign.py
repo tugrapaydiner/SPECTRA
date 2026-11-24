@@ -366,6 +366,62 @@ def test_model_checker_handles_admitted_comment_syntax(tmp_path):
     assert (tmp_path / "complete.model").is_file()
 
 
+def test_pigeonhole_worker_requires_a_complete_bounded_certificate(tmp_path, capsys):
+    from benchmarks.sat.campaign import main
+
+    # Three one-bit choices cannot all differ. Removing the final pair exclusion permits 0, 1, 1.
+    rows = ["1 2", "-1 -2", "1 3", "-1 -3", "2 3", "-2 -3"]
+    source, proof = tmp_path / "input.cnf", tmp_path / "proof.lrat"
+    def write(rows):
+        source.write_text(f"p cnf 3 {len(rows)}\n" + "".join(row + " 0\n" for row in rows))
+    args = ["pigeonhole", "--cnf", str(source), "--proof", str(proof)]
+    write(rows)
+    assert main(args) == 20 and capsys.readouterr().out.strip() == "s UNSATISFIABLE"
+    certificate = proof.read_bytes()
+    with pytest.raises(FileExistsError):
+        main(args)
+    assert proof.read_bytes() == certificate
+    proof.unlink()
+    assert main([*args, "--max-proof-bytes", str(len(certificate) - 1)]) == 0
+    assert capsys.readouterr().out.strip() == "s UNKNOWN" and not proof.exists()
+    assert main([*args, "--max-proof-bytes", str(len(certificate))]) == 20
+    assert proof.read_bytes() == certificate
+    capsys.readouterr()
+    proof.unlink()
+    write(rows[:-1])
+    assert main(args) == 0 and capsys.readouterr().out.strip() == "s UNKNOWN"
+    assert not proof.exists()
+
+
+def test_pigeonhole_campaign_replays_a_signed_binary_encoding(tmp_path):
+    from itertools import combinations
+    from spectra.sat.drat import write_dimacs
+
+    checker = os.environ.get("LRAT_CHECK")
+    if not checker and os.environ.get("DRAT_TRIM"):
+        drat = Path(os.environ["DRAT_TRIM"])
+        checker = drat.with_name("lrat-check" + drat.suffix)
+    if not checker or not Path(checker).is_file():
+        pytest.skip("set LRAT_CHECK or build lrat-check alongside DRAT_TRIM")
+
+    blocks = [(5, -2), (-8, 1), (7, -3), (-4, 6)]
+    def exclude(bits, value):
+        return tuple(-v if value & (1 << bit) else v for bit, v in enumerate(bits))
+    clauses = [exclude(block, 3) for block in blocks]
+    clauses.extend(exclude(left, h) + exclude(right, h)
+                   for left, right in combinations(blocks, 2) for h in range(3))
+    source = write_dimacs(tmp_path / "input.cnf", 8, reversed(clauses))
+    entry = solver("pigeonhole", track="standalone-native", upstream_engines=[], proof_format="LRAT",
+                   command=[sys.executable, "-m", "benchmarks.sat.campaign", "pigeonhole",
+                            "--cnf", "{cnf}", "--proof", "{proof}"],
+                   proof_checker={"command": [str(checker), "{cnf}", "{proof}"], "success_line": "c VERIFIED"})
+    inventory, field = manifests(tmp_path, [instance(source, expected="UNSAT")], [entry])
+    args = arguments(tmp_path, inventory, field)
+    args.timeout = args.checker_timeout = 10
+    result = run_campaign(args)
+    assert result["resource_summary"]["pigeonhole"]["statuses"] == {"UNSAT_VERIFIED": 1}
+
+
 @pytest.mark.skipif(os.name not in ("posix", "nt"), reason="campaign process supervision unavailable")
 @pytest.mark.parametrize("late_phase,expected", [("check", "CHECKER_TIMEOUT"), ("admission-process", "ADMISSION_FAILURE")])
 def test_late_successful_checker_or_admission_cannot_escape_deadline(tmp_path, monkeypatch, late_phase, expected):

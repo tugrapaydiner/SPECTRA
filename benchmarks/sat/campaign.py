@@ -1067,6 +1067,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="composed certificate literal cap with --binary-library")
     native.add_argument("--max-proof-bytes", type=int, default=1_073_741_824,
                         help="composed ASCII certificate byte cap with --binary-library")
+    pigeonhole = sub.add_parser("pigeonhole", help="prove binary pigeonhole contradictions with LRAT")
+    pigeonhole.add_argument("--cnf", type=Path, required=True, help="input CNF, up to 1 MiB decoded")
+    pigeonhole.add_argument("--proof", type=Path, required=True, help="new ASCII LRAT proof file")
+    pigeonhole.add_argument("--max-proof-bytes", type=int, default=8 << 20,
+                            help="certificate byte budget, up to 8 MiB; returns UNKNOWN if exceeded")
     stage = sub.add_parser("stage", help=argparse.SUPPRESS)
     for flag in ("source", "out"):
         stage.add_argument("--" + flag, type=Path, required=True)
@@ -1082,6 +1087,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if result.get("status") in ("INVALID_CAMPAIGN", "ABORTED_STORAGE_FAILURE") else 0
     if args.action == "native":
         return native_worker(args)
+    if args.action == "pigeonhole":
+        from benchmarks.sat.pigeonhole import write_pigeonhole_proof
+        if write_pigeonhole_proof(args.cnf, args.proof, args.max_proof_bytes):
+            print("s UNSATISFIABLE")
+            return 20
+        print("s UNKNOWN")
+        return 0
     if args.action == "stage":
         stage_input(args.source, args.sha256, args.out, args.max_bytes)
     elif args.action == "check-model":
