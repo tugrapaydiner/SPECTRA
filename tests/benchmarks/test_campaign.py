@@ -843,6 +843,8 @@ def test_native_lrat_replays_search_and_structural_answers(tmp_path, preprocesse
     def dimacs(rows, nvars=6):
         return f"p cnf {nvars} {len(rows)}\n" + "".join(" ".join(map(str, row)) + " 0\n" for row in rows)
 
+    grid = _crossing_grid_rows()
+    signed_grid = [tuple(-v if abs(v) % 3 == 0 else v for v in row) for row in grid]
     cases = [
         ("search", "p cnf 2 5\n1 -1 0\n1 1 2 0\n-1 2 0\n1 -2 0\n-1 -2 0\n", [], "native"),
         ("input-empty", "p cnf 2 3\n1 1 2 0\n0\n-2 0\n",
@@ -853,8 +855,10 @@ def test_native_lrat_replays_search_and_structural_answers(tmp_path, preprocesse
         ("lifted-proof", dimacs(_preprocessed_unsat_rows()),
          ["--binary-library", str(binary)], "native"),
         ("coupled", dimacs(coupled), ["--max-conflicts", "0"], "coupled-parity"),
-        ("crossing-grid", dimacs(_crossing_grid_rows(), 24),
-         ["--max-conflicts", "0", "--max-proof-bytes", str(9 << 10)], "coupled-parity"),
+        ("crossing-grid", dimacs(grid, 24),
+         ["--max-conflicts", "0", "--max-proof-bytes", str(2 << 10)], "coupled-parity"),
+        ("signed-crossing-grid", dimacs(signed_grid, 24),
+         ["--max-conflicts", "0", "--max-proof-bytes", str(6 << 10)], "coupled-parity"),
         ("relaxed", dimacs(coupled[:-1]), [], "native"),
         ("pigeons", "p cnf 3 6\n1 2 0\n-1 -2 0\n1 3 0\n-1 -3 0\n2 3 0\n-2 -3 0\n",
          ["--max-conflicts", "0"], "pigeonhole"),

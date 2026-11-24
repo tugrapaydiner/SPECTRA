@@ -80,23 +80,55 @@ def _table(proof, variables, odd, premises, splits=()):
     return tuple(_derive(proof, clause, premises, splits) for _, clause in _patterns(sorted(variables), odd))
 
 
+def _constrained_products(original, terms):
+    products = {}
+    for number, clause in enumerate(original, 1):
+        if len(clause) != 2 or abs(clause[0]) == abs(clause[1]):
+            continue
+        a, b = clause
+        key = abs(a), abs(b)
+        if key not in terms:
+            key = key[::-1]
+            if key not in terms:
+                continue
+        # (-a, b) gives ab = a. Two positive literals give ab = 1 + a + b over GF(2).
+        if a < 0 and b < 0:
+            form = ()
+        elif a > 0 and b > 0:
+            form = (0, *key)
+        else:
+            form = (-min(a, b),)
+        if key not in products or len(form) < len(products[key][0]):
+            products[key] = form, (number, clause)
+    return products
+
+
 def _product_nodes(proof, original, rows):
-    terms = sorted({term for row in rows for term in row.terms if term != (0, 0)})
+    terms = {term for row in rows for term in row.terms if term != (0, 0)}
     if len(terms) > 8192:
         raise ProofLimit
-    symbols, definitions = {}, {}
-    for a, b in terms:
-        if a and b:
-            symbols[a, b], definitions[a, b] = proof.gate(a, b, conjunction=True)
+    products = _constrained_products(original, terms)
+    forms, definitions = {(0, 0): (0,)}, {}
+    for a, b in sorted(terms):
+        if not a or not b:
+            forms[a, b] = (a or b,)
+            continue
+        product = products.get((a, b))
+        if product is None:
+            symbol, definitions[a, b] = proof.gate(a, b, conjunction=True)
+            forms[a, b] = (symbol,)
         else:
-            symbols[a, b] = a or b
+            forms[a, b], reason = product
+            definitions[a, b] = (reason,)
     nodes = {}
     for index, row in enumerate(rows):
-        variables = {symbols[term] for term in row.terms if term != (0, 0)}
-        odd = int((0, 0) in row.terms)
+        variables = set()
         source = [(i, original[i - 1]) for i in row.clauses]
         for term in row.terms:
+            variables.symmetric_difference_update(forms[term])
             source.extend(definitions.get(term, ()))
+        odd = int(0 in variables)
+        variables.discard(0)
         nodes[index] = variables, odd, _table(proof, variables, odd, source, row.splits)
     return nodes
 
