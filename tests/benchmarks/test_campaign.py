@@ -808,6 +808,21 @@ def preprocessed_native_libraries(tmp_path_factory):
     return build_native_cdcl(root / "backend"), build_native_binary_core(root / "frontend")
 
 
+def _crossing_grid_rows():
+    edges = [(a, b) for a in range(9) for b in range(a)
+             if abs(a // 3 - b // 3) + abs(a % 3 - b % 3) == 1]
+    incident = [[i for i, ends in enumerate(edges, 1) if vertex in ends] for vertex in range(9)]
+    rows = []
+    for vertex, local in enumerate(incident):
+        for offset, terminals in ((0, (3, 5)), (len(edges), (1, 7))):
+            for mask in range(1 << len(local)):
+                if mask.bit_count() % 2 != (vertex in terminals):
+                    rows.append(tuple(-(v + offset) if mask & (1 << i) else v + offset
+                                      for i, v in enumerate(local)))
+        rows.extend((-a, -(b + len(edges))) for a in local for b in local)
+    return list(dict.fromkeys(rows))
+
+
 def test_native_lrat_replays_search_and_structural_answers(tmp_path, preprocessed_native_libraries):
     from benchmarks.sat.campaign import main
 
@@ -818,12 +833,24 @@ def test_native_lrat_replays_search_and_structural_answers(tmp_path, preprocesse
     if not checker or not Path(checker).is_file():
         pytest.skip("set LRAT_CHECK or build lrat-check alongside DRAT_TRIM")
     native, binary = preprocessed_native_libraries
+    coupled = []
+    for group in ((1, 2, 3), (4, 5, 6)):
+        for mask in range(8):
+            if mask.bit_count() % 2 == 0:
+                coupled.append(tuple(-v if mask & (1 << i) else v for i, v in enumerate(group)))
+    coupled.extend((-a, -b) for a in (1, 2, 3) for b in (4, 5, 6))
+
+    def dimacs(rows, nvars=6):
+        return f"p cnf {nvars} {len(rows)}\n" + "".join(" ".join(map(str, row)) + " 0\n" for row in rows)
+
     cases = [
         ("search", "p cnf 2 5\n1 -1 0\n1 1 2 0\n-1 2 0\n1 -2 0\n-1 -2 0\n", [], "native"),
         ("preprocessed", "p cnf 2 3\n-1 2 0\n1 -2 0\n1 0\n", ["--binary-library", str(binary)], "native"),
-        ("lifted-proof", "p cnf 6 10\n" + "".join(" ".join(map(str, row)) + " 0\n"
-                                                  for row in _preprocessed_unsat_rows()),
+        ("lifted-proof", dimacs(_preprocessed_unsat_rows()),
          ["--binary-library", str(binary)], "native"),
+        ("coupled", dimacs(coupled), ["--max-conflicts", "0"], "coupled-parity"),
+        ("crossing-grid", dimacs(_crossing_grid_rows(), 24), ["--max-conflicts", "0"], "coupled-parity"),
+        ("relaxed", dimacs(coupled[:-1]), [], "native"),
         ("pigeons", "p cnf 3 6\n1 2 0\n-1 -2 0\n1 3 0\n-1 -3 0\n2 3 0\n-2 -3 0\n",
          ["--max-conflicts", "0"], "pigeonhole"),
     ]
@@ -838,7 +865,7 @@ def test_native_lrat_replays_search_and_structural_answers(tmp_path, preprocesse
         receipt = json.loads(stats.read_text())
         assert receipt["schema"] == "spectra.general_campaign_native_lrat_stats.v1"
         assert receipt["strategy"] == strategy
-        if name == "preprocessed":
+        if name in ("preprocessed", "relaxed"):
             assert status == 10 and not proof.exists()
             continue
         assert status == 20 and proof.is_file()

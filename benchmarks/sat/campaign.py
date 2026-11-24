@@ -541,14 +541,18 @@ def native_worker(args: argparse.Namespace) -> int:
     started = time.perf_counter()
     admitted = admit_and_load_cnf(args.cnf)
     runtime = NativeCDCLRuntime(args.library)
-    structural = False
+    strategy = "native"
     if lrat:
+        from benchmarks.sat.parity_lrat import write_coupled_parity_proof
         from benchmarks.sat.pigeonhole import write_admitted_pigeonhole_proof
         limits = (args.max_proof_clauses, args.max_proof_literals, args.max_proof_bytes)
         structural_started = time.perf_counter()
-        structural = write_admitted_pigeonhole_proof(admitted, args.proof, *limits)
+        if write_admitted_pigeonhole_proof(admitted, args.proof, *limits):
+            strategy = "pigeonhole"
+        elif write_coupled_parity_proof(admitted, args.proof, *limits):
+            strategy = "coupled-parity"
         structural_seconds = time.perf_counter() - structural_started
-    if structural:
+    if strategy != "native":
         status, model, proof = 20, (), None
         stats = NativeStats(0, 0, 0, 0, 0, 0, 0, 0)
         native_elapsed = 0.0
@@ -568,9 +572,9 @@ def native_worker(args: argparse.Namespace) -> int:
     if lrat:
         from benchmarks.sat.lrat import write_rup_lrat
         schema = "spectra.general_campaign_native_lrat_stats.v1"
-        metadata.update(strategy="pigeonhole" if structural else "native",
+        metadata.update(strategy=strategy,
                         structural_seconds=structural_seconds, proof_format="LRAT")
-        if status == 20 and not structural and not write_rup_lrat(args.proof, admitted.clauses, proof, *limits):
+        if status == 20 and strategy == "native" and not write_rup_lrat(args.proof, admitted.clauses, proof, *limits):
             status = 0
             metadata["proof_budget_reason"] = "LRAT certificate limit"
     if status == 10:
