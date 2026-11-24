@@ -802,16 +802,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--recheck-models", action="store_true", help="fresh bounded model checks on temporary copies")
     parser.add_argument("--proof-checker", action="append", default=[], metavar="SOLVER_ID=PATH",
                         help="explicit local checker invoked as PATH CNF PROOF; requires exit 0 and exact 's VERIFIED'")
+    parser.add_argument("--lrat-checker", action="append", default=[], metavar="SOLVER_ID=PATH",
+                        help="local lrat-check invoked as PATH CNF PROOF; requires exit 0 and exact 'c VERIFIED'")
     parser.add_argument("--require-all-proofs", action="store_true", help="fail unless every verified UNSAT cell receives a fresh proof check")
     parser.add_argument("--checker-timeout", type=float, default=120)
     parser.add_argument("--checker-memory-mib", type=int, default=4096)
     parser.add_argument("--checker-output-mib", type=int, default=1024)
     args = parser.parse_args(argv)
     try:
+        checkers = {key: TrustedProofChecker(path)
+                    for key, path in _mapping(args.proof_checker, "proof checkers").items()}
+        for key, path in _mapping(args.lrat_checker, "LRAT checkers").items():
+            _require(key not in checkers, f"choose only one proof checker for {key}")
+            checkers[key] = TrustedProofChecker(path, success_line="c VERIFIED")
         result = verify_campaign(args.evidence, expected_manifest_sha256=args.expected_manifest_sha256,
                     original_sources=_mapping(args.original_source, "original sources"),
                     recheck_models=args.recheck_models,
-                    proof_checkers={key: TrustedProofChecker(path) for key, path in _mapping(args.proof_checker, "proof checkers").items()},
+                    proof_checkers=checkers,
                     require_all_proofs=args.require_all_proofs, checker_timeout=args.checker_timeout,
                     checker_memory_mib=args.checker_memory_mib, checker_output_mib=args.checker_output_mib)
     except (OSError, ValueError, KeyError, TypeError, MemoryError, lzma.LZMAError) as error:

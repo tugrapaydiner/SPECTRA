@@ -472,6 +472,37 @@ def test_fresh_proofs_require_explicit_checker_exit_and_success_token(tmp_path, 
     assert digest(archive / "evidence-sha256.json") == pin and not marker.exists()
 
 
+def test_cli_rechecks_lrat_with_the_original_formula(tmp_path, capsys):
+    checker = os.environ.get("LRAT_CHECK")
+    if not checker and os.environ.get("DRAT_TRIM"):
+        drat = Path(os.environ["DRAT_TRIM"])
+        checker = drat.with_name("lrat-check" + drat.suffix)
+    if not checker or not Path(checker).is_file():
+        pytest.skip("set LRAT_CHECK or build lrat-check alongside DRAT_TRIM")
+    cnf = "p cnf 2 4\n1 2 0\n-1 2 0\n1 -2 0\n-1 -2 0\n"
+    proof = b"5 2 0 1 2 0\n6 0 5 3 4 0\n"
+    code = (f"import sys; from pathlib import Path; Path(sys.argv[2]).write_bytes({proof!r}); "
+            "print('s UNSATISFIABLE'); raise SystemExit(20)")
+    entry = fake_solver("lrat", code, proof_format="LRAT", proof_checker={
+        "command": [str(checker), "{cnf}", "{proof}"], "success_line": "c VERIFIED"})
+    archive = make_campaign(tmp_path / "campaign", [("contradiction", cnf, "UNSAT")], [entry])
+    assert cell_records(archive)[0]["status"] == "UNSAT_VERIFIED"
+    capsys.readouterr()
+    args = [str(archive), "--require-all-proofs", "--checker-memory-mib", "128"]
+    assert verifier.main([*args, "--lrat-checker", f"lrat={checker}"]) == 0
+    checks = json.loads(capsys.readouterr().out)["fresh_answer_checks"]
+    assert checks["proofs_rechecked"] == 1
+    assert checks["trusted_checker_sha256"] == {"lrat": digest(Path(checker))}
+    assert verifier.main([*args, "--proof-checker", f"lrat={checker}"]) == 1
+    assert "fresh proof check failed" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_cli_rejects_two_checker_contracts_for_one_solver(tmp_path, capsys):
+    checker = f"solver={sys.executable}"
+    assert verifier.main([str(tmp_path), "--proof-checker", checker, "--lrat-checker", checker]) == 1
+    assert "only one proof checker" in json.loads(capsys.readouterr().out)["error"]
+
+
 def test_compressed_archive_decodes_identities_and_rechecks_complete_model(compressed_base):
     pin = digest(compressed_base / "evidence-sha256.json")
     result = verify_campaign(compressed_base, recheck_models=True, checker_timeout=5, checker_memory_mib=256, checker_output_mib=16)
