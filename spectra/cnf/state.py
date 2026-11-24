@@ -9,8 +9,8 @@ an extra count array for avoiding high-index sparse bitsets. Old source stays
 unchanged for historical replay. Common validation/public observations are reused.
 """
 from __future__ import annotations
-from data.cnf import CNF
-from eval.cnf_cached import CachedCNFRepairState
+from .formula import CNF
+from .cached import CachedCNFRepairState
 
 
 class CompactCNFRepairState(CachedCNFRepairState):
@@ -41,15 +41,17 @@ class CompactCNFRepairState(CachedCNFRepairState):
                 self._counts.append(-1)  # tautology; absent from occurrence graph
                 self._xors.append(0)
                 continue
-            variables = tuple(sorted(abs(lit) - 1 for lit in literals))
+            variables = []
             count = support = 0
             for lit in literals:
                 v = abs(lit) - 1
+                variables.append(v)
                 self._occurrences[v].append(index + 1 if lit > 0 else -index - 1)
                 if witness[v] == (lit > 0):
                     count += 1
                     support ^= v + 1
-            self._variables.append(variables)
+            variables.sort()
+            self._variables.append(tuple(variables))
             self._counts.append(count)
             self._xors.append(support)
             self._contribution(index, count, support, 1)

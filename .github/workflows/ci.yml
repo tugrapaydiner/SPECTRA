@@ -1,0 +1,199 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONUTF8: '1'
+  OMP_NUM_THREADS: '1'
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'ruff==0.16.9'
+      - run: ruff check .
+      - run: python scripts/check_release_readiness.py
+
+  test:
+    name: test (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, python: '3.10', extras: ''}
+          - {os: ubuntu-24.04, python: '3.11', extras: 'numpy==2.3.5 scikit-learn==1.8.0'}
+          - {os: ubuntu-24.04, python: '3.12', extras: 'numpy==2.3.5 scikit-learn==1.8.0'}
+          - {os: ubuntu-24.04, python: '3.13', extras: 'numpy==2.3.5 scikit-learn==1.8.0'}
+          - {os: ubuntu-24.04-arm, python: '3.13', extras: 'numpy==2.3.5 scikit-learn==1.8.0'}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e ".[test]" ${{ matrix.extras }}
+      - run: python -m pytest -ra
+
+  test-windows:
+    name: test (windows-2022, Python ${{ matrix.python }})
+    runs-on: windows-2022
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: ./.github/actions/msvc
+      - run: python -m pip install -e ".[test]" scikit-learn==1.8.0 pandas==2.2.3
+      # Components with MSVC builders: exact queries, exam repair, the CNF solvers,
+      # the campaign runner's Windows job objects, and SVM execution.
+      - run: >-
+          python -m pytest -ra
+          tests/exact/test_exact_api.py tests/exact/test_exact_selftest.py
+          tests/exact/test_exact_compare.py tests/exact/test_auto_selector_v11.py
+          tests/exact/test_exact_edgeless.py tests/exact/test_exam_repair.py
+          tests/exact/test_itc2007_exam.py tests/exact/test_runtime.py
+          tests/exact/test_transfer_hardening.py tests/exact/test_linear_construction.py
+          tests/sat/test_admission.py tests/sat/test_native_cdcl.py
+          tests/sat/test_native_binary_core.py
+          tests/benchmarks/test_competition_input.py tests/benchmarks/test_campaign.py
+          tests/benchmarks/test_campaign_verify.py tests/svm
+          -k "not native_sanitizer_builds_execute_checked_unsat"
+
+  sanitizers:
+    name: sanitizers (${{ matrix.sanitizer }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [undefined, 'address,undefined']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: arminbiere/cadical
+          ref: c60730422e758ef1cebe7aeddf2dda31c996bf04  # 3.0.1
+          path: .external/cadical
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -e ".[test]"
+      - name: Native code under sanitizers
+        env:
+          SANITIZER: ${{ matrix.sanitizer }}
+          DIRECT_2SAT_SANITIZER: ${{ matrix.sanitizer }}
+          CADICAL_ADAPTER_SANITIZER: ${{ matrix.sanitizer }}
+          CADICAL_SOURCE: ${{ github.workspace }}/.external/cadical
+          UBSAN_OPTIONS: halt_on_error=1
+        run: |
+          set -euo pipefail
+          export SPECTRA_EXACT_LIBRARY="$(python -c "import os; from spectra.exact import build_exact_runtime; print(build_exact_runtime('.build/exact', sanitizer=os.environ['SANITIZER']))")"
+          export SPECTRA_QUOTIENT_LIBRARY="$(python -c "from spectra.cnf.quotient_query import build_quotient_runtime; print(build_quotient_runtime('.build/quotient', sanitize=True))")"
+          if [ "$SANITIZER" = 'address,undefined' ]; then
+            export LD_PRELOAD="$(g++ -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so)"
+            export ASAN_OPTIONS=detect_leaks=0:abort_on_error=1
+          fi
+          python -m pytest -ra \
+            tests/exact/test_exact_api.py tests/exact/test_auto_selector_v11.py \
+            tests/exact/test_exact_edgeless.py tests/exact/test_runtime.py \
+            tests/exact/test_transfer_hardening.py tests/exact/test_linear_construction.py \
+            tests/cnf/test_quotient_native_contract.py tests/cnf/test_arcfree_support.py
+          python -m pytest -ra tests/exact/test_direct_twosat_baseline.py -k 'not exhaustive'
+          python -m pytest -ra tests/exact/test_cadical_baseline.py -k 'not every_three_vertex_formula'
+
+  reference-tools:
+    name: reference checkers and solvers (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: marijnheule/drat-trim
+          ref: 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          path: .external/drat-trim
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: arminbiere/cadical
+          ref: c60730422e758ef1cebe7aeddf2dda31c996bf04  # 3.0.1
+          path: .external/cadical
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - run: make -C .external/drat-trim
+      - run: python -m pip install -e ".[test]"
+      - name: DRAT-trim proof replay and the official CaDiCaL baseline
+        env:
+          DRAT_TRIM: ${{ github.workspace }}/.external/drat-trim/drat-trim
+          CADICAL_SOURCE: ${{ github.workspace }}/.external/cadical
+        run: python -m pytest -ra tests/sat tests/benchmarks tests/exact/test_cadical_baseline.py
+
+  compilers:
+    name: build with ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Build and solve with the CDCL solver
+        env:
+          CXX: ${{ matrix.compiler }}
+        run: |
+          python - <<'PY'
+          from itertools import product
+          import os
+          from spectra.sat.native_cdcl import (NativeCDCLRuntime, build_native_cdcl,
+                                               solve_cnf_native, verify_direct_native_result)
+          runtime = NativeCDCLRuntime(build_native_cdcl('.build/sat', compiler=os.environ['CXX']))
+          unsat = tuple(tuple(v if b else -v for v, b in enumerate(bits, 1))
+                        for bits in product((False, True), repeat=5))
+          for nvars, formula in ((3, ((1, 2, 3), (-1, 2), (-2, 3))), (5, unsat)):
+              result = solve_cnf_native(runtime, nvars, formula)
+              assert result.status != 'UNKNOWN'
+              assert verify_direct_native_result(nvars, formula, result)
+          PY

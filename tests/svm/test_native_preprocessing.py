@@ -10,8 +10,6 @@ import math
 import os
 from pathlib import Path
 import struct
-import subprocess
-import sys
 
 import pytest
 from spectra.svm_pipeline import Preprocessor, PreparedPipeline, SCHEMA
@@ -102,12 +100,16 @@ def test_numpy_scalars_use_reference(compiled):
     assert compiled.transform(rows).tobytes()==reference().transform(rows).tobytes()
 
 
+def _concurrent_transform_bytes(model, row, calls):
+    with ThreadPoolExecutor(4) as pool:
+        return list(pool.map(lambda _: model.transform([row]).tobytes(), range(calls)))
+
+
 def test_outputs_own_storage_and_plan_is_shared(compiled):
     a=compiled.transform([[1.,'b',2.]])
     b=compiled.transform([[2.,'α',3.]])
     wanted=b.tobytes();a[0]=33.
-    with ThreadPoolExecutor(4) as pool:
-        results=list(pool.map(lambda _:compiled.transform([[2.,'α',3.]]).tobytes(),range(100)))
+    results=_concurrent_transform_bytes(compiled,[2.,'α',3.],100)
     assert all(r==wanted for r in results)
     del compiled;gc.collect()
     assert b.tobytes()==wanted
@@ -168,7 +170,6 @@ def test_non_nearest_rejected(compiled, rounding_library):
 
 
 def test_optional_pipeline_end_to_end(prelib,library,tmp_path):
-    from spectra.svm_shared import PreparedModel
     import hashlib,zlib
     folder=tmp_path/'bundle';folder.mkdir()
     # Legacy 2-class,16-feature finite fixture; no sklearn needed.

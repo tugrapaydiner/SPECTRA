@@ -1,51 +1,76 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectra"
-version = "0.7.1"
-description = "Checked research tools for compact reasoning, exact CNF state and reproducible evidence"
+version = "0.8.0.dev0"
+description = "Certified repeated-query compilation and checked CNF tools for CPUs"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "SPECTRA" }]
 dependencies = []
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
 
 [project.urls]
 Repository = "https://github.com/tugrapaydiner/SPECTRA"
-Documentation = "https://github.com/tugrapaydiner/SPECTRA/blob/main/docs/README.md"
+Documentation = "https://github.com/tugrapaydiner/SPECTRA/tree/main/docs"
 Issues = "https://github.com/tugrapaydiner/SPECTRA/issues"
 Changelog = "https://github.com/tugrapaydiner/SPECTRA/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+# Everything needed to run the full test suite. Optional SVM export tests
+# additionally use numpy/scikit-learn when installed and skip otherwise.
 test = ["pytest>=7.4", "python-sat==1.9.dev15"]
-dev = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66", "pytest>=7.4", "python-sat==1.9.dev15"]
-
-# Historical top-level packages remain import-compatible; spectra is the public API.
-research = ["torch>=2.4", "numpy>=1.24", "pyyaml>=6.0", "einops>=0.7", "tqdm>=4.66"]
-native = ["torch>=2.4", "ninja>=1.11"]
+svm = ["numpy>=1.24", "scikit-learn>=1.4"]
+dev = ["pytest>=7.4", "python-sat==1.9.dev15", "ruff==0.16.9"]
 
 [project.scripts]
 spectra = "spectra.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["spectra*", "common*", "model*", "train*", "eval*", "data*", "deploy*"]
-
+include = ["spectra*"]
 
 [tool.setuptools.package-data]
 "spectra._native" = ["*.cpp", "ovo/*.cpp", "ovo/*.hpp", "ovo/*/*.cpp", "ovo/*/*.hpp"]
-deploy = ["*.cpp", "cpp_sparse_kernel/*.cpp", "cpp_sparse_kernel/CMakeLists.txt"]
+"spectra.sat" = ["*.cpp"]
+"spectra.migration" = ["*.cpp"]
+
 [tool.pytest.ini_options]
-# Put the repo root on sys.path so `import model.trm`, `import train.losses`,
-# etc. resolve during tests without an editable install.
+# Put the repository root on sys.path so the experiments package and scripts
+# resolve during tests without an editable install.
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-ra"
 markers = [
-    "slow: long-running gates (e.g. single-batch overfit). Deselect with -m 'not slow'.",
+    "slow: long-running gates. Deselect with -m 'not slow'.",
+    "exhaustive: full enumeration of comparator inputs; excluded from bounded sanitizer runs.",
 ]
 filterwarnings = [
     # Keep test output readable; surface our own warnings only.
     "ignore::DeprecationWarning",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["benchmarks/svm_stream/data_manifest.json"]
+
+[tool.ruff.lint]
+# Correctness-focused rules: pyflakes (undefined names, unused imports and
+# variables, redefinitions) plus the pycodestyle error class.
+select = ["F", "E9"]

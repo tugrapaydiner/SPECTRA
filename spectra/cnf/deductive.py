@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import hashlib
 import time
 
-from data.cnf import CNF
+from .formula import CNF
 from .indexed import _settings, solve_indexed
 from .search import SolveResult
 

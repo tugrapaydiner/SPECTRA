@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import TextIO
 import re
-from data.cnf import CNF
+from .formula import CNF
 
 
 def read_dimacs(stream: TextIO, *, max_variables: int = 1_000_000,
