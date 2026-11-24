@@ -224,9 +224,9 @@ def _flip(proof, node, pivot, endpoint, changes):
         # Each consecutive pair of assignments has exactly one row of the wrong parity.
         positive.append(previous[base >> 1][0])
         negative.append(previous[(base ^ toggled) >> 1][0])
-        yes = proof.record((*clause, pivot), positive)
-        no = proof.record((*clause, -pivot), negative)
-        records.append(proof.record(clause, (yes[0], no[0])))
+        pivot_row, _ = proof.record((*clause, pivot), positive)
+        # Falsifying the target clause now forces the pivot before the remaining hints run.
+        records.append(proof.record(clause, (pivot_row, *negative)))
     return after, odd, tuple(records)
 
 
