@@ -858,7 +858,7 @@ def test_native_lrat_replays_search_and_structural_answers(tmp_path, preprocesse
         ("crossing-grid", dimacs(grid, 24),
          ["--max-conflicts", "0", "--max-proof-bytes", str(2 << 10)], "coupled-parity"),
         ("signed-crossing-grid", dimacs(signed_grid, 24),
-         ["--max-conflicts", "0", "--max-proof-bytes", str(6 << 10)], "coupled-parity"),
+         ["--max-conflicts", "0", "--max-proof-bytes", str(4 << 10)], "coupled-parity"),
         ("relaxed", dimacs(coupled[:-1]), [], "native"),
         ("pigeons", "p cnf 3 6\n1 2 0\n-1 -2 0\n1 3 0\n-1 -3 0\n2 3 0\n-2 -3 0\n",
          ["--max-conflicts", "0"], "pigeonhole"),

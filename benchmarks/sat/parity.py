@@ -157,6 +157,17 @@ def _conflicting_pairs(clauses, left, right):
     return None
 
 
+def _multipliers(left, right, terms):
+    partial, left_reasons, right_reasons = defaultdict(int), defaultdict(int), defaultdict(int)
+    for a, b in terms:
+        left_reasons[b] ^= left.reasons[a]
+        partial[b] ^= left.forms[a]
+    for b, value in partial.items():
+        for bit in _bits(value):
+            right_reasons[left.basis[bit]] ^= right.reasons[b]
+    return left_reasons, right_reasons
+
+
 def _linearize(equations, components, spaces, pairs):
     rows = []
     remainder = set()
@@ -171,23 +182,25 @@ def _linearize(equations, components, spaces, pairs):
         remainder ^= terms
         rows.append(ProductRow(tuple(sorted(terms)), (number,), (abs(a), abs(b))))
 
-    left, right = spaces
-    partial, left_reasons, right_reasons = defaultdict(int), defaultdict(int), defaultdict(int)
-    for a, b in remainder:
-        left_reasons[b] ^= left.reasons[a]
-        partial[b] ^= left.forms[a]
-    for b, value in partial.items():
-        for bit in _bits(value):
-            right_reasons[left.basis[bit]] ^= right.reasons[b]
-
-    for side, (component, factors) in enumerate(zip(components, (left_reasons, right_reasons))):
+    complements = []
+    for component in components:
         odd_variables = set()
         constant = 0
         for index in component:
             odd_variables.symmetric_difference_update(equations[index].variables)
             constant ^= equations[index].odd
         # A zero sum of the component's rows allows the shorter complementary derivation.
-        complement = sum(1 << i for i in component) if not odd_variables and not constant else 0
+        complements.append(sum(1 << i for i in component) if not odd_variables and not constant else 0)
+
+    def row_count(factors):
+        return sum(min(mask.bit_count(), (mask ^ complement).bit_count())
+                   for group, complement in zip(factors, complements) for mask in group.values())
+
+    left, right = spaces
+    forward = _multipliers(left, right, remainder)
+    reverse = _multipliers(right, left, ((b, a) for a, b in remainder))[::-1]
+    selected_factors = min((forward, reverse), key=row_count)
+    for side, (factors, complement) in enumerate(zip(selected_factors, complements)):
         for factor, selected in sorted(factors.items()):
             if (selected ^ complement).bit_count() < selected.bit_count():
                 selected ^= complement
