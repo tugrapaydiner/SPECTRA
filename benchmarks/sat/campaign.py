@@ -529,18 +529,31 @@ def _native_preprocessed_solve(args, admitted, runtime):
 
 def native_worker(args: argparse.Namespace) -> int:
     from benchmarks.sat.competition_input import admit_and_load_cnf
-    from spectra.sat.native_cdcl import NativeCDCLRuntime, _uint64, write_drup
+    from spectra.sat.native_cdcl import NativeCDCLRuntime, NativeStats, _uint64, write_drup
     # Validate even when preprocessing settles the formula without a CDCL call.
     for name in ("max_conflicts", "max_learned_literals"):
         _uint64(getattr(args, name), name)
     binary_library = getattr(args, "binary_library", None)
-    if binary_library is not None:
+    lrat = getattr(args, "lrat", False)
+    if binary_library is not None or lrat:
         for name in ("max_proof_clauses", "max_proof_literals", "max_proof_bytes"):
             _uint64(getattr(args, name), name)
     started = time.perf_counter()
     admitted = admit_and_load_cnf(args.cnf)
     runtime = NativeCDCLRuntime(args.library)
-    if binary_library is None:
+    structural = False
+    if lrat:
+        from benchmarks.sat.pigeonhole import write_admitted_pigeonhole_proof
+        limits = (args.max_proof_clauses, args.max_proof_literals, args.max_proof_bytes)
+        structural_started = time.perf_counter()
+        structural = write_admitted_pigeonhole_proof(admitted, args.proof, *limits)
+        structural_seconds = time.perf_counter() - structural_started
+    if structural:
+        status, model, proof = 20, (), None
+        stats = NativeStats(0, 0, 0, 0, 0, 0, 0, 0)
+        native_elapsed = 0.0
+        metadata = {"backend_called": False, "proof_generation_included_in_solve": False}
+    elif binary_library is None:
         solver_started = time.perf_counter()
         status, model, proof, stats, _ = runtime.solve_residual(
             admitted.nvars, admitted.clauses, max_conflicts=args.max_conflicts,
@@ -551,6 +564,15 @@ def native_worker(args: argparse.Namespace) -> int:
         status, model, proof, stats, metadata = _native_preprocessed_solve(args, admitted, runtime)
         native_elapsed = metadata["native_solve_seconds"]
     serialization_started = time.perf_counter()
+    schema = "spectra.general_campaign_native_stats.v1"
+    if lrat:
+        from benchmarks.sat.lrat import write_rup_lrat
+        schema = "spectra.general_campaign_native_lrat_stats.v1"
+        metadata.update(strategy="pigeonhole" if structural else "native",
+                        structural_seconds=structural_seconds, proof_format="LRAT")
+        if status == 20 and not structural and not write_rup_lrat(args.proof, admitted.clauses, proof, *limits):
+            status = 0
+            metadata["proof_budget_reason"] = "LRAT certificate limit"
     if status == 10:
         print("s SATISFIABLE")
         for begin in range(0, len(model), 100):
@@ -558,11 +580,12 @@ def native_worker(args: argparse.Namespace) -> int:
                          for i in range(begin, min(begin + 100, len(model)))])
         print("v 0")
     elif status == 20:
-        write_drup(args.proof, proof)
+        if not lrat:
+            write_drup(args.proof, proof)
         print("s UNSATISFIABLE")
     else:
         print("s UNKNOWN")
-    write_json(args.stats, {"schema": "spectra.general_campaign_native_stats.v1",
+    write_json(args.stats, {"schema": schema,
                            "status_code": status, "stats": asdict(stats),
                            "max_conflicts": args.max_conflicts,
                            "max_learned_literals": args.max_learned_literals,
@@ -1061,12 +1084,14 @@ def main(argv: list[str] | None = None) -> int:
     native.add_argument("--max-learned-literals", type=int, default=100_000_000)
     native.add_argument("--binary-library", type=Path,
                         help="opt into native binary preprocessing with original-CNF RUP composition")
+    native.add_argument("--lrat", action="store_true",
+                        help="try a bounded structural proof before CDCL and emit original-CNF LRAT on UNSAT")
     native.add_argument("--max-proof-clauses", type=int, default=5_000_000,
-                        help="composed certificate clause cap with --binary-library")
+                        help="certificate clause cap with --binary-library or --lrat")
     native.add_argument("--max-proof-literals", type=int, default=100_000_000,
-                        help="composed certificate literal cap with --binary-library")
+                        help="certificate literal cap with --binary-library or --lrat")
     native.add_argument("--max-proof-bytes", type=int, default=1_073_741_824,
-                        help="composed ASCII certificate byte cap with --binary-library")
+                        help="ASCII certificate byte cap with --binary-library or --lrat")
     pigeonhole = sub.add_parser("pigeonhole", help="prove binary pigeonhole contradictions with LRAT")
     pigeonhole.add_argument("--cnf", type=Path, required=True, help="input CNF, up to 1 MiB decoded")
     pigeonhole.add_argument("--proof", type=Path, required=True, help="new ASCII LRAT proof file")

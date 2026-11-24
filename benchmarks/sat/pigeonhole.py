@@ -7,6 +7,7 @@ from itertools import combinations
 from pathlib import Path
 
 from benchmarks.sat.competition_input import admit_and_load_cnf
+from benchmarks.sat.lrat import LRATWriter, ProofLimit
 
 
 def _find_core(nvars, clauses):
@@ -84,30 +85,13 @@ def _find_core(nvars, clauses):
     return None
 
 
-class _ProofLimit(Exception):
-    pass
-
-
 def _pattern(bits, value):
     return [v if value & (1 << bit) else -v for bit, v in enumerate(bits)]
 
 
-def _write_lrat(output, nvars, clauses, core, max_bytes):
+def _write_lrat(writer, nvars, clauses, core):
     source = {tuple(sorted(clause)): i for i, clause in enumerate(clauses, 1)}
-    clause_id = len(clauses)
-    literal_count = 0
-
-    def add(clause, hints=()):
-        nonlocal clause_id, literal_count
-        clause_id += 1
-        literal_count += len(clause)
-        if clause_id - len(clauses) > 100_000 or literal_count > 1_000_000:
-            raise _ProofLimit
-        line = (" ".join(map(str, (clause_id, *clause, 0, *hints, 0))) + "\n").encode("ascii")
-        if output.tell() + len(line) > max_bytes:
-            raise _ProofLimit
-        output.write(line)
-        return clause_id
+    add = writer.add
 
     fresh = nvars
     cells, covers, bit_hints, exclusions = [], [], [], []
@@ -182,13 +166,21 @@ def write_pigeonhole_proof(cnf: Path, proof: Path, max_bytes: int) -> bool:
                                       max_variable_bitmap_bytes=513)
     except MemoryError:
         return False
+    return write_admitted_pigeonhole_proof(admitted, proof, 100_000, 1_000_000, max_bytes)
+
+
+def write_admitted_pigeonhole_proof(admitted, proof, max_rows, max_literals, max_bytes):
+    if admitted.receipt.dimacs_bytes > 1 << 20 or not max_bytes or not max_rows:
+        return False
     core = _find_core(admitted.nvars, admitted.clauses)
     if core is None:
         return False
     with BytesIO() as buffer:
+        writer = LRATWriter(buffer, len(admitted.clauses), min(max_rows, 100_000),
+                            min(max_literals, 1_000_000), min(max_bytes, 8 << 20))
         try:
-            _write_lrat(buffer, admitted.nvars, admitted.clauses, core, min(max_bytes, 8 << 20))
-        except _ProofLimit:
+            _write_lrat(writer, admitted.nvars, admitted.clauses, core)
+        except ProofLimit:
             return False
         with buffer.getbuffer() as view, proof.open("xb") as destination:
             destination.write(view)

@@ -808,6 +808,48 @@ def preprocessed_native_libraries(tmp_path_factory):
     return build_native_cdcl(root / "backend"), build_native_binary_core(root / "frontend")
 
 
+def test_native_lrat_replays_search_and_structural_answers(tmp_path, preprocessed_native_libraries):
+    from benchmarks.sat.campaign import main
+
+    checker = os.environ.get("LRAT_CHECK")
+    if not checker and os.environ.get("DRAT_TRIM"):
+        drat = Path(os.environ["DRAT_TRIM"])
+        checker = drat.with_name("lrat-check" + drat.suffix)
+    if not checker or not Path(checker).is_file():
+        pytest.skip("set LRAT_CHECK or build lrat-check alongside DRAT_TRIM")
+    native, binary = preprocessed_native_libraries
+    cases = [
+        ("search", "p cnf 2 5\n1 -1 0\n1 1 2 0\n-1 2 0\n1 -2 0\n-1 -2 0\n", [], "native"),
+        ("preprocessed", "p cnf 2 3\n-1 2 0\n1 -2 0\n1 0\n", ["--binary-library", str(binary)], "native"),
+        ("lifted-proof", "p cnf 6 10\n" + "".join(" ".join(map(str, row)) + " 0\n"
+                                                  for row in _preprocessed_unsat_rows()),
+         ["--binary-library", str(binary)], "native"),
+        ("pigeons", "p cnf 3 6\n1 2 0\n-1 -2 0\n1 3 0\n-1 -3 0\n2 3 0\n-2 -3 0\n",
+         ["--max-conflicts", "0"], "pigeonhole"),
+    ]
+    for name, dimacs, extra, strategy in cases:
+        work = tmp_path / name
+        work.mkdir()
+        cnf, proof, stats = work / "input.cnf", work / "proof", work / "stats"
+        cnf.write_text(dimacs)
+        args = ["native", "--lrat", "--library", str(native), "--cnf", str(cnf),
+                "--proof", str(proof), "--stats", str(stats), *extra]
+        status = main(args)
+        receipt = json.loads(stats.read_text())
+        assert receipt["schema"] == "spectra.general_campaign_native_lrat_stats.v1"
+        assert receipt["strategy"] == strategy
+        if name == "preprocessed":
+            assert status == 10 and not proof.exists()
+            continue
+        assert status == 20 and proof.is_file()
+        replay = run_process([str(checker), str(cnf), str(proof)], work / "check",
+                             timeout=10, memory_mib=128, output_mib=1)
+        assert replay["returncode"] == 0 and "c VERIFIED" in (work / "check/stdout.txt").read_text().splitlines()
+        proof.unlink()
+        stats.unlink()
+        assert main([*args, "--max-proof-bytes", "0"]) == 0 and not proof.exists()
+
+
 def _preprocessed_worker_args(tmp_path, libraries, nvars, rows, **limits):
     from spectra.sat.drat import write_dimacs
     return argparse.Namespace(
