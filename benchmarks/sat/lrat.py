@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from io import BytesIO
 from shutil import copyfileobj
 from tempfile import SpooledTemporaryFile
 
@@ -30,6 +31,19 @@ class LRATWriter:
         self.remaining_bytes -= len(line)
         self.next_id += 1
         return self.next_id - 1
+
+
+def write_input_empty_lrat(path, clauses, max_rows, max_literals, max_bytes):
+    """Cite the original empty clause directly, preserving its DIMACS clause number."""
+    buffer = BytesIO()
+    writer = LRATWriter(buffer, len(clauses), max_rows, max_literals, max_bytes)
+    try:
+        writer.add((), (clauses.index(()) + 1,))
+    except ProofLimit:
+        return False
+    with path.open("xb") as destination:
+        destination.write(buffer.getvalue())
+    return True
 
 
 class _UnitReasons:
@@ -106,6 +120,7 @@ def write_rup_lrat(path, clauses, proof, max_rows, max_literals, max_bytes):
     if len(proof.additions) > max_rows or max_bytes == 0:
         return False
     database = _UnitReasons()
+    duplicates = {}
     with SpooledTemporaryFile(max_size=1 << 20, dir=path.parent) as stream:
         writer = LRATWriter(stream, len(clauses), max_rows, max_literals, max_bytes)
         try:
@@ -115,10 +130,19 @@ def write_rup_lrat(path, clauses, proof, max_rows, max_literals, max_bytes):
                     continue
                 if len(literals) != len(row):
                     row = tuple(literals)
-                    number = writer.add(row, [number])  # Checkers count repeated unassigned literals separately.
+                    duplicates[number] = row, None
                 database.add(number, row)
             for row in proof.additions:
-                number = writer.add(row, database.explain(row))
+                hints = database.explain(row)
+                # Only unit hints need normalization. Every literal in the final conflict is already false.
+                for position, original in enumerate(hints[:-1]):
+                    if original in duplicates:
+                        normalized, number = duplicates[original]
+                        if number is None:
+                            number = writer.add(normalized, (original,))
+                            duplicates[original] = normalized, number
+                        hints[position] = number
+                number = writer.add(row, hints)
                 database.add(number, row)
         except ProofLimit:
             return False

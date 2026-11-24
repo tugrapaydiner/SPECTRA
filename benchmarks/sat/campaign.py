@@ -527,6 +527,20 @@ def _native_preprocessed_solve(args, admitted, runtime):
     return status, model, proof, stats, metadata
 
 
+def _structural_lrat(admitted, path, limits):
+    if admitted.receipt.empty_clauses:
+        from benchmarks.sat.lrat import write_input_empty_lrat
+        written = write_input_empty_lrat(path, admitted.clauses, *limits)
+        return "input-empty", 20 if written else 0
+    from benchmarks.sat.pigeonhole import write_admitted_pigeonhole_proof
+    if write_admitted_pigeonhole_proof(admitted, path, *limits):
+        return "pigeonhole", 20
+    from benchmarks.sat.parity_lrat import write_coupled_parity_proof
+    if write_coupled_parity_proof(admitted, path, *limits):
+        return "coupled-parity", 20
+    return "native", None
+
+
 def native_worker(args: argparse.Namespace) -> int:
     from benchmarks.sat.competition_input import admit_and_load_cnf
     from spectra.sat.native_cdcl import NativeCDCLRuntime, NativeStats, _uint64, write_drup
@@ -541,22 +555,19 @@ def native_worker(args: argparse.Namespace) -> int:
     started = time.perf_counter()
     admitted = admit_and_load_cnf(args.cnf)
     runtime = NativeCDCLRuntime(args.library)
-    strategy = "native"
+    strategy, structural_status = "native", None
     if lrat:
-        from benchmarks.sat.parity_lrat import write_coupled_parity_proof
-        from benchmarks.sat.pigeonhole import write_admitted_pigeonhole_proof
         limits = (args.max_proof_clauses, args.max_proof_literals, args.max_proof_bytes)
         structural_started = time.perf_counter()
-        if write_admitted_pigeonhole_proof(admitted, args.proof, *limits):
-            strategy = "pigeonhole"
-        elif write_coupled_parity_proof(admitted, args.proof, *limits):
-            strategy = "coupled-parity"
+        strategy, structural_status = _structural_lrat(admitted, args.proof, limits)
         structural_seconds = time.perf_counter() - structural_started
-    if strategy != "native":
-        status, model, proof = 20, (), None
+    if structural_status is not None:
+        status, model, proof = structural_status, (), None
         stats = NativeStats(0, 0, 0, 0, 0, 0, 0, 0)
         native_elapsed = 0.0
         metadata = {"backend_called": False, "proof_generation_included_in_solve": False}
+        if status == 0:
+            metadata["proof_budget_reason"] = "LRAT certificate limit"
     elif binary_library is None:
         solver_started = time.perf_counter()
         status, model, proof, stats, _ = runtime.solve_residual(

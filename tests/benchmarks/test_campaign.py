@@ -845,6 +845,10 @@ def test_native_lrat_replays_search_and_structural_answers(tmp_path, preprocesse
 
     cases = [
         ("search", "p cnf 2 5\n1 -1 0\n1 1 2 0\n-1 2 0\n1 -2 0\n-1 -2 0\n", [], "native"),
+        ("input-empty", "p cnf 2 3\n1 1 2 0\n0\n-2 0\n",
+         ["--max-proof-clauses", "1", "--max-proof-literals", "0", "--max-proof-bytes", "8"], "input-empty"),
+        ("unit-conflict", "p cnf 3 3\n1 1 2 0\n3 0\n-3 -3 0\n",
+         ["--max-proof-clauses", "1", "--max-proof-literals", "0", "--max-proof-bytes", "10"], "native"),
         ("preprocessed", "p cnf 2 3\n-1 2 0\n1 -2 0\n1 0\n", ["--binary-library", str(binary)], "native"),
         ("lifted-proof", dimacs(_preprocessed_unsat_rows()),
          ["--binary-library", str(binary)], "native"),
@@ -869,12 +873,15 @@ def test_native_lrat_replays_search_and_structural_answers(tmp_path, preprocesse
             assert status == 10 and not proof.exists()
             continue
         assert status == 20 and proof.is_file()
+        if name == "input-empty":
+            assert proof.read_bytes() == b"4 0 2 0\n" and receipt["backend_called"] is False
         replay = run_process([str(checker), str(cnf), str(proof)], work / "check",
                              timeout=10, memory_mib=128, output_mib=1)
         assert replay["returncode"] == 0 and "c VERIFIED" in (work / "check/stdout.txt").read_text().splitlines()
         proof.unlink()
         stats.unlink()
-        assert main([*args, "--max-proof-bytes", "0"]) == 0 and not proof.exists()
+        limit = "7" if name == "input-empty" else "0"
+        assert main([*args, "--max-proof-bytes", limit]) == 0 and not proof.exists()
 
 
 def _preprocessed_worker_args(tmp_path, libraries, nvars, rows, **limits):
